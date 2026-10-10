@@ -1,8 +1,8 @@
 /**
  * The per-user play log, against real rows.
  *
- * Each of the three operations replaces a Mongo shape whose translation is not
- * mechanical, and each fixture below is chosen to sit on the side of the
+ * Each of the three operations has a plausible-but-wrong spelling, and each
+ * fixture below is chosen to sit on the side of the
  * distinction that tells the correct translation from the plausible one:
  *
  *  - the read collapses to the most recent play PER TRACK, so the fixture has a
@@ -212,8 +212,8 @@ describe('prunePlayHistory caps the log per listener', () => {
 
   /**
    * `<=` the cutoff, not `<`, so rows sharing the cutoff instant go together.
-   * Mongo's `$lte` behaved this way and a batch of plays written in the same
-   * millisecond should not end up half retained.
+   * A batch of plays written in the same millisecond should not end up half
+   * retained.
    */
   it('drops rows that share the cutoff instant', async () => {
     const trackId = await makeTrack();
@@ -250,8 +250,8 @@ describe('prunePlayHistory caps the log per listener', () => {
 
 describe('recordPlayEvent', () => {
   it('refuses a track that does not exist, so the controller can answer 404', async () => {
-    // `recently_played.track_id` is a real foreign key. The Mongo version stored
-    // the string, which is how a play log accumulated ids naming nothing.
+    // `recently_played.track_id` is a real foreign key, so a play log cannot
+    // accumulate ids naming nothing.
     await expect(recordPlayEvent(USER, uuidv7(), new Date())).rejects.toThrow();
     expect((await playedAtFor(USER)).length).toBe(0);
   });

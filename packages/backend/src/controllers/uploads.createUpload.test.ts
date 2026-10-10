@@ -182,15 +182,9 @@ let currentUserId = OWNER;
 let bulkImportWas: string | undefined;
 
 /**
- * BOTH databases, and the Mongo half is NOT this vertical's residue.
- *
- * Everything the upload path itself touches is Postgres. The last test in this
- * file drives `getHomeBrowse`, which goes through `recommendationService` —
- * still a hybrid module reading `UserTasteProfile`, Task 15's table. Mongoose
- * BUFFERS rather than throwing when its connection is absent, so without
- * `connect()` that request never answers at all: an 11-second timeout inside
- * the driver rather than a failure naming the missing store. It comes out when
- * Task 15 lands, not before.
+ * Postgres only. Everything the upload path itself touches is Postgres, and so
+ * is the last test in this file, which drives `getHomeBrowse` through
+ * `recommendationService` and the listener's taste profile.
  */
 beforeAll(async () => {
   await connectDb();
@@ -333,8 +327,8 @@ async function firstAttestation(trackId: string) {
  * A real artist row, because `tracks.artist_id` and `albums.artist_id` are real
  * foreign keys.
  *
- * The Mongo fixtures wrote the literal string `'artist-1'`, which was as good as
- * a stored id there and is a `23503` here. Seeding one is not ceremony: a track
+ * A literal id such as `'artist-1'` names no row and is a `23503`. Seeding one
+ * is not ceremony: a track
  * filed under an artist that does not exist was never a state the catalogue
  * could reach through any code path.
  */
@@ -487,18 +481,17 @@ describe('POST /api/uploads — private destination', () => {
     expect(status).toBe(200);
     expect(body.outcome).toBe('duplicate');
     // It names the row that actually holds the slot, which is the soft-deleted
-    // one — the same answer Mongo gave, whose lookup had no `deletedAt` filter.
+    // one — the slot lookup deliberately has no `deletedAt` filter.
     expect(body.uploadId).toBe(firstId);
   });
 
   /**
    * A failed write never publishes the upload it was carrying.
    *
-   * Under Mongoose an error carried no statement, so this exposure is new under
-   * Postgres — and this is the worst route on the branch to have it: the bound
+   * A Postgres driver error carries the failing statement and its bound
+   * parameters, and this is the worst route to expose them: the bound
    * parameters of an `insert into user_uploads` are the upload, raw ID3 block
-   * included. Task 19a found the same class in the fingerprint backfill and
-   * shipped `isDriverError`/`describeDriverError` for it.
+   * included. `isDriverError`/`describeDriverError` exist for this class.
    *
    * The failure is provoked with a `coverArt` id that is well-formed and names
    * no `image_assets` row: `user_uploads.cover_art_id` is a real foreign key,
@@ -1597,14 +1590,12 @@ describe('GET /api/uploads/albums', () => {
     expect(await countRows(albums)).toBe(0);
 
     /**
-     * `aggregate()` IGNORES Mongoose `select: false`, so on this route that
-     * projection protects nothing — the response mapping is the only guard.
+     * The response mapping is the guard here, not the grouping query.
      *
-     * Mutation-tested, and the result corrected this comment: adding
-     * `$push: '$$ROOT'` to the `$group` alone does NOT fail this assertion,
-     * because the `.map()` below still picks its fields by name. What DOES fail
-     * it is the `.map()` spreading the grouped document. So this guards the
-     * serializer, not the pipeline — worth stating precisely, because a raw tag
+     * A grouped row carrying every column would NOT fail this assertion,
+     * because the handler's `.map()` still picks its fields by name. What DOES
+     * fail it is the `.map()` spreading the grouped row. So this guards the
+     * serializer, not the query — worth stating precisely, because a raw tag
      * dump can carry an iTunes `apID` (the purchaser's email address) and
      * believing the wrong layer protects it is how that ships.
      */

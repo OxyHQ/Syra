@@ -33,22 +33,20 @@
  *    `expiresAt` IS on the wire, because retention promises the owner a
  *    warning and a warning the client cannot render is not a warning.
  *  - **The nine edition fields, `credits` and `lyrics`** — nothing writes any
- *    of them (see `schema/creators.ts`), so they were absent from the Mongo DTO
- *    too. They stay absent rather than being added on the way past: a column
+ *    of them (see `schema/creators.ts`), so they stay absent: a column
  *    with no writer put on the wire is a field every client learns to read as
  *    always-null.
  *  - **`loudnessLufs`**, which IS written — `ingestUserUpload` sets it from the
  *    packager's measurement. Omitted anyway, and for a different reason: it is
- *    a mastering figure with no consumer, and the Mongo DTO omitted it too.
+ *    a mastering figure with no consumer.
  *    Listed separately because the reason above does not apply to it, and a
  *    reader who found it under "nothing writes these" would go looking for a
  *    missing writer that is right there.
  *
- * The omissions above are the ones the PORT decided. What it did not decide is
- * anything else: the key set here was diffed against the shipped Mongo
- * serializer's and is identical, all 24, `coverArtSizes` included — which is
- * the check an allowlist needs, because a key dropped in the move would have
- * left the wire silently one field poorer with every test still green.
+ * Those are the deliberate omissions. The key set is 24 keys, `coverArtSizes`
+ * included — the number to diff against whenever this allowlist changes,
+ * because a key dropped by accident leaves the wire silently one field poorer
+ * with every test still green.
  */
 
 import type { CatalogImageSizes, UserUploadAsTrack } from '@syra/shared-types';

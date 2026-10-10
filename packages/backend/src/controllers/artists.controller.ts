@@ -355,10 +355,10 @@ export const registerAsArtist = async (req: AuthRequest, res: Response, next: Ne
       /**
        * Both live id shapes, not just the 24-hex one.
        *
-       * `image_assets.id` is `generatedId()` — a uuid v7 — so a check for an
-       * ObjectId would reject every image uploaded after the cutover while the
-       * upload endpoint that minted it succeeded. The message said "MongoDB
-       * ObjectId (24 hex characters)" and is corrected with the check.
+       * `image_assets.id` is `generatedId()` — a uuid v7 — so a 24-hex-only
+       * check would reject every newly uploaded image while the upload endpoint
+       * that minted it succeeded. The message names no id shape for the same
+       * reason.
        */
       if (!isLiveEntityId(data.image)) {
         return res.status(400).json({
@@ -407,8 +407,8 @@ export const registerAsArtist = async (req: AuthRequest, res: Response, next: Ne
     res.status(201).json(await toArtistResponse(created));
   } catch (error: unknown) {
     /**
-     * `23505` is Postgres's `unique_violation`, the replacement for Mongo's
-     * duplicate-key `11000`. It still has to be caught: the name check above is
+     * `23505` is Postgres's `unique_violation`. It has to be caught: the name
+     * check above is
      * a read followed by a write, so two simultaneous registrations both pass it
      * and the unique index is what actually decides.
      */
@@ -515,10 +515,10 @@ export const getArtistDashboard = async (req: AuthRequest, res: Response, next: 
       ]);
 
     /**
-     * Summed over the ten most recent tracks, which is what the Mongo version
-     * did too — `tracks` there was the same `.limit(10)` list. Preserved rather
-     * than corrected to a real total: changing what a dashboard number MEANS is
-     * not a port, and doing it silently inside one would be worse.
+     * Summed over the ten most recent tracks — the same `.limit(10)` list —
+     * not the whole catalogue. That is what this dashboard number MEANS;
+     * turning it into a real total is a product change, not a query fix, and
+     * must not happen silently.
      */
     const totalPlays = recentTracks.reduce((sum, track) => sum + (track.playCount || 0), 0);
 
@@ -583,11 +583,9 @@ export const getArtistInsights = async (req: AuthRequest, res: Response, next: N
     /**
      * Two queries instead of loading every track into memory.
      *
-     * The Mongo version read the artist's ENTIRE catalogue with `.lean()`, summed
-     * `playCount` in JS and sorted the whole array to take ten. Both answers are
-     * available from the database: the sum is an aggregate and the top ten is an
-     * `ORDER BY … LIMIT 10` the `tracks_artist_id_idx` can serve. Same numbers,
-     * bounded memory.
+     * Both answers are available from the database: the sum is an aggregate
+     * and the top ten is an `ORDER BY … LIMIT 10` the `tracks_artist_id_idx` can
+     * serve, so memory stays bounded however large the catalogue is.
      */
     const [summed, topTrackRows] = await Promise.all([
       getDb()
@@ -653,9 +651,9 @@ export const updateMyArtistProfile = async (
 
     /**
      * An explicit set object, built key by key — the parsed body is never
-     * spread. `name` carries `nameKey` with it, because the two are one fact and
-     * Mongoose's pre-save hook used to keep them together; leaving `nameKey`
-     * behind would silently strand every credit that matches on it.
+     * spread. `name` carries `nameKey` with it, because the two are one fact;
+     * leaving `nameKey` behind would silently strand every credit that matches
+     * on it.
      */
     const set: Partial<typeof catalogEntities.$inferInsert> = {};
     if (updates.name !== undefined) {
@@ -784,8 +782,8 @@ export const createArtistClaim = async (req: AuthRequest, res: Response, next: N
        * claimant per artist": a read-then-write leaves exactly the window two
        * taps land in.
        *
-       * Matched by CONSTRAINT NAME, not by the bare `23505` the Mongo version's
-       * bare `11000` translated to. `artist_claims` carries exactly one unique
+       * Matched by CONSTRAINT NAME, not by the bare `23505`. `artist_claims`
+       * carries exactly one unique
        * index, so today the two are the same test — but a second one added
        * tomorrow would be reported to the claimant as "you already have a claim
        * awaiting review", which is a lie about a bug.
@@ -866,12 +864,11 @@ export const resolveArtistClaim = async (req: AuthRequest, res: Response, next: 
     const id = getParam(req, 'id');
 
     /**
-     * `isLiveEntityId` now, matching the sibling guard in `createArtistClaim`.
+     * `isLiveEntityId`, matching the sibling guard in `createArtistClaim`.
      *
-     * This read `ObjectId.isValid` while `artist_claims` was Mongoose, on the
-     * rule that the guard is decided by which store the id addresses rather
-     * than by the file it appears in — Task 13 moved the table, so it moved
-     * with it. `ObjectId.isValid` alone would 404 every claim opened since.
+     * The guard is decided by the ids the table holds rather than by the file
+     * it appears in: `artist_claims.id` is `generatedId()` — a uuid v7 — so a
+     * 24-hex-only check would 404 every claim.
      */
     if (!isLiveEntityId(id)) {
       return res.status(404).json({ error: 'Claim not found' });
@@ -910,10 +907,9 @@ export const resolveArtistClaim = async (req: AuthRequest, res: Response, next: 
        * is what makes the grant atomic against a concurrent claim.
        *
        * `isNull` rather than `eq(column, null)`: in SQL `x = null` is never true,
-       * so the Mongo spelling — where equality to null also matched a MISSING
-       * field — would translate to a filter that matches nothing and a grant
-       * that always 409s. The two owner columns are nullable and unset means
-       * null here, so `is null` is the faithful translation.
+       * so an equality against null would be a filter that matches nothing and
+       * a grant that always 409s. The two owner columns are nullable and unset
+       * means null, so `is null` is the correct test.
        */
       const granted = await getDb()
         .update(catalogEntities)
@@ -1018,26 +1014,17 @@ const contributionSettingsSchema = z.object({
  *
  * A `ContributionAttestation` is what makes a track a contribution: it is
  * written when a publication is made by an account that is not the artist, and
- * nothing else records that fact. Under Mongo this was a single aggregation with
- * a `$lookup` from `tracks` into `contributionattestations`.
+ * nothing else records that fact.
  *
- * That pipeline could not survive the SPLIT: `tracks` was Postgres while
- * `contribution_attestations` was still Mongoose, so this became three bounded
- * round trips.
+ * It is three round trips where one join would do. That join is a rewrite of a
+ * working read, and each trip is already bounded (see below). Whoever collapses
+ * it should delete this paragraph with the code.
  *
- * **Task 13 ported the writer, and both tables are Postgres now** — the split
- * that forced the shape is gone, and one join would do. It is left as three
- * round trips because that is a rewrite of a working read rather than part of
- * the port, and each trip is already bounded (see below). Whoever collapses it
- * should delete this paragraph with the code.
+ * The three round trips, and why each is bounded:
  *
- * The three round trips, all Postgres now, and why each is bounded:
- *
- *   1. The artist's own track ids. Indexed on `artist_id`, and this is the SAME
- *      set the old pipeline's leading `$match: { artistId }` scanned, so
- *      nothing got wider.
+ *   1. The artist's own track ids. Indexed on `artist_id`.
  *   2. Attestations for those ids. `contribution_attestations_track_id_key`
- *      serves the `IN`, as the unique index served the `$lookup` before.
+ *      serves the `IN`.
  *   3. The page itself, over the contributed ids only.
  */
 async function loadContributedTrackIds(artistId: string): Promise<
@@ -1207,24 +1194,12 @@ export const resolveMyContribution = async (
        * owner IS the rightsholder here and the report is stored already resolved.
        */
       /**
-       * On DRIZZLE, and this one is not a scope choice — a foreign key decides
-       * it.
+       * In Postgres, and a foreign key decides it.
        *
-       * `copyright_reports` belongs to Task 13's vertical, so the obvious split
-       * is the one every other cross-vertical read here takes: keep the Mongoose
-       * write, hand the id to the ported service. That is UNREPRESENTABLE.
        * `tracks.copyright_report_id` is a REAL `.references()` constraint on
-       * `copyright_reports.id`, so `takeDownTrack` — already drizzle — writes a
-       * Mongo ObjectId into a column Postgres checks, and the update fails with
-       * `23503 tracks_copyright_report_id_copyright_reports_id_fk`. Measured,
-       * not predicted: that is exactly what this test suite reported.
-       *
-       * The difference from `UserUpload` and `UserMusicPreferences`, which
-       * stayed Mongoose while that was written, is that neither is referenced
-       * by a catalog column. A hybrid split survives a cross-vertical READ and
-       * cannot survive a cross-vertical FOREIGN KEY. (`user_uploads` has since
-       * moved with Task 13; `user_music_preferences` is Task 15's and is still
-       * the live example.)
+       * `copyright_reports.id`, so the report id `takeDownTrack` writes must
+       * name a row in `copyright_reports`; any other id fails the update with
+       * `23503 tracks_copyright_report_id_copyright_reports_id_fk`.
        */
       const [report] = await getDb()
         .insert(copyrightReports)
@@ -1333,10 +1308,9 @@ export const updateMyContributionSettings = async (
  * `ArtistImageSuggestionsResponse` — its own contract, reachable only from an
  * endpoint scoped to the caller's own profile.
  *
- * (Under Mongo the first mechanism was `select: false`, which was a QUERY
- * PROJECTION and inert against `aggregate()`. The protected-column registry is
- * the stronger replacement: it removes the column from the TYPE, so naming it
- * fails `tsc` rather than depending on which read shape was used.)
+ * (A per-field query exclusion would not be enough: it is a QUERY PROJECTION,
+ * inert against an aggregate read. The protected-column registry removes the
+ * column from the TYPE, so naming it fails `tsc` whichever read shape is used.)
  */
 
 const imageSuggestionActionSchema = z.object({
@@ -1371,9 +1345,8 @@ export const getMyImageSuggestions = async (
     const response: ArtistImageSuggestionsResponse = {
       suggestions: (artist.imageSuggestions ?? []).map((suggestion) => ({
         image: suggestion.image,
-        // `jsonb` round-trips a Date as an ISO STRING, where Mongo handed back a
-        // `Date`. Accepting both keeps this correct for rows written on either
-        // side of the cutover rather than only for ones written since.
+        // `jsonb` round-trips a Date as an ISO STRING. `new Date(...)` accepts
+        // a string or a `Date`, so this is correct whichever shape a row holds.
         proposedAt: new Date(suggestion.proposedAt).toISOString(),
         proposedByOxyUserId: suggestion.proposedByOxyUserId,
         sourceUploadId: suggestion.sourceUploadId,
@@ -1457,9 +1430,8 @@ export const acceptMyImageSuggestion = async (
      * `existingImageSizes` as "sizes are already stored" and can return them
      * unchanged, so handing it a fully-empty object claims something false and
      * yields an artist whose six size columns stay null after a successful
-     * accept. Caught by this suite rather than reasoned about — the Mongo code
-     * passed `artist.imageSizes`, which was simply absent for a fresh artist,
-     * and the shape of that absence is what had to be preserved.
+     * accept. Caught by this suite rather than reasoned about: a fresh artist
+     * has NO sizes, and that absence is what `mirrorCatalogImage` must see.
      */
     const existingImageSizes = storedVariantIds.some((id) => id !== null)
       ? {

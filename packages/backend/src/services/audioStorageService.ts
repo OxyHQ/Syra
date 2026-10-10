@@ -20,7 +20,7 @@ import { Readable } from 'stream';
 /**
  * Minimal subset of a track needed to address its audio in S3. Derived from the
  * shared `Track` type so it stays in sync, while letting callers pass any value
- * (e.g. a Mongoose document projection) that carries these fields without
+ * (e.g. a partial row projection) that carries these fields without
  * matching the full `Track` shape.
  */
 export type TrackAudioRef = Pick<Track, 'id' | 'artistId' | 'albumId' | 'title' | 'audioSource'>;

@@ -13,9 +13,9 @@
  * its constraint would turn a request the API used to accept into a `23514` the
  * caller cannot act on. {@link coerceMusicPreferencesPatch} is that one place.
  *
- * Clamping rather than rejecting is the ported behaviour, not a new choice — the
- * Mongo route silently clamped an out-of-range volume and silently ignored an
- * unknown audio quality, and clients depend on neither being an error.
+ * Clamping rather than rejecting is deliberate: an out-of-range volume is
+ * silently clamped and an unknown audio quality silently ignored, and clients
+ * depend on neither being an error.
  *
  * This module replaces `controllers/musicPreferences.controller.ts`, which held
  * no request handling at all: it was three data-access functions living under
@@ -125,9 +125,8 @@ export async function findMusicPreferences(
 /**
  * One account's preferences, creating the row with defaults on first read.
  *
- * The Mongo version listed all eleven defaults at the call site, duplicating the
- * schema's own. Every column here carries its default, so the insert names only
- * `oxyUserId` and the two cannot disagree.
+ * Every column carries its default, so the insert names only `oxyUserId` and
+ * the call site cannot disagree with the schema about what a default is.
  */
 export async function ensureMusicPreferences(oxyUserId: string): Promise<MusicPreferencesDto> {
   const existing = await findMusicPreferences(oxyUserId);

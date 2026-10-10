@@ -305,15 +305,14 @@ type ApplyUrlIngressOutcome =
  * WITHOUT persisting — the caller maps the error.
  *
  * Every optional field is written as `?? null` rather than left `undefined`.
- * Drizzle DROPS an `undefined`-valued key from the update, so the Mongoose
- * spelling would leave the PREVIOUS stream's title, artwork, duration and — for
+ * Drizzle DROPS an `undefined`-valued key from the update, so `undefined` here
+ * would leave the PREVIOUS stream's title, artwork, duration and — for
  * a room switching out of RTMP mode — its still-valid RTMP PUBLISHING KEY in
  * place. That last one is why this is stated here rather than left to the
  * update helper: the clear is a security property, not a cosmetic one.
  *
  * `queue` is the remainder to persist, written in the SAME transaction as the
- * stream fields. That is what preserves the Mongo behaviour the routes rely on:
- * a failed start never reaches here, so the persisted queue keeps its head for a
+ * stream fields. That is the behaviour the routes rely on: a failed start never reaches here, so the persisted queue keeps its head for a
  * retry.
  */
 async function applyUrlIngressToRoom(
@@ -840,13 +839,11 @@ function clearRecordingAutoStop(roomId: string) {
 /**
  * Helper: start recording for a room and return the Recording row.
  *
- * The Mongo version inserted a placeholder row (`egressId: 'pending'`,
- * `objectKey: 'pending'`) purely to mint an `_id` for the object key, then saved
- * twice more. The id is minted by the application here (`generatedId()` is a
+ * The id is minted by the application (`generatedId()` is a
  * `$defaultFn`, not a database default), so the object key is derived BEFORE the
  * insert and the row is written once, already correct. `egressId` also carries a
- * UNIQUE constraint now, which the `'pending'` sentinel would have collided on
- * the moment two rooms started recording at the same time.
+ * UNIQUE constraint, which a placeholder sentinel would collide on the moment
+ * two rooms started recording at the same time.
  */
 async function startRecordingForRoom(room: RoomWithCredentials) {
   const recordingId = uuidv7();
@@ -876,13 +873,10 @@ async function startRecordingForRoom(room: RoomWithCredentials) {
  * Helper: stop recording for a room. Non-fatal, and returns nothing.
  *
  * It CLEARS `recordingEgressId` with its own UPDATE rather than leaving the
- * caller to persist it. The Mongo version set `room.recordingEgressId =
- * undefined` in memory and relied on the caller's later `save()` to carry it —
- * exactly the shape that becomes a silent no-op under drizzle, so the write had
- * to move in here.
+ * caller to persist it: clearing a field in memory and relying on a later
+ * write to carry it is a silent no-op under drizzle.
  *
- * That does mean `/end` and `/stop` now issue two room writes where Mongo issued
- * one, and a row is briefly observable with `recording_egress_id = NULL` while
+ * That does mean `/end` and `/stop` issue two room writes, and a row is briefly observable with `recording_egress_id = NULL` while
  * `status` is still `live`. That intermediate is unavoidable (the alternative is
  * the no-op above) and harmless: the two writes touch disjoint columns, the
  * second never re-sends `recordingEgressId`, and `POST /:id/recording/stop`
@@ -1013,8 +1007,7 @@ router.post('/', async (req: AuthRequest, res: Response) => {
 
     // Resolve broadcastKind for broadcast rooms. `null` for a non-broadcast room
     // rather than `undefined`: `rooms_broadcast_kind_requires_type_check`
-    // enforces that pairing, which is the constraint the Mongoose
-    // `pre('validate')` hook only ever asserted in application code.
+    // enforces that pairing in the database.
     const resolvedBroadcastKind = isBroadcast
       ? broadcastKind && Object.values(BroadcastKind).includes(broadcastKind)
         ? (broadcastKind as BroadcastKind)
@@ -1209,10 +1202,10 @@ export function selectLiveUsers(
  * GET /api/rooms/live-users
  * → { liveUsers: { userId: string; roomId: string }[] }
  *
- * `findLiveRoomBroadcasters` also filters `archived = false`, which Mongo did
- * NOT — see its doc comment: an archived room is the moderation restriction for
- * a room and is routinely live at the same time, so the old query kept emitting
- * a live badge for a room a moderator had restricted.
+ * `findLiveRoomBroadcasters` also filters `archived = false` — see its doc
+ * comment: an archived room is the moderation restriction for a room and is
+ * routinely live at the same time, so without it a restricted room would keep
+ * its live badge.
  */
 router.get('/live-users', async (_req: AuthRequest, res: Response) => {
   try {
@@ -2418,9 +2411,8 @@ type ParsedOptionalText = { ok: true; value: string | null } | { ok: false; mess
  *
  * Returns `null` rather than `undefined` for the empty case because that value
  * is written straight into an update, where `undefined` means "leave alone" —
- * the Mongoose original returned `undefined` and relied on `save()` issuing
- * `$unset`, so carrying that spelling forward would make "clear the stream
- * title" silently keep the old one.
+ * so `undefined` would make "clear the stream title" silently keep the old
+ * one.
  */
 const parseOptionalStreamText = (value: unknown, field: string): ParsedOptionalText => {
   if (value === undefined || value === null) {
@@ -2889,9 +2881,7 @@ router.post('/:id/recording/stop', async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'No active recording' });
     }
 
-    // `stopRecordingForRoom` clears `recordingEgressId` itself. The Mongo
-    // version relied on a bare `room.save()` here to persist a field it had
-    // only set in memory, which under drizzle would have persisted nothing.
+    // `stopRecordingForRoom` clears `recordingEgressId` itself.
     await stopRecordingForRoom(room, 'manual');
 
     logger.info(`Recording manually stopped for room ${id}`);

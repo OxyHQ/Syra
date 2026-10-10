@@ -296,11 +296,10 @@ describe('backfillTrackFingerprints — writing', () => {
   });
 
   /**
-   * The failure mode Postgres introduced and Mongo could not have.
+   * A track deleted mid-page.
    *
    * `track_fingerprints.track_id` is a foreign key, so a track deleted between
-   * this page's `SELECT` and its `INSERT` raises `23503` where Mongo silently
-   * stored an orphan row. It is counted apart from `failed` because there is
+   * this page's `SELECT` and its `INSERT` raises `23503`. It is counted apart from `failed` because there is
    * nothing wrong and nothing to retry — telling an operator to investigate
    * audio that no longer exists would be worse than saying nothing.
    *
@@ -315,8 +314,7 @@ describe('backfillTrackFingerprints — writing', () => {
    * `logger.warn(…, { err })` publishes the entire fingerprint — measured at
    * FIVE copies of every value across `message`, `stack` and a structured
    * `params` array. At ~1600 int32s per track on a catalogue-wide run that is a
-   * log-volume problem and a data-in-logs problem at once, and nothing like it
-   * existed before the port: a Mongoose error carried no statement.
+   * log-volume problem and a data-in-logs problem at once.
    *
    * The trigger is a real bug rather than a contrived one. `fpcalc` prints
    * UNSIGNED uint32 and `fingerprint.ts` folds with `| 0`; without that fold the

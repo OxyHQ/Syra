@@ -494,8 +494,7 @@ describe('the expiry sweep is a range scan on every registered target', () => {
    * once per registry entry rather than written out, so a target added later
    * without a usable index fails here too.
    *
-   * This is the cost Mongo's TTL index was paying invisibly: without a leading
-   * btree, that predicate is a full scan of the largest table in this schema on
+   * Without a leading btree, that predicate is a full scan of the largest table in this schema on
    * every sweep.
    */
   const SWEEP_INDEXES: Readonly<Record<string, string>> = {
@@ -550,9 +549,9 @@ describe('the decay pass scans, and that is the right plan', () => {
    * column. So the write-amplification claim was false and the selectivity
    * argument is the whole case.
    *
-   * This is also not a regression: the Mongo pass was `find({})` with a cursor —
-   * every profile read into the application and filtered in JS. The scan is the
-   * same population, with the filter pushed into the database.
+   * The alternative — reading every profile into the application and filtering
+   * in JS — scans the same population; this pushes the filter into the
+   * database.
    */
   it('is a Seq Scan, deliberately — see this block for why no index is warranted', () => {
     expect(plans.get('decayDueProfiles')).toContain('Seq Scan');

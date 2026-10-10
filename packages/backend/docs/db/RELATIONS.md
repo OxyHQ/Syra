@@ -1,11 +1,11 @@
-# Syra relation inventory — MongoDB → PostgreSQL
+# Syra relation inventory
 
 Every identifier-shaped column in `packages/backend/src/models/`, classified by what
 it actually points at, recovered by reading the code that joins, looks up, or
-filters on it. Mongoose enforces almost none of this — 6 declared `ref:` columns
-against ~90 loose `*Id`/`*By`/`*userId`-shaped ones — so the table below, not the
-schema files, is the record of what would be lost if a column were dropped or
-mis-typed during the port.
+filters on it. The model files declared almost none of this — 6 declared `ref:`
+columns against ~90 loose `*Id`/`*By`/`*userId`-shaped ones — so the table below
+is the record of why each column in `src/db/schema/` is a foreign key, a
+cross-service id or an external id, and what each ON DELETE choice rests on.
 
 ## Cross-cutting facts that shape every ON DELETE decision below
 
@@ -92,9 +92,8 @@ mis-typed during the port.
    `storeImageAsset` returns that id as each size variant's `.id`, and
    `mirrorCatalogImage`'s `imageId` (picked from the `large`/`xlarge`/`medium`/
    `original` variant) is assigned straight onto the scalar field —
-   `models/CatalogEntity.ts:263` even says so in a comment: `image: { type:
-   String }, // own S3 MongoDB ObjectId; converted to /api/images/:id in API
-   responses`. Full proof per model is in each model's own section below. This
+   `models/CatalogEntity.ts:263` even says so in a comment: the field holds the
+   own-S3 image asset id, converted to `/api/images/:id` in API responses. Full proof per model is in each model's own section below. This
    is a **precise seven-model finding, not "every image-ish field"** —
    `Series.coverImage`, `House.avatar`/`coverImage`, and
    `UserSettings.profileCustomization.coverImage` go through a *different*,
@@ -102,8 +101,8 @@ mis-typed during the port.
    — `cdnUrlToKey`/`series.coverImage = cdnUrl`; `routes/houses.routes.ts:761-770`
    — same `cdnUrl` pattern for `house.avatar`; `routes/profileSettings.ts:97-100`
    — stored verbatim with no `ObjectId` validation at all, unlike every
-   `coverArt`/`image` field above, which the write path explicitly validates as
-   `mongoose.Types.ObjectId.isValid(...)` before accepting). Those three are
+   `coverArt`/`image` field above, which the write path explicitly validates as an
+   image asset id before accepting). Those three are
    correctly left out of the `ImageAsset` FK rows.
 
 ## Was the 79 figure right?
@@ -186,7 +185,7 @@ EXTERNAL / NOT-A-ROW-ID) · **target** (FK only) · **ON DELETE** · **proof**
 | source | class | target | ON DELETE | proof | note |
 |---|---|---|---|---|---|
 | `CatalogEntity(person).linkedArtistId` | FK (declared `ref`) | `catalog_entities` (self, artist) | SET NULL | `models/CatalogEntity.ts:464,468` (sparse index); doc comment "Links this person to a `type:'artist'` entity (claimed/owned artist)" | Absent already means "not yet linked" — the natural default state, so SET NULL promotes an orphan into the same state a never-linked person already has. |
-| `CatalogEntity.image` | FK | `image_assets` | SET NULL | `controllers/artists.controller.ts:1155-1176` (`mirrored = await mirrorCatalogImage(...); artist.image = mirrored.imageId`); `services/uploads/enrichCatalogEntity.ts:212-221` (same assignment, enrichment path); `models/CatalogEntity.ts:263` comment: "own S3 MongoDB ObjectId; converted to /api/images/:id in API responses" | Optional. See fact 5. |
+| `CatalogEntity.image` | FK | `image_assets` | SET NULL | `controllers/artists.controller.ts:1155-1176` (`mirrored = await mirrorCatalogImage(...); artist.image = mirrored.imageId`); `services/uploads/enrichCatalogEntity.ts:212-221` (same assignment, enrichment path); `models/CatalogEntity.ts:263` comment: the field holds the own-S3 image asset id, converted to /api/images/:id in API responses | Optional. See fact 5. |
 | `CatalogEntity.imageSizes.{small,medium,large,xlarge,xxlarge,original}.id` | FK (6 sub-fields) | `image_assets` | SET NULL | Same `writeCatalogImage`/`createImageSizes` pipeline as `Album.coverArtSizes` | |
 | `CatalogEntity.ownerOxyUserId` | CROSS-SERVICE | — | — | `models/CatalogEntity.ts:287` (index); `controllers/artists.controller.ts:1133,1220` (`ArtistModel.findOne({ ownerOxyUserId: userId })`) | The Oxy account that registered/owns this artist profile. |
 | `CatalogEntity.claimedByOxyUserId` | CROSS-SERVICE | — | — | `services/uploads/enrichCatalogEntity.ts:454` (`.select('_id claimedByOxyUserId')`) | Set when an `ArtistClaim` is approved. |
@@ -368,7 +367,7 @@ columns.
 |---|---|---|---|---|---|
 | `Playlist.ownerOxyUserId` | CROSS-SERVICE | — | — | `utils/catalogVisibility.ts:85,101` (`canViewPlaylist`); `models/Playlist.ts:71` (index) | |
 | `Playlist.collaborators[].oxyUserId` | CROSS-SERVICE | — | — | `utils/catalogVisibility.ts:86,102` (`collaborators?.some(entry => entry.oxyUserId === userId)`) | |
-| `Playlist.coverArt` | FK | `image_assets` | SET NULL | `controllers/playlists.controller.ts:219-246,298-323` (`coverArt` accepted only as a validated `mongoose.Types.ObjectId`, error message: "coverArt must be a valid image ID... Images must be uploaded first using /api/images/upload"; `getStoredImageColors(coverArt)` reads it back) | Optional. See fact 5. |
+| `Playlist.coverArt` | FK | `image_assets` | SET NULL | `controllers/playlists.controller.ts:219-246,298-323` (`coverArt` accepted only as a validated image asset id, error message: "coverArt must be a valid image ID... Images must be uploaded first using /api/images/upload"; `getStoredImageColors(coverArt)` reads it back) | Optional. See fact 5. |
 | `Playlist.coverArtSizes.{small,medium,large,xlarge,xxlarge,original}.id` | FK (6 sub-fields) | `image_assets` | SET NULL | Same `writeCatalogImage`/`createImageSizes` pipeline as `Album.coverArtSizes` | |
 | `Playlist.externalIds.isrc` | EXTERNAL | — | — | `models/Playlist.ts:24` | |
 | `Playlist.sources[].externalId` | EXTERNAL | — | — | Same provenance-log pattern as `Album`/`CatalogEntity`/`Track` | |
@@ -452,7 +451,7 @@ columns.
 |---|---|---|---|---|---|
 | `Track.artistId` | FK | `catalog_entities` (artist) | RESTRICT | `controllers/tracks.controller.ts:442-460`; `utils/playableContainers.ts:41-52,192`; dozens of read sites across `services/recommendations/*`, `services/radio/*`, `services/uploads/*` | The single densest relation in the codebase (~90+ call sites read/write it). Artists are never hard-deleted (fact 1) — RESTRICT. |
 | `Track.albumId` | FK | `albums` | SET NULL | `controllers/tracks.controller.ts:459-460` (`AlbumModel.findById(updates.albumId).select('artistId')`, cross-checked against `track.artistId`); `utils/playableContainers.ts:41-52,156` | Optional (`index: true`, no `required`) — a track can exist with no album. |
-| `Track.coverArt` | FK | `image_assets` | SET NULL | `controllers/tracks.controller.ts:279-299` (`coverArt` accepted only as a validated `mongoose.Types.ObjectId`, error message: "coverArt must be a valid image ID... Images must be uploaded first using /api/images/upload"; `getStoredImageColors(coverArt)` reads it back) | Optional (`models/Track.ts:158`, no `required`) — unlike `Album.coverArt`. See fact 5. |
+| `Track.coverArt` | FK | `image_assets` | SET NULL | `controllers/tracks.controller.ts:279-299` (`coverArt` accepted only as a validated image asset id, error message: "coverArt must be a valid image ID... Images must be uploaded first using /api/images/upload"; `getStoredImageColors(coverArt)` reads it back) | Optional (`models/Track.ts:158`, no `required`) — unlike `Album.coverArt`. See fact 5. |
 | `Track.coverArtSizes.{small,medium,large,xlarge,xxlarge,original}.id` | FK (6 sub-fields) | `image_assets` | SET NULL | Same `writeCatalogImage`/`createImageSizes` pipeline as `Album.coverArtSizes` | |
 | `Track.credits[].catalogEntityId` | FK (dead) | `catalog_entities` | SET NULL | See "dead readers" table above; read (never written) at `services/catalog/artistProfile.ts:172` | |
 | `Track.copyrightReportId` | FK | `copyright_reports` | SET NULL | `services/compliance/takedown.ts:567` (`track.copyrightReportId = copyrightReportId`); set from `controllers/copyright.controller.ts:204` and `controllers/artists.controller.ts:986` | Optional, set only on takedown. |

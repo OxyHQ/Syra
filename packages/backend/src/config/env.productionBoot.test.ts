@@ -27,8 +27,7 @@ import { join } from 'node:path';
  *
  * ## DATABASE_URL
  *
- * Postgres is the only database this service opens since the 2026-08-08
- * cutover, and the variable naming it was read straight from `process.env` by
+ * Postgres is the only database this service opens, and the variable naming it was read straight from `process.env` by
  * `db/postgres.ts` and `db/migrate.ts` while being declared in no schema at all
  * — so nothing checked it at boot. It degrades the same way: `bootServer`
  * catches a failed `connectPostgres()`, logs and continues (right for a database
@@ -37,8 +36,8 @@ import { join } from 'node:path';
  * every route.
  *
  * The scheme is asserted, not merely the URL shape, because `z.string().url()`
- * accepts `mongodb+srv://…` — and a leftover Mongo connection string in this
- * slot is the specific wrong value the cutover could produce.
+ * accepts any other database's connection string — the most likely wrong value
+ * in this slot.
  *
  * ## Why this runs `env.ts` in a CHILD PROCESS
  *
@@ -171,14 +170,13 @@ describe('DATABASE_URL', () => {
 
   it('refuses a value that is not a postgres connection string', async () => {
     /**
-     * `mongodb+srv://` is first deliberately: it passes `z.string().url()`, it
-     * is the value that sat in this slot's neighbourhood until the cutover, and
-     * it is the one a copy-paste from the old task definition would produce.
-     * The rest are the ordinary shapes of a half-filled variable.
+     * The first two are deliberately other databases' connection strings: they
+     * pass `z.string().url()`, and a copy-paste of the wrong secret produces
+     * exactly that. The rest are the ordinary shapes of a half-filled variable.
      */
     for (const value of [
-      'mongodb+srv://user:pass@cluster.mongodb.net/syra',
-      'mongodb://127.0.0.1:27017/syra',
+      'mysql://user:pass@cluster.example.net/syra',
+      'mysql://127.0.0.1:3306/syra',
       'redis://127.0.0.1:6379',
       'syra_ci',
       'host.rds.amazonaws.com:5432/syra',
@@ -199,14 +197,14 @@ describe('DATABASE_URL', () => {
     // production boot failure is logged, and log lines outlive the incident.
     const result = await boot({
       NODE_ENV: 'production',
-      DATABASE_URL: 'mongodb+srv://syra:hunter2-do-not-log@cluster.mongodb.net/syra',
+      DATABASE_URL: 'mysql://syra:hunter2-do-not-log@cluster.example.net/syra',
       STREAM_KEY_BASE_URL: VALID_STREAM_KEY_BASE_URL,
     });
 
     expect(result.ok).toBe(false);
     expect(result.output).not.toContain('hunter2-do-not-log');
     // And the redaction must not be achieved by printing nothing useful.
-    expect(result.output).toContain('cluster.mongodb.net');
+    expect(result.output).toContain('cluster.example.net');
   });
 
   it('boots in production with a postgres connection string', async () => {

@@ -1,13 +1,6 @@
 /**
  * Catalog playability and playlist readability, on drizzle.
  *
- * The only half there is. `utils/catalogVisibility.ts` held the Mongoose one
- * while call sites moved across, and Task 11 DELETED it — not deprecated it,
- * not re-exported it — when `playlists.controller` and `musicHelpers`, its last
- * two importers, were ported. Two implementations against two databases with an
- * explicit death date is what made that a migration rather than a compatibility
- * shim, and the death date has passed.
- *
  * ## The predicate
  *
  * Syra is an own-catalogue platform — every track is Syra-hosted — so a track is
@@ -27,18 +20,15 @@
  * in `controllers/stream.controller.ts`, which is the playback authority and
  * lives there because deciding whether to issue a stream is that controller's
  * job. Three artefacts, because listing and playback are genuinely two
- * authorities and the catalog needs both a query and a row predicate — but
- * under Mongo they did not actually agree, and the port is what fixes that.
+ * authorities and the catalog needs both a query and a row predicate — and
+ * they must agree.
  *
- * Measured on the Mongo pair before the port: the filter required
- * `isAvailable: true`, which a document with the key ABSENT does not match,
- * while the in-memory predicate accepted `isAvailable !== false`, which it does.
- * Two of the nine `{true, false, absent}²` shapes disagreed. The third
- * predicate, `isTrackPlayable` in `stream.controller.ts`, used
- * `!copyrightRemoved` against this file's `copyrightRemoved !== true`, which
- * diverge on a truthy non-boolean.
+ * Two ways they could disagree: a query requiring `isAvailable = true` against
+ * a predicate accepting `isAvailable !== false` diverge on an ABSENT value, and
+ * `!copyrightRemoved` against `copyrightRemoved !== true` diverge on a truthy
+ * non-boolean.
  *
- * Both divergences are gone here, and not by discipline: `tracks.is_available`
+ * Neither can happen here, and not by discipline: `tracks.is_available`
  * and `tracks.copyright_removed` are `NOT NULL` booleans, so "absent" and
  * "truthy non-boolean" are unrepresentable. The comparisons below are written
  * `=== true` / `=== false` rather than `!x` so the TypeScript predicate is the
@@ -57,9 +47,8 @@ import { catalogEntities, tracks } from '../schema/catalog';
  * The condition every catalog read of `tracks` composes first.
  *
  * Takes no arguments and returns a bare condition: drizzle composes with
- * `and()`, so there is no counterpart to the Mongo helper's filter parameter
- * (nor to `andMongoFilters`, which existed only because spreading two filter
- * objects could clobber an existing `$or`).
+ * `and()`, so there is no filter parameter to merge into (spreading two filter
+ * objects could clobber an existing `or`).
  *
  *     db.select().from(tracks).where(and(playableTrackFilter(), eq(tracks.albumId, id)))
  *
@@ -86,8 +75,7 @@ export function playableTrackFilter(): SQL {
  * as false. Written with `!=`, every artist whose `terminated` was never set
  * either way would silently vanish from every related-artists shelf, every
  * genre fallback and every radio artist seed. `is not true` is the three-valued
- * spelling that means what Mongo's `{ terminated: { $ne: true } }` meant:
- * false, null and absent all pass; only an explicit true is excluded.
+ * spelling of "not terminated": false, null and absent all pass; only an explicit true is excluded.
  *
  * One spelling, because there are four call sites across the recommendation and
  * radio services and a fifth in Task 10c's controllers — and the failure mode is
@@ -121,9 +109,8 @@ export interface PreviewEligibleTrackRow extends PlayableTrackRow {
   /**
    * How many rows this track has in `track_hls_renditions`.
    *
-   * The Mongo shape was an embedded `hls[]` array and the check was
-   * `hls.length > 0`; Task 4 moved the ladder to a child table, so the caller
-   * supplies the count rather than the array. Nothing here needs a rendition's
+   * The ladder lives in a child table, so the caller supplies the count rather
+   * than the rows. Nothing here needs a rendition's
    * contents — only whether the ladder exists.
    */
   readonly hlsRenditionCount: number;
@@ -146,9 +133,8 @@ function hasReadyHls(track: PreviewEligibleTrackRow): boolean {
  * regenerable source: either a retained original file (uploads / CC) or its own
  * ready HLS ladder.
  *
- * Not exported: `hasReadyHls` and its sibling `hasRegenerablePreviewSource` were
- * both exported from the Mongo module and referenced nowhere outside it, so the
- * two are folded back in here rather than carried over as dead surface.
+ * Not exported: `hasReadyHls` and its sibling `hasRegenerablePreviewSource` are
+ * referenced nowhere outside this module, so they are not public surface.
  */
 function hasRegenerablePreviewSource(track: PreviewEligibleTrackRow): boolean {
   return (track.audioSourceUrl !== null && track.audioSourceUrl.length > 0) || hasReadyHls(track);
@@ -172,7 +158,7 @@ export interface ViewablePlaylistRow {
    *
    * A separate table now rather than an embedded array, so a caller that has
    * not loaded them passes `undefined` — which is treated as "no collaborators",
-   * the same fail-closed answer the Mongo version gave for an absent field.
+   * the fail-closed answer for an absent field.
    */
   readonly collaboratorOxyUserIds?: readonly string[];
 }

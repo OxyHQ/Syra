@@ -219,7 +219,7 @@ export async function updateEpisode(req: AuthRequest, res: Response): Promise<vo
   if (updates.episodeType !== undefined) values.episodeType = updates.episodeType;
   /**
    * `image_id` is a foreign key to `image_assets`, so an id naming no asset is
-   * `23503` rather than the string Mongo stored. `isLiveEntityId` rejects a
+   * `23503` rather than a dangling reference. `isLiveEntityId` rejects a
    * malformed one here; a well-formed id for an asset that does not exist still
    * reaches the constraint, and that is the caller's 500 to avoid by uploading
    * the cover first — the same contract `uploads.controller` already has.

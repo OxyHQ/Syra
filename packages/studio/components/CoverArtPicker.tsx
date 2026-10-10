@@ -10,7 +10,7 @@ import { toast } from '@oxy.so/bloom/toast';
 import { cn } from '@/lib/utils';
 
 interface CoverArtPickerProps {
-  /** Selected cover art as an uploaded image id (MongoDB ObjectId). */
+  /** Selected cover art as an uploaded image id. */
   value?: string | null;
   /** Called with the uploaded image id once a pick + upload succeeds. */
   onChange: (imageId: string | null) => void;

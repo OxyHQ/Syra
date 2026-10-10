@@ -15,11 +15,10 @@
  *
  * ## `undefined` leaves alone; `null` clears
  *
- * Every "stop the stream" path in `rooms.routes.ts` used to assign `undefined`
- * to nine fields and call `save()`, which Mongoose turned into `$unset`.
- * Drizzle's `buildUpdateSet` DROPS an `undefined`-valued key, so the identical
- * code against Postgres is a stop that stops nothing — the stale RTMP key, the
- * stale ingress id and the stale "now playing" card all survive.
+ * Stopping a stream clears nine fields. Drizzle's `buildUpdateSet` DROPS an
+ * `undefined`-valued key, so assigning `undefined` to them is a stop that stops
+ * nothing — the stale RTMP key, the stale ingress id and the stale "now
+ * playing" card all survive.
  * {@link CLEARED_STREAM_FIELDS} is therefore an explicit all-`null` object
  * rather than a loop over the same field names, and {@link stopRoomStreamFields}
  * is the single place the teardown paths go through.
@@ -29,8 +28,8 @@
  * `Room.podcastQueue[]` is `room_media_queue_items`. Replacing a queue is a
  * DELETE plus an INSERT, and the stream paths only persist the remainder once
  * the ingress actually started — so {@link replaceRoomStreamAndQueue} takes both
- * halves and writes them in ONE transaction, preserving the Mongo behaviour that
- * a failed start leaves the persisted queue untouched.
+ * halves and writes them in ONE transaction, so a failed start leaves the
+ * persisted queue untouched.
  */
 
 import { and, asc, eq, inArray, isNull, notInArray, or, sql, type SQL } from 'drizzle-orm';
@@ -144,9 +143,9 @@ export interface ListRoomsOptions {
  * The room listing — both the global one and the per-house one, which differ
  * only in whether `houseId` is set.
  *
- * `archived = false` is unconditional, matching Mongo's `archived: { $ne: true }`
- * and matching the `WHERE` clause of all five listing indexes. Absent a status
- * filter the default is the live/scheduled pair, never `ended`.
+ * `archived = false` is unconditional, matching the `WHERE` clause of all five
+ * listing indexes. Absent a status filter the default is the live/scheduled
+ * pair, never `ended`.
  */
 export async function listRooms(
   options: ListRoomsOptions,
@@ -169,9 +168,8 @@ export async function listRooms(
     /**
      * A profile-owned room has `house_id = null`, and `null NOT IN (…)` is NULL
      * — not true — so a bare `notInArray` would DROP every profile-owned room
-     * from the listing the moment any house became restricted. Mongo's `$nin`
-     * matches a missing field, which is the behaviour being reproduced here;
-     * the `isNull` arm is what reproduces it.
+     * from the listing the moment any house became restricted. A room with no
+     * house must stay listed, and the `isNull` arm is what keeps it.
      */
     conditions.push(
       or(isNull(rooms.houseId), notInArray(rooms.houseId, [...options.excludeHouseIds])) as SQL,
@@ -200,8 +198,8 @@ export interface LiveRoomBroadcasters {
 /**
  * Every currently-live room's broadcasters, for the live-badge feed.
  *
- * `archived = false` is carried DELIBERATELY, and it is a behaviour change from
- * Mongo. Two reasons, and the second is the load-bearing one:
+ * `archived = false` is carried DELIBERATELY. Two reasons, and the second is the
+ * load-bearing one:
  *
  *  1. `rooms_status_created_at_idx` is partial on `archived = false`, so a query
  *     without the predicate cannot use it and sequential-scans `rooms` on every
@@ -209,9 +207,9 @@ export interface LiveRoomBroadcasters {
  *  2. `archived` is the MODERATION restriction lever for a room — per
  *     `moderation/enforcement-service.ts`, "the only lever a room has that does
  *     not end a live session out from under the people in it" — so an archived
- *     room is routinely `status = 'live'` at the same time. Mongo's unfiltered
- *     query therefore still emitted a live badge for a room a moderator had
- *     restricted. This closes that, rather than carrying it forward.
+ *     room is routinely `status = 'live'` at the same time. Without the
+ *     predicate, a room a moderator had restricted would still get a live
+ *     badge.
  */
 export async function findLiveRoomBroadcasters(
   db: DbOrTransaction = getDb(),
@@ -275,8 +273,8 @@ export async function findQueuesByRoomIds(
  *
  * The columns are nullable and the interface's fields are optional, so each null
  * is dropped rather than carried through as an explicit `undefined` — otherwise
- * a `'track'` item would serialize with `episodeId: null` where the Mongo
- * subdocument simply had no such key.
+ * a `'track'` item would serialize with `episodeId: null` rather than omitting
+ * the key.
  */
 function toMediaQueueItem(row: {
   kind: string;
@@ -432,10 +430,10 @@ export async function stopRoomStreamFields(
 /**
  * Persist a started stream and the queue remainder ATOMICALLY.
  *
- * This is the shape that keeps the Mongo behaviour the routes depend on: the
- * remaining queue is staged in memory and written only once the ingress has
- * actually started, so a failed start leaves the persisted queue untouched and
- * the head available for a retry. Two tables, therefore one transaction.
+ * This is the shape the routes depend on: the remaining queue is staged in
+ * memory and written only once the ingress has actually started, so a failed
+ * start leaves the persisted queue untouched and the head available for a
+ * retry. Two tables, therefore one transaction.
  */
 export async function replaceRoomStreamAndQueue(
   id: string,
@@ -469,8 +467,8 @@ export async function replaceRoomStreamAndQueue(
  * The array mutations are done in SQL rather than read-modify-write because two
  * people joining the same room concurrently would otherwise each write back the
  * roster they read, losing one of the two — the socket path in particular runs
- * this on every connection. `array_append` under a `not (… = any(…))` guard is
- * Mongo's `$addToSet`; `greatest` is its `$max`.
+ * this on every connection. `array_append` under a `not (… = any(…))` guard
+ * adds only if absent; `greatest` keeps the high-water mark.
  */
 export async function addParticipant(
   roomId: string,
@@ -491,7 +489,7 @@ export async function addParticipant(
     .where(eq(rooms.id, roomId));
 }
 
-/** Remove `userId` from `participants` — Mongo's `$pull`. */
+/** Remove `userId` from `participants`. */
 export async function removeParticipant(
   roomId: string,
   userId: string,
@@ -506,7 +504,7 @@ export async function removeParticipant(
     .where(eq(rooms.id, roomId));
 }
 
-/** Add `userId` to `speakers` if absent — Mongo's `$addToSet`. */
+/** Add `userId` to `speakers` if absent. */
 export async function addSpeaker(
   roomId: string,
   userId: string,
@@ -522,7 +520,7 @@ export async function addSpeaker(
     .where(eq(rooms.id, roomId));
 }
 
-/** Remove `userId` from `speakers` — Mongo's `$pull`. */
+/** Remove `userId` from `speakers`. */
 export async function removeSpeaker(
   roomId: string,
   userId: string,

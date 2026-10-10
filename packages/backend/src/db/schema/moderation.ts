@@ -31,9 +31,7 @@ import {
  * that is its own (`status`). That split is enforced by the compiler in the
  * direction that matters: `postgresModerationStore` takes a table typed as
  * carrying every moderation column, so a column dropped from the spread is a
- * compile error at the call site, naming the column. The Mongoose side could not
- * do this — `Model<TReport>` checked the TypeScript type and never the schema
- * paths, which is the defect `zodPathsExistInMongoose.test.ts` exists to catch.
+ * compile error at the call site, naming the column.
  *
  * ## The CHECK tuples come from the enums, so there is nothing to pin
  *

@@ -18,7 +18,7 @@ So the fix cannot be "split on comma". It has to be a better signal.
 ## The premise that changed
 
 `track_credits` has no `catalog_entity_id` column, and the schema explains that
-as: four Mongoose paths declared it, none ever wrote it, because a name from an
+as: four model paths declared it, none ever wrote it, because a name from an
 enrichment source "is not a high-confidence identity claim".
 
 That reasoning is sound and it is about ENRICHMENT names. It does not cover the

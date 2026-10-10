@@ -117,10 +117,9 @@ describe('unified search — episodes category', () => {
           source: 'rss',
           status: 'ready',
         }, // excluded: rss w/o enclosure
-        // Excluded: RSS with an EMPTY enclosure, not an absent one. Mongo needed
-        // three conditions (`$exists`, not null, not '') for this; Postgres needs
-        // two, and without a fixture on this side of it `is not null` alone would
-        // pass every other case in this block.
+        // Excluded: RSS with an EMPTY enclosure, not an absent one. The filter
+        // needs two conditions (not null, not ''), and without a fixture on this
+        // side of it `is not null` alone would pass every other case in this block.
         {
           podcastId,
           podcastTitle: 'Show',

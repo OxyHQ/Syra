@@ -38,8 +38,8 @@
   "inputs": [
     {
       "path": "docs/audits/2026-10-03-final-sdk-receiver/inputs/package.json",
-      "bytes": 2979,
-      "sha256": "e4d213d007441676d46d34e2ba3f98f112ba1ddf356b9183ce0a2bfdb7ec5b50"
+      "bytes": 2871,
+      "sha256": "8df8c47f3026d428dc5bd1afc89e595b4d014192eedefcfa03ec580a668e80f8"
     },
     {
       "path": "docs/audits/2026-10-03-final-sdk-receiver/inputs/bun.lock",

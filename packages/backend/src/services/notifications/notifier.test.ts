@@ -128,12 +128,9 @@ describe('notifyUser', () => {
   });
 
   /**
-   * The behaviour `schema/user.ts` said this port owed, and the ONE input on
-   * which the ported claim and the Mongo one disagree.
-   *
-   * Mongo's `claimSuppression` never read `expiresAt` — any duplicate key meant
-   * "already notified" — so a claim past its deadline kept suppressing until the
-   * TTL monitor happened to reap it. `on conflict … where expires_at <= now()`
+   * The behaviour `schema/user.ts` describes: a claim that treated any
+   * duplicate key as "already notified" would keep suppressing past its own
+   * deadline until the sweep reaped it. `on conflict … where expires_at <= now()`
    * takes an expired claim over instead, which makes the coalescing window exact
    * and leaves the sweep as pure housekeeping.
    *

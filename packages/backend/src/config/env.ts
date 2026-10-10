@@ -185,9 +185,9 @@ const schema = z
      * `STREAM_KEY_BASE_URL` rule below exists for.
      *
      * The scheme is checked, not just the URL shape: `z.string().url()` accepts
-     * `mongodb+srv://…` quite happily (verified), and a leftover Mongo connection
-     * string in this slot is the one wrong value this cutover could actually
-     * produce.
+     * any other database's connection string (`mysql://…`, `redis://…`) quite
+     * happily, and a connection string for the wrong database is the most likely
+     * wrong value in this slot.
      */
     const databaseUrl = value.DATABASE_URL;
     if (databaseUrl === undefined || !/^postgres(ql)?:\/\//.test(databaseUrl)) {

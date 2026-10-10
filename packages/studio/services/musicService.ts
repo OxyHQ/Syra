@@ -34,7 +34,7 @@ export interface UploadTrackMetadata {
   title: string;
   artistId: string;
   albumId?: string;
-  /** Cover art as an uploaded image id (MongoDB ObjectId), never a URL/blob. */
+  /** Cover art as an uploaded image id, never a URL/blob. */
   coverArt?: string;
   genre?: string[];
   isExplicit?: boolean;

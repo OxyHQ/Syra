@@ -17,7 +17,7 @@ afterEach(clearDb);
 afterAll(disconnectDb);
 beforeEach(() => resetPodcastImportStateForTests());
 
-/** How many shows exist — the Mongo `countDocuments({})` equivalent. */
+/** How many shows exist. */
 async function showCount(): Promise<number> {
   const [row] = await getDb().select({ total: count() }).from(podcasts);
   return row?.total ?? 0;

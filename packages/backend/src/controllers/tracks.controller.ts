@@ -87,12 +87,11 @@ export const getTracks = async (req: Request, res: Response, next: NextFunction)
 /**
  * The child collections only the single-track surface renders.
  *
- * `credits`, `sources` and the HLS ladder were EMBEDDED arrays on the Mongo
- * document, so `toApiFormat`'s spread put all three on `GET /api/tracks/:id`
- * for free. They are child tables now and `toTrackDto` is an allowlist, so a
- * port that did not ask for them would have dropped three live fields with
- * nothing to notice — an allowlist omits in silence, which is what makes this
- * the dangerous direction. Three bounded reads, and only for the one endpoint
+ * `credits`, `sources` and the HLS ladder are live fields of
+ * `GET /api/tracks/:id`. They are child tables and `toTrackDto` is an
+ * allowlist, so a read that did not ask for them would drop three live fields
+ * with nothing to notice — an allowlist omits in silence, which is what makes
+ * this the dangerous direction. Three bounded reads, and only for the one endpoint
  * that renders them: `toTrackDtos` deliberately loads none of them for a page.
  */
 async function loadTrackDetail(trackId: string): Promise<{
@@ -408,8 +407,7 @@ export const uploadTrack = async (req: AuthRequest, res: Response, next: NextFun
        * the S3 key embeds it (`getTrackS3Key`), so the object cannot be written
        * until the id exists. An upload that succeeds and an insert that then
        * fails leaves an orphaned object with no row — the safe direction, and
-       * the same trade `services/imageAssetService.ts` documents. `new
-       * mongoose.Types.ObjectId()` did exactly this job before.
+       * the same trade `services/imageAssetService.ts` documents.
        */
       const trackId = uuidv7();
       const metadataGenre = genre ? (Array.isArray(genre) ? genre : [genre]) : undefined;
@@ -438,9 +436,9 @@ export const uploadTrack = async (req: AuthRequest, res: Response, next: NextFun
 
       logger.debug('[TracksController] Attempting to save track to database', { trackId });
       /**
-       * One transaction for the track and both counters. In Mongo these were
-       * three independent writes, so a failed `$inc` left the catalogue with a
-       * track the artist's `stats.tracks` did not count.
+       * One transaction for the track and both counters, so a failed counter
+       * update cannot leave the catalogue with a track the artist's
+       * `stats.tracks` does not count.
        */
       const saved = await getDb().transaction(async (tx) => {
         const [row] = await tx

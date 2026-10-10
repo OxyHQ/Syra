@@ -52,7 +52,8 @@ Syra also gives something back to the ecosystem. `@syra.fm/sdk` ships the live r
 
 ## Quick start
 
-You need [Bun](https://bun.sh) 1.3 or newer, Node.js 18 or newer, and a MongoDB instance.
+You need [Bun](https://bun.sh) 1.3 or newer, Node.js 18 or newer, and a PostgreSQL instance
+(`docker compose -f docker-compose.postgres.yml up -d` starts one locally).
 
 ```bash
 bun install         # also builds shared-types via postinstall

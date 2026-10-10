@@ -73,8 +73,7 @@ async function fakeFetch(): Promise<SafeFetchResult> {
 /**
  * The mirrored asset has to EXIST as a row.
  *
- * `podcasts.image_id` is a foreign key to `image_assets`, where Mongo stored
- * whatever string the mirror returned. In production the real mirror creates
+ * `podcasts.image_id` is a foreign key to `image_assets`. In production the real mirror creates
  * that row (`services/imageAssetService.ts`) before returning its id, so nothing
  * changes there; here the mirror is STUBBED, so the fixture has to create it —
  * a stub returning an id nothing backs fails the import with `23503` and looks

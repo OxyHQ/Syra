@@ -8,11 +8,9 @@ import { catalogEntities } from '../db/schema/catalog';
 import { search } from './search.controller';
 
 /**
- * ONE database. This file used to connect to both — persons are
- * `catalog_entities` rows, while the same handler's podcast and episode
- * categories were still Mongoose and `search` touches them on every
- * `category=all` request. Task 12 took those two categories to drizzle, so
- * every read `search` makes is Postgres and the Mongo connection is gone.
+ * ONE database. Persons are `catalog_entities` rows, and the podcast and
+ * episode categories `search` touches on every `category=all` request are
+ * Postgres too, so every read `search` makes is Postgres.
  */
 beforeAll(connectDb);
 afterEach(clearDb);

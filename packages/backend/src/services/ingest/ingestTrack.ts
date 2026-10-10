@@ -319,8 +319,7 @@ export async function ingestTrack(
      * The measured audio facts, the rendition ladder and the `ready` status
      * commit TOGETHER.
      *
-     * They were one `track.save()` under Mongo because `hls` was an embedded
-     * array; `track_hls_renditions` is a child table now, and a track marked
+     * `track_hls_renditions` is a child table, and a track marked
      * `ready` with no rendition rows is a track the stream endpoint offers and
      * then cannot serve.
      */

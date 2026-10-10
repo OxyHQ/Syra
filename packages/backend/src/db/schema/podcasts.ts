@@ -82,15 +82,15 @@
  * stays flattened onto the parent row, the same treatment `catalog.ts` gives
  * `Track.metadata`/`Track.audioSource`. Every flattened column from an
  * optional-as-a-whole subdocument is nullable with NO default, even when the
- * Mongoose sub-schema declares one on an inner field (`cache.status` defaults
- * to `'none'` in Mongo, but `cache` itself may be entirely absent) — this
+ * sub-object declares one on an inner field (`cache.status` defaults to
+ * `'none'`, but `cache` itself may be entirely absent) — this
  * mirrors `tracks.audioSourceUrl`/`audioSourceFormat`/… in `catalog.ts`
  * exactly, which are bare nullable columns despite `AudioSourceSchema`
  * declaring some of its own fields `required: true`.
  *
  * `Episode.hlsMasterKey` (top-level, the primary/Syra-hosted stream) and
  * `Episode.cache.hlsMasterKey` (the hybrid-cache pipeline's own key) are two
- * DIFFERENT fields in Mongo — flattened here as `hlsMasterKey` and
+ * DIFFERENT fields — flattened here as `hlsMasterKey` and
  * `cacheHlsMasterKey` so neither collides with or shadows the other.
  *
  * ## Two `tsvector` GENERATED columns
@@ -101,11 +101,9 @@
  * `library.ts` give every browsable table. `author` is nullable, so its
  * expression is `title || ' ' || coalesce(author, '')`, the same `coalesce`
  * `playlists.searchVector` (`library.ts`) uses for its own nullable
- * `description`. `searchPodcasts` reads via a Mongo case-insensitive regex
- * today, not `$text` (its own comment: production `autoIndex` is off) — this
- * table still gets the GIN, matching `catalog.ts`'s systematic policy of one
- * per browsable table regardless of whether the current read path uses it
- * yet.
+ * `description`. This table gets the GIN, matching `catalog.ts`'s systematic
+ * policy of one per browsable table regardless of whether the current read
+ * path uses it yet.
  *
  * ## `podcasts.status` is NOT dropped — it got the index its NEGATION needs
  *
@@ -116,15 +114,15 @@
  * serve `status <> 'active'`. That negation is a real, per-request reader:
  * `utils/podcastDiscovery.ts`'s `hiddenShowEpisodeFilter()` runs `find({
  * status: { $ne: 'active' } })` on every credit-listing and search request
- * (its own doc comment names the Mongo `status` index it depends on).
+ * (its own doc comment names the `status` index it depends on).
  * `podcasts_inactive_idx`, on the table below, is the fix — see that index's
  * own comment for why it indexes `id` alone rather than a sort key.
  *
  * ## Indexes dropped, and why
  *
- * Every drop below replaces a Mongo `index: true` (or a Mongo `'text'`
- * index) with NOTHING, because tracing the real call sites found no reader
- * that benefits from it standing alone:
+ * Every index below was declared on the source model and is deliberately NOT
+ * built, because tracing the real call sites found no reader that benefits
+ * from it standing alone:
  *
  *  - `podcasts.title` / `podcasts.author` standalone ascending indexes, and
  *    `episodes.title`'s — superseded by the two `tsvector` GIN indexes above.
@@ -173,8 +171,7 @@
  * (`podcasts.controller.ts`), whose `episodeVisibilityFilter` returns `{}`
  * (every status) for the show's OWNER and `{ status: 'ready' }` for everyone
  * else. A partial index on `status = 'ready'` would silently stop serving the
- * owner's own unpublished-episode view; kept general, matching the original
- * Mongo index exactly.
+ * owner's own unpublished-episode view; kept general.
  *
  * ## `podcast_sources.importedAt` stays `text`, unlike its three siblings
  *
@@ -182,8 +179,8 @@
  * (`catalog.ts`, `library.ts`) all promoted this field to `timestamptz` on
  * real evidence: every one of their call sites writes `new
  * Date().toISOString()`. `Podcast.sources` has no call site at all (see
- * above) — there is no evidence to promote past what Mongoose actually
- * declares (`type: String`), so it stays `text`, matching the declared type
+ * above) — there is no evidence to promote past the declared `string`, so it
+ * stays `text`, matching the declared type
  * rather than assuming the sibling tables' real-instant semantics.
  *
  * ## The deferred ledger
@@ -339,7 +336,7 @@ export const podcasts = pgTable(
     claimable: boolean(),
     /** An Oxy account id — no foreign key. Set when the claim is approved. */
     claimedByOxyUserId: text(),
-    /** One of the six real `ref:` in the Mongoose model set (RELATIONS.md). */
+    /** One of the six declared `ref:` relations in the model set (RELATIONS.md). */
     linkedArtistId: text().references(() => catalogEntities.id, { onDelete: 'set null' }),
     // ── Refresh / HTTP conditional-GET cache ─────────────────────────────
     lastRefreshedAt: timestamptz(),
@@ -407,8 +404,8 @@ export const podcasts = pgTable(
       sql`${t.visibility} in (${sql.raw(inList(PODCAST_VISIBILITIES))})`,
     ),
     check('podcasts_popularity_check', sql`${t.popularity} between 0 and 100`),
-    // Sparse-unique in Mongo — a plain Postgres `unique()` already tolerates
-    // any number of NULLs, the identical semantics.
+    // Sparse-unique — a plain Postgres `unique()` already tolerates any number
+    // of NULLs.
     unique('podcasts_feed_url_key').on(t.feedUrl),
     unique('podcasts_podcast_guid_key').on(t.podcastGuid),
     index('podcasts_linked_artist_id_idx').on(t.linkedArtistId),
@@ -441,8 +438,8 @@ export const podcasts = pgTable(
      * `entityProfile.controller.ts:167` and the search path); that function's
      * own doc comment says "the extra query uses the indexed `status` field".
      * Indexes `id` alone, not a sort key, because the reader is
-     * `.select('_id')` with no `ORDER BY` — smaller than Mongo's full
-     * `status` index and an exact match for the query, not a general-purpose
+     * `.select('_id')` with no `ORDER BY` — smaller than a full `status`
+     * index and an exact match for the query, not a general-purpose
      * one.
      */
     index('podcasts_inactive_idx').on(t.id).where(sql`${t.status} <> 'active'`),
@@ -530,7 +527,7 @@ export const podcastSources = pgTable(
     /**
      * `text`, not `timestamptz` — this table has no writer at all, unlike its
      * three siblings in `catalog.ts`/`library.ts`. See the file-level doc
-     * comment for why this stays exactly what Mongoose declares.
+     * comment for why this stays exactly the declared type.
      */
     importedAt: text().notNull(),
     fields: text().array().notNull().default(sql`array[]::text[]`),
@@ -646,7 +643,7 @@ export const episodes = pgTable(
     source: text({ enum: PODCAST_SOURCES }).notNull(),
     // `cache` is a single optional subdocument, flattened (see the
     // file-level doc comment). `cacheHlsMasterKey` is DISTINCT from the
-    // top-level `hlsMasterKey` below — two different keys in Mongo.
+    // top-level `hlsMasterKey` below — two different keys.
     cacheStatus: text({ enum: EPISODE_CACHE_STATUSES }),
     // Named `cacheObjectKey`, not `cacheS3Key` — the latter tokenizes as
     // `cache_s_3_key` under drizzle's own snake_case casing (`toSnakeCase`,
@@ -698,7 +695,7 @@ export const episodes = pgTable(
       sql`${t.audioSourceFormat} is null or ${t.audioSourceFormat} in (${sql.raw(inList(AUDIO_FORMATS))})`,
     ),
     check('episodes_popularity_check', sql`${t.popularity} between 0 and 100`),
-    // One episode per feed guid, direct port of the Mongo compound unique.
+    // One episode per feed guid.
     unique('episodes_podcast_id_guid_key').on(t.podcastId, t.guid),
     // Reverse-chronological listing within a show — NON-partial; see the
     // file-level doc comment for why (the show owner sees every status).
@@ -840,16 +837,15 @@ export const episodeProgress = pgTable(
     updatedAt: updatedAt(),
   },
   (t) => [
-    // One progress record per user per episode — direct port of the Mongo
-    // compound unique; also the leading-column index for "this user's
+    // One progress record per user per episode; also the leading-column index for "this user's
     // progress list", so no separate standalone oxy_user_id index is added
     // (dropped in writing — see the file-level doc comment).
     unique('episode_progress_oxy_user_id_episode_id_key').on(t.oxyUserId, t.episodeId),
     // FK support — cascade-delete lookup by episode_id, not covered by the
     // unique index above (which leads with oxy_user_id).
     index('episode_progress_episode_id_idx').on(t.episodeId),
-    // getContinueListening's own filter + sort — a purpose-fit upgrade over
-    // Mongo's non-partial (oxyUserId, updatedAt desc) index, same convention
+    // getContinueListening's own filter + sort — partial rather than a plain
+    // (oxyUserId, updatedAt desc) index, same convention
     // Task 2/3 used for playableTrackFilter()/canViewPlaylist().
     index('episode_progress_oxy_user_id_updated_at_idx')
       .on(t.oxyUserId, t.updatedAt.desc())

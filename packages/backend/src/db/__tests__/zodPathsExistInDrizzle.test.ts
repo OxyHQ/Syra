@@ -8,36 +8,30 @@ import * as schema from '../schema';
 /**
  * Every field a stored zod DTO declares resolves to real storage.
  *
- * Replaces `models/zodPathsExistInMongoose.test.ts`, which guarded the same
- * class against Mongoose. **The two are not translations of each other** — half
- * the original job is now done by the compiler, and the half that is left is the
- * half that was always invisible.
+ * Half of this class is done by the compiler, and the half that is left is the
+ * half that is invisible to it.
  *
- * ## What carried over, and what did not
+ * ## What the compiler covers, and what it does not
  *
- * NOT carried over: the original's whole rationale. Mongoose strict mode
- * DISCARDS a `$set` on an undeclared path — no throw, no warning — while the
- * zod-derived TypeScript type made the write typecheck. Drizzle has no such
- * failure: an unknown key in `.values({...})` or `.set({...})` is a compile
- * error. Task 10b found `catalog_entities.members` exactly that way. That
- * direction needs no runtime gate any more.
+ * Covered: a write to an undeclared column. An unknown key in `.values({...})`
+ * or `.set({...})` is a compile error. Task 10b found `catalog_entities.members`
+ * exactly that way. That direction needs no runtime gate.
  *
- * CARRIED OVER: the other direction, which `tsc` still cannot see. Nothing
+ * NOT covered, so gated here: the other direction, which `tsc` still cannot see. Nothing
  * forces a DTO to be written through a table, so a zod field can exist in the
  * contract, be returned to clients, be asserted by a passing test, and have no
  * storage anywhere. That was `members` before it was caught, and it had a live
  * reader. Only a runtime comparison against the schema can see it.
  *
- * Also carried over, because they were right: an allowlist so an absence is a
- * visible decision rather than a hole, and a vacuity floor, because every
+ * Also here: an allowlist so an absence is a visible decision rather than a hole, and a vacuity floor, because every
  * assertion here is "nothing missing" and a broken traversal reports exactly
  * that.
  *
- * ## The trap the original recorded, in its drizzle costume
+ * ## The nested-object trap
  *
- * The original notes that `schema.path('links.wikidata')` does not resolve for a
- * single-nested subdocument, so a walk that misses it reports every nested field
- * as missing. The port turned those subdocuments into COLUMN PREFIXES —
+ * A nested DTO object (`links.wikidata`) has no column of its own name, so a walk
+ * that expects one reports every nested field as missing. Those objects are
+ * stored as COLUMN PREFIXES —
  * `links.wikidata` is `linksWikidata`, `stats.followers` is `statsFollowers` —
  * so the drizzle version of that trap is a naive one-to-one name match calling a
  * correct schema broken.
@@ -68,15 +62,14 @@ import * as schema from '../schema';
  * not a wider traversal — and it is stated here rather than only in a report
  * because this is where someone reading a passing run will be.
  *
- * ## A bug in the original, found while porting it
+ * ## The zod 4 array trap
  *
- * Its comment says "Only descend into plain objects. An array of objects is
- * stored as one array path". Its `unwrap` calls `.unwrap()` on anything that has
- * the method, and in **zod 4 `ZodArray.unwrap()` returns the ELEMENT type** — so
- * it walks into array items, against its own stated intent, emitting
- * `members.name` and `sources.provider`. It passes only because Mongoose happens
- * to resolve those through a DocumentArray's `.schema`. {@link unwrapOptional}
- * unwraps optionality and nothing else, so an array is one path here.
+ * "Only descend into plain objects. An array of objects is stored as one array
+ * path." An `unwrap` that calls `.unwrap()` on anything that has the method
+ * breaks that rule, because in **zod 4 `ZodArray.unwrap()` returns the ELEMENT
+ * type** — so it walks into array items, emitting `members.name` and
+ * `sources.provider`. {@link unwrapOptional} unwraps optionality and nothing
+ * else, so an array is one path here.
  */
 
 // ── The two registries, kept separate on purpose ────────────────────────────
@@ -447,7 +440,7 @@ describe('every zod DTO field resolves to drizzle storage', () => {
     expect(artist.resolved).not.toContain('imageSizes.small.width');
 
     // An array is ONE path, never a walk over its element shape. This is the
-    // zod-4 `ZodArray.unwrap()` trap the Mongoose gate fell into.
+    // zod-4 `ZodArray.unwrap()` trap.
     expect(artist.resolved).toContain('members');
     expect(artist.resolved.some((p) => p.startsWith('members.'))).toBe(false);
 

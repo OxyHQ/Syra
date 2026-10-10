@@ -25,9 +25,8 @@
  * and podcast schedulers, which skip a tick when Redis is down — because this
  * job DELETES. Its correctness depends on the same store it is deleting from
  * being reachable, and putting the mutual exclusion anywhere else means adding a
- * second thing that can be down while the deletes still run. That reasoning is
- * inherited verbatim from the Mongo lease row this replaces; see
- * {@link acquireSweepLock} for what changed and why it is strictly better.
+ * second thing that can be down while the deletes still run; see
+ * {@link acquireSweepLock} for why an advisory lock rather than a lease row.
  */
 
 import { and, eq, isNull, sql } from 'drizzle-orm';
@@ -64,9 +63,8 @@ const SWEEP_BATCH_SIZE = 500;
 const TICK_INTERVAL_MS = 60 * 60 * 1000;
 /** First tick is delayed so it never competes with cold-start boot work. */
 const INITIAL_DELAY_MS = 5 * 60 * 1000;
-// There is no lock lease any more, and therefore no TTL constant. The Mongo
-// version needed one because a lease has to guess how long the work takes; a
-// session advisory lock is released by the connection dropping, so a crashed
+// There is no lock lease, and therefore no TTL constant: a lease has to guess
+// how long the work takes; a session advisory lock is released by the connection dropping, so a crashed
 // task frees it exactly and a slow sweep never outlives its own claim. See
 // `acquireSweepLock`.
 
@@ -144,16 +142,16 @@ const SWEEP_LOCK_KEY = 704_213_001;
 /**
  * Claim the sweep for this instance, or report that somebody else holds it.
  *
- * A SESSION-scoped `pg_try_advisory_lock`, which is strictly better than the
- * Mongo lease row it replaces and needs no table at all:
+ * A SESSION-scoped `pg_try_advisory_lock`, which is strictly better than a
+ * lease row and needs no table at all:
  *
  *  - `try` never blocks. A losing instance is told immediately and skips the
- *    tick, exactly as the losing upsert did.
+ *    tick.
  *  - There is no TTL to tune, and no lease TTL that a sweep could
  *    outlive. A lease has to guess how long the work takes; guess short and two
  *    instances sweep at once, guess long and a crashed task wedges the job.
  *  - A task that dies mid-sweep drops its connection, and Postgres releases the
- *    lock with it. That is the property the lease was approximating with an
+ *    lock with it. That is the property a lease can only approximate with an
  *    expiry, and here it is exact.
  *
  * It needs a RESERVED connection because the lock lives on a session and the
@@ -183,7 +181,7 @@ async function acquireSweepLock(): Promise<SweepLock | undefined> {
     release: async () => {
       try {
         // Only the holder can release a session lock — Postgres enforces that
-        // for us, which is what the Mongo version's `holder` filter was for.
+        // for us.
         await reserved`select pg_advisory_unlock(${SWEEP_LOCK_KEY})`;
       } finally {
         // Returns the connection to the pool. Distinct from the unlock above:

@@ -307,12 +307,10 @@ export function initializeRoomSocket(io: Server): Namespace {
          * Update the DB: add to `participants`, bump `totalJoined` only on a
          * genuinely new join, and raise `peakListeners` to the live Redis count.
          *
-         * ONE statement where Mongo used up to two, and every part decided in
-         * SQL rather than from the row this handler read. The three Mongo
-         * operators each had a read-modify-write hiding in them at this call
-         * site — `isNewJoin` was computed from a snapshot taken before the
-         * Redis writes above, so two sockets joining at once could both see
-         * themselves as new. `$addToSet`/`$inc`/`$max` become an
+         * ONE statement, and every part decided in SQL rather than from the row
+         * this handler read. A read-modify-write at this call site would race:
+         * a snapshot taken before the Redis writes above would let two sockets
+         * joining at once both see themselves as new. So it is an
          * `array_append` under a membership guard, a conditional `+ 1`, and a
          * `greatest(…)`, all evaluated against the CURRENT row.
          */

@@ -31,7 +31,7 @@ function apiImageUrl(pathOrId: string): string {
 
 /**
  * Resolve a catalog image reference to a loadable absolute URL. Accepts a bare
- * MongoDB ObjectId, a relative `/api/images/:id` path, or an already-absolute
+ * 24-hex image id, a relative `/api/images/:id` path, or an already-absolute
  * URL pointing at the catalog API. Returns undefined for anything else.
  */
 export function resolveCatalogImageUrl(value: string | null | undefined): string | undefined {

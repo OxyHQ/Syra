@@ -25,8 +25,7 @@ export function assignMissingColors(
  *
  * `?? null`, not bare `undefined`, and the difference is only visible once the
  * target is a drizzle `.set()`: drizzle drops an `undefined`-valued key
- * entirely, so `undefined` means "leave this column alone" where Mongoose's
- * `save()` cleared it. A replace that left the previous image's colours behind
+ * entirely, so `undefined` means "leave this column alone", not "clear it". A replace that left the previous image's colours behind
  * would not be a replace.
  *
  * This module currently has NO importers — the shape it describes is

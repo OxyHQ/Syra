@@ -1,10 +1,9 @@
 /**
  * The seven child collections of a show or an episode, on the write side.
  *
- * `schema/podcasts.ts` turned six Mongo subdocument ARRAYS and one string array
- * into real tables. On the read side that is `hydrate.ts`; here it is the thing
- * a Mongo `$set: { persons: [...] }` used to do in one atomic field assignment
- * and that now takes a delete plus an insert per collection.
+ * `schema/podcasts.ts` stores six ordered sub-record lists and one string list
+ * as real tables. On the read side that is `hydrate.ts`; here, replacing a
+ * list takes a delete plus an insert per collection.
  *
  * ## Replace, never append — and the ordinal is what makes replace correct
  *
@@ -14,7 +13,7 @@
  * on the second crawl; `unique(parent_id, position)` would refuse the write
  * rather than corrupt the read, but the write is the one that has to succeed.
  *
- * `position` carries the array index, because a Mongo array is ordered and a
+ * `position` carries the array index, because the input list is ordered and a
  * table is not. It is assigned from the input order here rather than by the
  * caller, so there is exactly one place that decides what "the third host"
  * means.

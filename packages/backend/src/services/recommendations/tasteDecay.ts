@@ -22,11 +22,9 @@ import { logger } from '../../utils/logger';
  * a no-op rather than an error, because the caller is a timer with nobody to
  * report to.
  *
- * The connectivity gate now asks POSTGRES. It asked `isDatabaseConnected()`
- * (`utils/database.ts`, `mongoose.connection.readyState`) before this port,
- * which after it would have been a gate on the wrong database entirely —
- * permitting the pass while Postgres was still opening, and silencing it
- * forever once Mongo is removed.
+ * The connectivity gate asks POSTGRES — the database the pass actually
+ * writes — so it neither runs while the pool is still opening nor goes silent
+ * because some other store is down.
  */
 
 export type { TasteDecayResult } from '../../db/user/taste';
@@ -36,8 +34,7 @@ export type { TasteDecayResult } from '../../db/user/taste';
  * time-proportional: a profile decayed twice in quick succession barely changes
  * the second time.
  *
- * Best-effort as a WHOLE, where the Mongo version was best-effort per profile.
- * That difference is the transaction's doing: five set-wise statements either
+ * Best-effort as a WHOLE, not per profile. That is the transaction's doing: five set-wise statements either
  * all commit or none do, so there is no half-decayed state for a per-profile
  * `catch` to salvage. A failed pass costs nothing — the next tick recomputes the
  * same factors from the same untouched `last_decay_at`, which is the property

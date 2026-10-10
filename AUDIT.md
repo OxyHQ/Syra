@@ -172,7 +172,7 @@ Idéntico problema. Mismo fix.
 ```ts
 if (!isDatabaseConnected()) return res.status(503).json({ error: 'Database unavailable' });
 if (!req.user?.id) return res.status(401).json({ error: 'Unauthorized' });
-if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ error: 'Invalid id' });
+if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid id' });
 const body = req.body; // ← cero validación
 ```
 
@@ -221,9 +221,9 @@ Helper correcto pero infrautilizado: muchos controllers hacen `req.user?.id` dir
 Bien estructurado. Mantener.
 
 #### 2.6.4 `database.ts` (OK)
-Conexión Mongo con backoff exponencial. Mantener. Después de env-zod, leer `env.MONGODB_URI` en vez de `process.env.MONGODB_URI`.
+Conexión a la base de datos con backoff exponencial. Mantener. Después de env-zod, leer la URL de conexión desde `env` en vez de `process.env`.
 
-#### 2.6.5 `metrics.ts`, `mongoose-gridfs.ts`, `imageUpload.ts`, `imageColors.ts`, etc. (OK)
+#### 2.6.5 `metrics.ts`, `imageUpload.ts`, `imageColors.ts`, etc. (OK)
 Mantener.
 
 ### 2.7 `src/services/` (OK estructura, ALTO en algunas piezas)
@@ -244,7 +244,7 @@ import 'dotenv/config';
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().default(3000),
-  MONGODB_URI: z.string().url(),
+  DATABASE_URL: z.string().url(),
   REDIS_URL: z.string().url().optional(),
   OXY_API_URL: z.string().url(),
   S3_BUCKET: z.string(),
@@ -564,7 +564,7 @@ Estado actual: cubre `dist/`, `*.tsbuildinfo`, `.expo`, `node_modules`, `.env*`.
 8. **`any` masivos** — `usersStore` 21, `LegendList` 11, `utils/api` 10, `utils/logger` 9, `LayoutScrollContext` 7.
 9. **Patrón repetido controllers** — helper `withDb(handler)`.
 10. **Modelo Playlist `isPublic` redundante** — eliminar campo.
-11. **Indexes Mongo** — añadir `{ createdAt: -1 }` en Track.
+11. **Índices** — añadir un índice descendente sobre `createdAt` en Track.
 12. **`interfaces/` y `types/` frontend** — mover a shared-types o borrar.
 13. **Validación respuestas API en frontend** — parsear con schemas zod.
 

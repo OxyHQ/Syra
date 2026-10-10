@@ -18,10 +18,8 @@ import { getDb } from '../postgres';
  *
  * `name` is here because the two CREATE paths (`createAlbum`, `uploadTrack`)
  * denormalise it onto the row they write: `albums.artist_name` and
- * `tracks.artist_name` are both `NOT NULL`. The Mongo helper projected
- * `_id ownerOxyUserId uploadsDisabled` and both controllers therefore issued a
- * SECOND `findOne` for the same document to get the name. One read answers both
- * questions.
+ * `tracks.artist_name` are both `NOT NULL`. One read answers both the ownership
+ * question and the name, rather than a second lookup for the same row.
  */
 export interface OwnedArtist {
   readonly id: string;
@@ -36,8 +34,8 @@ export interface OwnedArtist {
  * distinguishing "missing" from "not yours", so this cannot be used to probe
  * which artist ids exist.
  *
- * `type = 'artist'` is written out. Mongoose's discriminator injected it into
- * `find()` invisibly; `catalog_entities` holds persons in the same table, and
+ * `type = 'artist'` is written out: `catalog_entities` holds persons in the
+ * same table, and
  * without this condition a person row sharing an owner would resolve as an
  * artist.
  */

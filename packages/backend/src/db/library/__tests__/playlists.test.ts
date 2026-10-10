@@ -5,8 +5,8 @@
  * reading the schema:
  *
  *  - **Positions survive an arbitrary permutation.** `unique(playlist_id,
- *    position)` is enforced per row as an `UPDATE` walks its result, so the
- *    Mongo shift has no direct translation and the reorder had to be rewritten.
+ *    position)` is enforced per row as an `UPDATE` walks its result, so a single
+ *    shifting `UPDATE` cannot do the reorder.
  *    A reversal is the shape that fails for every naive spelling.
  *  - **`canViewPlaylist` agrees with the rows it is asked about.** Playlist
  *    readability is the one catalog predicate that genuinely varies per viewer,
@@ -97,7 +97,7 @@ describe('assignPlaylistTrackPositions survives a permutation', () => {
    *
    * A single `UPDATE … FROM (VALUES …)` writing the reversal collides on
    * `unique(playlist_id, position)` — the constraint is checked per row, not at
-   * statement end — and so does the Mongo-style `$inc` shift. Reversal is the
+   * statement end — and so does a `position = position + k` shift. Reversal is the
    * strongest shape because EVERY row's new position is already held by
    * another row that has not moved yet.
    */

@@ -14,8 +14,8 @@ import {
 } from './radioFixtures';
 
 /**
- * One database. The catalogue and the playlists were already Postgres; Task 15
- * moved the taste profile and Task 11 the library, so the Mongo hooks are gone.
+ * One database: the catalogue, playlists, taste profile and library are all
+ * Postgres.
  */
 beforeAll(connectDb);
 afterEach(clearDb);
@@ -222,8 +222,8 @@ describe('resolveRadioSeed — user', () => {
 describe('loadRadioTaste', () => {
   it("normalises affinities against the listener's own strongest weight", async () => {
     // A REAL artist id, not the string `'artist-a'` this fixture used to pass:
-    // `user_taste_artists.artist_id` is a foreign key into `catalog_entities`
-    // now, so an invented id is a `23503` where Mongo stored it verbatim.
+    // `user_taste_artists.artist_id` is a foreign key into `catalog_entities`,
+    // so an invented id is a `23503`.
     const artistId = await makeArtist({ name: `Affinity ${uuidv7()}` });
 
     await makeTasteProfile(

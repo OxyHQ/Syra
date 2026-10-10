@@ -30,7 +30,7 @@
  * THE GENESIS BOOTSTRAP WINDOW — `LAST_GENESIS_MIGRATION_TAG`
  *
  * `0000` through `0011` build this schema against an EMPTY database with no
- * live predecessor to protect — Tasks 1 through 6 of the Mongo→Postgres port,
+ * live predecessor to protect — Tasks 1 through 6 of the schema build-out,
  * including the Task 4 review's `0007`/`0008` genres-`kind` follow-up, Task
  * 5's `0009`/`0010` creators-and-uploads pair and Task 6's `0011` rooms
  * vertical, applied with `--phase=all` against `syra_dev`, CI's `syra_ci` and —

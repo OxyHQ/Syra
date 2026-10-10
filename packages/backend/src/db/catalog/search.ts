@@ -3,8 +3,8 @@
  *
  * ## The ruling this implements, and what it costs
  *
- * Every search site was a case-insensitive SUBSTRING match — Mongo's
- * `new RegExp(q, 'i')`, ported briefly as `ilike '%q%'`. Both are unindexable:
+ * Every search site was a case-insensitive SUBSTRING match (`ilike '%q%'`),
+ * which is unindexable:
  * a leading wildcard cannot use a b-tree and `pg_trgm` is not installed, so the
  * query scanned every playable row and the cost grew with the catalogue.
  *

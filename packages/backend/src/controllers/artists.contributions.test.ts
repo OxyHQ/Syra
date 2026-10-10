@@ -17,9 +17,8 @@ import {
 
 /**
  * A "contribution" is a `tracks` row PLUS a `contribution_attestations` row, and
- * neither alone means anything — both Postgres since Task 13. It was one
- * `$lookup` under Mongo and it is three round trips now, and these tests are
- * what say the answer did not change across both moves.
+ * neither alone means anything. Reading one takes three round trips, and these
+ * tests are what pin the answer those round trips assemble.
  */
 beforeAll(connectDb);
 afterEach(clearDb);

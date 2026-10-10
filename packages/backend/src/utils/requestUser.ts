@@ -1,16 +1,8 @@
 /**
  * The signed-in user's id, off an Express request.
  *
- * It lived in `utils/catalogVisibility.ts` and had nothing to do with either
- * database — which is why `db/catalog/__tests__/halfPortedImports.test.ts` had
- * to carry it as a named exemption: a controller that had moved its queries to
- * drizzle but still called this one function looked half-ported and was not.
- *
- * Giving it a home of its own removed the exemption rather than re-homing it,
- * and it did not wait for `utils/catalogVisibility.ts` to die — which it since
- * has, in Task 11. An exemption that outlives the work it describes is the
- * shape the registries on this branch exist to prevent, so retiring it first
- * was the point.
+ * It has nothing to do with the database, so it lives on its own rather than
+ * beside the catalog queries.
  *
  * Distinct from `getRequiredOxyUserId` (`@oxy.so/core/server`), which THROWS on
  * an unauthenticated request. This one answers `undefined`, because its callers

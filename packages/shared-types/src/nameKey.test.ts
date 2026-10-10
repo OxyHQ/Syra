@@ -223,9 +223,9 @@ describe('buildAlbumKey', () => {
     expect(keys.size).toBe(1);
   });
 
-  it('stays inside MongoDB index key limits for absurd tag values', () => {
+  it('stays inside index key limits for absurd tag values', () => {
     // An untruncated composite would make the INSERT fail on exactly the
-    // pathological file nobody tests with (Mongo refuses index keys > 1024 B).
+    // pathological file nobody tests with (an index key has a hard size cap).
     const key = buildAlbumKey({
       albumArtistName: 'A'.repeat(5000),
       albumName: 'B'.repeat(5000),

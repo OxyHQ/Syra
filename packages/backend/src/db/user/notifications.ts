@@ -8,19 +8,18 @@
  * ## The claim is an INSERT, and it stays one
  *
  * {@link claimSuppression} does not read and then write. The insert IS the
- * decision, exactly as the Mongo version had it: a read-then-write races two
+ * decision: a read-then-write races two
  * concurrent feed refreshes into both deciding to emit, and the unique
  * constraint on `(oxy_user_id, key)` is what makes the race impossible rather
  * than merely unlikely.
  *
- * ## The `on conflict` `schema/user.ts` said this port owed
+ * ## The `on conflict` that makes expiry exact
  *
- * The Mongo version treated ANY duplicate key as "already notified" and never
- * looked at `expiresAt` — so a row past its deadline that the TTL monitor had
- * not yet reaped kept suppressing. Mongo bounded that overshoot at the monitor's
- * ~60s; a Postgres sweep on the 30-minute tick would have bounded it at 30
- * minutes, against a 6-hour default coalescing window: up to ~8% late rather
- * than ~0.3%.
+ * Treating ANY duplicate key as "already notified", without looking at
+ * `expiresAt`, would let a row past its deadline that the sweep had not yet
+ * reaped keep suppressing. With the sweep on the 30-minute tick that overshoot
+ * is up to 30 minutes, against a 6-hour default coalescing window: up to ~8%
+ * late.
  *
  * `on conflict … do update … where expires_at <= now()` removes the overshoot
  * instead of widening it. An expired row is CLAIMED (its deadline moves forward

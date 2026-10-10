@@ -134,8 +134,8 @@ describe('POST /api/artists/:id/claim', () => {
     expect(claim.status).toBe('pending');
     expect(claim.oxyUserId).toBe('claimant-1');
 
-    // `null`, not `undefined`: Mongo simply had no key for an unset field and
-    // Postgres returns an explicit null. Both columns are asserted, because
+    // `null`, not `undefined`: Postgres returns an explicit null for an unset
+    // column. Both columns are asserted, because
     // "nobody holds this profile" is what the grant's WHERE clause tests.
     const artist = await readArtist(artistId);
     expect(artist?.ownerOxyUserId).toBeNull();

@@ -75,14 +75,12 @@ router.post(
     }
 
     /**
-     * The room lookup is INSIDE the try, and that changed with the port.
+     * The room lookup is INSIDE the try.
      *
-     * Mongoose BUFFERS when its connection is absent rather than throwing, so
-     * `Room.findOne(...)` here could only hang — never reject. `getDb()` and the
-     * driver both throw, so leaving this outside the guard would let a database
+     * `getDb()` and the driver both throw, so leaving this outside the guard would let a database
      * outage reject out of an async handler and hand LiveKit a 500, which is
      * exactly the retry-the-whole-delivery outcome the catch below exists to
-     * prevent. Same policy, applied to the one call that newly needs it.
+     * prevent.
      */
     try {
       const room = await findRoomByIngressId(ingressId);

@@ -34,9 +34,8 @@ afterAll(disconnectDb);
 /**
  * A real `podcasts` row, not a bare id.
  *
- * `episodes.podcast_id` is a foreign key now, so an episode fixture pointing at
- * a show that does not exist fails with `23503` rather than inserting the way
- * the Mongo fixture did. Created per test file, in `beforeAll`.
+ * `episodes.podcast_id` is a foreign key, so an episode fixture pointing at a
+ * show that does not exist fails with `23503`. Created per test file, in `beforeAll`.
  */
 const PODCAST_ID = uuidv7();
 
@@ -117,8 +116,8 @@ describe('ingestEpisode — shared-pipeline regression guards', () => {
 
     const reloaded = (await findEpisodeById(episodeId))?.episode;
     expect(reloaded?.status).toBe('ready');
-    // The ladder is `episode_hls_renditions` now, and `position` is what keeps
-    // the order the Mongo array had — so this asserts the ORDER too, which is
+    // The ladder is `episode_hls_renditions`, and `position` is what keeps its
+    // order — so this asserts the ORDER too, which is
     // what a bitrate list read back out of a set would silently lose.
     const hls = (await loadEpisodeHls([episodeId])).get(episodeId) ?? [];
     expect(hls).toHaveLength(HLS_BITRATES_KBPS.length);

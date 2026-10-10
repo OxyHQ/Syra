@@ -78,9 +78,9 @@
  * the `enable_seqscan = off` pass, which asks "can the index serve this at all"
  * rather than "is it cheapest today".
  *
- * `descNullsLast` is ALSO the faithful ordering (Mongo sorts a missing field
- * lowest, which is NULLS LAST descending), so the correct spelling and the fast
- * one are the same spelling. The rejected form is kept as a probe below and
+ * `descNullsLast` is ALSO the intended ordering (a missing value sorts lowest,
+ * which is NULLS LAST descending), so the correct spelling and the fast one are
+ * the same spelling. The rejected form is kept as a probe below and
  * asserted to STILL sort, otherwise that is a claim rather than a measurement.
  *
  * ## What these probes are worth
@@ -987,8 +987,8 @@ describe('the search reads reach the GIN indexes', () => {
       'episode search index count: true',
     );
     // The hidden-show semi-join resolves against the primary key, one probe per
-    // candidate — the whole argument for replacing the Mongo form's separate
-    // "which shows are hidden" query and its unbounded `$nin` list.
+    // candidate — no separate "which shows are hidden" query and no unbounded
+    // exclusion list.
     expect(plans.get('searchEpisodes')).not.toContain('Seq Scan on podcasts');
   });
 });

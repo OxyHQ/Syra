@@ -10,21 +10,10 @@ import { isPostgresConnected } from '../db/postgres';
 import { getParam, parseBoundedLimit } from '../utils/reqParams';
 
 /**
- * POSTGRES ONLY, because that is now the only database this controller reads.
- *
- * It asked twice — `isDatabaseConnected() && isPostgresConnected()` — and the
- * Mongoose half was correct right up to Task 15: the taste profile, the library
- * and the listening history every personalised read starts from were Mongo, so a
- * guard naming one database passed while the other was down.
- *
- * Task 15 ported the last of them. Verified transitively rather than by grepping
- * this file, because the identical guard in `entityProfile.controller` had its
- * Mongo dependency two hops away: walking this controller's whole import graph
- * (24 files) reaches no `models/` import at all.
- *
- * Leaving the Mongoose half would have cost twice over — Mongo down with
- * Postgres up answers 503 for reads that would have succeeded, and at Task 19
- * `readyState` never reaches 1 again, so every route here 503s permanently.
+ * POSTGRES ONLY, because that is the only database this controller reads —
+ * the taste profile, the library and the listening history every personalised
+ * read starts from included. That holds transitively, not just in this file:
+ * the whole import graph reaches no other store.
  */
 
 /** Discovery responses are user-scoped where personalised, public otherwise. */

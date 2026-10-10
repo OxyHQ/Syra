@@ -25,12 +25,11 @@ import { getOxyServiceToken } from './oxyServiceToken';
  *
  * ## The two suppression rules are one statement each, in `db/user/notifications.ts`
  *
- * `isEventDisabled` and `claimSuppression` moved there with their tables. The
- * claim is still an INSERT rather than a read-then-write — that is what makes it
- * race-free — but it no longer treats every duplicate key as "already notified":
- * an EXPIRED claim is now taken over by the same statement. The Mongo version
- * could not see `expiresAt` at all, so a row its TTL monitor had not yet reaped
- * kept suppressing; that module's doc comment carries the full reasoning.
+ * `isEventDisabled` and `claimSuppression` live there with their tables. The
+ * claim is an INSERT rather than a read-then-write — that is what makes it
+ * race-free — but it does not treat every duplicate key as "already notified":
+ * an EXPIRED claim is taken over by the same statement; that module's doc
+ * comment carries the full reasoning.
  */
 
 /** How long an exact-entity suppression record is kept. Long enough to outlive re-imports. */

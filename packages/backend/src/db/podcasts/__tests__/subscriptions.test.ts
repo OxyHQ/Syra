@@ -1,19 +1,17 @@
 /**
- * Podcast subscriptions, and the counter Mongo could not keep honest.
+ * Podcast subscriptions, and keeping the subscriber counter honest.
  *
- * The Task 12 review (I2) found this untested: nothing pinned
- * `onConflictDoNothing().returning()` or the `greatest(…, 0)` floor, which are
- * the two mechanisms the port's sixth defect fix rests on.
+ * These pin `onConflictDoNothing().returning()` and the `greatest(…, 0)` floor,
+ * the two mechanisms the counter's correctness rests on.
  *
- * ## What was wrong before, and what these assert
+ * ## The race, and what these assert
  *
- * The Mongo handlers bumped `subscriberCount` by READING the array first
- * (`before?.subscribedPodcasts?.includes(id)`) and then writing — two round
- * trips with no isolation. Two concurrent subscribes from the same account both
- * read "not subscribed" and both incremented, overstating the count
- * permanently and undetectably; the reverse race under-counted.
+ * Bumping `subscriberCount` by READING membership first and then writing is two
+ * round trips with no isolation. Two concurrent subscribes from the same
+ * account would both read "not subscribed" and both increment, overstating the
+ * count permanently and undetectably; the reverse race under-counts.
  *
- * The port asks the DATABASE whether the insert happened, in the same
+ * So the code asks the DATABASE whether the insert happened, in the same
  * transaction as the counter. The cases below pin the observable consequences —
  * idempotence in both directions, the count matching the membership, and the
  * floor — rather than the mechanism, so a future rewrite that keeps the
@@ -74,8 +72,8 @@ describe('subscribeToPodcast', () => {
     const showId = await makeShow();
     await subscribeToPodcast(USER, showId);
 
-    // The assertion the Mongo read-then-write could not make: the answer comes
-    // from the insert itself, so a repeat cannot be mistaken for a new one.
+    // The answer comes from the insert itself, not a prior read, so a repeat
+    // cannot be mistaken for a new one.
     expect(await subscribeToPodcast(USER, showId)).toBe('already-subscribed');
     expect(await listSubscribedPodcastIds(USER)).toEqual([showId]);
     expect(await subscriberCount(showId)).toBe(1);
@@ -94,10 +92,9 @@ describe('subscribeToPodcast', () => {
 
   it('answers missing-podcast for an id that names nothing, and writes nothing', async () => {
     /**
-     * A real answer here and not one Mongo had: `podcast_id` is a foreign key,
-     * so a bogus id is `23503` where Mongo silently stored the string. The
-     * controller turns this into a 404 rather than letting a constraint
-     * violation reach a client as a 500.
+     * `podcast_id` is a foreign key, so a bogus id is `23503` rather than a
+     * silently stored dangling string. The controller turns this into a 404
+     * rather than letting a constraint violation reach a client as a 500.
      */
     expect(await subscribeToPodcast(USER, uuidv7())).toBe('missing-podcast');
     expect(await listSubscribedPodcastIds(USER)).toEqual([]);
@@ -145,8 +142,7 @@ describe('unsubscribeFromPodcast', () => {
      * The `greatest(…, 0)` floor, and the fixture is what makes it testable:
      * a show whose stored `subscriber_count` is ALREADY 0 while a subscription
      * row exists. That state is unreachable through the API — which is the
-     * point. The floor carries over the Mongo guard (`subscriberCount: { $gt:
-     * 0 }`) and, with the write now atomic, should be unreachable; it stays
+     * point. With the write atomic the floor should be unreachable; it stays
      * because a counter that went negative would be silently wrong rather than
      * loud, and a guard nobody can exercise is a guard nobody can trust.
      */
@@ -161,8 +157,8 @@ describe('unsubscribeFromPodcast', () => {
 
 describe('the two read directions', () => {
   it("a user's subscriptions come back oldest first", async () => {
-    // The order the Mongo array had, since `$addToSet` appended — and two
-    // callers read it as an order rather than a set.
+    // Subscription order, oldest first — two callers read it as an order
+    // rather than a set.
     const first = await makeShow('First');
     const second = await makeShow('Second');
     const third = await makeShow('Third');

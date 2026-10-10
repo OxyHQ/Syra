@@ -2,36 +2,28 @@
  * User, taste and listening schema — the per-account rows (`user_settings`,
  * `user_music_preferences`, `user_behavior`, `notification_preferences`), the
  * recommendation engine's learned state (`user_taste_profiles` and its two
- * children, `catalog_relations`), and the two tables Mongo reaped with a TTL
- * index (`listening_events`, `notification_suppressions`).
+ * children, `catalog_relations`), and the two tables reaped by the expiry
+ * sweep (`listening_events`, `notification_suppressions`).
  *
  * Ported from `packages/backend/src/models/{UserSettings,UserMusicPreferences,
  * UserBehavior,UserTasteProfile,ListeningEvent,CatalogRelation,
  * NotificationPreference,NotificationSuppression}.ts`, field by field, against
  * `packages/backend/docs/db/RELATIONS.md` for every foreign key.
  *
- * ## The two TTL indexes — and why they are the whole point of this file
+ * ## The two expiry entries — and why they are the whole point of this file
  *
- * `db/expiry.ts`'s registry is the Postgres replacement for a Mongo TTL index,
- * and this vertical is where it stops being empty. Two of the repo's four
- * `expireAfterSeconds` declarations were ported here:
+ * `db/expiry.ts`'s registry is how rows are reaped, and two of its entries
+ * live here:
  *
- *  - `NotificationSuppression.expiresAt`, `expireAfterSeconds: 0` — the column
- *    IS the deadline, so `retentionSeconds: 0`.
- *  - `ListeningEvent.playedAt`, `expireAfterSeconds: 90 days` — a retention
- *    window measured from a birth column.
+ *  - `notification_suppressions.expires_at`, `retentionSeconds: 0` — the
+ *    column IS the deadline.
+ *  - `listening_events.played_at`, 90 days — a retention window measured from
+ *    a birth column.
  *
- * (The other two, `ModerationOutbox` and `ModerationEvent`, were Task 8's. The
- * brief's prose said this task lands three of four; the grep said four
- * declarations total with two of them here, which is also what the brief's own
- * table said. Raised in this task's report. That grep no longer reproduces —
- * the Mongoose models it read are deleted, so `expireAfterSeconds` now survives
- * only in prose like this; `db/expiry.ts` records what still checks the
- * registry.)
+ * (The others cover the moderation tables and `episode_ingest_tickets`.)
  *
  * Each entry needs a supporting index or the sweep's `column <= now() - N`
- * predicate becomes a full table scan every time it runs — the exact cost the
- * Mongo TTL index hid. `listening_events_played_at_idx` and
+ * predicate becomes a full table scan every time it runs. `listening_events_played_at_idx` and
  * `notification_suppressions_expires_at_idx` below are those indexes;
  * `findUnsupportedExpiryColumns` (`@oxy.so/db/assert`, driven from
  * `__tests__/gates.test.ts` against the real catalogue) fails the gate if
@@ -42,8 +34,8 @@
  * ## The read that depends on a swept row already being gone
  *
  * `@oxy.so/db/expiry`'s own rule: a registry entry is only safe once the
- * table's readers are audited for depending on absence, because Mongo's TTL
- * monitor lags ~60s while a sweep lags one scheduled call. The two tables here
+ * table's readers are audited for depending on absence, because a sweep lags
+ * up to one scheduled call. The two tables here
  * answer that question differently, and the difference matters:
  *
  *  - `listening_events` is safe, but its TWO readers are safe for DIFFERENT
@@ -59,21 +51,17 @@
  *    interval. A bounded rolling window where lateness costs nothing, not a
  *    filter.
  *
- *    THE DISTINCTION IS THE POINT, not pedantry: whoever ports
+ *    THE DISTINCTION IS THE POINT, not pedantry: whoever changes
  *    `recommendationService` must not read "every reader filters time" as
  *    permission to drop a filter that was never there. The sweep is what bounds
  *    that table's size; nothing in this reader bounds its age.
- *  - `notification_suppressions` WAS not, and the fix this block asked for has
- *    landed. Mongo's `claimSuppression` INSERTED and treated the duplicate-key
- *    error as "already notified" — it never read `expiresAt` at all, so a row
- *    that had expired but had not been swept kept suppressing. Under Mongo that
- *    overshoot was bounded by the TTL monitor's ~60s; under a sweep on the
- *    30-minute tick `services/recommendations/scheduler.ts` uses, it would have
- *    been bounded by 30 minutes — against a 6-hour default coalescing window
- *    (`notifier.ts`), up to ~8% late rather than ~0.3%.
+ *  - `notification_suppressions` would NOT be safe if a claim merely INSERTED
+ *    and treated the duplicate-key error as "already notified": a row that had
+ *    expired but had not been swept would keep suppressing for up to the
+ *    30-minute tick `services/recommendations/scheduler.ts` uses — against a
+ *    6-hour default coalescing window (`notifier.ts`), up to ~8% late.
  *
- *    Task 15 put the fix in the write path, where this block said it belonged:
- *    `db/user/notifications.ts` claims with `on conflict (oxy_user_id, key) do
+ *    So the fix is in the write path: `db/user/notifications.ts` claims with `on conflict (oxy_user_id, key) do
  *    update set expires_at = excluded.expires_at where
  *    notification_suppressions.expires_at <= now()`, so an expired claim is
  *    taken over rather than collided with. The window is exact and the sweep is
@@ -120,7 +108,7 @@
  * durable artifacts are recomputed) while the genre side stays plain text.
  *
  * Neither child gets a `position`. `position` exists on this schema's other
- * child tables to preserve a Mongo array's ORDER; these two arrays have none
+ * child tables to preserve a source array's ORDER; these two arrays have none
  * worth preserving, and NO READER DEPENDS ON POSITION — which is the precise
  * claim, not "every reader sorts by weight": `recommendationService.ts:211-221`
  * re-sorts by weight before slicing, while `rankByTaste` (`taste.ts:87-90`)
@@ -135,8 +123,8 @@
  * `.interests.tags`, `UserBehavior.{preferredAuthors,preferredTopics,
  * preferredLanguages,activeHours}`, `NotificationPreference.disabledEvents`.
  * Same `text[]`/`integer[]` treatment `library.ts` gives `PlaybackState.queue`.
- * The two element-level enums Mongoose declared (`disabledEvents`,
- * `activeHours`) keep their validation as a `<@` containment CHECK against the
+ * The two element-level enums (`disabledEvents`, `activeHours`) keep their
+ * validation as a `<@` containment CHECK against the
  * same tuple that types the column, which is how an array column keeps a
  * per-element constraint at all.
  *
@@ -152,8 +140,8 @@
  * column whose CHECK name (`user_settings_…_check`) lands at 71 bytes, past
  * the 63 Postgres silently truncates at.
  *
- * A field with a Mongoose DEFAULT becomes `notNull().default(...)`; a field
- * without one stays nullable. That is the whole rule, and it is why
+ * A field with a model DEFAULT is `notNull().default(...)`; a field without
+ * one stays nullable. That is the whole rule, and it is why
  * `feed_diversity_max_consecutive_same_author` and
  * `feed_quality_min_engagement_rate` are the two nullable numbers in an
  * otherwise fully-defaulted block.
@@ -271,7 +259,7 @@ export const userSettings = pgTable(
     /** An Oxy account id — no foreign key. One row per account. */
     oxyUserId: text().notNull(),
     appearanceThemeMode: text({ enum: THEME_MODES }).notNull().default('system'),
-    /** `default: undefined` in Mongoose — absent, never an empty string. */
+    /** No default — absent, never an empty string. */
     appearancePrimaryColor: text(),
     /** A raw CDN URL, not an `image_assets` id — see the file-level doc comment. */
     profileHeaderImage: text(),
@@ -302,7 +290,7 @@ export const userSettings = pgTable(
     feedDiversityEnabled: boolean().notNull().default(true),
     feedDiversitySameAuthorPenalty: doublePrecision().notNull().default(0.95),
     feedDiversitySameTopicPenalty: doublePrecision().notNull().default(0.92),
-    /** No Mongoose default (`models/UserSettings.ts:99`) — nullable. Rounded by its writer, so `integer`. */
+    /** No default — nullable. Rounded by its writer, so `integer`. */
     feedDiversityMaxConsecutiveSameAuthor: integer(),
     /**
      * `doublePrecision`, not `integer`: `routes/profileSettings.ts:170` clamps
@@ -311,7 +299,7 @@ export const userSettings = pgTable(
      */
     feedRecencyHalfLifeHours: doublePrecision().notNull().default(24),
     feedRecencyMaxAgeHours: doublePrecision().notNull().default(168),
-    /** No Mongoose default (`models/UserSettings.ts:106`) — nullable. */
+    /** No default — nullable. */
     feedQualityMinEngagementRate: doublePrecision(),
     feedQualityBoostHighQuality: boolean().notNull().default(true),
     createdAt: createdAt(),
@@ -326,9 +314,9 @@ export const userSettings = pgTable(
       'user_settings_profile_visibility_check',
       sql`${t.privacyProfileVisibility} in (${sql.raw(inList(PROFILE_VISIBILITIES))})`,
     ),
-    // The five bounded feed numbers (`models/UserSettings.ts:97-107`). Mongoose
-    // enforces each on every save, so a port that dropped them would silently
-    // loosen validation — the same reasoning `rooms.ts` applied to its eleven
+    // The five bounded feed numbers (`models/UserSettings.ts:97-107`). The
+    // application relies on each bound, so the database enforces them on every
+    // write — the same reasoning `rooms.ts` applied to its eleven
     // `maxlength`/`match` declarations.
     check(
       'user_settings_feed_diversity_same_author_penalty_check',
@@ -570,22 +558,18 @@ export const listeningEvents = pgTable(
     // Co-occurrence mining walks each user's events in time order
     // (`coOccurrenceJob.ts:79`, `sort({ oxyUserId: 1, playedAt: 1 })`). Its
     // leading column also serves `findRecentTrackIds`' per-user newest-first
-    // read, so Mongo's standalone `{ oxyUserId: 1 }` is dropped rather than
-    // ported.
+    // read, so no standalone `oxy_user_id` index is needed.
     index('listening_events_oxy_user_id_played_at_idx').on(t.oxyUserId, t.playedAt),
     /**
      * THE SWEEP'S INDEX. `db/expiry.ts` registers `played_at` with a 90-day
      * retention, and `sweepExpiredRows` range-scans `played_at <= now() - 90d`
      * on every run; without a leading btree here that is a full scan of the
-     * largest table in this schema, which is precisely the cost Mongo's TTL
-     * index was paying invisibly. Ascending, which serves both the sweep's
-     * range and Mongo's `{ playedAt: -1 }` popularity scan (a btree reads
-     * backwards).
+     * largest table in this schema. Ascending, which serves both the sweep's
+     * range and the newest-first popularity scan (a btree reads backwards).
      */
     index('listening_events_played_at_idx').on(t.playedAt),
     /**
-     * The two CASCADEs' supporting indexes. Both ported from Mongo's own
-     * `index: true`, and both load-bearing for a different reason here: a
+     * The two CASCADEs' supporting indexes, both load-bearing: a
      * `tracks`/`catalog_entities` delete makes Postgres find every referencing
      * row, and this is the table designed to hold millions of them.
      */
@@ -643,8 +627,8 @@ export const notificationPreferences = pgTable(
     updatedAt: updatedAt(),
   },
   (t) => [
-    // Mongoose validates the enum PER ELEMENT; `<@` containment is how an
-    // array column keeps that. Trivially satisfied by the empty default.
+    // The enum is validated PER ELEMENT; `<@` containment is how an array
+    // column enforces that. Trivially satisfied by the empty default.
     check(
       'notification_preferences_disabled_events_check',
       sql`${t.disabledEvents} <@ ${sql.raw(textArrayLiteral(SYRA_NOTIFICATION_EVENTS))}`,
@@ -682,8 +666,7 @@ export const notificationSuppressions = pgTable(
     unique('notification_suppressions_oxy_user_id_key_key').on(t.oxyUserId, t.key),
     /**
      * THE SWEEP'S INDEX, the counterpart to `listening_events_played_at_idx`.
-     * Mongo's `{ expiresAt: 1 }, { expireAfterSeconds: 0 }` had no other
-     * reader and neither does this — it exists so the sweep's
+     * It has no other reader — it exists so the sweep's
      * `expires_at <= now()` is a range scan rather than a full one.
      */
     index('notification_suppressions_expires_at_idx').on(t.expiresAt),

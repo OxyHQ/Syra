@@ -59,8 +59,7 @@ export interface ContributorStanding extends ContributorStandingRow {
  * strike behind it. They run together.
  *
  * The count itself is `strike_count + 1` in SQL rather than a read, an
- * increment in JavaScript and a write back. The Mongo version did the latter,
- * so two takedowns resolved concurrently could both read 2 and both write 3 —
+ * increment in JavaScript and a write back. With the latter, two takedowns resolved concurrently could both read 2 and both write 3 —
  * leaving a repeat infringer one strike short of the threshold with nothing to
  * show that it had happened.
  */

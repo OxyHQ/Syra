@@ -17,9 +17,9 @@ import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
 import type { Request, Response, NextFunction } from 'express';
 
 /**
- * Postgres only. Every read in `browse.controller` is drizzle now, and the
+ * Postgres only. Every read in `browse.controller` is drizzle, and the
  * personalised branch is not exercised here — these are the GUEST surfaces, so
- * nothing in this file reaches `recommendationService`'s Mongo half.
+ * nothing in this file reaches `recommendationService`.
  */
 beforeAll(connectDb);
 afterEach(clearDb);
@@ -73,8 +73,8 @@ const next: NextFunction = (err?: unknown) => {
  * ONE artist per file, minted lazily.
  *
  * `tracks.artist_id` and `albums.artist_id` are real foreign keys to
- * `catalog_entities`, so the Mongo fixtures' hard-coded `'507f…011'` is no
- * longer insertable at all — every seed has to hang off a row that exists.
+ * `catalog_entities`, so a hard-coded artist id is not insertable at all —
+ * every seed has to hang off a row that exists.
  */
 let artistId: string | undefined;
 
@@ -206,12 +206,11 @@ describe('getGenres', () => {
   });
 
   /**
-   * The Mongo version filtered its `distinct('genre')` result with
-   * `.filter(Boolean)`, which drops `null` AND `''`. The port's `where` has to
-   * do both, and `is not null` alone does not — an empty-string genre is a row
-   * with a value. That is the only input shape making the two spellings
-   * disagree, so it is seeded here; without it, dropping `ne(genre, '')` leaves
-   * this suite green while a blank card appears on the browse screen.
+   * The genre query's `where` has to drop `null` AND `''`, and `is not null`
+   * alone does not — an empty-string genre is a row with a value. That is the
+   * only input shape separating the two filters, so it is seeded here; without
+   * it, dropping `ne(genre, '')` leaves this suite green while a blank card
+   * appears on the browse screen.
    */
   it('ignores a track whose genre is an empty string', async () => {
     await seedTrack({ genre: 'Electronic' });
@@ -241,9 +240,8 @@ describe('getGenres', () => {
 
   /**
    * `images` is a server-only column (`PROTECTED_COLUMNS_BY_TABLE`), so its
-   * external URLs cannot reach a card even by accident. The Mongo version of
-   * this test guarded a `delete` in `stripExternalCatalogFields`; the guard here
-   * is that `normalizeImageRef` only ever answers `/api/images/:id`.
+   * external URLs cannot reach a card even by accident; the guard this test
+   * pins is that `normalizeImageRef` only ever answers `/api/images/:id`.
    */
   it('does not use track images[] external URLs as genre cover art', async () => {
     await seedTrack({

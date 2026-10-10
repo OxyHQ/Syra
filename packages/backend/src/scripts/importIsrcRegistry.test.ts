@@ -9,9 +9,8 @@
  *    script and the failure mode nobody would ever see in production.
  *  - `two recordings sharing one ISRC` is the fixture that tells a correct
  *    implementation from a naive one. MusicBrainz maps recordings to ISRCs
- *    many-to-many, so the same code reaches one batch twice; Mongo's `bulkWrite`
- *    applied both and the last won, while Postgres rejects two rows with the same
- *    conflict key in one statement with `21000`. Every other fixture in this file
+ *    many-to-many, so the same code reaches one batch twice, and Postgres rejects
+ *    two rows with the same conflict key in one statement with `21000`. Every other fixture in this file
  *    has distinct ISRCs and cannot tell the two apart.
  */
 
@@ -179,7 +178,7 @@ describe('importIsrcRegistry', () => {
    * rows fails this test with exactly that SQLSTATE, and leaves every other test
    * in this file green.
    */
-  it('survives two recordings sharing one ISRC, last one winning as Mongo did', async () => {
+  it('survives two recordings sharing one ISRC, last one winning', async () => {
     const dump = makeDump({
       isrc: [
         '1\t101\tESA452300137\t0\t2023-05-01 00:00:00+00',
@@ -248,12 +247,12 @@ describe('importIsrcRegistry', () => {
   });
 
   /**
-   * The one place the Postgres port deliberately behaves differently from Mongo.
+   * The dump is authoritative.
    *
    * The conflict `SET` writes `excluded.length_ms`, and a row whose recording has
    * no length omits the column — so drizzle emits `default`, `excluded.length_ms`
-   * is NULL, and the previously-stored length is CLEARED. Mongo's `$set` omitted
-   * the key entirely and the stale value survived every future import.
+   * is NULL, and the previously-stored length is CLEARED rather than surviving
+   * every future import.
    *
    * This table mirrors somebody else's dataset. When MusicBrainz stops asserting
    * a length, the mirror has to stop asserting it too.
@@ -339,7 +338,7 @@ describe('importIsrcRegistry', () => {
 
     const row = await readRow('ESA452300137');
     expect(row?.title).toBe('A\tB\nC\\D');
-    // `lengthMs` is a nullable COLUMN now, where Mongo simply had no key.
+    // `lengthMs` is a nullable COLUMN.
     expect(row?.lengthMs).toBeNull();
   });
 

@@ -5,8 +5,7 @@ import { ZRoom, validateRooms } from './validation';
  * The Live screen went empty in production, and this is the test that would have
  * caught it.
  *
- * The PostgreSQL migration made `id` REQUIRED on `ZRoom`, correct against the
- * ported backend. But `deploy-frontends.yml` fires on `packages/frontend` and
+ * `id` is REQUIRED on `ZRoom`, correct against the current backend. But `deploy-frontends.yml` fires on `packages/frontend` and
  * `packages/shared-types` while the backend deploy is gated on approval — so
  * merging shipped the client half ALONE against a backend still answering `_id`.
  * `validateRooms` DROPS what it cannot parse, so every room vanished and the only
@@ -30,7 +29,7 @@ function roomBody(): Record<string, unknown> {
   };
 }
 
-describe('ZRoom accepts the Mongo-era wire shape', () => {
+describe('ZRoom accepts the `_id`-only wire shape', () => {
   it('reads `_id` as `id` when the payload carries no `id`', () => {
     const parsed = ZRoom.safeParse({ ...roomBody(), _id: '6a47e96948842c36b38f8267' });
 
