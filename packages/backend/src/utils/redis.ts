@@ -19,9 +19,9 @@ function getRedisConfig(): {
   return {
     redisUrl: redisUrl && redisUrl.length > 0 ? redisUrl : undefined,
     redisHost: process.env.REDIS_HOST || 'localhost',
-    redisPort: parseInt(process.env.REDIS_PORT || '6379'),
+    redisPort: parseInt(process.env.REDIS_PORT || '6379', 10),
     redisPassword: process.env.REDIS_PASSWORD,
-    redisDb: parseInt(process.env.REDIS_DB || '0'),
+    redisDb: parseInt(process.env.REDIS_DB || '0', 10),
   };
 }
 

@@ -186,8 +186,6 @@ async function determineJoinRole(
         return 'speaker';
       }
       return 'listener';
-
-    case RoomType.TALK:
     default: {
       // Talk rooms: apply speakerPermission logic
       if (room.speakers.includes(userId)) {

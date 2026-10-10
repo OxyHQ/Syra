@@ -8,7 +8,7 @@ import { usePlayerStore } from '@/stores/playerStore';
 export const PODCAST_PLAYBACK_RATES = [1, 1.25, 1.5, 1.75, 2, 0.75] as const;
 
 function nextRate(current: number): number {
-  const index = PODCAST_PLAYBACK_RATES.findIndex((rate) => rate === current);
+  const index = (PODCAST_PLAYBACK_RATES as readonly number[]).indexOf(current);
   const next = PODCAST_PLAYBACK_RATES[(index + 1) % PODCAST_PLAYBACK_RATES.length];
   return next ?? 1;
 }

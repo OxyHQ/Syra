@@ -995,7 +995,7 @@ router.post('/', async (req: AuthRequest, res: Response) => {
     let scheduledStartDate: Date | undefined;
     if (scheduledStart) {
       scheduledStartDate = new Date(scheduledStart);
-      if (isNaN(scheduledStartDate.getTime())) {
+      if (Number.isNaN(scheduledStartDate.getTime())) {
         return res.status(400).json({ message: 'Invalid scheduledStart date' });
       }
     }

@@ -304,7 +304,6 @@ const LoadingComponent: React.FC<LoadingProps> = (props) => {
       return <SkeletonLoading {...props} variant="skeleton" />;
     case 'inline':
       return <InlineLoading {...props} variant="inline" />;
-    case 'spinner':
     default:
       return <SpinnerLoading {...props} variant="spinner" />;
   }

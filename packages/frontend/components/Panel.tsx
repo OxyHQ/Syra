@@ -110,7 +110,6 @@ export const Panel: React.FC<PanelProps> = ({
         return {
           borderRadius: radius,
         };
-      case 'none':
       default:
         return {};
     }

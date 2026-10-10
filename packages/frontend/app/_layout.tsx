@@ -253,18 +253,15 @@ const MainLayout: React.FC<MainLayoutProps> = memo(({ isScreenNotMobile }) => {
       </View>
 
       {/* Bottom Player Bar - Outside panels wrapper */}
-      {!keyboardVisible && (
-        <>
-          {isScreenNotMobile ? (
-            <View style={styles.playerBarContainer}>
-              <PlayerBar />
-            </View>
-          ) : (
-            // Mobile: Only show player bar when there's a track or episode playing
-            hasNowPlaying && <MobilePlayerBar />
-          )}
-        </>
-      )}
+      {!keyboardVisible &&
+        (isScreenNotMobile ? (
+          <View style={styles.playerBarContainer}>
+            <PlayerBar />
+          </View>
+        ) : (
+          // Mobile: Only show player bar when there's a track or episode playing
+          hasNowPlaying && <MobilePlayerBar />
+        ))}
 
       {/* Mobile Bottom Navigation - Only on mobile */}
       {!isScreenNotMobile && !keyboardVisible && <MobileBottomNav />}

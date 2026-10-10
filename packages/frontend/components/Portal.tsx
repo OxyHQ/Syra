@@ -62,11 +62,13 @@ function createPortalGroup() {
     const append = useCallback<ContextType['append']>((id, component) => {
       if (map.current[id]) return;
       map.current[id] = <Fragment key={id}>{component}</Fragment>;
+      // biome-ignore lint/complexity/noUselessFragments: the outlet is typed as one ReactElement, and the fragment is what turns the array of portals into one.
       setOutlet(<>{Object.values(map.current)}</>);
     }, []);
 
     const remove = useCallback<ContextType['remove']>((id) => {
       map.current[id] = null;
+      // biome-ignore lint/complexity/noUselessFragments: the outlet is typed as one ReactElement, and the fragment is what turns the array of portals into one.
       setOutlet(<>{Object.values(map.current)}</>);
     }, []);
 
