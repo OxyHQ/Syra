@@ -6,7 +6,7 @@
 
 **Architecture:** Canonical Track/Artist/Album gain `externalIds`/`sources`/`source`/`status`/`images`/`hls`. Owned audio (uploads + commercial-use CC) and copyable Audius audio are transcoded to AES-128-encrypted HLS in S3, served via CloudFront signed URLs. Audius direct streaming is only the user opt-in fallback for tracks that cannot be copied/rehosted and only have a provider stream URL. A unified resolver hands the player one URL per source. Playback is server-authoritative (`PlaybackState` + `Device`) over the existing `playerSocket` for cross-device control + transfer.
 
-**Tech Stack:** Bun, Express + Mongoose, Expo/expo-router, `expo-audio` (+ `hls.js` web shim), `@tanstack/react-query`, Bloom, `@syra/shared-types`, ffmpeg + Shaka Packager/Bento4 (transcode/encrypt), CloudFront (CDN), Audius API, LRCLIB.
+**Tech Stack:** Bun, Express, Expo/expo-router, `expo-audio` (+ `hls.js` web shim), `@tanstack/react-query`, Bloom, `@syra/shared-types`, ffmpeg + Shaka Packager/Bento4 (transcode/encrypt), CloudFront (CDN), Audius API, LRCLIB.
 
 **Spec:** `docs/superpowers/specs/2026-06-16-music-sync-design.md`
 
@@ -160,7 +160,7 @@ export interface ExternalTrack {
 - [ ] **Step 5: Build** — Run: `bun run build:shared-types`. Expected: exits 0.
 - [ ] **Step 6: Commit** — `git add packages/shared-types && git commit -m "feat(types): canonical catalog + external source types"`
 
-### Task 1.2: Extend Mongoose schemas
+### Task 1.2: Extend the model schemas
 
 - [ ] **Step 1: `models/Track.ts`** — `audioSource` optional; add `source` (index),
   `status` (default `'ready'`, index), `externalIds` sub-schema (sparse unique index on

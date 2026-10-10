@@ -326,9 +326,8 @@ describe('PATCH /api/uploads/:id', () => {
    * `updateUserUploadRequestSchema` is all-optional and not `.strict()`, so an
    * empty body — or one carrying only fields this route refuses — parses
    * cleanly and reaches the update with an empty `changes`. Drizzle throws
-   * `No values to set` on `db.update(...).set({})`, where Mongoose's `save()`
-   * on an unmodified document simply did nothing; without the guard the route
-   * 500s on a request that asked for nothing.
+   * `No values to set` on `db.update(...).set({})`, so without the guard the
+   * route 500s on a request that asked for nothing.
    */
   it('answers 200 and changes nothing for a body with no editable field', async () => {
     const upload = await seedUpload({ title: 'Untouched' });
@@ -352,11 +351,10 @@ describe('PATCH /api/uploads/:id', () => {
   /**
    * Changing to artwork with NO palette CLEARS the accents.
    *
-   * The new cover decides both, including deciding they are absent — and the
-   * two ORMs disagree about how to say that. Drizzle drops an `undefined`
-   * value from a `.set()` entirely ("leave alone"), where Mongoose's `save()`
-   * issued `$unset` for the same assignment ("clear it"). Without an explicit
-   * `null` the row keeps the PREVIOUS cover's colours forever and the client
+   * The new cover decides both, including deciding they are absent — and
+   * drizzle drops an `undefined` value from a `.set()` entirely ("leave
+   * alone"); only `null` says "clear it". Without an explicit `null` the row
+   * keeps the PREVIOUS cover's colours forever and the client
    * renders a palette belonging to artwork that is no longer there.
    *
    * `image_assets.primary_color` is nullable and `storeImageAsset` takes the

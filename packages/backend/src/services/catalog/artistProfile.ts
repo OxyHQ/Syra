@@ -146,17 +146,12 @@ export async function loadDiscography(artistId: string): Promise<ArtistDiscograp
  * Tracks this artist participated in without being the primary artist.
  *
  * A join on `track_credits.name_key`, which is the indexed column, rather than
- * the Mongo `$or` widening that would have turned this into a collection scan of
- * every track on every profile view.
+ * an `or` widening that would turn this into a full scan of every track on every
+ * profile view.
  *
- * The Mongo version then refined in memory: a credit counted when it was
- * explicitly linked to THIS artist, or when it linked nowhere and matched by
- * name. `track_credits` has no `catalog_entity_id` column at all —
- * `schema/catalog.ts` dropped it across all four places it was declared because
- * NONE of them was ever written — so every credit is the "links nowhere" case
- * and the refinement has nothing left to distinguish. Behaviour is unchanged
- * because the field was always absent; what is gone is the code that checked for
- * a value nothing produced.
+ * A credit matches by name alone: `track_credits` has no `catalog_entity_id`
+ * column (see `schema/catalog.ts` — nothing ever wrote one), so there is no
+ * explicit link to prefer over the name.
  */
 export async function loadCreditedOn(artist: ArtistProfileSource): Promise<CreditedTrack[]> {
   const nameKey = artist.nameKey;
@@ -168,9 +163,8 @@ export async function loadCreditedOn(artist: ArtistProfileSource): Promise<Credi
    * `credits.nameKey` is one-to-many: an artist credited as producer AND
    * composer on the same track yields two joined rows. `LIMIT 50` over the join
    * therefore returns fewer than 50 TRACKS, and how many fewer depends on how
-   * many roles each one happens to carry. Mongo bounded 50 documents and folded
-   * roles afterwards, so a single query with a limit is a silent behaviour
-   * change: the shelf shrinks for exactly the artists with the richest credits.
+   * many roles each one happens to carry. A single query with a limit would
+   * silently shrink the shelf for exactly the artists with the richest credits.
    *
    * `selectDistinct` over the joined shape is not the fix either — distinct
    * applies to the whole projected row, and the rows differ by `role`.

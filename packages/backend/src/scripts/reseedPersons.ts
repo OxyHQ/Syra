@@ -17,23 +17,6 @@
  * slow, and an offset scan re-reads everything it has already skipped on each
  * page. `generatedId()` mints uuid v7, which is k-sortable, so `id > $last` is
  * both a stable cursor and an index-ordered one.
- *
- * ## Why this script moved in Task 12 rather than in Task 10
- *
- * `db/catalog/hybridServices.ts` registered it against Task 10, alongside five
- * other operational scripts that read catalog collections whose tables had
- * moved. It is ported here because it is the only one of the six whose OTHER
- * half was this vertical: it replayed `Podcast.persons[]`/`Episode.persons[]`,
- * and those became `podcast_persons`/`episode_persons`. Deleting the Mongoose
- * models left it unable to compile at all, so "leave it for its owner" was not
- * an available option.
- *
- * That ownership was also STALE — Task 10 had closed, so the entry named a task
- * that could not act on it. Its registry entry is cleared with this port. The
- * other five named the same closed task; they were re-owned on the lead's
- * ruling in the next commit, and split again by the Task 12 review into the two
- * that are genuinely dormant and the three whose Postgres readers are starved
- * until their loader moves. See `db/catalog/hybridServices.ts`.
  */
 import dotenv from 'dotenv';
 import { and, asc, eq, gt, isNull } from 'drizzle-orm';
@@ -132,8 +115,8 @@ export async function reseedPersons(): Promise<ReseedPersonsStats> {
   /**
    * Drop name-only / RSS persons; keep creator-added Oxy-linked ones.
    *
-   * `type = 'person'` is STATED. Mongoose's discriminator injected it into
-   * `PersonModel.deleteMany`; one table with a `type` column does not, and this
+   * `type = 'person'` is STATED. One table with a `type` column scopes nothing
+   * implicitly, and this
    * predicate without it — `linked_oxy_user_id is null` — matches almost every
    * ARTIST in the catalogue.
    */

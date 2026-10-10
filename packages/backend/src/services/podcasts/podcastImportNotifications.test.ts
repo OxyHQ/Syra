@@ -17,9 +17,9 @@ import { importFeed } from './podcastImportService';
  * `importedEpisodes` counts episodes PROCESSED, so every refresh re-processes the whole
  * feed — driving notifications off it would push every episode to every subscriber on
  * every refresh. The import instead asks the DATABASE whether the upsert actually
- * created a row: Mongo answered with `updatedExisting: false`, Postgres answers with
- * `xmax = 0` on the returned row (`db/podcasts/episodes.ts`). Same question, and the
- * Postgres form is additionally correct under two concurrent crawls of one feed.
+ * created a row: Postgres answers with `xmax = 0` on the returned row
+ * (`db/podcasts/episodes.ts`), which is correct even under two concurrent crawls of
+ * one feed.
  *
  * These tests assert on NotificationSuppression rows rather than on delivered pushes:
  * the notifier claims its suppression key BEFORE attempting delivery, so a claim proves
@@ -27,12 +27,7 @@ import { importFeed } from './podcastImportService';
  * Oxy service credentials are configured in tests — which is exactly what makes the
  * second test meaningful.
  *
- * ## One database again
- *
- * This suite used to connect to BOTH, because subscriptions and episodes were Postgres
- * from Task 12 while the suppression ledger was still Mongoose. Task 15 moved the
- * ledger, so the whole path — feed, episodes, subscriptions, notifier — is Postgres and
- * the Mongo hooks are gone.
+ * The whole path — feed, episodes, subscriptions, notifier — is Postgres.
  */
 
 const SUBSCRIBER = 'oxy-subscriber-1';

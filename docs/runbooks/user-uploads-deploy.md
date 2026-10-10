@@ -24,87 +24,24 @@ is silent AND unbounded.
 
 ---
 
-## 1. `bun run ensure-indexes -- --dry-run`
-
-Reports which indexes are missing, and which existing duplicate rows would block
-a unique index from building. Writes nothing.
-
-Run this **first, and against production**, not against a staging copy: the
-duplicates it finds are properties of real data, and staging does not have them.
-
-### How far the dry run can be trusted
-
-It tells you **which indexes are missing** and **which duplicates block a
-build**. It **cannot validate the definitions it would create**, because it
-shares the code that generates them.
-
-That is not a theoretical caveat. During development the index planner mistook
-the base schema of a discriminated model for a discriminator (its
-`discriminatorMapping.value` is `null`, not `undefined`) and stamped
-`partialFilterExpression: { type: null }` onto six indexes — a filter matching no
-documents at all. Those six would have been reported `MISSING`, then created
-successfully, then reported `CREATED`, and indexed nothing. Every signal
-available to the operator would have said the job worked.
-
-The guard against that class is `src/scripts/ensureIndexes.test.ts`, which
-compares the planner's output against the indexes Mongoose itself builds — an
-independent oracle. Trust the dry run for coverage, not for correctness.
-
----
-
-## 2. Merge or delete the duplicates the dry run named
-
-**Expect the first `ensure-indexes` run to fail. That is the script working.**
-
-Nothing has ever enforced artist name uniqueness, so duplicate `nameKey` values
-almost certainly exist in production and the unique index cannot build until they
-are resolved. The same risk applies to `Track.externalIds.isrc`.
-
-The script prints the offending groups with their document ids, because "E11000"
-on its own leaves whoever is mid-deploy with no next step. Merge or remove those
-rows, then continue.
-
-Anyone who hits an unexplained `E11000` here without having read this will assume
-the script is broken and stop. It is not — the constraint is being enforced for
-the first time against data that predates it.
-
----
-
-## 3. `bun run ensure-indexes`
-
-Builds every index declared in every schema. Reports created / already present /
-failed per index, and exits non-zero if any failed.
-
-This matters beyond this feature. `utils/database.ts` disables `autoIndex` in
-production and nothing else in the backend has ever created an index, so **every
-index in every schema has been declarative only in production** — including
-constraints the existing code already assumes, such as `Track.externalIds.isrc`,
-`Album.upc`, `CatalogEntity.linkedOxyUserId`, `Podcast.feedUrl` and
-`Episode {podcastId, guid}`.
-
----
-
-## 4. `bun run reseed:persons`
-
-**Must come after step 3, and after it specifically.**
+## 1. `bun run reseed:persons`
 
 `Person.nameKey` values written before this feature used a weaker normalisation
 (`trim().toLowerCase()`) and will not match lookups for any name carrying an
 accent or punctuation. The reseed replays every credit through the current
 resolver and rewrites them.
 
-It comes last of the identity steps because it **writes the very `nameKey` values
-the unique index guards**, and because it generates new values under the
-Latin-only diacritic rule. Running it before the index exists means writing
-unconstrained data that the index then refuses to build over.
+It rewrites those `nameKey` values under the current Latin-only diacritic rule,
+so it must run before anyone relies on accent- or punctuation-insensitive person
+lookups.
 
 ---
 
-## 5. `bun run backfill:fingerprints`
+## 2. `bun run backfill:fingerprints`
 
 Acoustically indexes the catalogue that predates the fingerprint write.
 
-Independent of steps 1–4 — it reads `tracks` and writes a new collection — so it
+Independent of step 1 — it reads `tracks` and writes its own table — so it
 can run last, and it is the only step here that is safe to run in bounded passes
 during a quiet window:
 
@@ -137,7 +74,5 @@ matter how correct their code is:
 
 - `SYRA_COMPLIANCE_REVIEWERS` is set, and a reviewer account can load the claim
   queue rather than receiving `403`.
-- `ensure-indexes` exits 0 with zero failures.
-- A second `ensure-indexes` run reports everything already present and creates
-  nothing.
+- `reseed:persons` exits 0.
 - `backfill:fingerprints` reports `failed: 0`, or the failures are understood.

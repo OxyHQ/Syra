@@ -16,9 +16,8 @@
  * as the `device:list` payload, so whatever shape this module returns IS the
  * wire contract. `@syra/shared-types`' `deviceSchema` declares that contract —
  * `{ id?, deviceId, name, type, capabilities, lastSeen, isActive }` with
- * `lastSeen` a STRING — and the Mongoose version satisfied neither half: it
- * emitted the raw document, so clients received `_id` and `__v` they were never
- * promised and a `Date` where the schema says string. Mapping here rather than
+ * `lastSeen` a STRING. Emitting the raw row would hand clients fields they
+ * were never promised and a `Date` where the schema says string. Mapping here rather than
  * in the socket keeps the one place that knows the row shape responsible for
  * the one shape that leaves it.
  */
@@ -55,10 +54,8 @@ export function toDevice(row: DeviceRow): Device {
  * `(oxyUserId, deviceId)` pair.
  *
  * `capabilities` defaults to `[]` on BOTH sides of the upsert, not just the
- * insert. Mongoose's `findOneAndUpdate` set the field on every call because the
- * update document always carried it, so a re-register that omits capabilities
- * CLEARED them; keeping that in the conflict branch preserves the behaviour
- * rather than silently making the field sticky.
+ * insert: a re-register that omits capabilities CLEARS them, rather than the
+ * field silently becoming sticky.
  *
  * `lastSeen` is stamped explicitly instead of relying on the column default,
  * which only applies to an insert.

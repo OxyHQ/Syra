@@ -10,22 +10,20 @@
  * on drizzle the constraint is satisfiable, the model is deleted, and this
  * module is what replaced it.
  *
- * ## The counter race Mongo had, and that this does not
+ * ## The counter race, and why this does not have it
  *
- * `subscribePodcast` had to bump `subscriberCount` exactly once per user, and it
- * did it by READING the array first (`before?.subscribedPodcasts?.includes(id)`)
- * and then writing — two round trips with no isolation between them. Two
- * concurrent subscribes from the same account both read "not subscribed" and
- * both incremented, permanently overstating the count with no way to detect it
- * after the fact; the reverse race under-counts on unsubscribe.
+ * Subscribing has to bump `subscriberCount` exactly once per user. Doing it by
+ * READING membership first and then writing is two round trips with no
+ * isolation between them: two concurrent subscribes from the same account would
+ * both read "not subscribed" and both increment, permanently overstating the
+ * count with no way to detect it after the fact; the reverse race under-counts
+ * on unsubscribe.
  *
  * `insert … onConflictDoNothing().returning()` answers "did this insert actually
  * happen" from the database, atomically, and `delete … returning()` does the
  * same for removal. The counter update then rides in the SAME transaction, so
- * the count and the membership cannot disagree even under concurrency. This is a
- * behaviour IMPROVEMENT rather than parity, and it is called out because a
- * reviewer comparing against Mongo will find the read-then-write gone and should
- * know it was deliberate.
+ * the count and the membership cannot disagree even under concurrency. Do not
+ * reintroduce a read-then-write here.
  *
  * ## `subscriberCount` is not derived, and that is a deliberate keep
  *
@@ -49,9 +47,8 @@ const MISSING_PODCAST_CONSTRAINT = 'user_podcast_subscriptions_podcast_id_podcas
 /**
  * One user's subscribed show ids, oldest first.
  *
- * The order is `created_at`, matching the four sibling memberships and the Mongo
- * array it replaces — `$addToSet` appended, so the document recorded when each
- * subscription was added simply by where it sat.
+ * The order is `created_at`, matching the four sibling memberships, so the list
+ * reads in the order the subscriptions were added.
  */
 export async function listSubscribedPodcastIds(oxyUserId: string): Promise<string[]> {
   const rows = await getDb()
@@ -144,9 +141,9 @@ export type SubscribeResult = 'subscribed' | 'already-subscribed' | 'missing-pod
 /**
  * Subscribe, idempotently, bumping `subscriberCount` exactly once.
  *
- * `'missing-podcast'` when the id names nothing — a real answer here and not one
- * Mongo had, for the same reason `addMembership` gained it: the column is a
- * foreign key, so a bogus id is `23503` where Mongo silently stored the string.
+ * `'missing-podcast'` when the id names nothing, for the same reason
+ * `addMembership` has it: the column is a foreign key, so a bogus id is
+ * `23503`.
  * The controller turns it into a 404 rather than letting it reach a client as a
  * 500.
  */
@@ -181,12 +178,11 @@ export async function subscribeToPodcast(
  * Unsubscribe, idempotently. Returns whether a subscription was actually
  * removed, which is what decides whether the counter moves.
  *
- * Unsubscribing from a show that does not exist is a successful no-op, exactly
- * as the Mongo `$pull` was: the foreign key constrains what may be STORED, not
- * what may be asked for. The counter's `greatest(…, 0)` floor carries over the
- * Mongo guard (`{ subscriberCount: { $gt: 0 } }`) — with the write now atomic it
- * should be unreachable, and it stays because a counter that went negative would
- * be silently wrong rather than loud.
+ * Unsubscribing from a show that does not exist is a successful no-op: the
+ * foreign key constrains what may be STORED, not what may be asked for. The
+ * counter's `greatest(…, 0)` floor should be unreachable with the write atomic;
+ * it stays because a counter that went negative would be silently wrong rather
+ * than loud.
  */
 export async function unsubscribeFromPodcast(
   oxyUserId: string,

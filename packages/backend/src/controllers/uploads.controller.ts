@@ -759,9 +759,8 @@ async function storeLockerUpload(
     trackNumber: overrides.trackNumber ?? metadata.trackNumber,
     discNumber: overrides.discNumber ?? metadata.discNumber,
     year: overrides.year ?? metadata.year,
-    // `genres` is NOT NULL with a `{}` default, matching the implicit `[]`
-    // Mongoose gave every upload — so an absent tag list is an empty array
-    // rather than a null the DTO would have to decide about.
+    // `genres` is NOT NULL with a `{}` default — so an absent tag list is an
+    // empty array rather than a null the DTO would have to decide about.
     genres: overrides.genres?.length ? overrides.genres : metadata.genres,
 
     duration: metadata.technical.durationSec,
@@ -819,10 +818,10 @@ async function storeLockerUpload(
   } catch (err) {
     /**
      * Losing the race on THIS owner's copy of THESE bytes is the duplicate
-     * outcome. Matched by CONSTRAINT NAME rather than by a bare `23505`, for the
-     * reason the Mongo version named its two fields: a collision on any other
-     * constraint is a bug, and recovering from it as "you already have this
-     * file" would answer with somebody else's row or silently drop the write.
+     * outcome. Matched by CONSTRAINT NAME rather than by a bare `23505`: a
+     * collision on any other constraint is a bug, and recovering from it as
+     * "you already have this file" would answer with somebody else's row or
+     * silently drop the write.
      */
     if (!isUniqueViolation(err, 'user_uploads_owner_oxy_user_id_sha256_key')) throw err;
     // The row holding the SLOT, soft-deleted ones included — see that
@@ -1488,10 +1487,10 @@ async function publishContribution(params: PublishParams): Promise<string> {
   /**
    * The track, its attestation and both counters in ONE transaction.
    *
-   * In Mongo these were four independent writes, and every gap between them was
-   * a state somebody has to reason about: a published recording whose signature
-   * never landed is a contribution with no evidence behind it — the one thing
-   * the attestation exists to prevent — and a failed `$inc` left the artist's
+   * As separate writes, every gap between them would be a state somebody has to
+   * reason about: a published recording whose signature never landed is a
+   * contribution with no evidence behind it — the one thing the attestation
+   * exists to prevent — and a failed counter update would leave the artist's
    * `stats.tracks` under-counting a catalogue that already had the track in it.
    *
    * The acoustic index and the ingest enqueue stay OUTSIDE, deliberately: both
@@ -2109,10 +2108,8 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
        *
        * A driver error's MESSAGE is the failing statement and its bound
        * parameters. On this route those parameters are the upload itself: the
-       * whole raw ID3 block, lyrics, comments, publisher. Under Mongoose the
-       * error carried no statement, so this exposure is new under Postgres and
-       * this is the worst route on the branch to have it — see Task 19a and
-       * `describeDriverError`.
+       * whole raw ID3 block, lyrics, comments, publisher — so this is the worst
+       * route to log one verbatim. See `describeDriverError`.
        *
        * The CLASSIFIER is the load-bearing half, not the formatter.
        * `sqlStateOf(err) !== undefined` is true of any error carrying a string
@@ -2333,12 +2330,11 @@ export const updateUpload = async (
       changes.coverArtId = updates.coverArt;
       const colors = await getStoredImageColors(updates.coverArt);
       /**
-       * `?? null`, and this is the whole difference between the two ORMs.
+       * `?? null`, because `undefined` and `null` mean different things here.
        *
        * Drizzle's `buildUpdateSet` DROPS every `undefined`-valued key
        * (`pg-core/dialect.js` filters on `set[colName] !== void 0`), so
-       * `undefined` means "leave this column alone". Mongoose's `save()` issued
-       * `$unset` for the identical assignment, so there it meant "clear it".
+       * `undefined` means "leave this column alone" and only `null` clears it.
        *
        * The new cover decides both accents, including deciding they are absent
        * — `storeImageAsset` takes the palette as OPTIONAL input, so an image
@@ -2346,10 +2342,9 @@ export const updateUpload = async (
        * image leaves the PREVIOUS cover's accents on the row forever, and the
        * client renders a palette belonging to artwork that is no longer there.
        *
-       * The general rule, which the remaining verticals will meet too: in
-       * drizzle `undefined` is "leave alone" and `null` is "clear"; in Mongoose
-       * they were the same thing. Every ported `.set()` has to say which it
-       * means. The conditional spreads elsewhere in this vertical
+       * The general rule: in drizzle `undefined` is "leave alone" and `null` is
+       * "clear", so every `.set()` has to say which it means. The conditional
+       * spreads elsewhere in this vertical
        * (`ingestUserUpload`, `resolvePendingArtistClaim`) are the OTHER
        * intent — "leave alone" — and are correct as they stand.
        */
@@ -2360,9 +2355,8 @@ export const updateUpload = async (
     /**
      * An empty body is a no-op, and it has to be handled rather than sent.
      *
-     * `db.update(...).set({})` is a SQL syntax error, where Mongoose's
-     * `save()` on an unmodified document simply did nothing — so a PATCH with
-     * no recognised fields would 500 instead of echoing the row back.
+     * `db.update(...).set({})` is a SQL syntax error — so a PATCH with no
+     * recognised fields would 500 instead of echoing the row back.
      */
     const [updated] =
       Object.keys(changes).length > 0

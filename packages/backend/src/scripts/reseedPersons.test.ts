@@ -2,10 +2,8 @@
  * `reseedPersons` — the clean re-derivation of `type:'person'` rows from
  * podcast and episode credits.
  *
- * Split out of `catalogEntityMigration.test.ts` in Task 12: every table this
- * script touches is Postgres now (`catalog_entities`, `podcast_persons`,
- * `episode_persons`), while its former file-mate `migrateArtistsToCatalogEntities`
- * is a Mongo-only collection rename.
+ * Every table this script touches is Postgres (`catalog_entities`,
+ * `podcast_persons`, `episode_persons`).
  */
 
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'bun:test';
@@ -96,8 +94,8 @@ describe('reseedPersons', () => {
      * The fixture that separates the scoped delete from an unscoped one.
      *
      * `linked_oxy_user_id is null` is true of almost every artist in the
-     * catalogue, and Mongoose's discriminator used to add `type: 'person'` for
-     * free. Without an artist here the delete could lose the whole artist table
+     * catalogue, and nothing adds `type: 'person'` implicitly. Without an artist
+     * here the delete could lose the whole artist table
      * and every assertion in the case above would still pass.
      */
     await getDb()

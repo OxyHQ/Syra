@@ -16,7 +16,7 @@ import { useImagePicker } from '@/hooks/useImagePicker';
 import { resolveCatalogImageUrl } from '@/utils/catalogImages';
 
 interface CoverArtPickerProps {
-  value?: string; // Image ID (MongoDB ObjectId string) or URL for display
+  value?: string; // Image ID or URL for display
   onChange: (imageId: string | null) => void; // Callback with image ID
   size?: number;
   disabled?: boolean;

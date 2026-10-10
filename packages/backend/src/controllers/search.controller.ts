@@ -71,9 +71,8 @@ const PLAYLIST_ORDER = [
 /**
  * `catalog_entities` rows of `type = 'person'` matching the query.
  *
- * Persons and artists share one table, so `type` is written out — Mongoose's
- * discriminator injected it into `PersonModel.find()` and an aggregation would
- * not have had it at all. Ordered by name, exactly as the Mongo read was.
+ * Persons and artists share one table, so `type` is written out — nothing
+ * scopes the read to persons implicitly. Ordered by name.
  */
 async function findPeople(query: string, offset: number, limit: number) {
   return getDb()
@@ -193,18 +192,14 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
     const trimmed = query.trim();
 
     /**
-     * Every category is a DTO promise now, not a document promise.
+     * Every category is a DTO promise, not a row promise.
      *
-     * The four catalog categories used to be `CatalogAggregateDoc` so the Mongo
-     * formatters could be typed against `_id`; they are serialized by
-     * `db/catalog/hydrate` here, which names its own input and output. `people`
-     * is `SearchPerson[]` for the same reason — it goes through `enrichPersons`,
-     * whose input `PersonLike` a drizzle row does not satisfy, so the mapping is
-     * explicit (`toPersonLike`) rather than implicit and silent.
-     *
-     * `podcasts` and `episodes` are DTO promises too since Task 12 — they were
-     * the last `unknown` here, and they were `unknown` only because the podcast
-     * serializers took Mongoose documents this file had no type for.
+     * The four catalog categories are serialized by `db/catalog/hydrate`, which
+     * names its own input and output. `people` is `SearchPerson[]` for the same
+     * reason — it goes through `enrichPersons`, whose input `PersonLike` a
+     * drizzle row does not satisfy, so the mapping is explicit (`toPersonLike`)
+     * rather than implicit and silent. `podcasts` and `episodes` are typed DTO
+     * promises too, so nothing here is `unknown`.
      */
     const searchPromises: {
       tracks?: Promise<[Track[], number]>;
@@ -264,7 +259,7 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
       /**
        * `description` is in the stored vector already —
        * `to_tsvector('english', name || ' ' || coalesce(description, ''))` — so
-       * the Mongo `$or` over two fields is ONE match here, and the `coalesce`
+       * a match over both fields is ONE match here, and the `coalesce`
        * is what stops a null description erasing the whole vector.
        */
       const playlistMatches = and(
@@ -305,10 +300,10 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
      * Search podcasts (our mirrored catalog; podcasts are free → no playback
      * filter).
      *
-     * `search_vector` since Task 12, which is what removed the last
-     * `new RegExp(req.query.q)` from this handler. The stored column is
-     * `to_tsvector('english', title || ' ' || coalesce(author, ''))`, so the
-     * Mongo `$or` over two fields is ONE match here.
+     * `search_vector`, so no `new RegExp(req.query.q)` is built from the
+     * query. The stored column is
+     * `to_tsvector('english', title || ' ' || coalesce(author, ''))`, so a
+     * match over both fields is ONE match here.
      */
     if (categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.PODCASTS) {
       // `viewerId` is `undefined`: search is a public discovery surface and

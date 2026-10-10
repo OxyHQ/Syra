@@ -178,7 +178,7 @@ export function isDenylistedAlbumName(value: string): boolean {
  * How much of each component survives into an {@link buildAlbumKey} key.
  *
  * A tag field is arbitrary user-supplied text and some files carry absurd ones.
- * MongoDB refuses an index key over 1024 bytes, so an untruncated composite key
+ * A btree index entry has a hard size cap, so an untruncated composite key
  * would not merely be ugly — it would make the insert FAIL, on exactly the
  * pathological file nobody tests with. Truncating only ever merges two albums
  * whose first 120 normalised characters are identical, which is a merge you

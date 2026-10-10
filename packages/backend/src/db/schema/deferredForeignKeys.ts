@@ -282,7 +282,7 @@ export const ID_COLUMNS_WITHOUT_FOREIGN_KEY: readonly { column: string; reason: 
   {
     column: 'house_members.oxy_user_id',
     reason:
-      "A house member's Oxy account id (RELATIONS.md: House.members[].userId). Renamed from Mongo's " +
+      "A house member's Oxy account id (RELATIONS.md: House.members[].userId). Named `oxyUserId` rather than " +
       "`userId` to match every other Oxy account id in this schema — see the column's own comment.",
   },
   {

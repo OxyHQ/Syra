@@ -301,8 +301,7 @@ export async function ensureContributedAlbum(
   try {
     /**
      * The album row, its provenance entry and its genre links commit TOGETHER.
-     * All three were one `AlbumModel.create()` under Mongo because the last two
-     * were embedded arrays; they are child tables now, and a partial write
+     * The last two are child tables, and a partial write
      * would leave a release whose cover art has no recorded licence — the one
      * fact `sources` exists to carry.
      */
@@ -317,14 +316,11 @@ export async function ensureContributedAlbum(
           coverArtId: coverArt,
           ...coverArtSizeIds(coverArtSizes),
           /**
-           * `coverArtLicence` is NOT written here, and that is parity rather
-           * than an oversight of this port: the Mongo version recovered a
-           * licence from Cover Art Archive and used it only to decide whether
-           * to record a `sources` entry, never storing the licence itself.
-           * Nothing in production writes `albums.cover_art_licence_*` — the
-           * only writer anywhere is `models/Album.test.ts`. Reported rather
-           * than fixed, because storing it changes what `toAlbumDto` puts on
-           * the wire and that is a contract decision, not a translation.
+           * `coverArtLicence` is NOT written here, deliberately: the licence
+           * recovered from Cover Art Archive only decides whether to record a
+           * `sources` entry, and is never stored itself. Nothing in production
+           * writes `albums.cover_art_licence_*`. Storing it would change what
+           * `toAlbumDto` puts on the wire, which is a contract decision.
            */
           type: input.type ?? 'album',
           source: 'upload',

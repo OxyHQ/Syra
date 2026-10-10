@@ -1,7 +1,6 @@
 # `@oxy.so/db` — extracting the Postgres plumbing
 
-**Status:** design, approved 2026-08-05. Blocks the Syra port
-([`2026-08-05-syra-mongo-to-postgres-design.md`](./2026-08-05-syra-mongo-to-postgres-design.md)).
+**Status:** design, approved 2026-08-05.
 
 **Where the work lands:** `OxyHQServices/packages/db`, published to npm. This spec
 lives in the Syra repo because the Syra port is what forces it; when
@@ -11,8 +10,8 @@ migration contract does.
 
 ## Why this exists
 
-oxy-api and Mention each ported MongoDB to PostgreSQL, and each wrote its own
-copy of the same plumbing. The copies have already diverged:
+oxy-api and Mention each run on PostgreSQL, and each wrote its own copy of the
+same plumbing. The copies have already diverged:
 
 | module | oxy-api | Mention | differing lines |
 |---|---|---|---|

@@ -12,19 +12,15 @@
  * `catalog_entities` id under `kind = 'artist'`. Postgres has no conditional
  * foreign key, so both are plain `text` — which is also why no reader needs an
  * id-shape guard: an edge pointing at a row that no longer exists simply matches
- * nothing when the caller looks the id up. The Mongo readers had to drop
- * non-`ObjectId` values first or the `$in` would throw.
+ * nothing when the caller looks the id up.
  *
  * ## The rewrite is a truncate-and-insert inside one transaction
  *
- * `persistGraph` used `deleteMany({ kind })` followed by batched `bulkWrite`
- * upserts, and the gap between the two was a window in which every "related"
- * shelf for that kind was empty. One transaction closes it: readers see the old
- * graph until the new one commits. The upsert half of the Mongo version has
- * nothing left to do once the delete and the insert are atomic — after the
- * delete there is nothing to conflict with — so this inserts outright and the
- * unique constraint stays as the invariant it always was rather than a
- * conflict target.
+ * A delete followed by separate inserts would leave a window in which every
+ * "related" shelf for that kind is empty. One transaction closes it: readers
+ * see the old graph until the new one commits. After the delete there is
+ * nothing to conflict with, so this inserts outright and the unique constraint
+ * is an invariant rather than a conflict target.
  */
 
 import { and, eq, inArray } from 'drizzle-orm';

@@ -23,18 +23,14 @@
  *
  * ## What the port changed, and what it did not
  *
- * The show and its categories, funding links and credits were one document and
- * are five tables; `db/podcasts/podcasts.ts` runs them as one transaction, so a
- * crawl that dies mid-write no longer leaves a show carrying the previous
- * refresh's hosts. The `image`/`imageSizes` pair became an `image_assets` id
- * plus six variant FKs, so {@link showCoverColumns} converts once rather than at
- * each of the two call sites that used to assign them.
+ * The show and its categories, funding links and credits are five tables; `db/podcasts/podcasts.ts` runs them as one transaction, so a
+ * crawl that dies mid-write never leaves a show carrying the previous refresh's
+ * hosts. The cover is an `image_assets` id plus six variant FKs, so
+ * {@link showCoverColumns} converts once rather than at each call site.
  *
- * The one thing that genuinely could not be preserved: Mongo reported a real
- * insert through `lastErrorObject.updatedExisting`, which has no equivalent.
- * `upsertEpisodeFromFeed` answers it from `xmax = 0` on the returned row instead
- * — exact, and unlike the Mongo form it is correct under two concurrent crawls
- * of the same feed.
+ * Whether an upsert really inserted is answered by `upsertEpisodeFromFeed` from
+ * `xmax = 0` on the returned row — exact, and correct under two concurrent
+ * crawls of the same feed.
  */
 
 import type { CatalogImageSizes } from '@syra/shared-types';
@@ -196,8 +192,7 @@ function buildEpisodeSet(
  * Re-host the show cover into Syra S3 and return the columns to write, keeping
  * the external URL only as a fallback.
  *
- * Returns the columns rather than mutating a document, which is what the Mongo
- * version did. Colors follow the catalog convention: REPLACE when the image
+ * Returns the columns rather than mutating a row. Colors follow the catalog convention: REPLACE when the image
  * changed, fill-missing when it did not — `rehostPodcastImage` returns no colors
  * on the idempotent path, so blindly assigning would erase them.
  */
@@ -464,8 +459,8 @@ export async function importFeed(
  * `imageId` set is still a one-way door, deliberately: once an episode has its
  * own re-hosted cover, a refresh never revisits it — so an episode whose own
  * artwork is later removed from the feed keeps the cover a previous crawl
- * re-hosted. Mongo behaved identically and said so — "Existing episode → leave
- * its cover as-is (idempotent)". Recorded rather than fixed, because
+ * re-hosted ("Existing episode → leave its cover as-is (idempotent)"). Recorded
+ * rather than fixed, because
  * re-hosting every episode's art on every crawl is what the `imageId` guard and
  * `MAX_EPISODE_IMAGE_REHOST` exist to prevent; only the case of NEVER having
  * gotten one is retried.

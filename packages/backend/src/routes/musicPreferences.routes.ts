@@ -19,19 +19,16 @@ const router = Router();
  * Music Preferences API
  * All routes require authentication
  *
- * ## The 400 branch is gone, and it had to be
+ * ## No 400-from-error-message branch, deliberately
  *
- * `PUT` used to answer 400 when the caught error's `.message` contained the
- * substring "validation", and put that message in the response body. Both halves
- * stop working at the port: Mongoose document validation is what produced those
- * messages, and a postgres.js error's `.message` carries the failing statement
- * and its bound parameters, so echoing it would put the SQL on the wire.
+ * `PUT` never echoes a caught error's `.message`: a postgres.js error's
+ * `.message` carries the failing statement and its bound parameters, so echoing
+ * it would put the SQL on the wire.
  *
  * Nothing reachable is lost. Every field is clamped into its column's CHECK
  * range by `coerceMusicPreferencesPatch` and anything of the wrong type is
  * dropped, so a well-formed request cannot be refused by the database and a
- * malformed one is ignored field by field — which is what the Mongo route did
- * with it too.
+ * malformed one is ignored field by field.
  */
 
 // Apply auth middleware to all routes

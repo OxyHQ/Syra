@@ -182,8 +182,7 @@ const PROBES: readonly { readonly name: string; readonly sql: string }[] = [
           where deleted_at is null and expires_at <= now() limit 500`,
   },
   {
-    // `db/creators/uploads.ts` — `findUploadsPastGrace`, sweeper phase 3. The
-    // one the Mongo collection had NO index for at all.
+    // `db/creators/uploads.ts` — `findUploadsPastGrace`, sweeper phase 3.
     name: 'sweepHardDeletes',
     sql: `select id from user_uploads
           where deleted_at <= now() - interval '30 days' limit 500`,
@@ -558,7 +557,7 @@ describe('the locker reads reach an index', () => {
    * `(owner_oxy_user_id, album_key, disc_number, track_number)` supplies the
    * rows in group order; the outer `ORDER BY` is over three aggregate
    * expressions, which no index can supply. Asserted as it is rather than
-   * wished away — the Mongo pipeline sorted there too.
+   * wished away.
    */
   it('the album page groups through an owner-leading index', () => {
     // The GROUP BY is over `album_key`, but the only constrained column is the
@@ -605,10 +604,9 @@ describe('the locker reads reach an index', () => {
 describe("compliance's three purge legs reach an index", () => {
   /**
    * All three, because a purge that falls back to a scan on the one table this
-   * design expects to reach millions of rows is a takedown that times out —
-   * and two of these three indexes did not exist in Mongo at all.
+   * design expects to reach millions of rows is a takedown that times out.
    */
-  it('the matched-track leg uses the index Mongo did not have', () => {
+  it('the matched-track leg uses its own index', () => {
     expectIndexed('purgeByMatchedTrack', 'user_uploads');
     expect(`matched: ${indexesIn('purgeByMatchedTrack')}`).toBe(
       'matched: user_uploads_matched_track_id_idx',
@@ -659,11 +657,11 @@ describe("the expiry sweeper's three phases reach an index", () => {
   });
 
   /**
-   * Phase 3 had NO Mongo index at all, on a job that runs unattended every hour
-   * over the largest table in the schema. This is the probe that says the added
-   * one is reachable rather than merely declared.
+   * Phase 3 runs unattended every hour over the largest table in the schema.
+   * This is the probe that says its index is reachable rather than merely
+   * declared.
    */
-  it('phase 3 reaches the deleted_at index Mongo lacked entirely', () => {
+  it('phase 3 reaches the deleted_at index', () => {
     expectIndexed('sweepHardDeletes', 'user_uploads');
     expect(`hard deletes: ${indexesIn('sweepHardDeletes')}`).toBe(
       'hard deletes: user_uploads_deleted_at_idx',

@@ -1,8 +1,8 @@
 /**
  * Music genres as rows, and an album's membership in them.
  *
- * `Album.genre` was a bare `string[]` in Mongo. `schema/genres.ts` explains why
- * it is a real table now — "what genres EXIST across the catalogue" cannot be
+ * `schema/genres.ts` explains why a genre is a real table rather than a bare
+ * `string[]` on the album — "what genres EXIST across the catalogue" cannot be
  * answered from an array without scanning every row — and this module is the
  * write side of that: the one place that turns the genre NAMES a tag block or an
  * importer hands us into `genres` rows and `album_genres` links.

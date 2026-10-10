@@ -2,14 +2,11 @@
  * `houses` and `house_members` — row access, the visibility predicates, and
  * their query-level twin.
  *
- * ## The predicates are pure functions now, and that is the point
+ * ## The predicates are pure functions, and that is the point
  *
- * `models/House.ts` carried `hasRole` / `getMemberRole` / `isMember` /
- * `canSeeHouse` / `canAccessRooms` / `isSelfJoinable` as Mongoose INSTANCE
- * METHODS, which meant every caller had to hold a hydrated document — the reason
- * `GET /api/houses` could not use `.lean()` and said so in a comment. They are
- * plain functions over `(house, members, userId)` here, so a caller passes rows
- * and nothing is hydrated at all.
+ * `hasRole` / `getMemberRole` / `isMember` / `canSeeHouse` / `canAccessRooms` /
+ * `isSelfJoinable` are plain functions over `(house, members, userId)`, so a
+ * caller passes rows and nothing is hydrated at all.
  *
  * ## Two expressions of one rule, still pinned together
  *
@@ -20,13 +17,9 @@
  * `routes/houseVisibility.test.ts` asserts the two agree on every combination of
  * the axes, for a member, a non-member and an anonymous caller.
  *
- * The Mongo version's "a house that predates the `visibility` field matches
- * neither restricted branch and so stays listed" caveat is GONE and deliberately
- * not reproduced: all three axis columns are `notNull` with defaults, so there is
- * no such row to reason about. The behaviour is unchanged for every house that
- * ever existed — the default IS `listed`/`anyone` — but the branch that used to
- * express it would now be dead code, and a comment describing a row shape the
- * schema forbids is worse than no comment.
+ * There is no "house without a `visibility`" branch: all three axis columns are
+ * `notNull` with defaults (`listed`/`anyone`), so there is no such row to reason
+ * about.
  */
 
 import { and, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
@@ -260,11 +253,11 @@ export interface ListHousesOptions {
  * not one of the two which hide it.
  *
  * DERIVED from the closed tuple rather than written as `['listed']`, so the
- * rule stays "these two withhold" (Mongo's `$nin`, and what the axis actually
- * means) while the QUERY gets an equality it can index. Add a fourth visible
- * level to `HOUSE_DISCOVERY_LEVELS` and it appears here automatically; add a
- * fourth hiding one and it must be named below, which is a change to the rule
- * and should be.
+ * rule stays "these two withhold" (what the axis actually means) while the
+ * QUERY gets an equality it can index. Add a fourth visible level to
+ * `HOUSE_DISCOVERY_LEVELS` and it appears here automatically; add a fourth
+ * hiding one and it must be named below, which is a change to the rule and
+ * should be.
  */
 const DISCOVERABLE_LEVELS = HOUSE_DISCOVERY_LEVELS.filter(
   (level) => level !== HouseDiscovery.UNLISTED && level !== HouseDiscovery.HIDDEN,
@@ -313,9 +306,8 @@ export function houseListingConditions(options: {
     conditions.push(sql`${houses.id} < ${options.cursor}`);
   }
   if (options.search !== undefined && options.search.length > 0) {
-    // Replaces Mongo's `$text` over the `{ name: 'text', description: 'text' }`
-    // index; `houses.searchVector` is the generated `tsvector` behind
-    // `houses_search_gin`.
+    // Full-text over name and description; `houses.searchVector` is the
+    // generated `tsvector` behind `houses_search_gin`.
     conditions.push(sql`${houses.searchVector} @@ plainto_tsquery('english', ${options.search})`);
   }
 
@@ -343,8 +335,7 @@ export function houseListingConditions(options: {
  * ## Why membership is TWO queries and not a correlated `EXISTS`
  *
  * `exists (select 1 from house_members where house_id = houses.id and …)` reads
- * naturally and is the direct transcription of Mongo's `'members.userId': userId`.
- * Resolving the member's house ids first instead turns the second arm into an
+ * naturally. Resolving the member's house ids first instead turns the second arm into an
  * `id in (…)` list. Measured on 30,000 houses (20,000 of them `listed`) with the
  * member in 2,869, `EXPLAIN ANALYZE` of the statement the builder below actually
  * emits:
@@ -501,10 +492,8 @@ export async function createHouse(
  * Fields a house PATCH may change.
  *
  * `null` CLEARS and `undefined` LEAVES ALONE — drizzle's `buildUpdateSet` drops
- * every `undefined`-valued key, where Mongoose's `save()` issued `$unset` for
- * the same assignment. Callers that mean "clear this" must pass `null`; the
- * route's `description ? trim : undefined` shape is the exact spelling that
- * shipped as a live bug twice in earlier verticals.
+ * every `undefined`-valued key. Callers that mean "clear this" must pass
+ * `null`; a `description ? trim : undefined` shape silently fails to clear.
  */
 export type UpdateHouseInput = Partial<{
   name: string;

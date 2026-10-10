@@ -44,10 +44,8 @@ const fakeRedis = {
 mock.module('../utils/redis', () => ({ getRedisClient: () => fakeRedis }));
 
 /**
- * One database, matching `radioFixtures`. The catalogue it seeds was already
- * Postgres; Task 15 moved the last three things this suite touched on Mongoose
- * — the co-listen graph, the taste weights and the listener's music preferences
- * — so the Mongo hooks are gone.
+ * One database, matching `radioFixtures`: the catalogue, the co-listen graph,
+ * the taste weights and the listener's music preferences are all Postgres.
  */
 beforeAll(connectDb);
 afterEach(clearDb);

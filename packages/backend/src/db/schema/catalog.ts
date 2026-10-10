@@ -9,25 +9,21 @@
  * `models/TrackKey.ts` was ported here too and moved out in Task 13a — see
  * `trackKeys.ts`, and the note where the table used to sit.
  *
- * **`models/*.ts` citations below are HISTORICAL.** They name the Mongoose
- * source each column was ported from, and several of those files no longer
- * exist — a port finishes by deleting the model once nothing imports it. A
- * citation resolving to no file means that vertical is done, not that the
- * reference is wrong.
+ * **`models/*.ts` citations below are HISTORICAL.** They name the model file
+ * each column's shape was taken from, and those files no longer exist. A
+ * citation resolving to no file is expected, not a wrong reference.
  *
  * ## `CatalogEntity` becomes ONE table
  *
- * Mongoose's `artist`/`person` discriminator scoped queries IMPLICITLY —
- * `ArtistModel.find()` auto-injects `{ type: 'artist' }` — but `aggregate()`
- * does not, and every catalog read in this codebase (`playableContainers.ts`,
- * `findOneArtistWithPlayableTracks`) is an aggregation. That gap is a live bug
- * class this table dissolves: there is no discriminator model here, so every
+ * An `artist`/`person` discriminator that scopes queries IMPLICITLY is a bug
+ * class: a read path that bypasses the implicit scope (an aggregation) sees
+ * both kinds. This table dissolves it: there is no discriminator model here, so every
  * `where type = …` is a call site the reader can see, not an invisible
  * default.
  *
  * ## Image FK columns hold ONLY the id — url/width/height are dropped
  *
- * `coverArtSizes.{small,…}` and `imageSizes.{small,…}` are, in Mongo, six
+ * `coverArtSizes.{small,…}` and `imageSizes.{small,…}` are, in the DTO, six
  * `{ id, url, width, height }` objects per entity. `catalogImageAssets.ts`'s
  * `writeCatalogImage` proves all three non-id fields are pure functions of the
  * `ImageAsset` row the id already points at: `url` is always literally
@@ -101,7 +97,7 @@
  *
  * ## `catalogEntityId` is dropped everywhere it was declared
  *
- * Four Mongoose paths declare it (`Track.credits[]`, `UserUpload.credits[]`,
+ * Four model paths declared it (`Track.credits[]`, `UserUpload.credits[]`,
  * `DiscogsRelease.credits[]`, `CatalogEntity.members[]`) and NONE of them ever
  * has `catalogEntityId` written — confirmed in `RELATIONS.md`'s "columns I
  * could not find a reader for" table, and re-confirmed in Task 10b:
@@ -156,8 +152,8 @@ import { genres, GENRE_KINDS } from './genres';
 
 // ── Closed value sets ────────────────────────────────────────────────────
 // `@syra/shared-types` exports `PROVENANCE_PROVIDERS` as a runtime array
-// already (imported above); every other enum below is declared only as a
-// Mongoose `enum:` list or a bare TypeScript union, so it is hand-written
+// already (imported above); every other enum below has no shared runtime
+// array, so it is hand-written
 // here, matching this repo's own convention (`inList`'s doc comment) of one
 // `as const` tuple per closed value set that both types the column and
 // drives its CHECK.
@@ -225,9 +221,9 @@ export const IMAGE_ASSET_OWNER_TYPES = [
 /**
  * The three `image_assets` unions as TYPES, derived from the arrays above.
  *
- * `models/ImageAsset.ts` declared each one twice — a hand-written union for
- * TypeScript and a separate `enum:` array for Mongoose — so the two could
- * disagree and nothing would say so. Deriving them here means the CHECK
+ * Declaring each one twice — a hand-written union for TypeScript and a
+ * separate runtime array — lets the two disagree with nothing to say so.
+ * Deriving them here means the CHECK
  * constraint and the type a service annotates with are the same list by
  * construction, and adding a member is one edit.
  */
@@ -269,7 +265,7 @@ export const imageAssets = pgTable(
     secondaryColor: text(),
     // `ImageAssetCatalogMetadata`, flattened: it is queried by its OWN fields
     // (`catalog.provider`+`entityType`+`externalId`+`size` is a compound
-    // Mongo index; `catalog.sourceContentHash` is a second one), so it needs
+    // lookup key; `catalog.sourceContentHash` is a second one), so it needs
     // real indexed columns, not an opaque jsonb blob.
     catalogProvider: text({ enum: CATALOG_IMAGE_PROVIDERS }),
     catalogEntityType: text({ enum: CATALOG_IMAGE_ENTITY_TYPES }),
@@ -361,17 +357,15 @@ export const catalogEntities = pgTable(
      * Provider-supplied images, server-only — `stripExternalCatalogFields`
      * (`utils/musicHelpers.ts`) deletes `formatted.images` from every catalog
      * API response. See `PROTECTED_COLUMNS_BY_TABLE` in `protectedColumns.ts`.
-     * Declared on the base only because the column is shared; Mongoose only
-     * ever populates it on the `artist` discriminator.
+     * Declared on the base only because the column is shared; only `artist`
+     * rows ever populate it.
      */
     images: jsonb().$type<TrackImage[]>(),
 
     // ── Artist-only (nullable: a person row never populates these) ───────
-    // Where Mongoose declared a `default:`, the same default is kept here —
-    // it fires only when an INSERT omits the column, so a person row that
-    // never sets these stays exactly as absent as it is in Mongo today; an
-    // artist row that omits them at insert time gets the identical default
-    // Mongoose would have applied.
+    // A default fires only when an INSERT omits the column, so a person row
+    // that never sets these stays absent, and an artist row that omits them at
+    // insert time gets the artist default.
     genres: text().array().default(sql`array[]::text[]`),
     verified: boolean().default(false),
     statsFollowers: integer().default(0),
@@ -404,8 +398,7 @@ export const catalogEntities = pgTable(
     origin: text({ enum: ARTIST_ORIGINS }).default('registered'),
     acceptsContributions: boolean().default(false),
     /**
-     * Candidate profile photos — server-only, claim-flow-only. Mongoose
-     * `select: false`; see `PROTECTED_COLUMNS_BY_TABLE`. `sourceUploadId`
+     * Candidate profile photos — server-only, claim-flow-only; see `PROTECTED_COLUMNS_BY_TABLE`. `sourceUploadId`
      * inside each entry is a FK (dead write path, `RELATIONS.md`) to
      * `user_uploads`, which has not landed yet — left as an opaque jsonb
      * field rather than a constrained column, since the one function that
@@ -427,11 +420,11 @@ export const catalogEntities = pgTable(
      * name. `services/uploads/enrichCatalogEntity.ts` writes it from Wikidata's
      * `has part`.
      *
-     * So the port would have dropped a field that is written, read and tested —
+     * So the schema nearly lacked a field that is written, read and tested —
      * silently, because at the time nothing gated "every DTO field has a
      * column": the other gates check `*_id` columns, protected columns and
      * identifier length. It surfaced only because drizzle refuses an unknown
-     * column key at compile time where Mongoose dropped the `$set` in silence.
+     * column key at compile time.
      *
      * `__tests__/zodPathsExistInDrizzle.test.ts` now closes that gap directly —
      * this defect is the reason it exists, and `members` is one of its fixtures.
@@ -686,9 +679,9 @@ export const tracks = pgTable(
     genre: text(),
     /** Queried by element in production (`radioPools.ts:204`, `mood: { $in: seed.moods }`) — see the index decision below. */
     mood: text(),
-    /** Mongoose gives every track an implicit `[]` default; matched here. */
+    /** Every track defaults to `[]`. */
     tags: text().array().notNull().default(sql`array[]::text[]`),
-    /** A real Date in Mongo (unlike `Album.releaseDate`, which is a string). */
+    /** A real timestamp (unlike `Album.releaseDate`, which is a string). */
     releaseDate: timestamptz(),
     /** Queried in production (`radioPools.ts:111`, `isExplicit: { $ne: true }`) — see the index decision below. */
     isExplicit: boolean().notNull().default(false),
@@ -704,8 +697,7 @@ export const tracks = pgTable(
      * `tracks` composes first: the container helpers, `browse.controller.ts`,
      * and `radio/radioPools.ts`'s `findPoolTracks` (which puts it FIRST in
      * `constraints`, before its own `mood`/`isExplicit`/`genre` filters) all
-     * confirmed by grep. Mongo indexed each singly; neither gets a standalone
-     * Postgres index here, and that is a decision, not an omission — see the
+     * confirmed by grep. Neither gets a standalone index here, and that is a decision, not an omission — see the
      * index list below.
      */
     isAvailable: boolean().notNull().default(true),
@@ -747,8 +739,7 @@ export const tracks = pgTable(
     // sibling of `album_sources` and `catalog_entity_sources`. See the
     // file-level doc comment for why this wasn't in the first pass.
     /**
-     * Content hash of the ingested audio — server-only (Mongoose `select:
-     * false`). See `PROTECTED_COLUMNS_BY_TABLE`. Deliberately NOT unique —
+     * Content hash of the ingested audio — server-only. See `PROTECTED_COLUMNS_BY_TABLE`. Deliberately NOT unique —
      * two catalog tracks sharing bytes is a data error worth seeing, not a
      * write to reject.
      */
@@ -770,8 +761,7 @@ export const tracks = pgTable(
     unique('tracks_external_isrc_key').on(t.externalIsrc),
     /**
      * The index decision for `mood` / `isExplicit` / `isAvailable` /
-     * `copyrightRemoved`, all four of which carried `index: true` in Mongo
-     * and none of which gets a like-for-like Postgres index:
+     * `copyrightRemoved`, none of which gets a standalone index:
      *
      * `isAvailable` and `copyrightRemoved` are near-constant (almost every
      * track is available and not copyright-removed), so a standalone index on
@@ -779,8 +769,7 @@ export const tracks = pgTable(
      * it over a sequential scan. What they ARE is the WHERE clause every real
      * query below actually runs under, because `playableTrackFilter()` gates
      * every one of them first. Folding the predicate into these five indexes
-     * (rather than adding two near-useless singleton booleans) is "add the
-     * index Mongo needed and lacked": each becomes an index-only scan over
+     * (rather than adding two near-useless singleton booleans) means each becomes an index-only scan over
      * PLAYABLE rows for exactly the sort/filter order it already serves.
      *
      * `mood` and `genre` get the same partial treatment for the identical
@@ -804,9 +793,7 @@ export const tracks = pgTable(
      * `EXPLAIN (ANALYZE, BUFFERS)` against 60,000 tracks: `GET /albums/:id/tracks`
      * read 190 buffers, of which 187 were the index scan itself, and the cost
      * scaled with the size of `tracks` rather than with the album. With the
-     * standalone index it is 9. Mongo had this index
-     * (`models/Track.ts:134`, `albumId: { type: String, index: true }`), so
-     * dropping it was a port regression rather than a considered trade.
+     * standalone index it is 9.
      * `db/catalog/__tests__/containers.explain.test.ts` asserts the planner
      * REACHES it — a definition assertion would have certified the defect,
      * since the compound index satisfies "an index on album_id exists" too.
@@ -828,8 +815,8 @@ export const tracks = pgTable(
      *   `strikeService.takeDownArtistTracks` — `artist_id = $1 and
      *   copyright_removed = false`, with no `is_available` clause, because
      *   terminating an artist must also mark their UNPUBLISHED tracks
-     *   copyright-removed (Mongo's filter was `{ artistId, copyrightRemoved:
-     *   { $ne: true } }`, which included them). Narrowing the query to satisfy
+     *   copyright-removed (the filter is "this artist, not yet
+     *   copyright-removed", which includes them). Narrowing the query to satisfy
      *   the partial index would silently leave those tracks playable-eligible.
      *
      *   `takedown.takeDownTrack`'s termination cascade — `artist_id = $1 and
@@ -839,9 +826,8 @@ export const tracks = pgTable(
      * Measured under `EXPLAIN (ANALYZE, BUFFERS)` with `enable_seqscan = off`
      * on 40,000 seeded tracks: both were Seq Scans at 3,865 buffers and ~48-70 ms
      * — cost scaling with the whole table, on a write path that runs per strike.
-     * `models/Track.ts:132` declares `artistId: { type: String, index: true }`,
-     * so Mongo had this index and the port folded it into a compound partial one
-     * that cannot answer either question.
+     * A compound partial index cannot answer either question, so this
+     * standalone one is needed.
      */
     index('tracks_artist_id_idx').on(t.artistId),
     index('tracks_album_id_idx')
@@ -885,7 +871,7 @@ export const trackCredits = pgTable(
     trackId: text()
       .notNull()
       .references(() => tracks.id, { onDelete: 'cascade' }),
-    /** Preserves Mongo array order. */
+    /** Preserves the credits' order. */
     position: integer().notNull(),
     name: text().notNull(),
     role: text().notNull(),
@@ -894,7 +880,7 @@ export const trackCredits = pgTable(
     /**
      * The artist this credit IS, when we can say so — and NULL when we cannot.
      *
-     * The file-level comment explains why this column was dropped: four Mongoose
+     * The file-level comment explains why this column was dropped: four model
      * paths declared it and none ever wrote it, because a name from an
      * enrichment source is not a high-confidence identity claim. That reasoning
      * holds and is about enrichment names. It does not cover the signal that
@@ -978,7 +964,7 @@ export const catalogEntityStrikes = pgTable(
       .notNull()
       .references(() => catalogEntities.id, { onDelete: 'cascade' }),
     reason: text().notNull(),
-    /** Mirrors the Mongo subdocument's own `createdAt: { default: Date.now }`. */
+    /** When the strike was recorded. */
     createdAt: createdAt(),
     /**
      * Optional per-strike audit pointer to the offending track. SET NULL, not

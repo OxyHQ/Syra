@@ -15,14 +15,11 @@ import { logger } from '../../utils/logger';
  * one instance per tick. If Redis is unavailable the lock can't be taken and the
  * tick is skipped — safe, since these are non-critical periodic aggregates.
  *
- * ## The expiry sweep runs here, and Task 15 is why it had to start
+ * ## The expiry sweep runs here
  *
- * `db/expiry.ts` is the Postgres replacement for a Mongo TTL index, and it names
- * this file as the natural home for the sweep. It stayed unwired while those two
- * tables were empty and Mongo's TTL monitor was still doing the work — and Task
- * 15 is the change that ends that: `listening_events` and
- * `notification_suppressions` are now the live store, so an unwired registry
- * means both grow FOREVER, with no error and no failing test until disk.
+ * `db/expiry.ts` is the registry of tables whose rows expire, and it names this
+ * file as the natural home for the sweep. An unwired registry means
+ * `listening_events` and `notification_suppressions` grow FOREVER, with no error and no failing test until disk.
  *
  * `listening_events` sets the batch ceiling. It is the only high-arrival-rate
  * table in the registry (one row per play), and `sweepExpiredRows`' per-call
@@ -84,7 +81,7 @@ async function tick(): Promise<void> {
       }
     });
 
-    // Expiry sweep — the replacement for the Mongo TTL indexes.
+    // Expiry sweep — reaps every table in `db/expiry.ts`'s registry.
     await withLock('db:expiry-sweep', EXPIRY_SWEEP_LOCK_TTL_MS, sweepExpiredTables);
   } finally {
     running = false;

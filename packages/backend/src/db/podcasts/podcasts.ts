@@ -1,9 +1,7 @@
 /**
  * Shows — every read and write of `podcasts` and its four child tables.
  *
- * The write side is the part that changed shape. Under Mongo a show and its
- * categories, funding links, credits and provenance were ONE document, so
- * `findOneAndUpdate` was atomic over all of them for free. Here they are five
+ * A show and its categories, funding links, credits and provenance are five
  * tables, so every write that touches a child runs in a TRANSACTION — otherwise
  * a crawl that failed between the row update and the credit replace would leave
  * a show carrying the previous refresh's hosts, with nothing to say so.
@@ -17,14 +15,13 @@
  * written out — update by id when the caller already resolved the row, insert
  * otherwise — and the insert still carries `onConflictDoUpdate` on `feed_url`,
  * because two crawls of the same feed can interleave between the lookup and the
- * write. That race existed under Mongo too and was resolved by the same
- * mechanism (a unique index); this just has to name it.
+ * write. The unique index on `feed_url` is what resolves that race.
  *
  * ## Ordering is `descNullsLast` throughout, and it is BOTH correctness and speed
  *
- * Postgres `DESC` is `NULLS FIRST`, the inversion of Mongo, which sorts a
- * missing field lowest. Every ordering here therefore has to be `NULLS LAST` to
- * mean what the Mongo sort meant — and drizzle emits `.desc()` in an INDEX
+ * Postgres `DESC` is `NULLS FIRST`, but a missing value should sort lowest.
+ * Every ordering here therefore has to be `NULLS LAST` to mean "newest first,
+ * unknown last" — and drizzle emits `.desc()` in an INDEX
  * definition as `DESC NULLS LAST`, so it is also the only spelling that can
  * STREAM those indexes. Measured on 4,900 active shows
  * (`__tests__/podcasts.explain.test.ts`), browse-by-recency:
@@ -80,8 +77,8 @@ export type PodcastValues = Partial<Omit<typeof podcasts.$inferInsert, 'id' | 's
 /**
  * The child collections a write may replace.
  *
- * Every field is optional and `undefined` means LEAVE ALONE, matching the
- * `definedOnly` filter the Mongo `$set` builders used: a feed that carries no
+ * Every field is optional and `undefined` means LEAVE ALONE, via the
+ * `definedOnly` filter below: a feed that carries no
  * `<podcast:funding>` tag must not erase funding links a creator added, which is
  * a different thing from a feed that carries an empty list.
  */
@@ -108,8 +105,7 @@ async function writeChildren(
 
 /**
  * Drop `undefined` values so a partial write never clobbers a stored column with
- * null — the `definedOnly` helper the two Mongo `$set` builders each had a copy
- * of. Drizzle would omit an `undefined` key anyway; this exists so an
+ * null. Drizzle would omit an `undefined` key anyway; this exists so an
  * all-undefined object is visibly EMPTY here rather than reaching drizzle as a
  * `set` with no columns, which throws.
  */
@@ -238,8 +234,7 @@ export interface BrowseOptions {
  * `podcast_categories_podcast_id_genre_id_key`) instead of one probe that has to
  * evaluate `lower(g.name)` per candidate show.
  *
- * The comparison is case-INSENSITIVE, which the Mongo array-contains was not.
- * That is a deliberate correction, not drift: `genres` dedups on
+ * The comparison is case-INSENSITIVE, deliberately: `genres` dedups on
  * `(lower(name), kind)` and keeps the first spelling it saw, so the stored name
  * may differ in case from anything a client sends, and an exact match would
  * return an empty shelf for a category that plainly exists.
@@ -308,8 +303,8 @@ const SEARCH_ORDER = [
  * This replaces a case-insensitive regex over `title` and `author` — the last
  * podcast regex, and the reason `escapeRegex` survived in two files. The
  * generated column is `to_tsvector('english', title || ' ' || coalesce(author,
- * ''))`, so the Mongo `$or` over two fields is ONE match here and the
- * `coalesce` is what stops a null author erasing the whole vector.
+ * ''))`, so matching either field is ONE match here and the `coalesce` is what
+ * stops a null author erasing the whole vector.
  *
  * Same ruling and same accepted loss as the catalogue (`db/catalog/search.ts`):
  * word and prefix matching, stemming gained, infix lost.
@@ -342,8 +337,8 @@ export async function countSearchPodcasts(query: string): Promise<number> {
  * TWO axes, and they are deliberately at different strictnesses:
  *
  *  - `status <> 'removed'` rather than `= 'active'`. A person's profile keeps
- *    listing a show its creator has merely unpublished, which is what the Mongo
- *    filter said; only a platform takedown removes it. PRESERVED as-is.
+ *    listing a show its creator has merely unpublished; only a platform
+ *    takedown removes it.
  *  - `visibility = 'public'`, which is the strictest of the three. This is a
  *    cross-show DISCOVERY shelf — nobody asked for this show by id — so an
  *    `unlisted` show must not appear here even though it is reachable by link,
@@ -510,10 +505,9 @@ export async function upsertPodcastFromFeed(input: {
    *
    * Split from `set` rather than merged with it because `podcasts.title` and
    * `podcasts.source` are `NOT NULL` with no default, and a single `Partial`
-   * value object would let an insert missing either type-check. Mongo accepted
-   * exactly that: `findOneAndUpdate` upserts do not run validators, so a feed
-   * with no `<title>` inserted a title-less show that every DTO then failed to
-   * parse.
+   * value object would let an insert missing either type-check — and a feed
+   * with no `<title>` would insert a title-less show that every DTO then fails
+   * to parse.
    */
   readonly insert: typeof podcasts.$inferInsert;
   /** The columns a REFRESH overwrites — a subset of the insert, never a superset. */
@@ -570,11 +564,10 @@ export interface ShallowCandidate {
 /**
  * The search-time shallow upsert: directory metadata only, no feed fetch.
  *
- * Mongo did this as ONE unordered `bulkWrite`, so a duplicate `podcastGuid` in
- * the batch failed that one operation and let the rest through. There is no
- * batched multi-row upsert with per-row `$setOnInsert` semantics here, so this
- * is a loop — and the loop is per-candidate ISOLATED for the same reason
- * `ordered: false` was chosen: one bad candidate out of twenty-five must not
+ * A duplicate `podcastGuid` in the batch must fail that one candidate and let
+ * the rest through. There is no batched multi-row upsert with per-row
+ * insert-only semantics, so this is a loop — and the loop is per-candidate
+ * ISOLATED: one bad candidate out of twenty-five must not
  * cost the other twenty-four their instant search results.
  *
  * Returns how many rows were actually written, so the caller logs a measurement

@@ -137,7 +137,7 @@ export const MODERATION_ENFORCEMENT_ACTIONS: readonly ModerationEnforcementActio
  *
  * **A `type`, not an `interface`, and that is not a style choice.** TypeScript
  * gives an object type alias an implicit index signature and an interface none,
- * so the interface this was under Mongoose is NOT assignable to the package's
+ * so an interface with these fields is NOT assignable to the package's
  * `Record`-shaped port — `apply` returning one fails with "Index signature for
  * type 'string' is missing". The alias satisfies it structurally with nothing
  * asserted anywhere.

@@ -12,12 +12,10 @@ const SECRET_STREAM_KEY = 'LK_sensitive_stream_key';
  *
  * Spelled out in full rather than as a partial cast, because that is precisely
  * what this suite is for. The regression being guarded was a sanitizer that
- * `delete`d the credential keys from its ARGUMENT: that worked on the sparse
- * object literal a `.lean()` read produced and was a silent no-op on a hydrated
- * Mongoose document, where schema fields are prototype getters rather than own
- * properties. Mongoose is gone, so the hydrated-document case no longer exists —
- * but the property it was really testing does: the sanitizer must REBUILD from
- * its allowlist rather than subtract from its input. A row with all four
+ * `delete`d the credential keys from its ARGUMENT, which is a silent no-op on
+ * any object whose fields are not own properties. The property being tested:
+ * the sanitizer must REBUILD from its allowlist rather than subtract from its
+ * input. A row with all four
  * credentials present as own properties is the input that tells those two
  * implementations apart, which is what makes this fixture the load-bearing one.
  */
@@ -71,11 +69,10 @@ describe('room response sanitization', () => {
     expect(sanitized.title).toBe('Live room');
     expect(sanitized.host).toBe('host-1');
     expect(sanitized.streamTitle).toBe('Public stream title');
-    // `stats` was a Mongo subdocument and is two flat columns; the serializer
-    // rebuilds the nested shape so the wire format is unchanged.
+    // `stats` is two flat columns; the serializer rebuilds the nested shape the
+    // wire format carries.
     expect(sanitized.stats).toEqual({ peakListeners: 0, totalJoined: 0 });
-    // No queue was passed, so the key is absent rather than an empty array —
-    // matching the Mongo field's `default: undefined`.
+    // No queue was passed, so the key is absent rather than an empty array.
     expect('podcastQueue' in sanitized).toBe(false);
   });
 

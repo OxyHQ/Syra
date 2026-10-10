@@ -6,15 +6,13 @@
  * produces the size variants. No test wants any of that, so every suite that
  * touches enrichment replaces it.
  *
- * It used to live inside `test/mongo.ts` and be installed as a side effect of
- * `connect()`. That was invisible coupling — a suite that moved to Postgres and
- * dropped the Mongo hooks silently lost its image mock and started making real
- * HTTP requests — and it is exactly how this module came to exist.
+ * It is its own module, installed explicitly, rather than a side effect of a
+ * database hook: that coupling is invisible, and a suite that dropped the hook
+ * would silently lose its image mock and start making real HTTP requests.
  *
  * ## It writes REAL `image_assets` rows, and it has to
  *
- * The old double minted `new ObjectId()` strings for each variant. Those ids are
- * now written into `catalog_entities.image_id` and the six
+ * The variant ids are written into `catalog_entities.image_id` and the six
  * `image_sizes_*_id` columns, every one a foreign key to `image_assets` — so a
  * minted id is a constraint violation, not a harmless fake. The double inserts
  * the rows it claims to have created, which is also what makes the variant

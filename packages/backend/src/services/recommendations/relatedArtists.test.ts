@@ -18,9 +18,8 @@ import { getRelatedArtists } from './recommendationService';
  */
 
 /**
- * One database. The catalogue and the co-listen graph this suite is about are
- * both Postgres since Task 15 moved `catalog_relations`; the Mongo hooks this
- * file used to carry alongside them are gone.
+ * One database: the catalogue and the co-listen graph this suite is about are
+ * both Postgres.
  */
 beforeAll(connectDb);
 afterEach(clearDb);
@@ -157,10 +156,8 @@ describe('getRelatedArtists — only artists you can actually play', () => {
   });
 
   /**
-   * The Mongo version rejected this with an `ObjectId.isValid` pre-check.
-   * `catalog_entities.id` is `text`, so no guard is needed and none exists: the
-   * query itself answers, which is why the assertion is unchanged even though
-   * the mechanism behind it is gone.
+   * `catalog_entities.id` is `text`, so no id-shape guard is needed and none
+   * exists: the query itself answers.
    */
   it('returns nothing for an id no row carries', async () => {
     expect(await getRelatedArtists('not-an-id')).toEqual([]);

@@ -143,8 +143,7 @@ export interface ArtistIdentity {
 /**
  * Every lookup here restricts to `type = 'artist'`.
  *
- * Mongoose's discriminator injected that condition into `find()` invisibly, and
- * `catalog_entities` holds persons in the same table with the same `nameKey`
+ * Nothing adds that condition implicitly, and `catalog_entities` holds persons in the same table with the same `nameKey`
  * space (`services/podcasts/resolvePersons.ts` writes them) — so without it a
  * podcast guest sharing an artist's normalised name would resolve as the artist
  * an upload gets attributed to.
@@ -418,12 +417,11 @@ export async function ensureContributedArtist(
      * the same new artist at once. The loser reads the winner's row rather than
      * leaving a duplicate that no later write could ever merge.
      *
-     * Narrowed to that ONE constraint by name. The Mongo version keyed on
-     * `code === 11000`, which is "some unique index rejected this" — and this
-     * table carries four others (`linked_oxy_user_id`, `href`,
+     * Narrowed to that ONE constraint by name, not to "some unique index
+     * rejected this" — this table carries four others (`linked_oxy_user_id`, `href`,
      * `external_musicbrainz_artist_id`, and the artist name key), so a
-     * collision on the MBID would have been swallowed and answered with an
-     * unrelated artist that merely shares a name.
+     * collision on the MBID would be swallowed and answered with an unrelated
+     * artist that merely shares a name.
      */
     if (isUniqueViolation(err, 'catalog_entities_artist_name_key_key')) {
       const winner = await findArtistByNameKey(nameKey);

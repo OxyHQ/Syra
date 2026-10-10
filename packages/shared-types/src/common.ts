@@ -4,12 +4,10 @@
  * ## A row's id is spelled `id`, and only `id`
  *
  * Thirteen DTOs across this package carried `_id: z.string().optional()`
- * alongside a required `id`. That pair dates from the Mongo era, when a handler
- * could return a Mongoose document whose id was `_id` — the optional `_id` was
- * the contract admitting it did not know which spelling it would get.
+ * alongside a required `id` — a contract admitting it did not know which
+ * spelling a handler would return.
  *
- * Both halves of that are now gone. Every vertical is on Postgres, where the
- * primary key column is literally named `id`, and the serializers name their
+ * Neither spelling is ambiguous any more: every primary key column is literally named `id`, and the serializers name their
  * output keys explicitly. So `_id` described a shape nothing produced: a field
  * clients could read, could not rely on, and would always find absent.
  *

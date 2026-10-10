@@ -7,14 +7,13 @@
  * Auth: writes resolve the owner via `getRequiredOxyUserId` and use explicit
  * field whitelists (never a spread of `req.body`). Ids are validated with
  * `isLiveEntityId`, which accepts BOTH shapes this schema stores — a 24-char
- * ObjectId hex carried over from Mongo and a uuid v7 minted since. The old
- * `mongoose.Types.ObjectId.isValid` guard accepted only the first, so every show
- * and episode created after the cutover would have 400'd on its own detail page.
+ * hex legacy id and a uuid v7. A guard accepting only the first would 400 every
+ * newly created show and episode on its own detail page.
  *
  * ## `image` is a foreign key now, and a creator supplies it
  *
- * `podcasts.image_id` references `image_assets`. Mongo stored whatever string
- * the client sent; a bogus id here is `23503`. The create/update paths resolve
+ * `podcasts.image_id` references `image_assets`, so a bogus id here is `23503`
+ * rather than a stored dangling string. The create/update paths resolve
  * the asset BEFORE writing (they already read its colors) and reject an
  * unknown id with a 400 rather than letting a constraint violation reach the
  * client as a 500.
@@ -194,12 +193,10 @@ async function serializeOne(row: PodcastRow | undefined, viewerId: string | null
  * throttled, never hangs) so they appear in THIS response like the old discover
  * screen; the heavy feed import runs in the background.
  *
- * Matching is `search_vector` now, not a case-insensitive regex. The regex was a
- * deliberate choice under Mongo — its own comment named `$text` as unavailable
- * because production runs with `autoIndex` off — and the Postgres GIN index is
- * built by a migration, so the constraint that forced it is gone. Word and
- * prefix matching with stemming, at a cost that does not grow with the
- * catalogue; infix matching is the accepted loss (`db/catalog/search.ts`).
+ * Matching is `search_vector`, not a case-insensitive regex: the GIN index is
+ * built by a migration, and it gives word and prefix matching with stemming at
+ * a cost that does not grow with the catalogue; infix matching is the accepted
+ * loss (`db/catalog/search.ts`).
  *
  * Paginated for infinite scroll: `offset` (zero-based, clamped `>= 0`) + `limit`
  * page the result set. `hasMore` is derived by over-fetching ONE row beyond the
@@ -538,7 +535,7 @@ export async function getMyPodcasts(req: AuthRequest, res: Response): Promise<vo
  * is unknown.
  *
  * `podcasts.image_id` is a foreign key, so an id naming no asset is a constraint
- * violation rather than the string Mongo silently stored. Checked here, before
+ * violation rather than a silently stored dangling string. Checked here, before
  * the write, so the caller gets a 400 that names the problem.
  *
  * One query rather than `getImageAssetColors` plus an existence check: that
@@ -872,9 +869,9 @@ export async function claimPodcast(req: AuthRequest, res: Response): Promise<voi
      * IDOR guard: a caller may only link an artist they own or claimed — never
      * trust a body-supplied id to point at someone else's.
      *
-     * `type = 'artist'` is stated. Mongoose's discriminator injected it into
-     * `ArtistModel.findById`; one table with a `type` column does not, and
-     * without it a caller could link their own PERSON row here and put it in a
+     * `type = 'artist'` is stated. One table with a `type` column does not
+     * scope itself, and without it a caller could link their own PERSON row
+     * here and put it in a
      * column whose CHECK — `linked_artist_id is null or type = 'person'` on
      * `catalog_entities` — says nothing about what `podcasts.linked_artist_id`
      * may reference.
@@ -968,14 +965,14 @@ export async function updatePodcast(req: AuthRequest, res: Response): Promise<vo
     }
     values.imageId = updates.image;
     /**
-     * `?? null`, and this is the same ORM difference Task 13 fixed on the
-     * locker's own PATCH (`uploads.controller.ts`'s `updateUpload`).
+     * `?? null`, for the same `undefined`-versus-`null` reason as the locker's
+     * own PATCH (`uploads.controller.ts`'s `updateUpload`).
      *
      * `resolveCover` answers `{ ok: true }` with NO palette for an asset that
      * carries none, and `secondaryColor: undefined` for one that has a primary
      * and no secondary. `definedOnly` then strips those keys, and drizzle would
-     * strip them anyway — so `undefined` means "leave this column alone", where
-     * Mongoose's `$set` builder + `save()` cleared it.
+     * strip them anyway — so `undefined` means "leave this column alone", and
+     * only `null` clears it.
      *
      * "Leave alone" is right for the FEED REFRESH `definedOnly` exists for — a
      * crawl that carries no `<podcast:funding>` must not erase creator-added

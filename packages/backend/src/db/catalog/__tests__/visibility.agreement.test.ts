@@ -15,23 +15,16 @@
  * is looser, a taken-down track stays visible and searchable and then fails
  * under the listener's thumb.
  *
- * ## Why this test moved to the Postgres side
+ * ## Why the schema, not discipline, keeps them agreeing
  *
- * Under Mongo the three did NOT agree, and the same test written there fails:
- * `playableTrackFilter` matched `isAvailable: true`, which a document with the
- * key ABSENT does not satisfy, while `isPlayableTrack` accepted
- * `isAvailable !== false`, which it does. Two of the nine
- * `{true, false, absent}²` shapes disagreed. `stream.controller`'s
- * `isTrackPlayable` was a third spelling (`!copyrightRemoved`) that diverges
- * from `copyrightRemoved !== true` on a truthy non-boolean.
- *
- * Fixing that in the Mongo code would have been work that evaporates — those
- * modules are deleted in Task 10c. The port closes both divergences
- * STRUCTURALLY: `tracks.is_available` and `tracks.copyright_removed` are
- * `NOT NULL` boolean columns, so "absent" and "truthy non-boolean" are
- * unrepresentable. That is the migration retiring a latent bug by construction
- * rather than by a comment telling the next person to keep two functions in
- * step.
+ * A query matching `isAvailable = true` and a predicate accepting
+ * `isAvailable !== false` disagree on an ABSENT value, and `!copyrightRemoved`
+ * diverges from `copyrightRemoved !== true` on a truthy non-boolean. Both
+ * divergences are closed STRUCTURALLY: `tracks.is_available` and
+ * `tracks.copyright_removed` are `NOT NULL` boolean columns, so "absent" and
+ * "truthy non-boolean" are unrepresentable — a latent bug retired by
+ * construction rather than by a comment telling the next person to keep two
+ * functions in step.
  *
  * ## Fixtures that can tell a strict read from a loose one
  *
@@ -194,7 +187,7 @@ describe('playableTrackFilter / isPlayableTrack agreement', () => {
   });
 });
 
-describe('the shapes the Mongo pair disagreed on are unrepresentable', () => {
+describe('the shapes on which the predicates could disagree are unrepresentable', () => {
   /**
    * SQLSTATE, not the message text. Drizzle wraps the driver error in one whose
    * own message is `Failed query: …` — matching on that would assert only that
@@ -212,7 +205,7 @@ describe('the shapes the Mongo pair disagreed on are unrepresentable', () => {
   }
 
   /**
-   * The Mongo query and predicate diverged only when `isAvailable` was ABSENT.
+   * The query and predicate could diverge only if `isAvailable` were ABSENT.
    * Postgres cannot store that, and this asserts it rather than assuming it —
    * if either column ever loses its `NOT NULL`, the divergence becomes
    * reachable again and this fails, which is the only warning anyone would get.
@@ -265,12 +258,9 @@ describe('the shapes the Mongo pair disagreed on are unrepresentable', () => {
 
 describe('the catalog and playback authorities cannot drift apart on a real row', () => {
   /**
-   * The block name is now accurate, and Task 10c is why: `isTrackPlayable` is
-   * imported from `controllers/stream.controller` and asserted here alongside
-   * the catalog pair. Before that it was called "visibility.ts's own two
-   * artefacts", deliberately, because the playback authority was still on
-   * Mongoose and untested — a name claiming both authorities would have been the
-   * same shape of defect as a comment claiming a guard that does not exist.
+   * `isTrackPlayable` is imported from `controllers/stream.controller` and
+   * asserted here alongside the catalog pair, which is what makes the block
+   * name accurate.
    *
    * What is checked: a row the query returns must be one BOTH predicates accept,
    * or a takedown stays listed and searchable and then fails at play. Checked in

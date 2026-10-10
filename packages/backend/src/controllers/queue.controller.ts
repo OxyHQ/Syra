@@ -56,16 +56,14 @@ async function resolvePlayableRefs(refs: PlayableRef[], userId: string): Promise
   const trackIds = [...new Set(refs.filter((ref) => ref.kind === 'track').map((ref) => ref.id))];
   const uploadIds = [...new Set(refs.filter((ref) => ref.kind === 'upload').map((ref) => ref.id))];
 
-  // ONE id guard for both kinds now that both are Postgres rows. `uploadIds`
-  // used to be filtered by `ObjectId.isValid` because the locker was still
-  // Mongo; a locker id is a uuid v7 since the port, which that test rejects.
+  // ONE id guard for both kinds, since both are Postgres rows. A locker id is
+  // a uuid v7, which a 24-hex-only check would reject.
   const validTrackIds = trackIds.filter(isLiveEntityId);
   const validUploadIds = uploadIds.filter(isLiveEntityId);
 
   const [trackRows, uploads] = await Promise.all([
     // `inArray` with an empty list generates `in ()`, a Postgres syntax error
-    // rather than an empty result — so the length guard is load-bearing here in
-    // a way the Mongo `$in` did not need.
+    // rather than an empty result — so the length guard is load-bearing.
     validTrackIds.length
       ? getDb()
           .select(publicColumns(tracksTable, PROTECTED_COLUMNS_BY_TABLE))

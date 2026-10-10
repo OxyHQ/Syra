@@ -1,15 +1,13 @@
 /**
  * The four library memberships, against real rows.
  *
- * Three properties the Mongo arrays had only by convention, and one they did
- * not have at all:
+ * Four properties, each enforced rather than left to convention:
  *
- *  - idempotent (`$addToSet` → `unique(oxy_user_id, target_id)` +
- *    `onConflictDoNothing`),
+ *  - idempotent (`unique(oxy_user_id, target_id)` + `onConflictDoNothing`),
  *  - ORDERED oldest-first, which `services/radio/radioSeed.ts` reads as
  *    freshness off the tail,
  *  - removing what is not there is a successful no-op,
- *  - and adding something that does not exist is now REFUSED, because every
+ *  - and adding something that does not exist is REFUSED, because every
  *    target column is a real foreign key.
  */
 
@@ -195,8 +193,7 @@ describe('removing is a no-op when there is nothing to remove', () => {
   /**
    * The asymmetry with adding, asserted rather than described. A foreign key
    * constrains what may be STORED; it says nothing about what may be asked for,
-   * and the Mongo `$pull` against an upserted document was equally happy to
-   * remove nothing.
+   * so removing nothing is a successful no-op.
    */
   it('unliking a track the user never liked', async () => {
     await removeMembership('likedTracks', USER, await makeTrack());
@@ -224,10 +221,8 @@ describe('removing is a no-op when there is nothing to remove', () => {
 
 describe('a deleted target takes its memberships with it', () => {
   /**
-   * `on delete cascade` on every junction. Under Mongo the array kept the id of
-   * a deleted playlist forever — `Library.savedPlaylists` was documented as a
-   * real orphan — and this is the change that fixes it with no application
-   * code at all.
+   * `on delete cascade` on every junction, so a deleted playlist never leaves an
+   * orphaned saved-playlist id behind, with no application code at all.
    */
   it('deleting a playlist removes it from everybody who saved it', async () => {
     const playlistId = await makePlaylist();

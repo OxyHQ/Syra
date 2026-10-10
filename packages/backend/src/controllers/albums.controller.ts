@@ -28,15 +28,14 @@ import { describeErrorSafely } from '../utils/error';
 /**
  * How the public album listing is ordered.
  *
- * The Mongo sort was `withImageFirstSort('album', { releaseDate: -1, createdAt: -1 })`,
- * which prepended `{ coverArt: -1 }`. There is no `imageFirst(albums.coverArtId)`
- * term here and its absence is a decision: `albums.cover_art_id` is `NOT NULL`
- * (an album is not created at all without real cover art), so "has an image
- * first" is a constant for every row and sorts nothing. What the Mongo term DID
- * do was order the rows by the lexical value of their cover-art id BEFORE
- * `releaseDate` — an arbitrary tie-break that took precedence over the ordering
- * the caller actually asked for. Dropping it is what makes release date the
- * primary key of this listing, which is what the call site says it wants.
+ * There is no `imageFirst(albums.coverArtId)` term here and its absence is a
+ * decision: `albums.cover_art_id` is `NOT NULL` (an album is not created at all
+ * without real cover art), so "has an image first" is a constant for every row
+ * and sorts nothing. A `{ coverArt: -1 }` prefix would instead order the rows by
+ * the lexical value of their cover-art id BEFORE `releaseDate` — an arbitrary
+ * tie-break taking precedence over the ordering the caller actually asked for.
+ * Leaving it out is what makes release date the primary key of this listing,
+ * which is what the call site says it wants.
  */
 const ALBUM_LISTING_ORDER = [descNullsLast(albums.releaseDate), descNullsLast(albums.createdAt)];
 
@@ -45,8 +44,8 @@ const ALBUM_LISTING_ORDER = [descNullsLast(albums.releaseDate), descNullsLast(al
  *
  * `toAlbumDtos` deliberately does not load `album_genres` — a listing would pay
  * a join per page for a field nothing shows. A single album does show it, and
- * `Album.genre` was an array ON the Mongo document, so a port that skipped this
- * would drop a live field silently: `toAlbumDto` is an allowlist, and an
+ * `genre` is a live field of the album response, so a serializer that skipped
+ * this would drop it silently: `toAlbumDto` is an allowlist, and an
  * allowlist that is not asked for a field simply omits it.
  */
 async function toAlbumResponse(row: AlbumRow) {
@@ -111,9 +110,9 @@ export const getAlbumById = async (req: Request, res: Response, next: NextFuncti
 
     /**
      * BOTH live id shapes, not the 24-hex one alone. `albums.id` is
-     * `generatedId()` — a uuid v7 — so a `mongoose.Types.ObjectId.isValid`
-     * guard here would 404 every album created after the cutover while the
-     * create endpoint that minted it returned 201.
+     * `generatedId()` — a uuid v7 — so a 24-hex-only guard here would 404 every
+     * newly created album while the create endpoint that minted it returned
+     * 201.
      */
     if (!isLiveEntityId(id)) {
       return res.status(404).json({ error: 'Album not found' });
@@ -236,10 +235,9 @@ export const createAlbum = async (req: AuthRequest, res: Response, next: NextFun
 
     /**
      * One transaction for three writes, because `album_genres` is a child table
-     * now: the album row, its genre links, and the artist's album counter. In
-     * Mongo `genre` was an array on the document and the counter a separate
-     * `updateOne` that could fail on its own; here a half-created album with no
-     * genres is representable and a transaction is what makes it unreachable.
+     * now: the album row, its genre links, and the artist's album counter. A
+     * half-created album with no genres, or with a stale counter, is
+     * representable, and a transaction is what makes it unreachable.
      */
     const created = await getDb().transaction(async (tx) => {
       const [row] = await tx

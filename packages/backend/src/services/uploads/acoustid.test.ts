@@ -483,8 +483,7 @@ describe('resolveAcousticIdentity turns a match into identifiers', () => {
     // the index it is a scan over the whole MusicBrainz slice, on the upload path
     // with a person waiting.
     //
-    // Asked of `pg_indexes` rather than of a Mongo collection — and asked for the
-    // INDEXDEF, not just the name, so an index renamed to match while indexing a
+    // Asked of `pg_indexes` — and asked for the INDEXDEF, not just the name, so an index renamed to match while indexing a
     // different column cannot satisfy it.
     const [index] = await getDb().execute<{ indexdef: string }>(
       sql`select indexdef from pg_indexes

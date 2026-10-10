@@ -140,10 +140,8 @@ export async function shallowUpsertCandidates(
         appleCollectionId: candidate.appleCollectionId,
       },
       /**
-       * Categories are a JUNCTION now, so `undefined` (leave alone) and `[]`
-       * (erase) are different writes and the Mongo conditional spread has to be
-       * preserved exactly. It read `...(categories.length > 0 ? { categories } :
-       * {})` — a directory result with no categories must not wipe the ones the
+       * Categories are a JUNCTION, so `undefined` (leave alone) and `[]` (erase)
+       * are different writes, hence the conditional spread — a directory result with no categories must not wipe the ones the
        * deep feed import already resolved.
        */
       ...(candidate.categories.length > 0 ? { categories: candidate.categories } : {}),
@@ -151,8 +149,8 @@ export async function shallowUpsertCandidates(
   });
 
   /**
-   * Mongo's `bulkWrite(..., { ordered: false })` let one bad candidate fail on
-   * its own; `shallowUpsertPodcasts` keeps that by isolating per row, and takes
+   * One bad candidate must fail on its own; `shallowUpsertPodcasts` isolates
+   * per row, and takes
    * the error handler so the log line stays here with the rest of this module's
    * logging rather than inside the data layer.
    */

@@ -19,14 +19,12 @@ import { OwnerType, RoomStatus, RoomType, SpeakerPermission, type MediaQueueItem
  *
  * Three things are tested here and nowhere else:
  *
- *  1. **The stream teardown actually clears.** `clearRoomStreamFields` assigned
- *     `undefined` to nine fields and let Mongoose's `save()` turn that into
- *     `$unset`. Drizzle's `buildUpdateSet` DROPS an `undefined`-valued key, so
- *     the identical code is a stop that stops nothing — and one of the nine is a
- *     live RTMP PUBLISHING key. The brief for this task records the same defect
- *     shipping twice in earlier verticals as a cover-art palette that never
- *     cleared; here it would leave a working broadcast credential on a room its
- *     host believes is no longer streaming.
+ *  1. **The stream teardown actually clears.** `clearRoomStreamFields` writes
+ *     nine fields, and they must be `null`, not `undefined`: Drizzle's
+ *     `buildUpdateSet` DROPS an `undefined`-valued key, so an `undefined` there
+ *     is a stop that stops nothing — and one of the nine is a live RTMP
+ *     PUBLISHING key. It would leave a working broadcast credential on a room
+ *     its host believes is no longer streaming.
  *
  *     Mutation-verified: changing any `null` in `CLEARED_STREAM_FIELDS` back to
  *     `undefined` fails `clears every stream field` by name, and changing them
@@ -174,7 +172,7 @@ describe('replaceRoomStreamAndQueue', () => {
 
     // Round-tripped through `findRoomQueue`, which is what the routes read.
     // The nulls the columns hold for the inapplicable ids must not come back as
-    // explicit `undefined` keys — the Mongo subdocument simply had no such key.
+    // explicit `undefined` keys — an inapplicable id is simply absent.
     expect(await findRoomQueue(room.id)).toEqual([
       { kind: 'podcast', episodeId: 'ep-1', syraPodcastId: 'pod-1' },
       { kind: 'track', trackId: 'tr-1' },
@@ -209,8 +207,8 @@ describe('the participant and speaker array mutations', () => {
 
     const after = await findRoomById(room.id);
     expect(after?.participants).toEqual(['listener-a']);
-    // The second call must NOT bump the counter — `$addToSet` plus a
-    // conditional `$inc` in Mongo, and a `case when … = any(…)` here. A plain
+    // The second call must NOT bump the counter — a `case when … = any(…)`
+    // decides it. A plain
     // `array_append` with an unconditional `+ 1` passes the array assertion
     // above and fails this one, which is why both are asserted.
     expect(after?.statsTotalJoined).toBe(1);
@@ -222,7 +220,7 @@ describe('the participant and speaker array mutations', () => {
     await addParticipant(room.id, 'listener-a', 5);
     await addParticipant(room.id, 'listener-b', 2);
 
-    // `greatest(…)`, which is Mongo's `$max`: a later, smaller count must not
+    // `greatest(…)`: a later, smaller count must not
     // overwrite the high-water mark.
     expect((await findRoomById(room.id))?.statsPeakListeners).toBe(5);
   });

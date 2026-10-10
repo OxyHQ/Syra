@@ -392,8 +392,7 @@ async function resolveFromRegistry(isrc: string): Promise<IsrcRecording | undefi
     ...(row.title && { title: row.title }),
     ...(row.artistCredit && { artistName: row.artistCredit }),
     // Milliseconds in the dump, seconds everywhere in this pipeline. `lengthMs`
-    // is nullable in Postgres where Mongo simply omitted the key, so the guard
-    // is `!== null` as well as `> 0`.
+    // is nullable, so the guard is `!== null` as well as `> 0`.
     ...(row.lengthMs !== null && row.lengthMs > 0 && { durationSec: row.lengthMs / 1000 }),
   };
 }

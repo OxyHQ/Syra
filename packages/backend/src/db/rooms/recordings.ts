@@ -1,12 +1,11 @@
 /**
  * `recordings` — the recorded-audio rows for a live room.
  *
- * ## `room_id` is nullable here and was `required: true` in Mongoose
+ * ## `room_id` is nullable
  *
  * Rooms ARE hard-deleted, with no check for existing recordings and no cleanup,
- * so a `Recording.roomId` pointing at nothing was already reachable — the
- * Mongoose `required` only ever constrained the INSERT. `ON DELETE SET NULL`
- * promotes that silent dangling reference into an explicit one. Neither
+ * so a recording can outlive its room. `ON DELETE SET NULL` makes that an
+ * explicit null rather than a silent dangling reference. Neither
  * alternative is right: `CASCADE` would delete recorded audio because someone
  * tidied up a room, and `RESTRICT` would refuse a deletion the app performs
  * freely today.
@@ -16,9 +15,8 @@
  * Every row gets `now + 6 months` and nothing ever queries by it — there is no
  * sweeper, and the declared retention has never once been enforced. The column
  * is carried (the intent is real) and this module deliberately adds no sweep:
- * `db/expiry.ts`'s registry replaces a Mongo TTL index, and this was never one,
- * so starting to delete recordings Mongo has never deleted is a product decision
- * rather than a port.
+ * recordings are not registered in `db/expiry.ts`, and starting to delete
+ * recordings that have never been deleted is a product decision.
  */
 
 import { and, arrayContains, eq, or, sql, type SQL } from 'drizzle-orm';
@@ -70,11 +68,9 @@ export type PublicRecordingSort = 'popular' | 'recent';
 /**
  * The public recordings listing.
  *
- * `popular` orders by listener count — `cardinality(participant_ids)` — which
- * replaces Mongo's `$addFields: { listenerCount: { $size: … } }` stage. The
- * count is NOT projected: the aggregation removed it again with
- * `$project: { listenerCount: 0 }`, so adding it to the response would be a new
- * field rather than a port.
+ * `popular` orders by listener count — `cardinality(participant_ids)`. The
+ * count is NOT projected: it is not part of the response, and adding it would
+ * be a new field.
  */
 export async function listPublicRecordings(
   sort: PublicRecordingSort,
@@ -186,10 +182,9 @@ export interface CreateRecordingInput {
    * Supplied by the caller, not left to the column default.
    *
    * The S3 object key embeds the recording's own id, so the id has to exist
-   * BEFORE the row is written. Mongo could not do that, which is why the old
-   * code inserted a placeholder row (`egressId: 'pending'`, `objectKey:
-   * 'pending'`) purely to mint an `_id` and then saved twice more. Ids are
-   * minted in the application here — `generatedId()` is a `$defaultFn`, not a
+   * BEFORE the row is written, rather than inserting a placeholder row
+   * (`egressId: 'pending'`) just to mint an id and saving again. Ids are minted
+   * in the application here — `generatedId()` is a `$defaultFn`, not a
    * database default — so the caller derives the key first and the row is
    * written once, already correct.
    */

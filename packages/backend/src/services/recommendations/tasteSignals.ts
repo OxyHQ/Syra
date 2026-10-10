@@ -76,8 +76,8 @@ export async function applyFollowSignal(oxyUserId: string, artistId: string): Pr
 
     // The follow's weight is SPLIT across the artist's genres, so following a
     // five-genre artist does not boost each of them as hard as following a
-    // single-genre one. Unchanged from the Mongo version; a list rather than a
-    // loop because the deltas now land in one statement.
+    // single-genre one. A list rather than a loop because the deltas land in
+    // one statement.
     const perGenre = FOLLOW_ARTIST_WEIGHT / Math.max(1, genres.length);
     const genreDeltas: TasteDelta[] = genres.map((genre) => ({ key: genre, delta: perGenre }));
 

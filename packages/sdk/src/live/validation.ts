@@ -1,26 +1,24 @@
 import { z } from 'zod';
 
 /**
- * Accept a document whose identity arrives as `_id` and present it as `id`.
+ * Accept a payload whose identity arrives as `_id` and present it as `id`.
  *
- * The PostgreSQL migration made `id` REQUIRED on the four schemas below, which is
- * correct against the ported backend — `_id` left the wire contract there. But the
- * frontend deploys on its own path (`deploy-frontends.yml`, on `packages/frontend`
+ * `id` is REQUIRED on the four schemas below, which is correct against the current
+ * backend — `_id` is not part of the wire contract. But the frontend deploys on its own path (`deploy-frontends.yml`, on `packages/frontend`
  * and `packages/shared-types`) while the backend deploy is gated, so a merge to
- * `main` ships the client half ALONE. It did: `GET /rooms` still answers `_id`,
+ * `main` can ship the client half ALONE. It did once: `GET /rooms` answered `_id`,
  * every room failed `ZRoom`, and `validateRooms` DROPS what it cannot parse — so
  * the Live screen went empty in production with only a `console.warn` to say so.
  *
  * Normalising here rather than teaching call sites to read `room.id ?? room._id`
  * is the architecture this repo already states: parse once at the API boundary and
- * return typed data. One place, no UI knows, and it is correct against BOTH
- * backends — so the cutover needs no coordinated client flip, which is the failure
- * this comment exists because of.
+ * return typed data. One place, no UI knows, and it is correct against an older
+ * backend too — so no coordinated client flip is needed.
  *
  * It can be deleted once no deployed Syra backend serves `_id`. Nothing breaks if
  * it outlives that: a payload carrying only `id` passes through untouched.
  */
-function withMongoIdFallback<T extends z.ZodTypeAny>(schema: T) {
+function withUnderscoreIdFallback<T extends z.ZodTypeAny>(schema: T) {
   return z.preprocess((value) => {
     if (value === null || typeof value !== 'object') return value;
     const doc = value as Record<string, unknown>;
@@ -48,7 +46,7 @@ export type PodcastQueueItem = z.infer<typeof ZPodcastQueueItem>;
 
 // --- Room (replaces Space) ---
 
-export const ZRoom = withMongoIdFallback(
+export const ZRoom = withUnderscoreIdFallback(
   z
     .object({
       id: z.string(),
@@ -159,7 +157,7 @@ export const ZHouseVisibility = z
 
 export type HouseVisibility = z.infer<typeof ZHouseVisibility>;
 
-export const ZHouse = withMongoIdFallback(
+export const ZHouse = withUnderscoreIdFallback(
   z
     .object({
       id: z.string(),
@@ -222,7 +220,7 @@ export const ZSeriesEpisode = z
 
 export type SeriesEpisode = z.infer<typeof ZSeriesEpisode>;
 
-export const ZSeries = withMongoIdFallback(
+export const ZSeries = withUnderscoreIdFallback(
   z
     .object({
       id: z.string(),
@@ -245,7 +243,7 @@ export type Series = z.infer<typeof ZSeries>;
 
 // --- Recording ---
 
-export const ZRecording = withMongoIdFallback(
+export const ZRecording = withUnderscoreIdFallback(
   z
     .object({
       id: z.string(),

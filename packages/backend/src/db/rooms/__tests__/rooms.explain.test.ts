@@ -25,7 +25,7 @@
  * ## What it found
  *
  * **The houses listing was a full table scan, and the index built for it was
- * unreachable.** `listHouses` first transcribed Mongo's `$nin` directly, and
+ * unreachable.** `listHouses` was first written as an exclusion, and
  * `visibility_discovery NOT IN ('unlisted', 'hidden')` renders as `<> ALL (…)`,
  * which no btree can serve — measured under `enable_seqscan = off`, it
  * sequential-scans `houses` and top-N sorts, on the most-requested listing in
@@ -52,19 +52,18 @@
  * `created_at` is ordered only within one status; the default listing's
  * `status in ('live', 'scheduled')` spans two, and no index scan can produce one
  * ordered stream across both. Measured: `roomsDefault` sorts 18,182 rows to
- * return 21. Mongo had the identical shape against `{ status: 1, createdAt: -1 }`,
- * so this is carried forward rather than introduced — but it is why the
+ * return 21. That is a standing cost of the index shape — and it is why the
  * `descNullsLast` finding above is demonstrated on the single-status probe,
  * which is the only one where the two spellings differ.
  *
  * **The live-badge feed needed `archived = false` added to it, and that is a
  * behaviour change rather than a tuning one.** `rooms_status_created_at_idx` is
- * partial on `archived = false`, so Mongo's `find({ status: 'live' })` — which
- * carries no `archived` clause — cannot use it and scans the table.
+ * partial on `archived = false`, so a `status = 'live'` query that carries no
+ * `archived` clause cannot use it and scans the table.
  * `liveUsersUnfiltered` below is that query, asserted to STILL scan.
  * `archived` is also the moderation restriction lever for a room, so the
  * unfiltered query kept emitting a live badge for a room a moderator had
- * restricted; the ported `findLiveRoomBroadcasters` carries the predicate.
+ * restricted; `findLiveRoomBroadcasters` carries the predicate.
  *
  * **The five constraint-support indexes are reached by the referential-integrity
  * queries, not just declared.** `rooms_house_id_idx`, `series_house_id_idx`,
@@ -243,7 +242,7 @@ const PROBES: readonly { readonly name: string; readonly sql: string | (() => st
           order by created_at desc nulls last limit 21`,
   },
   {
-    // `listHouses` with `?search=` — the `tsvector` replacing Mongo's `$text`.
+    // `listHouses` with `?search=` — the `tsvector` full-text match.
     name: 'housesSearch',
     sql: `select id, name from houses
           where visibility_discovery in ('listed')
@@ -268,8 +267,7 @@ const PROBES: readonly { readonly name: string; readonly sql: string | (() => st
   {
     /**
      * The membership arm as a correlated `EXISTS`, which is what `listHouses`
-     * first shipped and the direct transcription of Mongo's
-     * `'members.userId': userId`.
+     * first shipped: membership by `userId` as a subquery.
      *
      * An `OR` between a column predicate and a correlated subquery gives the
      * planner nothing to combine, so it is a **Seq Scan** even under
@@ -448,7 +446,7 @@ const PROBES: readonly { readonly name: string; readonly sql: string | (() => st
   {
     /**
      * `listHouses` as it was first written — `NOT IN` over the two hiding
-     * levels, the direct transcription of Mongo's `$nin`.
+     * levels.
      *
      * `<> ALL (…)` is not a btree-indexable condition, so this cannot use
      * `houses_visibility_discovery_created_at_idx` AT ALL and sequential-scans
@@ -462,7 +460,7 @@ const PROBES: readonly { readonly name: string; readonly sql: string | (() => st
   },
   {
     /**
-     * The live-badge feed as MONGO issued it — `status = 'live'` with no
+     * The live-badge feed WITHOUT the predicate — `status = 'live'` with no
      * `archived` clause.
      *
      * `rooms_status_created_at_idx` is partial on `archived = false`, and a
@@ -839,11 +837,8 @@ describe('room listings reach a partial listing index and do not sort', () => {
    * narrows on two status VALUES, which is the opposite case. Asserting no sort
    * there would have been asserting something the schema does not promise.
    *
-   * Mongo's `{ status: { $in: [...] } }` with `sort({ createdAt: -1 })` had the
-   * identical shape against `{ status: 1, createdAt: -1 }`, so this is carried
-   * forward rather than introduced. Reported as a standing cost, not fixed here:
-   * closing it means a `created_at`-leading partial index, which is a schema
-   * change and a different question from porting.
+   * Reported as a standing cost, not fixed here: closing it means a
+   * `created_at`-leading partial index, which is a schema change.
    */
   it('roomsSingleStatus takes its ordering from the index; the two-value default cannot', () => {
     expectNoSort('roomsSingleStatus');
@@ -870,7 +865,7 @@ describe('the live-badge feed', () => {
     expectIndexAmong('liveUsers', ROOM_LISTING_INDEXES);
   });
 
-  it('scans the whole table without it — the shape Mongo shipped', () => {
+  it('scans the whole table without it', () => {
     // The proof that the PREDICATE and not the column list is what excluded it:
     // the two probes differ only by `and archived = false`.
     expect(plans.get('liveUsersUnfiltered')).toContain('Seq Scan on rooms');

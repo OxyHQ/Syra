@@ -71,11 +71,10 @@
  * batch in flight. Re-running that batch is harmless because the upsert is
  * idempotent, which is what makes "resume" safe rather than merely cheap.
  *
- * THE DUMP IS AUTHORITATIVE — a deliberate change from Mongo. `lengthMs` is
+ * THE DUMP IS AUTHORITATIVE. `lengthMs` is
  * absent from a row whose recording has no length, and the conflict `SET` writes
  * `excluded.length_ms`, so re-importing a dump that dropped a length CLEARS the
- * stored one. Mongo's `$set` omitted the key and the stale value survived
- * forever. This is a mirror of somebody else's dataset: when the source stops
+ * stored one rather than letting a stale value survive forever. This is a mirror of somebody else's dataset: when the source stops
  * asserting a fact, the mirror must stop asserting it too.
  *
  * MEMORY
@@ -255,13 +254,12 @@ export async function importIsrcRegistry(options: ImportOptions): Promise<Import
    *
    * MusicBrainz's `isrc` table maps recordings to identifiers many-to-many, so
    * the same ISRC legitimately appears on more than one recording and reaches
-   * this batch twice. Mongo's `bulkWrite` applied those as two sequential
-   * `updateOne`s and the last one won. Postgres refuses outright: two rows with
+   * this batch twice. Postgres refuses that outright: two rows with
    * the same conflict key in ONE `INSERT … ON CONFLICT DO UPDATE` is
    * `21000 — ON CONFLICT DO UPDATE command cannot affect row a second time`,
    * which fails the whole statement and therefore the whole import.
    *
-   * A `Map` keeps last-write-wins, matching what Mongo did, and guarantees the
+   * A `Map` keeps last-write-wins and guarantees the
    * conflict key is unique within every statement this builds.
    */
   let batch = new Map<string, RegistryRow>();

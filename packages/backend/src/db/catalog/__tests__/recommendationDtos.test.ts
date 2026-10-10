@@ -37,20 +37,17 @@ import {
  * test. `id` in particular is asserted equal to the seeded uuid rather than
  * merely truthy, because `''` is the exact value the bug produced.
  *
- * Mutation-verified, and stated as MEASURED rather than as intended: reverting
- * both controller lines to the Mongo formatters (with a cast, since the typed
- * parameter is now itself a compile-time guard) fails both tests — on the `id`
+ * Mutation-verified, and stated as MEASURED rather than as intended: replacing
+ * both controller lines with an untyped spreading formatter (with a cast, since
+ * the typed parameter is itself a compile-time guard) fails both tests — on the `id`
  * equality, which is the FIRST assertion and short-circuits the rest. The
  * `name` / `title` / `coverArt` assertions below are therefore not what catches
  * THIS mutation; they catch a serializer that keeps the id and drops a field,
  * which is a different regression and the reason they name values rather than
  * check shape.
  *
- * BOTH databases: the catalogue is Postgres, while the co-listen graph
- * (`CatalogRelation`) belongs to Task 15 and is still Mongoose. Neither handler
- * under test needs an edge — both fall back to genre/popularity, which is the
- * path a sparse catalogue actually takes — but the model is loaded, so the
- * connection has to exist.
+ * Neither handler under test needs a co-listen edge — both fall back to
+ * genre/popularity, which is the path a sparse catalogue actually takes.
  */
 
 beforeAll(async () => {

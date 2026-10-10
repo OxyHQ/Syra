@@ -45,8 +45,7 @@
  * all. The two agree on every row that can exist — an episode pointing at a
  * MISSING show would be kept by `$nin` and dropped by `EXISTS`, but
  * `episodes.podcast_id` is `NOT NULL REFERENCES podcasts(id) ON DELETE CASCADE`,
- * so no such row is representable. That is the constraint doing the work the
- * Mongo version had to assume.
+ * so no such row is representable. The constraint guarantees it.
  */
 
 import { and, eq, exists, isNotNull, ne, or, sql, type SQL } from 'drizzle-orm';
@@ -178,9 +177,8 @@ export function showIsReadableByViewer(viewerId: string | null | undefined): SQL
 /**
  * The status gate for episodes of ONE show, from a given viewer's position.
  *
- * Returns `undefined` for the owner — no condition at all, which is what the
- * Mongo `{}` meant. A caller composes it with `and()`, which drops `undefined`
- * arguments, so the two spellings behave identically.
+ * Returns `undefined` for the owner — no condition at all. A caller composes it
+ * with `and()`, which drops `undefined` arguments.
  *
  * Both arguments are nullable and the comparison is deliberately strict, for the
  * reason {@link viewerOwnsShow} states.
@@ -199,10 +197,8 @@ export function episodeVisibilityFilter(
  *
  * `status = 'ready'` AND the show is LISTABLE AND there is something to play:
  * Syra-hosted episodes stream from our own storage, RSS episodes need an
- * enclosure. The Mongo form tested `{ enclosureUrl: { $exists: true, $nin:
- * [null, ''] } }` — three conditions because a Mongo field can be absent, null,
- * or empty. A Postgres column is only null or a value, so `is not null` plus
- * `<> ''` is the whole of it.
+ * enclosure. A Postgres column is only null or a value, so `is not null` plus
+ * `<> ''` is the whole of the "has an enclosure" test.
  *
  * Listable, not merely active: an `unlisted` show is reachable by id and must
  * still never appear in a listing nobody asked it for by name.

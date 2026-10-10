@@ -1,35 +1,24 @@
 /**
- * The four library memberships, on drizzle — the replacement for
- * `UserLibrary`'s arrays.
+ * The four library memberships, on drizzle, as real junction tables. The
+ * fifth library list, podcast subscriptions, lives in
+ * `db/podcasts/subscriptions.ts`, beside the rest of that vertical.
  *
- * `models/Library.ts` held one document per user carrying five string arrays.
- * Four of them are ported here as real junction tables. The fifth,
- * `subscribedPodcasts`, could not move with them — `user_podcast_subscriptions`
- * references `podcasts`, and nothing wrote that table yet, so a drizzle insert
- * would have failed `23503` against an empty one. Task 12 ported its writer and
- * took the array with it; it lives in `db/podcasts/subscriptions.ts` rather than
- * here, beside the rest of that vertical, and `models/Library.ts` is deleted.
+ * ## Idempotence is a unique constraint
  *
- * ## What `$addToSet` promised and a unique constraint delivers
- *
- * The Mongo handlers were idempotent by using `$addToSet`/`$pull` on an array,
- * which is a set operation only for as long as every writer remembers to use
- * one. `unique(oxy_user_id, <target>_id)` on each table below is the same
- * property enforced by the database, and `onConflictDoNothing()` is what turns
+ * `unique(oxy_user_id, <target>_id)` on each table below makes every membership
+ * a SET, enforced by the database rather than by every writer remembering to
+ * use a set operation, and `onConflictDoNothing()` is what turns
  * a second like of the same track back into a no-op rather than a `23505`.
  *
  * ## Adding can now fail, and removing still cannot
  *
- * This is the one place the ported behaviour genuinely differs from Mongo, and
- * it is not a choice: every target column is a real foreign key, so liking a
- * track that does not exist is `23503` where Mongo silently stored the string.
+ * Every target column is a real foreign key, so liking a track that does not
+ * exist is `23503` rather than a silently stored dangling id.
  * {@link addMembership} answers `'missing-target'` for exactly that constraint
  * and the controller turns it into a 404 — a bogus id must not reach a client
  * as a 500.
  *
- * Removal is unchanged: a `delete` matching nothing removes nothing, which is
- * what the Mongo `$pull` (against an upserted, possibly empty document) also
- * did. Unliking a track that never existed is still a successful no-op, and
+ * Removal cannot fail: a `delete` matching nothing removes nothing. Unliking a track that never existed is still a successful no-op, and
  * that asymmetry is deliberate — the foreign key constrains what may be
  * STORED, not what may be asked for.
  *
@@ -58,8 +47,7 @@ export type MembershipKind = 'likedTracks' | 'savedAlbums' | 'followedArtists' |
 
 interface MembershipRelation {
   /**
-   * One user's ids, OLDEST FIRST — the order the Mongo array had, since
-   * `$addToSet` appends. Two callers read it as an order rather than a set:
+   * One user's ids, OLDEST FIRST — the order they were added in. Two callers read it as an order rather than a set:
    * `services/radio/radioSeed.ts` takes the freshest likes off the tail, and
    * `controllers/library.controller.ts` hands the list to a client that
    * renders it in the order it arrives.
@@ -163,7 +151,7 @@ export type AddMembershipResult = 'added' | 'missing-target';
  * Add one membership, idempotently.
  *
  * `'missing-target'` when the id names nothing — see this file's doc comment
- * for why that is a real answer here and was not one under Mongo.
+ * for why that is a real answer.
  */
 export async function addMembership(
   kind: MembershipKind,

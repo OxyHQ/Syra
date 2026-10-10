@@ -222,9 +222,8 @@ describe('playlist subject provider', () => {
   });
 
   it('declines an id that names no playlist, without an id-shape guard', async () => {
-    // The Mongo provider opened with `mongoose.isValidObjectId`, which rejected
-    // every uuid v7 the catalogue mints today. `playlists.id` is `text`, so the
-    // query answers both cases: a malformed id and a well-formed unknown one.
+    // An id-shape guard would reject one of the two id shapes the catalogue
+    // holds. `playlists.id` is `text`, so the query answers both cases: a malformed id and a well-formed unknown one.
     expect(await playlistProvider?.snapshot('not-an-object-id')).toBeNull();
     expect(await playlistProvider?.snapshot('01936f00-0000-7000-8000-000000000000')).toBeNull();
   });
@@ -246,10 +245,9 @@ describe('playlist subject provider', () => {
 
 describe('the catalog providers scope the discriminator', () => {
   /**
-   * `catalog_entities` holds artists AND persons in one table. `ArtistModel` is
-   * a Mongoose discriminator, so every query through it carried `type: 'artist'`
-   * implicitly; drizzle adds nothing, so both providers that read it have to
-   * write the filter out.
+   * `catalog_entities` holds artists AND persons in one table, and drizzle adds
+   * no implicit `type: 'artist'`, so both providers that read it have to write
+   * the filter out.
    *
    * EVERY fixture here is a `person` behind an id an artist would be expected
    * at, because that is the only shape that tells the scoped query from the

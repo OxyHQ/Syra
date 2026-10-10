@@ -32,15 +32,10 @@ const OWNER_ID = 'oxy-owner-1';
 const INTRUDER_ID = 'oxy-intruder-2';
 
 /**
- * BOTH databases, because this file spans TWO verticals: the whole music
- * surface — artist, tracks, albums — is Postgres (Tasks 10c-2 and 10c-3), while
- * podcasts and episodes are drizzle since Task 12.
- *
- * The two-store artist fixture 10c-2 needed is gone with 10c-3: track and album
- * ownership resolved through `utils/catalogOwnership.ts` (Mongoose) then, which
- * forced ONE artist to exist in both stores under an ObjectId hex — the only id
- * shape both accepted. Ownership is `db/catalog/ownership.ts` now, so the ids
- * here are plain `generatedId()`s like every other fixture on the branch.
+ * This file spans TWO verticals — the music surface (artist, tracks, albums)
+ * and podcasts/episodes — both on Postgres. Ownership resolves through
+ * `db/catalog/ownership.ts`, so the ids here are plain `generatedId()`s like
+ * every other fixture.
  */
 beforeAll(async () => {
   await connectDb();
@@ -333,15 +328,10 @@ describe('album unpublish (container-only)', () => {
   });
 
   /**
-   * Was: "treats a pre-existing album with no isAvailable field as available",
-   * which `$unset` the field to simulate a document written before it existed.
-   *
-   * That shape is UNREPRESENTABLE now — `albums.is_available` is
-   * `NOT NULL DEFAULT true` — so the Mongo test cannot be translated, and a test
-   * that cannot fail is worse than none. What it was really asserting is that an
-   * album written WITHOUT the field counts as available and needs no backfill,
-   * and that property still holds and is still worth pinning: the column default
-   * is what supplies it, and dropping the default would fail this.
+   * An album with NO `isAvailable` value is unrepresentable — `albums.is_available`
+   * is `NOT NULL DEFAULT true`. What is worth pinning is that an album written
+   * WITHOUT the field counts as available and needs no backfill: the column
+   * default is what supplies it, and dropping the default would fail this.
    */
   it('an album inserted without isAvailable is available, no backfill needed', async () => {
     const { album, artistId, track } = await seedOwnedCatalog();

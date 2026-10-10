@@ -424,9 +424,8 @@ describe('rooms axis — GET /api/rooms/:id (fetch one by id)', () => {
  * asserts they agree — which is the only thing keeping the global listing and
  * the house-scoped route from diverging as the axes grow.
  *
- * The predicates are plain functions over `(house, members, userId)` now rather
- * than Mongoose instance methods, so this compares two pure expressions against
- * one query. What it pins is unchanged.
+ * The predicates are plain functions over `(house, members, userId)`, so this
+ * compares two pure expressions against one query.
  */
 describe('rooms axis — the query filter agrees with the predicates', () => {
   it('matches canSeeHouse && canAccessRooms on every axis combination', async () => {

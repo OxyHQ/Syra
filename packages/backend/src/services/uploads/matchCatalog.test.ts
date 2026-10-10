@@ -10,8 +10,7 @@ import corpus from './__fixtures__/fingerprints.json';
 
 /**
  * ONE database. Tiers 1-4 read the catalogue and tier 1's OTHER half — "is this
- * already in the uploader's own locker" — reads `user_uploads`, which was Task
- * 13's still-Mongoose vertical when this suite was written and is Postgres now.
+ * already in the uploader's own locker" — reads `user_uploads`.
  */
 beforeAll(connectDb);
 beforeEach(async () => {

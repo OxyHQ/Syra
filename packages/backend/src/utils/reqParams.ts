@@ -66,8 +66,8 @@ export function parseClampedLimit(
 }
 
 /**
- * Parse a zero-based pagination `offset`, clamped to `>= 0` (a negative value
- * makes MongoDB's `.skip()` throw). Deliberately has no upper bound: unlike
+ * Parse a zero-based pagination `offset`, clamped to `>= 0` (a negative
+ * `OFFSET` is an error). Deliberately has no upper bound: unlike
  * `limit`, a deep offset costs at most a walk of the collection and capping it
  * would silently serve the wrong page to a legitimate deep-paging client.
  */

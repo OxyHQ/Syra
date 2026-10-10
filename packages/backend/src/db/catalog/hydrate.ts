@@ -6,21 +6,18 @@
  * context, and returns a DTO. That is what makes it testable without a database
  * and what lets one page share one lookup. But somebody has to BUILD the lookup,
  * count the HLS ladder rows behind `previewAvailable`, and fetch the album cover
- * a track falls back to — and doing that per row is the N+1 the Mongo serializer
- * had (`formatTrackWithCoverArt` issued an `AlbumModel.findById` per track,
- * behind a per-call Map).
+ * a track falls back to — and doing that per row is an N+1 (one album lookup
+ * per track).
  *
  * So this module exists, and everything in it is a BATCH: a fixed number of
  * queries for a page of any size, and none at all for an empty one.
  *
- * ## Why this is not in `utils/musicHelpers.ts`'s shape
+ * ## Every function is typed on both ends
  *
- * That module is gone (Task 11), and this is what it was replaced with rather
- * than ported into. `formatTracksWithCoverArt(tracks: any[]): Promise<any[]>`
- * was typed `any` on both ends, so handing it a drizzle row instead of a
- * Mongoose document type-checked perfectly and returned objects with
- * `undefined` in every field — which four live endpoints did. Every function
- * here names its input and output types.
+ * A formatter typed `any[] => Promise<any[]>` type-checks perfectly when handed
+ * the wrong row shape and returns objects with `undefined` in every field —
+ * which four live endpoints once did. Every function here names its input and
+ * output types.
  */
 
 import { count, inArray } from 'drizzle-orm';
@@ -271,10 +268,8 @@ function playlistImageIds(row: PlaylistRow): (string | null)[] {
  * behaviour regression the Task 11 review caught. Discovery shelves genuinely
  * do not want it — but `GET /api/playlists` does, because two frontend surfaces
  * (`PlaylistActionsSheet.tsx`, `app/playlist/[id].tsx`) derive "can this user
- * edit" from `playlist.collaborators`, and the Mongo serializer spread the
- * whole document so the list surface had always carried it. Dropping it would
- * have cost editors their rights on that surface the moment anything started
- * writing that table. A caller that wants them passes ONE batch-loaded map for
+ * edit" from `playlist.collaborators`, and the list surface has always carried
+ * it. Dropping it would cost editors their rights on that surface. A caller that wants them passes ONE batch-loaded map for
  * the whole page; a caller that does not passes nothing and pays nothing.
  */
 export async function toPlaylistDtos(

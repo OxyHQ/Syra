@@ -51,11 +51,10 @@ const publicTrackColumns = () => publicColumns(tracks, PROTECTED_COLUMNS_BY_TABL
 /**
  * "Most popular first" for tracks, artists, albums and playlists.
  *
- * Each is the Mongo sort with its `withImageFirstSort` prefix translated to
- * `imageFirst()` — a sort on the PREDICATE `(column is not null)`, not on the
- * image id's lexical value, which is what the Mongo `{ coverArt: -1 }` prefix
- * actually did. `albums.cover_art_id` is `NOT NULL`, so the album orderings
- * carry no `imageFirst` term at all: it would be a constant.
+ * Each leads with `imageFirst()` — a sort on the PREDICATE `(column is not
+ * null)`, not on the image id's lexical value. `albums.cover_art_id` is
+ * `NOT NULL`, so the album orderings carry no `imageFirst` term at all: it
+ * would be a constant.
  */
 const TRACK_POPULAR_ORDER = [
   imageFirst(tracks.coverArtId),
@@ -247,8 +246,6 @@ export const getGenres = async (req: Request, res: Response, next: NextFunction)
      * each one's most popular track — in ONE query rather than a `distinct`
      * followed by a `find` per genre.
      *
-     * Mongo needed 1 + N round trips (`distinct('genre', …)`, then a sorted
-     * `find().limit(1)` for every genre) because it has no lateral join.
      * `distinct on (genre)` with a matching `order by` is exactly "the first row
      * per genre", so the sample track falls out of the same scan that
      * enumerates the genres.
@@ -260,8 +257,8 @@ export const getGenres = async (req: Request, res: Response, next: NextFunction)
     const rows = await getDb()
       .selectDistinctOn([tracks.genre], { genre: tracks.genre, coverArtId: tracks.coverArtId })
       .from(tracks)
-      // `<> ''` alongside `is not null`, because the Mongo version's
-      // `.filter(Boolean)` dropped both shapes and only one of them is a null.
+      // `<> ''` alongside `is not null`: neither a null nor an empty genre may
+      // become a card, and only one of those shapes is a null.
       .where(and(playableTrackFilter(), isNotNull(tracks.genre), ne(tracks.genre, '')))
       // `genre` LEADS the ordering because `distinct on` requires it to; the
       // rest is the sample track's own ordering — has-a-cover first, then

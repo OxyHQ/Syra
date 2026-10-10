@@ -244,8 +244,8 @@ describe("no catalog read orders with drizzle's desc()", () => {
    * (measured: `GET /api/tracks` cost 1087.00 vs 4.34).
    *
    * On a NULLABLE column it is also a behaviour inversion: `catalog_entities.
-   * stats_followers` and `tracks.removed_at` are nullable, and Mongo sorted a
-   * missing field LAST. `desc()` puts those rows at the FRONT of the shelf.
+   * stats_followers` and `tracks.removed_at` are nullable, and a missing value
+   * belongs LAST. `desc()` puts those rows at the FRONT of the shelf.
    *
    * The task that introduced `descNullsLast` converted its own three
    * controllers and left eleven sites in files it had also touched — two of them

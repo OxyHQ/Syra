@@ -192,8 +192,8 @@ describe('addStrike — termination', () => {
   });
 
   /**
-   * A person row is not an artist. `catalog_entities` holds both, and Mongoose's
-   * discriminator used to add `type` to every query invisibly — so a strike
+   * A person row is not an artist. `catalog_entities` holds both, and nothing
+   * adds `type` to a query implicitly — so a strike
    * against a person id must find nothing rather than silently writing artist
    * columns onto a person.
    */
@@ -265,9 +265,9 @@ describe('addStrike — termination', () => {
   /**
    * `strikeCount` is counted from `catalog_entity_strikes` rather than
    * incremented, so a column that has drifted out of step with the rows is
-   * repaired by the next write rather than compounding. The Mongo version
-   * incremented on add and recomputed on remove, so the two disagreed forever
-   * once they diverged.
+   * repaired by the next write rather than compounding. Incrementing on add and
+   * recomputing on remove would let the two disagree forever once they
+   * diverged.
    */
   it('recomputes strikeCount from the rows, repairing a drifted counter', async () => {
     const artistId = await makeArtist();

@@ -52,7 +52,7 @@ dotenv.config();
  * run — this page is a latency budget, not a write budget. The write it feeds
  * is necessarily one row at a time (a fingerprint cannot be computed in bulk),
  * so it is nowhere near the bind-parameter ceiling that constrains the two dump
- * importers, and it stays where Mongo had it.
+ * importers.
  */
 const BATCH_SIZE = 50;
 
@@ -79,9 +79,8 @@ export interface BackfillStats {
   /**
    * The track was deleted between this page's `SELECT` and its `INSERT`.
    *
-   * New under Postgres and unreachable under Mongo, which had no foreign key:
    * `track_fingerprints.track_id` references `tracks.id`, so a row for a
-   * vanished track raises `23503` where Mongo silently stored an orphan.
+   * vanished track raises `23503`.
    * Counted apart from `failed` because nothing is wrong and nothing is worth
    * retrying — the track is gone, and had the fingerprint landed first the
    * cascade would have deleted it anyway. Folding it into `failed` would tell
@@ -205,8 +204,7 @@ async function fingerprintOne(
      * here as THREE copies of every value: inline in `message`, again in
      * `stack`, and a third time as a structured `params` array. At ~1600 int32s
      * per track, on a catalogue-wide run, that is a log volume problem and a
-     * data-in-logs problem at once. Nothing like it existed before the port: a
-     * Mongoose error carried no statement.
+     * data-in-logs problem at once.
      *
      * The CLASSIFIER is the load-bearing half, not the formatter. This `try`
      * spans an S3 read, a `pipeline()` into a temp file, `fpcalc`, and the
