@@ -101,8 +101,8 @@ interface PoolQueryContext {
  * preference and the served-history exclusion are applied structurally — a pool
  * added later cannot forget them, because it never builds a query itself. The
  * pool's own condition is composed with `and()`, so a pool that passes an
- * `or(...)` keeps it; the Mongo version needed `andMongoFilters` for that,
- * because spreading two filter objects dropped the earlier `$or`.
+ * `or(...)` keeps it, where spreading two filter objects would drop the
+ * earlier one.
  */
 async function findPoolTracks(
   ctx: PoolQueryContext,
@@ -124,7 +124,7 @@ async function findPoolTracks(
         excluded.length > 0 ? notInArray(tracks.id, excluded) : undefined,
         // `is not true` rather than `!= true`: `is_explicit` is NOT NULL here so
         // the two agree, but the spelling is the one that stays correct if the
-        // column ever becomes nullable, and it matches Mongo's `{ $ne: true }`.
+        // column ever becomes nullable.
         ctx.allowExplicit ? undefined : sql`${tracks.isExplicit} is not true`,
         condition,
       ),
@@ -208,9 +208,8 @@ async function gatherCandidates(
     const contentTerms: SQL[] = [];
     if (seed.genres.length > 0) contentTerms.push(inArray(tracks.genre, seed.genres));
     if (seed.moods.length > 0) contentTerms.push(inArray(tracks.mood, seed.moods));
-    // `&&` — array overlap. The Mongo `{ tags: { $in: [...] } }` matched a
-    // document whose tags array shared ANY element with the list, which is
-    // overlap, not containment.
+    // `&&` — array overlap: a track matches when its tags share ANY element
+    // with the list, which is overlap, not containment.
     if (seed.tags.length > 0) contentTerms.push(arrayOverlaps(tracks.tags, seed.tags));
 
     if (contentTerms.length > 0) {

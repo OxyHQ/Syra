@@ -59,9 +59,8 @@ export async function findLiveVisibilities(
 }
 
 /**
- * Set a user's preference, creating the row if they have none — Mongo's
- * `findOneAndUpdate(…, { upsert: true })`, as a real `ON CONFLICT` against the
- * unique `oxy_user_id` rather than the find-then-insert race it papered over.
+ * Set a user's preference, creating the row if they have none — a real
+ * `ON CONFLICT` against the unique `oxy_user_id`, not a find-then-insert race.
  */
 export async function setLiveVisibility(
   oxyUserId: string,

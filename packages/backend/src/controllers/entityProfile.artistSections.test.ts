@@ -30,19 +30,11 @@ import { getEntityProfile } from './entityProfile.controller';
 /**
  * POSTGRES ONLY.
  *
- * This block used to say the opposite, and the reason it was wrong is worth
- * keeping: nothing here reads a Mongoose model, but `entityProfile.controller`
- * still GATED every handler on `isDatabaseConnected()` — Mongoose readiness —
- * so without a Mongo connection every request answered 503 and these suites had
- * to open one. The guard was the whole dependency.
- *
- * Task 15 switched that gate to `isPostgresConnected()`, and the Mongo hooks
- * went with it. `db/__tests__/connectivityGates.test.ts` used to keep this true
- * by walking this controller's whole import graph and failing if anything it
- * reached opened a model; it was retired in 8cd87a8 together with its subject.
- * Nothing polices it now because nothing can violate it — `mongoose` is not a
- * dependency and `src/models/` does not exist, so reintroducing a model is a
- * package install and a new directory, not a silent import.
+ * Every read these handlers make is Postgres, and `entityProfile.controller`
+ * gates each one on `isPostgresConnected()`, so opening Postgres is the whole
+ * dependency. Nothing polices it because nothing can violate it: there is no
+ * second database driver and `src/models/` does not exist, so adding another
+ * store is a package install and a new directory, not a silent import.
  */
 beforeAll(async () => {
   await connectDb();
@@ -121,8 +113,8 @@ async function seedRichArtist() {
       /**
        * `normalizeNameKey('Rich Artist')`, written explicitly.
        *
-       * Mongoose DERIVED this from `name` in a pre-save hook, so the old fixture
-       * never mentioned it — and `loadCreditedOn` matches
+       * Nothing derives it from `name` on insert, so the fixture must state it
+       * — `loadCreditedOn` matches
        * `track_credits.name_key` against exactly this value, which is why a
        * fixture that invented a unique key here returns an EMPTY credited-on
        * shelf and still looks like a seeded artist. Stable rather than

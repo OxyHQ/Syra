@@ -1,12 +1,8 @@
 /**
  * "Which shows and episodes credit this person" — against real rows.
  *
- * `strongKeyCreditMatch` had a unit test that asserted the SHAPE of the Mongo
- * filter it returned (`{ persons: { $elemMatch: { linkedOxyUserId } } }`, and an
- * `instanceof RegExp` for the name tier). That test cannot survive the port and
- * should not: the Postgres form is an `EXISTS` subquery, and asserting its SQL
- * text would pin the implementation while proving nothing about which rows come
- * back.
+ * `strongKeyCreditMatch` is an `EXISTS` subquery, and asserting its SQL text
+ * would pin the implementation while proving nothing about which rows come back.
  *
  * So this is behavioural instead. Every case seeds credits on both a show and an
  * episode and asserts WHICH ones the predicate selects — which is the property
@@ -160,8 +156,8 @@ describe('credit match — tier 3, the exact name', () => {
     await showCrediting('Shorter name', { name: 'Jane' });
 
     // Both spellings of the same name, and NEITHER of the two names that merely
-    // contain it — `=` on a whole column is what makes this anchored, where the
-    // Mongo form needed an explicitly anchored, escaped regex.
+    // contain it — `=` on a whole column is what makes this anchored, with no
+    // regex to escape.
     expect(await showTitlesCrediting({ name: 'jane host' })).toEqual(['Different case', 'Exact']);
   });
 

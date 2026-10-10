@@ -94,9 +94,8 @@ export async function setNowPlaying(
  * source of truth. All mutations go through this function.
  *
  * A command that changes nothing (an empty queue's `next`, a `volume` with no
- * volume) leaves `patch` empty and returns the state unwritten — the Mongoose
- * version called `.save()` regardless, which for a document with no modified
- * paths was likewise a no-op write. What must NOT change is `updated_at`: it
+ * volume) leaves `patch` empty and returns the state unwritten. What must NOT
+ * change is `updated_at`: it
  * orders states on the client, so bumping it for a command that did nothing
  * would make two clients disagree about which state is newer.
  */
@@ -195,10 +194,8 @@ export async function applyCommand(
  * If the disconnected device was not the active device the playback state is
  * left untouched (only the device registry is updated).
  *
- * The `activeDeviceId: null` in the no-failover branch is the one place in this
- * vertical where the drizzle/Mongoose difference bites. The document version
- * assigned `undefined` and `.save()` turned that into `$unset`; an `undefined`
- * here would be dropped from the UPDATE, leaving a disconnected device named as
+ * The `activeDeviceId: null` in the no-failover branch must be `null`: an
+ * `undefined` here would be dropped from the UPDATE, leaving a disconnected device named as
  * active on a paused state forever. See `db/playback/playbackStates.ts`.
  */
 export async function handleDeviceDisconnect(

@@ -11,10 +11,8 @@ import { findRelatedEdges } from '../../db/user/relations';
  * would silently change what a listener is recommended depending on which
  * surface they came from.
  *
- * `andMongoFilters` is GONE, not ported. It existed because spreading two Mongo
- * filter objects together silently dropped an `$or` — a later key of the same
- * name won. Drizzle composes with `and()`, which cannot lose a term, so there is
- * nothing for a counterpart to do.
+ * Filters compose with drizzle's `and()`, which cannot lose a term the way
+ * spreading two filter objects together silently drops an earlier `or`.
  */
 
 /** Resolve the union of related-artist edges for a set of seed artists. */
@@ -38,7 +36,6 @@ export async function topRelatedArtistIds(
 
   // No id-shape filter: `catalog_entities.id` is `text`, so an edge pointing at
   // an id that does not exist simply matches no row when the caller looks it up.
-  // The Mongo version had to drop non-ObjectId ids here or the `$in` would throw.
   return Array.from(scoreById.entries())
     .sort((a, b) => b[1] - a[1])
     .slice(0, limit)
@@ -81,8 +78,7 @@ export function rankByTaste<T extends TasteRankableTrack>(
 /**
  * Re-order rows to match a list of ids.
  *
- * `WHERE id IN (…)` has no more defined order than Mongo's `$in` did, and the
- * ids arrive ranked — by collaborative score, by radio pool weight — so
+ * `WHERE id IN (…)` has no defined order, and the ids arrive ranked — by collaborative score, by radio pool weight — so
  * returning them in whatever order the planner produced would discard the whole
  * ranking the caller just computed.
  */

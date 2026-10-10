@@ -2,8 +2,8 @@
  * `db/user/listening.ts` and `db/user/relations.ts`.
  *
  * The two behaviours worth pinning are the paging (because the ORDER is the
- * co-occurrence algorithm, not a preference) and the graph rewrite (because the
- * Mongo version had a window in which every "related" shelf was empty).
+ * co-occurrence algorithm, not a preference) and the graph rewrite (because a
+ * non-atomic rewrite leaves a window in which every "related" shelf is empty).
  */
 
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'bun:test';
@@ -82,7 +82,7 @@ describe('listening events', () => {
   it('refuses an event for a track that does not exist', async () => {
     const artistId = await makeArtist();
 
-    // `track_id` is a real foreign key, where Mongo stored the string.
+    // `track_id` is a real foreign key.
     await expect(play('oxy-1', 'no-such-track', artistId)).rejects.toThrow();
   });
 
@@ -100,8 +100,8 @@ describe('listening events', () => {
   });
 
   /**
-   * Duplicates are NOT collapsed: `limit` means the most recent N EVENTS, which
-   * is what the Mongo read returned, and the caller folds the result into a
+   * Duplicates are NOT collapsed: `limit` means the most recent N EVENTS, and
+   * the caller folds the result into a
    * `Set` with its liked tracks anyway. A `distinct` here would change what the
    * limit counts.
    */

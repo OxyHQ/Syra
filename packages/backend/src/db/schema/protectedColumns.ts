@@ -1,9 +1,9 @@
 /**
- * Columns That Must Not Reach a Client — the `select: false` replacement
+ * Columns That Must Not Reach a Client
  *
- * Mongoose can mark a field so sensitive it is absent from every read unless a
- * caller asks for it by name. Drizzle enumerates columns explicitly, so a
- * naive port keeps no such guard at all: `db.select().from(table)` returns
+ * Some fields are so sensitive they must be absent from every read unless a
+ * caller asks for them by name. Drizzle enumerates columns explicitly, so with
+ * no registry there is no such guard at all: `db.select().from(table)` returns
  * every column, secrets included, with nothing in the call site naming what
  * leaked.
  *
@@ -35,9 +35,8 @@
  *    `publicColumns` exists — a bare `.select()` and the relational
  *    `db.query.<table>` API — against any table in this registry.
  *
- * Each schema task that ports a model with a Mongoose `select: false` field
- * (or any column that must not reach a client even though Mongoose never
- * marked it) adds an entry here in the same change.
+ * Any change that adds a column which must not reach a client adds an entry
+ * here in the same change.
  *
  * `PROTECTED_COLUMNS_BY_TABLE` must stay declared `as const` and be passed
  * straight through to `publicColumns` at every call site — see that
@@ -53,14 +52,11 @@
  * property names).
  *
  * `catalog_entities.images` / `catalog_entities.imageSuggestions` and
- * `tracks.images` / `tracks.sha256` are every field the Mongoose serializer's
- * `stripExternalCatalogFields` deleted before Task 11 removed it with
- * `utils/musicHelpers.ts`. That guard was one hand-maintained `delete` list
- * behind thirteen formatters, so a field it missed was exposed by all of them
- * at once the moment a route stopped being a Mongoose `find()` (which honoured
- * `select: false`) and became an aggregation (which does not) — which happened
- * once, to `imageSuggestions`. This registry replaces it by removing the column
- * from the ROW TYPE, so naming one fails `tsc` rather than shipping.
+ * `tracks.images` / `tracks.sha256` were once guarded by one hand-maintained
+ * `delete` list behind thirteen formatters, so a field it missed was exposed by
+ * all of them at once the moment a route bypassed the per-field exclusion —
+ * which happened once, to `imageSuggestions`. This registry removes the column
+ * from the ROW TYPE instead, so naming one fails `tsc` rather than shipping.
  */
 
 export const PROTECTED_COLUMNS_BY_TABLE = {
@@ -68,10 +64,8 @@ export const PROTECTED_COLUMNS_BY_TABLE = {
   catalog_entities: ['images', 'imageSuggestions'],
   tracks: ['images', 'sha256'],
   /**
-   * `rawTags*` is the port of Mongoose `select: false` on `UserUpload
-   * .rawTags` — the file's native tag block, which must never reach a
-   * client. `fingerprint` and `sha256` were never marked in Mongoose and are
-   * registered here anyway: the model's own doc comment calls the
+   * `rawTags*` is the file's native tag block, which must never reach a
+   * client. `fingerprint` and `sha256` are registered too: the model's own doc comment calls the
    * fingerprint server-only ("exposing it would hand a client the acoustic
    * index it would need to enumerate the catalog"), and `sha256` is the same
    * audio content hash `tracks.sha256` above is protected for.
@@ -92,8 +86,7 @@ export const PROTECTED_COLUMNS_BY_TABLE = {
   /**
    * The same `select: false` `rawTags` block, duplicated onto the
    * attestation because the upload can be deleted and the evidence for a
-   * published recording has to outlive it — plus `ip`/`userAgent`, which
-   * Mongoose never marked either. Those two are request context about a
+   * published recording has to outlive it — plus `ip`/`userAgent`. Those two are request context about a
    * person, held as legal evidence; no client has ever been served them and
    * none should be.
    */
@@ -107,9 +100,8 @@ export const PROTECTED_COLUMNS_BY_TABLE = {
   ],
   /**
    * The four internal stream credentials `PUBLIC_ROOM_FIELDS`
-   * (`routes/rooms.routes.ts:70-104`) exists to withhold. Mongoose never
-   * marked any of them `select: false` — the guard has always been that
-   * hand-written allowlist, and `routes/streamCredentialExposure.test.ts`
+   * (`routes/rooms.routes.ts:70-104`) exists to withhold. That hand-written
+   * allowlist is the route-level guard, and `routes/streamCredentialExposure.test.ts`
    * exists because an earlier implementation of it silently failed to strip
    * them from a hydrated document.
    *
@@ -128,17 +120,14 @@ export const PROTECTED_COLUMNS_BY_TABLE = {
    */
   rooms: ['rtmpStreamKey', 'rtmpUrl', 'activeStreamUrl', 'activeIngressId'],
   /**
-   * One person's muted words and the accounts they have restricted. Mongoose
-   * never marked either `select: false`, and they are on the wire TODAY:
+   * One person's muted words and the accounts they have restricted.
    * `GET /api/profile/settings/:userId` (`routes/profileSettings.ts:41`) serves
-   * any account's whole settings document to any authenticated caller, because
-   * `ensureUserSettings` narrows the TypeScript type with
-   * `.lean<UserSettingsLean>()` but never projects — the type says four fields,
-   * the object carries all of them.
+   * any account's settings to any authenticated caller, so these two must never
+   * ride along on a whole-row read.
    *
-   * Registering the two lists gives the Postgres port a structural guard
-   * (`findImplicitWholeRowReads` refuses a bare `db.select().from(userSettings)`)
-   * rather than leaving it to whoever ports that route to notice. The rest of
+   * Registering the two lists is a structural guard (`findImplicitWholeRowReads`
+   * refuses a bare `db.select().from(userSettings)`) rather than something each
+   * route has to remember. The rest of
    * `privacy` is deliberately absent: the booleans and `profileVisibility`
    * describe how a profile renders to other people, which is the part of this
    * document a viewer is meant to see.

@@ -10,10 +10,10 @@
  *
  * ## Why every child collection is loaded, rather than opted into per surface
  *
- * `serializePodcast`/`serializeEpisode` under Mongo emitted `categories`,
- * `funding`, `persons`, `sources`, `transcripts` and `hls` on EVERY surface,
- * because they were embedded in the document and therefore free. They are joins
- * now, and the tempting saving is to load them only on detail surfaces.
+ * `serializePodcast`/`serializeEpisode` emit `categories`, `funding`,
+ * `persons`, `sources`, `transcripts` and `hls` on EVERY surface, and clients
+ * rely on that. They are joins, and the tempting saving is to load them only on
+ * detail surfaces.
  *
  * That is a behaviour regression, and Task 11 shipped exactly it once already
  * (`collaborators` dropped from the playlist LIST surface, where two frontend
@@ -296,8 +296,7 @@ export interface ShowContext {
  * The replacement for `services/podcasts/episodeShowArtwork.ts`: ONE query over
  * the DISTINCT parent ids plus one for their image assets, never one per
  * episode. Episodes whose show is missing get no entry, which leaves their own
- * absent cover unchanged — the Mongo helper's behaviour exactly — and leaves
- * them treated as NOT owned, which is the safe direction.
+ * absent cover unchanged and leaves them treated as NOT owned, which is the safe direction.
  */
 export async function loadShowContext(
   episodeRows: readonly { podcastId: string }[],
@@ -366,10 +365,9 @@ export async function toPodcastDtos(
         : { isOwner: false, readyEpisodeCount: readyCounts.get(row.id) ?? 0 },
       /**
        * `?? []` rather than `?? undefined`, and the difference is on the wire: a
-       * show with no funding rows had an EMPTY ARRAY in Mongo (the schema
-       * declared `funding: [...]`, and Mongoose materialises a declared array
-       * path as `[]` rather than leaving it absent), so a client distinguishing
-       * "no funding" from "not loaded" keeps getting the same answer.
+       * show with no funding rows serializes an EMPTY ARRAY rather than leaving
+       * the field absent, so a client distinguishing "no funding" from "not
+       * loaded" gets a consistent answer.
        */
       categories: want('categories') ? (categories.get(row.id) ?? []) : undefined,
       funding: want('funding') ? (funding.get(row.id) ?? []) : undefined,

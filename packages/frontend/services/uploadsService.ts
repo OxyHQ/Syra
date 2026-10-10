@@ -103,7 +103,7 @@ export interface UploadRequest {
   title?: string;
   artistName?: string;
   albumName?: string;
-  /** Cover art as an uploaded image id (MongoDB ObjectId), never a URL or blob. */
+  /** Cover art as an uploaded image id, never a URL or blob. */
   coverArt?: string;
   /**
    * The ISRC the uploader says this recording has — the one field here that is

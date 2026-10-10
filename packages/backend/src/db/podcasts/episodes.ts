@@ -5,19 +5,17 @@
  * Same transaction discipline as `podcasts.ts`, and one thing that module does
  * not have to solve: the import path needs to know whether a per-episode upsert
  * INSERTED or UPDATED, because only a genuine insert is a new episode worth
- * notifying subscribers about. Mongo answered it with
- * `lastErrorObject.updatedExisting`; here it is {@link INSERTED}, `xmax = 0` on
+ * notifying subscribers about. The answer is {@link INSERTED}, `xmax = 0` on
  * the returned row — see that constant's comment.
  *
  * ## `updated_at` has to be written by hand on an upsert
  *
  * `@oxy.so/db`'s `updatedAt()` carries `$onUpdate(() => new Date())`, which
  * drizzle applies to `.update()` — and NOT to the `set` of an
- * `onConflictDoUpdate`. Mongo's `timestamps: true` moved it on every
- * `findOneAndUpdate`, upsert included. So every conflict path below sets it
- * explicitly. This is not cosmetic: `episode_progress.updated_at` is the sort
- * key of "continue listening", and an upsert that left it alone would freeze a
- * listener's resume list in whatever order it was first built.
+ * `onConflictDoUpdate`. So every conflict path below sets it explicitly. This
+ * is not cosmetic: `episode_progress.updated_at` is the sort key of "continue
+ * listening", and an upsert that left it alone would freeze a listener's
+ * resume list in whatever order it was first built.
  */
 
 import {
@@ -285,9 +283,6 @@ export async function countReadyEpisodesByShows(
  * instead returns a real `Date`, and it is served by
  * `episodes_podcast_id_pub_date_idx` (which leads with `podcast_id` and then
  * `pub_date desc`), so it is a one-row index probe rather than an aggregate.
- *
- * It is also what Mongo did — `findOne({podcastId}).sort({pubDate:-1})` — so the
- * two-query shape is the port rather than a concession.
  */
 export async function episodeStats(
   podcastId: string,
@@ -365,8 +360,8 @@ export async function findEpisodeArtworkState(
  * Playable episodes matching a query, through the GIN-indexed `search_vector`.
  *
  * The last of the two podcast regexes. `episodes.search_vector` is
- * `to_tsvector('english', title)` — title only, matching the Mongo filter, which
- * searched `title` and nothing else.
+ * `to_tsvector('english', title)` — episode search covers `title` and nothing
+ * else.
  */
 export async function searchEpisodeRows(
   query: string,
@@ -411,12 +406,10 @@ export async function findEpisodesCreditingPerson(
  *
  * `recordOnShow` exists because `podcasts.episode_count` and `last_episode_at`
  * are DERIVED facts about the episode set, so "this episode exists" and "the
- * show has one more episode" are one fact rather than two. The Task 12 review
- * (M2) found the counter bump sitting outside this transaction as a separate
- * call: a failure between them drifted a Syra-hosted show's counters
- * permanently, because only the RSS import path recomputes them from the rows
- * (`episodeStats`). That was parity with Mongo, which had no transaction to put
- * it in; here there is one, so it goes in it.
+ * show has one more episode" are one fact rather than two. A counter bump
+ * outside this transaction could fail after the insert and drift a
+ * Syra-hosted show's counters permanently, because only the RSS import path
+ * recomputes them from the rows (`episodeStats`).
  */
 export async function insertEpisode(
   values: typeof episodes.$inferInsert,
@@ -490,9 +483,8 @@ export async function upsertEpisodeFromFeed(input: {
    * Split from `set` rather than merged with it, because `episodes.title`,
    * `podcast_title`, `pub_date` and `source` are `NOT NULL` with no default: a
    * single `Partial` value object would let an insert missing one of them
-   * type-check and fail at runtime. Mongo accepted exactly that — a
-   * `findOneAndUpdate` upsert does not run validators, so a feed item with no
-   * title inserted a title-less episode.
+   * type-check and fail at runtime — a feed item with no title must not be able
+   * to reach the insert.
    */
   readonly insert: typeof episodes.$inferInsert;
   /** The columns a REFRESH overwrites — a subset of the insert, never a superset. */
@@ -578,9 +570,8 @@ export async function findEpisodeProgress(
 /**
  * Save a listener's position. Idempotent on `(oxy_user_id, episode_id)`.
  *
- * `durationSec` is only written when supplied — the Mongo handler built its
- * `$set` the same way, because a client that reports a position without a
- * duration must not zero the duration it reported earlier.
+ * `durationSec` is only written when supplied, because a client that reports a
+ * position without a duration must not zero the duration it reported earlier.
  */
 export async function upsertEpisodeProgress(
   oxyUserId: string,

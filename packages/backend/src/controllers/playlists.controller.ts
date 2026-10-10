@@ -35,14 +35,13 @@ interface PlaylistAuthRequest extends AuthRequest {
 }
 
 /**
- * Why a rejected cover art is no longer described as an ObjectId.
+ * Why a rejected cover art is not described by id shape.
  *
- * The message said "a valid MongoDB ObjectId string (24 hex characters)" and
- * the check behind it was `mongoose.Types.ObjectId.isValid`. Every image
- * uploaded since the cutover gets a uuid v7 from
- * `services/imageAssetService.ts`, so that check rejected every real cover art
- * id — a live 400 on a working upload. `isLiveEntityId` accepts both shapes,
- * which is what `albums.controller` already does.
+ * Every new image gets a uuid v7 from `services/imageAssetService.ts`, and a
+ * stored one may carry a 24-hex legacy id. `isLiveEntityId` accepts both
+ * shapes, which is what `albums.controller` does too, so the message names
+ * neither — a 24-hex-only check (or message) would reject every real cover art
+ * id, a 400 on a working upload.
  */
 const INVALID_COVER_ART = {
   error: 'Invalid coverArt',
@@ -130,11 +129,9 @@ async function canEditPlaylist(playlistId: string, userId: string): Promise<bool
  * The playlist, if this viewer may read it.
  *
  * `'forbidden'` covers a playlist that does not exist as well as one the
- * viewer may not see — the behaviour this endpoint has always had, since the
- * Mongo `canViewPlaylistById` answered `false` for a missing playlist and the
- * caller turned that into a 403 (which made the 404 branch after it dead
- * code). It is also the answer that leaks least: a 404 would tell a stranger
- * which private playlist ids are real.
+ * viewer may not see — the behaviour this endpoint has always had. It is also
+ * the answer that leaks least: a 404 would tell a stranger which private
+ * playlist ids are real.
  */
 async function readablePlaylist(
   playlistId: string,
@@ -272,10 +269,10 @@ export const createPlaylist = async (
       return res.status(400).json({ error: 'Playlist name is required' });
     }
 
-    // `playlists.visibility` carries a CHECK constraint; the Mongoose enum
-    // rejected a bad value with a 500 (a ValidationError from `save`). Parsed
-    // against the shared contract instead, so the client gets a 400 naming the
-    // field — the answer the update handler below already gave.
+    // `playlists.visibility` carries a CHECK constraint, which would reject a
+    // bad value with a 500. Parsed against the shared contract first, so the
+    // client gets a 400 naming the field — the answer the update handler below
+    // gives too.
     const requestedVisibility = playlistVisibilitySchema.optional().safeParse(visibility);
     if (!requestedVisibility.success) {
       return res.status(400).json({ error: 'Invalid visibility value' });
@@ -447,10 +444,10 @@ export const deletePlaylist = async (req: AuthRequest, res: Response, next: Next
     }
 
     // `playlist_tracks`, `playlist_collaborators`, `playlist_sources` and
-    // `user_saved_playlists` all reference this row `on delete cascade`, so the
-    // explicit `PlaylistTrackModel.deleteMany` this replaced is gone — and so
-    // are the saved-playlist rows the Mongo path never cleaned up, a real
-    // orphan documented in `db/schema/library.ts`.
+    // `user_saved_playlists` all reference this row `on delete cascade`, so
+    // deleting the playlist removes its tracks, collaborators, sources and
+    // every user's saved-playlist row with it — no explicit cleanup, and no
+    // orphans.
     await getDb().delete(playlists).where(eq(playlists.id, id));
 
     res.status(204).send();
@@ -519,9 +516,9 @@ export const addTracksToPlaylist = async (req: AuthRequest, res: Response, next:
       if (newTrackIds.length === 0)
         throw new PlaylistAccessError(400, 'All tracks are already in the playlist');
 
-      // Clamped into the playlist rather than used raw. The Mongo version
-      // shifted by `$inc` from `position` verbatim, so a position past the end
-      // left a GAP in the ordering and a non-numeric one wrote `NaN`.
+      // Clamped into the playlist rather than used raw: used verbatim, a
+      // position past the end would leave a GAP in the ordering and a
+      // non-numeric one would write `NaN`.
       const requested = Number(position);
       const insertAt =
         position === undefined || !Number.isFinite(requested)

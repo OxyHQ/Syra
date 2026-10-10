@@ -8,11 +8,9 @@
  * RecentlyPlayed,PlaybackState,Device}.ts`, field by field, against
  * `packages/backend/docs/db/RELATIONS.md` for every foreign key.
  *
- * **`models/*.ts` citations below are HISTORICAL.** They name the Mongoose
- * source each column was ported from, and several of those files no longer
- * exist — a port finishes by deleting the model once nothing imports it. A
- * citation resolving to no file means that vertical is done, not that the
- * reference is wrong.
+ * **`models/*.ts` citations below are HISTORICAL.** They name the model file
+ * each column's shape was taken from, and those files no longer exist. A
+ * citation resolving to no file is expected, not a wrong reference.
  *
  * ## `Library` ceases to exist
  *
@@ -22,8 +20,8 @@
  * arrays gone as real junction tables (`userLikedTracks`, `userSavedAlbums`,
  * `userFollowedArtists`, `userSavedPlaylists`, `userPodcastSubscriptions`,
  * each `(oxy_user_id, target_id)`, unique), the document has nothing left in
- * it — it was only ever a container Mongo forced on a set of independent
- * many-to-many relations. RELATIONS.md classifies all five as `CASCADE
+ * it — it was only ever a container around a set of independent many-to-many
+ * relations. RELATIONS.md classifies all five as `CASCADE
  * (target-side)`: `$addToSet`/`$pull` in `controllers/library.controller.ts`
  * already treat each array as an idempotent SET, which the `unique(oxy_user_id,
  * *_id)` constraint on every junction below enforces for real rather than by
@@ -45,28 +43,21 @@
  * triggers/episodePublished.ts` reverse-joins it (`listSubscriberIds`, the
  * fan-out to every subscriber on a new episode) — the one junction of the five
  * with a real reverse-read, not just the forward "this user's list" one every
- * `unique(oxy_user_id, *_id)` already serves as a leading-column index. This
- * was the one junction Task 11 could not port, because its writer was still
- * Mongoose; Task 12 moved both.
+ * `unique(oxy_user_id, *_id)` already serves as a leading-column index.
  *
  * ## The five junctions carry `created_at`, and it is not decoration
  *
- * A Mongo array is ORDERED, and `$addToSet` appends, so the document recorded
- * when each membership was added simply by where it sat. Two surfaces read
- * that ordering: `services/radio/radioSeed.ts` seeds a station from the
+ * Membership order matters: two surfaces read it: `services/radio/radioSeed.ts` seeds a station from the
  * freshest likes (`likedTracks.slice(-N)` — "the tail is the freshest
- * signal"), and `controllers/library.controller.ts` hands each array back in
- * the order it stored it. A junction table has no intrinsic order, so without
+ * signal"), and `controllers/library.controller.ts` hands each list back in
+ * the order it was added. A junction table has no intrinsic order, so without
  * this column both become arbitrary — and the only thing that would have
  * looked like an answer is ordering by the uuid v7 primary key, which is
  * time-sortable by an accident of how `generatedId` mints ids rather than by
- * anything this schema promises. Task 11 added the column rather than lean on
- * that.
+ * anything this schema promises. So the column carries it explicitly.
  *
- * `user_podcast_subscriptions` got it too, at a point when its writer
- * (`controllers/podcasts.controller.ts`) was still Mongoose and could not use
- * it: five sibling tables that differ in shape for no reason a reader can see
- * is how a schema starts drifting. Task 12 ported that writer, and
+ * `user_podcast_subscriptions` has it too — five sibling tables that differ in
+ * shape for no reason a reader can see is how a schema starts drifting — and
  * `listSubscribedPodcastIds` orders by this column exactly as the four
  * siblings do.
  *
@@ -130,8 +121,7 @@
  * `track_sources.position`, `album_sources.position`,
  * `catalog_entity_sources.position`, `lyrics_lines.position`,
  * `musicbrainz_artist_urls.position`) — `order` is also a reserved SQL
- * keyword. A schema-wide naming decision, not a Mongo field this port is
- * required to preserve verbatim.
+ * keyword. A schema-wide naming decision.
  */
 
 import { sql } from 'drizzle-orm';
@@ -218,10 +208,9 @@ export const playlists = pgTable(
     ),
     index('playlists_owner_oxy_user_id_created_at_idx').on(t.ownerOxyUserId, t.createdAt.desc()),
     /**
-     * Replaces Mongo's standalone `{ visibility: 1, followers: -1 }` index.
      * `browse.controller.ts`'s made-for-you and discover sections both query
      * `{ visibility: PlaylistVisibility.PUBLIC }` sorted `{ followers: -1,
-     * createdAt: -1 }` and NEVER browse any other visibility — the same "port
+     * createdAt: -1 }` and NEVER browse any other visibility — the same "index
      * what the real query needs, partial on the predicate it actually filters
      * on" decision Task 2 made for `tracks`' playability indexes.
      */
@@ -256,15 +245,14 @@ export const playlistTracks = pgTable(
     addedAt: timestamptz().notNull(),
     /** An Oxy account id — no foreign key. Not `*_id`-suffixed. */
     addedBy: text(),
-    /** `Mongo`'s `order` — renamed; see the file-level doc comment. */
+    /** Called `position`, not `order`; see the file-level doc comment. */
     position: integer().notNull(),
   },
   (t) => [
     check('playlist_tracks_position_check', sql`${t.position} >= 0`),
-    // Matches Mongo's unique `{ playlistId: 1, order: 1 }`.
+    // One track per slot in a playlist.
     unique('playlist_tracks_playlist_id_position_key').on(t.playlistId, t.position),
-    // Matches Mongo's plain (non-unique) `{ playlistId: 1, trackId: 1 }` —
-    // the "does this playlist already have track X" existence check in
+    // Plain (non-unique) — the "does this playlist already have track X" existence check in
     // `controllers/playlists.controller.ts`'s add-tracks flow.
     index('playlist_tracks_playlist_id_track_id_idx').on(t.playlistId, t.trackId),
   ],

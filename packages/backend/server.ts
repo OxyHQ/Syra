@@ -417,11 +417,9 @@ app.get('/health', async (_req, res) => {
       isRedisConnected(),
     ]);
 
-    // What /health has reported as "database" since the migration finished: the
-    // POSTGRES pool, which is now the only one. It reported Mongo's
-    // `readyState` until Task 8 removed the last Mongoose model — and a health
-    // endpoint answering about a database the service no longer opens is worse
-    // than one answering nothing, because it reads as green forever.
+    // "database" is the POSTGRES pool, the only one this service opens. A health
+    // endpoint answering about any other database would be worse than one
+    // answering nothing, because it would read as green forever.
     const dbStats = {
       engine: 'postgres' as const,
       state: dbConnected ? 'connected' : 'disconnected',
@@ -482,13 +480,11 @@ app.use(
 
 const bootServer = async () => {
   /**
-   * PostgreSQL, and now the only database this service opens.
+   * PostgreSQL, the only database this service opens.
    *
    * Log-and-continue, which is what every route here expects: `withDb` answers
    * 503 per request when the pool is down, so a boot that failed closed would
-   * trade a degraded service for an outage. (It is also what the Mongo
-   * connection that used to sit beside this one did, which is why the routes
-   * were written against those semantics in the first place.)
+   * trade a degraded service for an outage.
    *
    * This is about a database that is UNREACHABLE. An unset or non-`postgres://`
    * `DATABASE_URL` is a different failure and never gets here: `config/env.ts`

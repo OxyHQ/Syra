@@ -31,9 +31,8 @@ export function getErrorStack(error: unknown): string | undefined {
  * A catch value rendered safely for a log field or a response body.
  *
  * Route handlers overwhelmingly do two things with a caught error: put it in a
- * `logger.error` field, and put its `.message` in the JSON they return. Both
- * were harmless while the errors came from Mongoose. They stopped being harmless
- * when the handlers started issuing SQL: a postgres.js error carries `query`,
+ * `logger.error` field, and put its `.message` in the JSON they return. Neither
+ * is harmless for a database error: a postgres.js error carries `query`,
  * `params` and `detail`, so `logger.error(msg, { error })` writes the whole
  * statement and every bound parameter into the log, and `.message` can carry a
  * `detail` string built from the offending ROW.

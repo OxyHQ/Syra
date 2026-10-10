@@ -202,8 +202,8 @@ describe('parseFpcalcOutput', () => {
 
 describe('compareFingerprints — bit arithmetic', () => {
   it('counts every one of the 32 bits, including the sign bit', () => {
-    // -1 is all ones; 0 is all zeros. Signed int32 is how MongoDB stores these,
-    // so a popcount that lost the sign bit would silently under-report by 1/32.
+    // -1 is all ones; 0 is all zeros. Signed int32 is how these are stored, so
+    // a popcount that lost the sign bit would silently under-report by 1/32.
     const allOnes = Array.from({ length: FINGERPRINT_MIN_OVERLAP_ITEMS }, () => -1);
     const allZeros = Array.from({ length: FINGERPRINT_MIN_OVERLAP_ITEMS }, () => 0);
     const comparison = compareFingerprints(allOnes, allZeros);

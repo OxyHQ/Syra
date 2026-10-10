@@ -23,12 +23,11 @@ import type { NextFunction, Response } from 'express';
  * The playlists API on Postgres.
  *
  * What this file is FOR, over and above `db/library/__tests__/playlists.test.ts`
- * (which owns the queries): the handler-level decisions the port changed, each
- * of which is a wire-visible behaviour nothing else asserts —
+ * (which owns the queries): the handler-level decisions, each of which is a
+ * wire-visible behaviour nothing else asserts —
  *
- *  - a cover art id is now validated with `isLiveEntityId` rather than
- *    `mongoose.Types.ObjectId.isValid`, which rejected every uuid v7 the image
- *    service has minted since the cutover;
+ *  - a cover art id is validated with `isLiveEntityId`, which accepts the uuid
+ *    v7 the image service mints as well as a 24-hex legacy id;
  *  - an unknown cover art is a 400 rather than an unhandled `23503`;
  *  - `position` is clamped into the playlist instead of writing a gap or `NaN`;
  *  - a request naming the same track twice adds it once;
@@ -158,13 +157,11 @@ describe('POST /api/playlists', () => {
   });
 
   /**
-   * The live defect this port fixes.
-   *
    * `services/imageAssetService.ts` mints a uuid v7 for every uploaded image,
-   * and the guard here was `mongoose.Types.ObjectId.isValid` — which accepts
-   * only a 24-char hex string. Every real cover art id was therefore a 400.
+   * so a guard that accepts only a 24-char hex string would answer 400 for
+   * every real cover art id.
    */
-  it('accepts a uuid v7 cover art id, which the ObjectId guard rejected', async () => {
+  it('accepts a uuid v7 cover art id, which a 24-hex-only guard would reject', async () => {
     const coverArtId = await makeImageAsset('#ff0000');
     const res = await createThrough({ name: 'With art', coverArt: coverArtId });
 
@@ -366,8 +363,8 @@ describe('POST /api/playlists/:id/tracks', () => {
       next,
     );
 
-    // Position 0 on a two-track playlist: the Mongo `$inc` shift this replaced
-    // is a duplicate-key error against `unique(playlist_id, position)`.
+    // Position 0 on a two-track playlist: a naive in-place `position + 1`
+    // shift is a duplicate-key error against `unique(playlist_id, position)`.
     await addTracksToPlaylist(
       makeReq({ params: { id }, body: { trackIds: [c], position: 0 }, userId: OWNER }),
       makeRes() as unknown as Response,
@@ -378,10 +375,9 @@ describe('POST /api/playlists/:id/tracks', () => {
   });
 
   /**
-   * The Mongo version used `position` verbatim, so a value past the end left a
-   * GAP in the ordering and a non-numeric one wrote `NaN`. Both are clamped
-   * into the playlist now — positions are `0…n-1`, which is what the removal
-   * path already assumed.
+   * Used verbatim, a `position` past the end would leave a GAP in the ordering
+   * and a non-numeric one would write `NaN`. Both are clamped into the
+   * playlist — positions are `0…n-1`, which is what the removal path assumes.
    */
   it('clamps a position past the end and a non-numeric one', async () => {
     const id = bodyId(await createThrough({ name: 'Mix' }));
@@ -507,9 +503,9 @@ describe('DELETE and reorder', () => {
   });
 
   /**
-   * A partial reorder. The Mongo version left the unnamed rows at whatever
-   * position they already held, which collides with a newly assigned one; here
-   * they keep their relative order AFTER the named ones.
+   * A partial reorder. Leaving the unnamed rows at whatever position they
+   * already held would collide with a newly assigned one; instead they keep
+   * their relative order AFTER the named ones.
    */
   it('puts the tracks a partial reorder did not name after the ones it did', async () => {
     const { id, ids } = await seedThree();
@@ -611,12 +607,10 @@ describe('GET /api/playlists', () => {
   /**
    * The list surface carries `collaborators`, and the review is why.
    *
-   * The Mongo serializer spread the whole document, so it always did; the first
-   * drizzle port dropped it because the batch serializer omits it for discovery
-   * shelves. Inert while nothing writes that table — but `PlaylistActionsSheet`
-   * and `app/playlist/[id].tsx` both derive "can this user edit" from it, so
-   * the first writer would have silently cost editors their rights on this
-   * surface and nowhere else.
+   * The batch serializer omits it for discovery shelves, so the list surface
+   * adds it explicitly. `PlaylistActionsSheet` and `app/playlist/[id].tsx` both
+   * derive "can this user edit" from it, so dropping it would silently cost
+   * editors their rights on this surface and nowhere else.
    *
    * The fixture puts a collaborator on ONE of two playlists, so a serializer
    * that attached the same list to every row — the shape a batch loader gets

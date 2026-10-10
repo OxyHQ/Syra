@@ -119,7 +119,7 @@ export function maybeCacheEpisode(episode: {
   enclosureUrl: string | null;
   popularity: number;
   playCount: number;
-  /** `null` is what an absent Mongo `cache` subdocument became. */
+  /** `null` when the episode has no cache state at all. */
   cacheStatus: 'none' | 'cached' | 'hls' | null;
 }): void {
   if (episode.source !== 'rss' || !episode.enclosureUrl) return;

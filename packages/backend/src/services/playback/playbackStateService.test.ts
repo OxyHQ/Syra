@@ -23,9 +23,8 @@ const USER = 'user-state-test';
 /**
  * Every track id this suite names, as real rows.
  *
- * `playback_states.track_id` is a real `.references(() => tracks.id)` — Mongo
- * had no such constraint, so these fixtures used to be bare strings naming
- * nothing. The ids are inserted verbatim rather than generated, because the
+ * `playback_states.track_id` is a real `.references(() => tracks.id)`, so a
+ * fixture cannot be a bare string naming nothing. The ids are inserted verbatim rather than generated, because the
  * queue-navigation assertions are written against their ORDER ("next from b
  * goes to c"), which a generated id would make unreadable.
  */
@@ -288,9 +287,7 @@ describe('handleDeviceDisconnect — failover', () => {
   });
 
   it('no other active device: disconnect d1 → paused, activeDeviceId CLEARED', async () => {
-    // The one place the drizzle/Mongoose difference bites. The document version
-    // assigned `undefined` and `.save()` turned it into `$unset`; an
-    // `undefined` in a drizzle `set` is dropped from the UPDATE, which would
+    // An `undefined` in a drizzle `set` is dropped from the UPDATE, which would
     // leave the departed device named as active on a paused state forever.
     // Asserted against the STORED row, not just the returned one.
     await registerDevice(USER, { deviceId: D1, name: 'Web', type: 'web' });

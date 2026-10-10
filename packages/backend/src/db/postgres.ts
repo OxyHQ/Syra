@@ -98,22 +98,11 @@ export function getDb(): OxyDatabase<typeof schema> {
  * Whether the pool is open. **The only connectivity question left**, and every
  * gate in the tree asks it.
  *
- * It is worth knowing why this is emphatic for a function this small. Gates here
- * used to call `utils/database.ts`'s `isDatabaseConnected()` — Mongoose
- * readiness — while the reads underneath them were all drizzle, which is the
- * wrong database in both directions: Mongo down and Postgres up answered 503 for
- * an endpoint that would have worked, and Postgres down with Mongo up sailed
- * past the guard and threw inside the handler. `tsc` could not see it, and
- * neither could a suite that opened both databases, which is how it survived six
- * verticals.
- *
- * That whole class of bug is now closed by construction rather than by a check:
- * Mongoose, `utils/database.ts` and the last four models are gone, so there is
- * no second readiness flag left to ask the wrong one of. The scanner that
- * policed it (`db/__tests__/connectivityGates.test.ts`, which walked each gated
- * entry point's import graph looking for a Mongoose model) was retired with its
- * subject — a gate whose violation is now unrepresentable is a gate that can
- * only ever pass.
+ * It is emphatic for a function this small because a gate that asks a
+ * readiness flag other than the one for the database its reads actually use is
+ * wrong in both directions: it 503s an endpoint that would have worked, and lets
+ * a request past the guard to throw inside the handler. There is exactly one
+ * readiness flag, so that class of bug is closed by construction.
  */
 export function isPostgresConnected(): boolean {
   return handle !== null;

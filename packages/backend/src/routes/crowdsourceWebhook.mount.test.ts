@@ -76,7 +76,7 @@ let harness: Harness | undefined;
 beforeAll(connectDb);
 afterAll(disconnectDb);
 
-/** How many rows a table holds, as `countDocuments` answered under Mongoose. */
+/** How many rows a table holds. */
 async function rowsIn(table: typeof moderationEvents | typeof moderationOutbox): Promise<number> {
   const [row] = await getDb().select({ total: count() }).from(table);
   return row?.total ?? 0;

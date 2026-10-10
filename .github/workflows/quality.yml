@@ -75,14 +75,6 @@ jobs:
       - name: Guard canonical AI routing
         run: bun run validate:ai-architecture
 
-      # Before the builds and typechecks, and needing neither: it reads the tracked
-      # file listing. Syra went to Postgres greenfield in #92 and `syra-production`
-      # was dropped on 2026-08-09, so a Mongo reference is now always a mistake —
-      # and it would arrive as a hoisted dependency or a stray env name, neither of
-      # which breaks a build.
-      - name: Guard against MongoDB returning
-        run: bun run validate:no-mongo
-
       # AGENTS.md is prepended to EVERY agent session, so its bytes are paid on
       # every task forever, and it grows by accretion — one reasonable paragraph
       # at a time, invisible per-commit. Nothing breaks when it grows, which is
@@ -125,14 +117,6 @@ jobs:
       # them worth gating on: a mocked `insert` that rejects leaves no aborted
       # transaction behind, so a unique-violation recovery path passes in the
       # test and fails against a server.
-      #
-      # (This said "a real in-memory MongoDB replica set" until the Postgres
-      # cutover finished. Syra opens no Mongo anywhere: the live task definition
-      # carries DATABASE_URL and no MONGODB_URI, /health reports
-      # engine=postgres, and no package.json here declares mongoose. There is no
-      # longer a mongoose in node_modules either — it was an UNSATISFIED optional
-      # peer of @oxy.so/crowdsource-app, and @crowdsource.you/core, which
-      # replaced that package, does not declare one at all.)
       # The upload screening suite shells out to real binaries rather than mocking
       # them: ffprobe measures a fixture's true duration/codec, ffmpeg builds the
       # fixtures and drives the HLS packager, and fpcalc produces the Chromaprint

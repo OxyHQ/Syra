@@ -101,16 +101,16 @@ export const RAW_TAGS_MAX_BYTES = 32 * 1024;
  * file again, and debugging the extractor itself.
  *
  * NEVER SERVED TO A CLIENT. That is enforced mechanically rather than by
- * convention — the Mongoose paths are `select: false`, so a query does not fetch
- * it unless it explicitly asks, and it is absent from
+ * convention — the columns are protected server-side, so a query does not fetch
+ * them unless it explicitly asks, and it is absent from
  * {@link userUploadAsTrackSchema}, the DTO that actually goes over the wire. A
  * future serializer therefore cannot leak it by spreading a document, because
  * the document it spreads does not contain it.
  *
  * Stored as a JSON STRING, not a nested object: tag keys are arbitrary
  * user-supplied text (`TXXX` descriptions, Vorbis comments, iTunes `----`
- * atoms), and a key with a `$` or a `.` in it is a document Mongo will fight
- * over. A string is inert. `truncated` and `originalByteLength` are what make a
+ * atoms), and a key with a `$` or a `.` in it is awkward for any structured
+ * store. A string is inert. `truncated` and `originalByteLength` are what make a
  * capped dump honest — without them a truncated payload reads as a complete one.
  */
 export const rawTagsSchema = z.object({
@@ -339,7 +339,7 @@ export const uploadTrackRequestSchema = z.object({
    * being a stranger's guess.
    */
   isrc: isrcSchema.optional(),
-  /** Cover art as an uploaded image id (MongoDB ObjectId), never a URL or blob. */
+  /** Cover art as an uploaded image id, never a URL or blob. */
   coverArt: z.string().optional(),
   isExplicit: z.boolean().optional(),
   /**

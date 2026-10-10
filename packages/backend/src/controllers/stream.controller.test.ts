@@ -15,9 +15,8 @@ import type { Response } from 'express';
 process.env.STREAM_TOKEN_SECRET = 'test-secret-stream-controller';
 
 /**
- * One database. The catalogue, the HLS ladder, the content key and — since Task
- * 15 — the listener's music preferences are all Postgres, so the Mongo hooks
- * this file carried alongside them are gone.
+ * One database. The catalogue, the HLS ladder, the content key and the
+ * listener's music preferences are all Postgres.
  */
 beforeAll(connectDb);
 afterEach(clearDb);
@@ -84,11 +83,10 @@ const KEY_HEX = 'deadbeefdeadbeefdeadbeefdeadbeef';
 /**
  * An id in the shape `generatedId()` mints, for the "no such row" cases.
  *
- * These were `new mongoose.Types.ObjectId().toString()`. A 24-char hex still
- * passes `isLiveEntityId` — both spellings are accepted, deliberately, because
- * ids carried over from Mongo are real — so an ObjectId fixture would keep
- * asserting 404 and never notice if the guard stopped accepting the id space
- * every NEW row is written in.
+ * Not a 24-char hex. That still passes `isLiveEntityId` — both spellings are
+ * accepted, deliberately, because 24-hex legacy ids are real — so a 24-hex
+ * fixture would keep asserting 404 and never notice if the guard stopped
+ * accepting the id space every NEW row is written in.
  */
 function absentId(): string {
   return uuidv7();

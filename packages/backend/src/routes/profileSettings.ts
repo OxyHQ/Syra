@@ -45,12 +45,11 @@ const router = Router();
  * what that PR narrowed. `db/user/settings.ts` holds the column lists and
  * `schema/protectedColumns.ts` is the structural guard behind them.
  *
- * ## `null` clears a field, and under Mongoose it did not
+ * ## `null` clears a field
  *
- * Five fields below accept `null` to mean "clear this". The Mongo handler
- * expressed that by putting `undefined` in its `$set`, which Mongoose strips out
- * of an update — so every one of those branches was a no-op and the field kept
- * its old value. They work here. See {@link updateUserSettings}.
+ * Five fields below accept `null` to mean "clear this". An `undefined` in an
+ * update is stripped out, so clearing must be spelled `null` or the field keeps
+ * its old value. See {@link updateUserSettings}.
  */
 
 // Apply auth middleware to all routes
@@ -107,9 +106,7 @@ function clamped(value: unknown, min: number, max: number): number | undefined {
  * `undefined` when they did not mention the field at all.
  *
  * The three-way result is the point: `undefined` leaves the column alone and
- * `null` clears it, which is the distinction `$set: { x: undefined }` could not
- * express. A string that trims to empty means "clear" for the same reason it did
- * in the Mongo handler — `.trim() || undefined` there, `null` here.
+ * `null` clears it. A string that trims to empty means "clear" too.
  */
 function trimmedOrCleared(value: unknown): string | null | undefined {
   if (value === null) return null;
@@ -207,9 +204,7 @@ function buildSettingsPatch(body: Record<string, unknown>): UserSettingsPatch {
 
   if (body.interests) {
     const interests = asRecord(body.interests);
-    // An absent or null `tags` CLEARS the list — the Mongo handler's one
-    // clearing path that actually worked, because it assigned `[]` rather than
-    // `undefined`.
+    // An absent or null `tags` CLEARS the list.
     patch.interestsTags = Array.isArray(interests.tags)
       ? interests.tags.filter((tag): tag is string => typeof tag === 'string')
       : [];
@@ -224,8 +219,8 @@ function buildSettingsPatch(body: Record<string, unknown>): UserSettingsPatch {
       put(patch, 'feedDiversitySameAuthorPenalty', clamped(diversity.sameAuthorPenalty, 0.5, 1.0));
       put(patch, 'feedDiversitySameTopicPenalty', clamped(diversity.sameTopicPenalty, 0.5, 1.0));
 
-      // The one bounded number the Mongo handler ROUNDED as well as clamped,
-      // which is why its column is `integer` and the other four are not.
+      // The one bounded number that is ROUNDED as well as clamped, which is
+      // why its column is `integer` and the other four are not.
       if (typeof diversity.maxConsecutiveSameAuthor === 'number') {
         patch.feedDiversityMaxConsecutiveSameAuthor = Math.max(
           1,

@@ -31,11 +31,9 @@ import type { NextFunction, Response } from 'express';
  * a real foreign key, so the alternative was a `23503` reaching the client as a
  * 500.
  *
- * BOTH stores, because `likeTrack` and `followArtist` fold the action into the
- * listener's taste profile and `UserTasteProfile` is Task 15's — still
- * Mongoose. Without a Mongo connection those handlers do not fail, they HANG:
- * Mongoose buffers the command until a connection arrives, so the symptom is a
- * 5-second test timeout naming the test rather than the missing store.
+ * `likeTrack` and `followArtist` also fold the action into the listener's taste
+ * profile, and `user_taste_profiles` is a Postgres table too, so opening
+ * Postgres is the whole dependency.
  */
 
 beforeAll(async () => {

@@ -185,8 +185,7 @@ async function persistGraph(kind: RelationKind, graph: MinedGraph): Promise<numb
 
   // Drop the previous graph for this kind, then write the fresh one — now in ONE
   // transaction (`replaceRelationGraph`), so readers see the old graph until the
-  // new one commits instead of an empty one in between. The Mongo version's
-  // `upsert: true` has nothing left to do once the two are atomic: after the
-  // delete there is no row to conflict with.
+  // new one commits instead of an empty one in between. No upsert is needed:
+  // after the delete there is no row to conflict with.
   return replaceRelationGraph(kind, edges);
 }

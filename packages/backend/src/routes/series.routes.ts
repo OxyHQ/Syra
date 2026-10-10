@@ -258,10 +258,9 @@ router.patch('/:id', async (req: AuthRequest, res: Response) => {
     }
 
     /**
-     * `null` CLEARS and `undefined` LEAVES ALONE. The Mongoose original assigned
-     * `undefined` to clear, which `save()` turned into `$unset`; drizzle DROPS an
-     * `undefined`-valued key, so carrying that spelling forward would make
-     * "remove the cover image" silently keep the old one.
+     * `null` CLEARS and `undefined` LEAVES ALONE. Drizzle DROPS an
+     * `undefined`-valued key, so using `undefined` to clear would make "remove
+     * the cover image" silently keep the old one.
      */
     const update: UpdateSeriesInput = {};
 

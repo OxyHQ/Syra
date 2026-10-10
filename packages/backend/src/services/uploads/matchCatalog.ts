@@ -180,11 +180,8 @@ async function findCatalogTrackByHash(sha256: string): Promise<MatchedTrack | nu
 /**
  * The uploader's own locker — the only locker any match may look inside.
  *
- * The Mongo read spelled "not soft-deleted" as `deletedAt: { $exists: false }`
- * while `uploads.controller` spelled the same thing `deletedAt: null`. Those
- * are different predicates in Mongo and agreed only because nothing ever stored
- * an explicit null; `deleted_at is null` is both of them, so the divergence
- * disappears at the port rather than being carried forward.
+ * "Not soft-deleted" is `deleted_at is null`, the same single spelling
+ * `uploads.controller` uses.
  */
 async function findOwnUploadByHash(
   sha256: string,
@@ -340,9 +337,8 @@ async function findCatalogTrackByFuzzy(
       normalizeForFuzzy(c.title) === normTitle &&
       normalizeForFuzzy(c.artistName) === normArtist
     ) {
-      // The row already carries everything a match needs. The Mongo version
-      // re-read the document here "so callers can mutate and save" — no caller
-      // ever did; `matchCatalog` hands the result straight to `asTrackMatch`.
+      // The row already carries everything a match needs; `matchCatalog` hands
+      // the result straight to `asTrackMatch`.
       return { id: c.id, artistId: c.artistId, artistName: c.artistName };
     }
   }

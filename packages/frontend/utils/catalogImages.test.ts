@@ -7,7 +7,7 @@ import {
 const API_IMAGES = 'http://localhost:4120/api/images';
 
 describe('catalog image URL normalization', () => {
-  it('turns a Mongo image id into an absolute backend image URL', () => {
+  it('turns a 24-hex image id into an absolute backend image URL', () => {
     expect(resolveCatalogImageUrl('111111111111111111111111')).toBe(
       `${API_IMAGES}/111111111111111111111111`,
     );

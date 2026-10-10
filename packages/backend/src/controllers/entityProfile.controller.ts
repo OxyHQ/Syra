@@ -44,11 +44,9 @@ const APPEARS_IN_CAP = 50;
  * deleted: `toArtistDto` returns an `Artist`, and every field read below is now
  * checked against the DTO it comes from.
  *
- * `members` in particular reached the wire only because the Mongo formatter
- * SPREAD the document. `toArtistDto` is an allowlist, and it did not name
- * `members` — on a comment claiming the column had no reader anywhere, which
- * `schema/catalog.ts` had already corrected in two places without the claim
- * being grepped out of `serialize.ts`. This controller is the reader.
+ * `members` is read below. `toArtistDto` is an allowlist, so a column it does
+ * not name never reaches the wire whatever its readers expect — this
+ * controller is the reader `members` is named for.
  */
 
 /** The display fields shared by the old artist screen — pulled from the artist DTO. */
@@ -154,12 +152,10 @@ async function loadArtistSections(
 /**
  * Adapt an entity row to the id-shaped source the profile sections take.
  *
- * 10b added this to move `_id` → `id` at one place instead of two, and predicted
- * it would disappear once 10c read `catalog_entities` through drizzle. It has
- * not, and the reason is `sources`: Mongo carried it as an embedded array on the
- * document, Postgres keeps it in `catalog_entity_sources`, so the caller loads
- * it and hands it in. `null` → `undefined` on every optional field for the same
- * reason `PreviewSourceRef` needs it — `ArtistProfileSource` declares them
+ * It exists because of `sources`: the provenance lives in
+ * `catalog_entity_sources`, not on the row, so the caller loads it and hands it
+ * in. `null` → `undefined` on every optional field for the same reason
+ * `PreviewSourceRef` needs it — `ArtistProfileSource` declares them
  * `?:`, not nullable, and `loadProfileState` distinguishes `undefined` from a
  * value on three of them.
  */
@@ -182,9 +178,9 @@ function toArtistProfileSource(
 /**
  * `catalog_entity_sources` for one entity, in stored order.
  *
- * A child table since the port, so the provenance the profile shows is a second
- * read rather than a field on the document. Ordered by `position`, which is the
- * only thing that preserves the array order Mongo had.
+ * A child table, so the provenance the profile shows is a second read rather
+ * than a field on the row. Ordered by `position`, which is the only thing that
+ * preserves the sources' stored order.
  */
 async function loadEntitySources(entityId: string): Promise<SourceProvenance[]> {
   const rows = await getDb()
@@ -269,10 +265,6 @@ async function loadAppearsIn(person: PersonLike): Promise<EntityAppearsIn> {
  * Exported for `search.controller`, which needs the identical mapping for the
  * people category. One adapter, not two: duplicating the bridge is how the two
  * surfaces would start disagreeing about which columns a person carries.
- *
- * `_id` is `id` since Task 12: the field was spelled that way only so a Mongoose
- * document could satisfy the same type during the split, and nothing
- * Mongo-shaped reaches either function any more.
  */
 export function toPersonLike(person: PublicCatalogEntityRow): PersonLike {
   return {
@@ -303,35 +295,12 @@ export function toPersonLike(person: PublicCatalogEntityRow): PersonLike {
 export const getEntityProfile = async (req: Request, res: Response, next: NextFunction) => {
   try {
     /**
-     * BOTH connections, which is what this handler actually needs.
-     *
-     * The guard used to be `isDatabaseConnected()` alone — MONGOOSE readiness
-     * (`mongoose.connection.readyState === 1`) — and that was already wrong
-     * before this task and got wronger with it: every read on the direct path
-     * here is Postgres (`catalog_entities`, `tracks`, and since Task 12
-     * `podcasts`/`episodes` and their credit tables), so a process with Postgres
-     * down answered 200 with a failure behind it.
-     *
-     * It was not `isPostgresConnected()` alone either, and the reason was worth
-     * naming because a grep of THIS file would not find it: `loadArtistSections`
-     * calls `services/catalog/artistProfile.ts`, which read
-     * `ContributionAttestationModel` — Task 13's collection. Mongoose BUFFERS a
-     * query issued with no connection rather than throwing, so dropping the
-     * Mongo half turned an artist profile into a request that never answers
-     * rather than a 503. Measured: two cases in this controller's own suite hung
-     * for the full 5s timeout the moment the Mongo connection went away.
-     *
-     * **That reason is now spent, and the Mongo half is gone.** Task 13 ported
-     * `contribution_attestations` and `artistProfile.ts` reads Postgres, so this
-     * controller has no Mongoose read left, direct or transitive — re-verified
-     * by walking all 31 files it reaches, none of which imports a model. Task 15
-     * took the change this block was waiting for, alongside the same call in
-     * `recommendations.controller`.
-     *
-     * Two things it was costing: Mongo down with Postgres up answered 503 for a
-     * profile that would have rendered, and at Task 19 `readyState` never
-     * reaches 1 again, so the route would have 503'd for everyone, permanently
-     * and silently.
+     * Postgres readiness, because every read this handler makes is Postgres,
+     * direct or transitive: `catalog_entities`, `tracks`, `podcasts`/`episodes`
+     * and their credit tables, and — through `loadArtistSections` →
+     * `services/catalog/artistProfile.ts`, which a grep of THIS file would not
+     * find — `contribution_attestations`. With Postgres down the handler answers
+     * 503 rather than a 200 with a failure behind it.
      */
     if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
@@ -354,9 +323,8 @@ export const getEntityProfile = async (req: Request, res: Response, next: NextFu
       const [formatted, music, linkedPerson, sources] = await Promise.all([
         toArtistProfile(entity),
         loadArtistMusic(id),
-        // `type = 'person'` is stated, not implied. Mongoose's discriminator
-        // injected it into `PersonModel.findOne`; one table with a `type`
-        // column does not, and the column is nullable for artists — so an
+        // `type = 'person'` is stated, not implied. One table with a `type`
+        // column does not scope itself, and the column is nullable for artists — so an
         // unscoped read here could resolve a person link to a non-person row.
         getDb()
           .select(publicColumns(catalogEntities, PROTECTED_COLUMNS_BY_TABLE))

@@ -229,15 +229,11 @@ async function findHlsRenditions(trackId: string): Promise<HlsRendition[]> {
 /**
  * The PLAYBACK authority, and the third of the three predicates.
  *
- * It was `isAvailable !== false && !copyrightRemoved` against Mongo, where both
- * fields were optional — so it disagreed with the catalog filter on an absent
- * `isAvailable` and with the in-memory catalog predicate on a truthy
- * non-boolean `copyrightRemoved`. A takedown that set only `copyrightRemoved`
- * to something other than exactly `true` stayed listed, searchable, AND
- * playable.
- *
- * Both columns are `NOT NULL` booleans in Postgres, so neither disagreeing
- * shape is representable, and this is now the literal mirror of
+ * Both columns are `NOT NULL` booleans in Postgres, so an absent
+ * `isAvailable` or a truthy non-boolean `copyrightRemoved` — the shapes on
+ * which the three predicates could disagree, leaving a takedown listed,
+ * searchable AND playable — is not representable, and this is the literal
+ * mirror of
  * `db/catalog/visibility.ts`'s `isPlayableTrack` — same comparison, same
  * direction. `__tests__/visibility.agreement.test.ts` holds all three to that
  * over real rows rather than to a comment.

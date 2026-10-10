@@ -269,8 +269,8 @@ export type UnfollowArtistRequest = z.infer<typeof unfollowArtistRequestSchema>;
  *
  * DELIBERATELY ABSENT FROM {@link artistSchema}. That is the enforcement: the
  * public artist DTO has no field for this, so no profile serializer can emit it
- * even by spreading a document — and the Mongoose path is `select: false`, so
- * the document it would spread does not contain it either. A boolean like
+ * even by spreading a row — and the column is in the protected-column registry,
+ * so the row it would spread does not contain it either. A boolean like
  * `isPublic: false` on the main image would have been a rule to remember; this
  * is a shape that cannot express the mistake.
  *

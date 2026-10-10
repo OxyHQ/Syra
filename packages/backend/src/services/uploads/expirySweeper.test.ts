@@ -155,8 +155,7 @@ describe('recordUploadPlay', () => {
     await recordUploadPlay(upload.id, 'oxy-owner', T0);
 
     const after = await reload(upload.id);
-    // `null`, not `undefined`: Mongo's `$unset` removed the field, and the
-    // Postgres write sets the column back to null. Both mean "no notice has
+    // `null`: the write sets the column back to null, meaning "no notice has
     // been sent for the current window", which is what the next sweep reads.
     expect(after?.deletionNoticeSentAt).toBeNull();
   });

@@ -27,20 +27,14 @@ import {
  * They must be readable ONLY by the artist whose profile they sit on, and
  * publishable only once that artist has said yes.
  *
- * Under Mongo, THREE mechanisms claimed to guard that and only the third
- * actually did: `select: false` on the Mongoose path (inert under `aggregate()`,
- * which every container helper used), the absent `artistSchema` field (inert
- * against `formatArtistWithImage`, which was untyped and spread the whole
- * document), and the explicit `delete` in `stripExternalCatalogFields`.
- * `GET /api/artists/:id` really did return suggestions before that third one
- * existed — verified against the handler, which is why the fixture below gives
- * the artist a playable track.
- *
- * On Postgres the guard is an ALLOWLIST and there is only one: `image_suggestions`
- * is in `PROTECTED_COLUMNS_BY_TABLE`, so `publicColumns()` removes it from the
- * row TYPE and `toArtistDto` cannot name it without failing `tsc`. The two
- * Mongo formatters this file imported to make the old point were still imported
- * here and never called; the import is deleted with the claim.
+ * The guard is an ALLOWLIST and there is only one: `image_suggestions` is in
+ * `PROTECTED_COLUMNS_BY_TABLE`, so `publicColumns()` removes it from the row
+ * TYPE and `toArtistDto` cannot name it without failing `tsc`. A per-field
+ * exclusion on the read is not a guard: paired with a formatter that spreads
+ * the whole row, any read that skips the exclusion puts the suggestions on the
+ * wire, and `GET /api/artists/:id` served them exactly that way. The public
+ * route 404s an artist with no playable track, which is why the fixture below
+ * gives the artist one.
  */
 
 /**
@@ -59,19 +53,11 @@ import {
 /**
  * POSTGRES ONLY.
  *
- * This block used to say the opposite, and the reason it was wrong is worth
- * keeping: nothing here reads a Mongoose model, but `entityProfile.controller`
- * still GATED every handler on `isDatabaseConnected()` — Mongoose readiness —
- * so without a Mongo connection every request answered 503 and these suites had
- * to open one. The guard was the whole dependency.
- *
- * Task 15 switched that gate to `isPostgresConnected()`, and the Mongo hooks
- * went with it. `db/__tests__/connectivityGates.test.ts` used to keep this true
- * by walking this controller's whole import graph and failing if anything it
- * reached opened a model; it was retired in 8cd87a8 together with its subject.
- * Nothing polices it now because nothing can violate it — `mongoose` is not a
- * dependency and `src/models/` does not exist, so reintroducing a model is a
- * package install and a new directory, not a silent import.
+ * Every read these handlers make is Postgres, and `entityProfile.controller`
+ * gates each one on `isPostgresConnected()`, so opening Postgres is the whole
+ * dependency. Nothing polices it because nothing can violate it: there is no
+ * second database driver and `src/models/` does not exist, so adding another
+ * store is a package install and a new directory, not a silent import.
  */
 beforeAll(async () => {
   await connectDb();
@@ -126,10 +112,9 @@ const EMBEDDED_URL = 'https://syra.example/embedded/cover.jpg';
 /**
  * `proposedAt` is an ISO STRING, not a `Date`.
  *
- * `artistImageSuggestionSchema` has always declared `z.string()`; Mongoose
- * accepted a `Date` and handed one back, so the fixture and the DTO disagreed
- * and nothing noticed. `jsonb().$type<ArtistImageSuggestion[]>()` is checked at
- * compile time, which is what surfaced it.
+ * `artistImageSuggestionSchema` declares `z.string()`, and
+ * `jsonb().$type<ArtistImageSuggestion[]>()` holds the fixture to that at
+ * compile time.
  */
 const COMMONS_SUGGESTION: ArtistImageSuggestion = {
   image: {

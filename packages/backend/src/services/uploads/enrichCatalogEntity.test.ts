@@ -209,8 +209,7 @@ describe('enrichArtistProfile — filling gaps', () => {
    * Idempotency, asserted as a PROPERTY rather than as a status label.
    *
    * The second run answers `nothing-found` — the sources had nothing left to
-   * give. (It could once also answer `skipped`, for a field the Mongoose schema
-   * did not declare; that arm is gone with the database that needed it.) What
+   * give. What
    * must hold is that it writes no fields and adds no provenance ROW —
    * asserting the exact status string would make this fail on a correct
    * behaviour change and, worse, pass while `catalog_entity_sources` grew on
@@ -233,20 +232,9 @@ describe('enrichArtistProfile — filling gaps', () => {
   });
 
   /**
-   * A TEST WAS DELETED HERE, because the failure it guarded is unrepresentable.
-   *
-   * It re-read the artist after enrichment and asserted every field named in
-   * `sources[].fields` had actually persisted — the smoke alarm for Mongoose
-   * strict mode DISCARDING a `$set` on a path the schema does not declare,
-   * silently. Left unchecked that meant a scheduled job appending a provenance
-   * entry per run forever while storing nothing.
-   *
-   * With drizzle an unknown column key is a COMPILE error and an unknown column
+   * No test asserts that every field named in `sources[].fields` persisted:
+   * with drizzle an unknown column key is a COMPILE error and an unknown column
    * in SQL is a runtime one, so a write that returns is a write that landed.
-   * The service's verification read, `readPath`, and its "nothing persisted"
-   * result arm were deleted with it — they were compensating for a database
-   * behaviour this one does not have, and a test asserting the compensation
-   * would now be asserting nothing.
    *
    * The idempotency test above is the one that still earns its place: it is a
    * property (`second run writes nothing, provenance stays at one entry`)
@@ -287,9 +275,8 @@ describe('enrichArtistProfile — filling gaps', () => {
      * is the one that is always set when a licence was written.
      *
      * They are listed EXPLICITLY rather than pattern-matched. A new provenance
-     * field with no entry here fails this test, which is the point — that is the
-     * drift the deleted Mongoose-era check used to catch by resolving each
-     * recorded path against the stored document.
+     * field with no entry here fails this test, which is the point — it catches
+     * a recorded path that resolves to no stored column.
      */
     const IRREGULAR: Readonly<Record<string, string>> = {
       image: 'imageId',
@@ -455,10 +442,8 @@ describe('artist photo suggestions from an uploaded file', () => {
 
     expect(stored).toBe(1);
     /**
-     * `imageSuggestions` is asked for EXPLICITLY here, and the reason changed
-     * with the database. Under Mongo it was `select: false`, which Task 10a
-     * measured as no protection at all — `aggregate()` ignores it. What keeps it
-     * off the wire now is `PROTECTED_COLUMNS_BY_TABLE`: it is absent from
+     * `imageSuggestions` is asked for EXPLICITLY here. What keeps it off the
+     * wire is `PROTECTED_COLUMNS_BY_TABLE`: it is absent from
      * `PublicCatalogEntityRow`, so a serializer cannot even NAME it. A test
      * still has to read it directly, and this is the read.
      */
@@ -524,10 +509,9 @@ describe('cover art recovery — the blocker it clears', () => {
     });
     if (!recovered) throw new Error('expected cover art');
 
-    // An `image_assets` id — a uuid v7 for anything minted since the cutover,
-    // a 24-char ObjectId hex for a row carried over from Mongo. Asserting the
-    // ObjectId shape, as this did, would fail for every image created from now
-    // on; `isLiveEntityId` is the predicate that accepts both, and it is the
+    // An `image_assets` id — a uuid v7, or a legacy 24-char hex id. Asserting
+    // only one shape would fail for the other; `isLiveEntityId` is the
+    // predicate that accepts both, and it is the
     // same one `normalizeImageRef` uses to decide the served URL.
     expect(isLiveEntityId(recovered.coverArt)).toBe(true);
     expect(recovered.licence.attribution).toBe('Cover Art Archive');
@@ -607,19 +591,8 @@ describe('cover art recovery — the blocker it clears', () => {
   });
 
   /**
-   * THREE TESTS WERE DELETED HERE with `enrichAlbumCoverArt` itself.
-   *
-   * It repaired "an existing album's missing cover art" — a state that cannot
-   * exist: `albums.cover_art_id` is NOT NULL, and `models/Album.ts:69` declared
-   * `coverArt: { type: String, required: true }` for the same reason, so the
-   * function was already dead under Mongo too. Its guard
-   * (`if (album.coverArt) return skipped`) was unconditionally true, and it had
-   * no production caller anywhere in the repo.
-   *
-   * These tests reached its working arm only by `$unset`-ing `coverArt` AFTER
-   * creation — i.e. by building a document Mongoose would have refused to save.
-   * Under a NOT NULL column that fixture is unrepresentable, so there is nothing
-   * left to test and nothing left to test it against.
+   * There is no "repair an existing album's missing cover art" path to test: a
+   * state that cannot exist, because `albums.cover_art_id` is NOT NULL.
    *
    * `recoverCoverArt` is the live half of the pair — it runs BEFORE an album
    * exists and decides whether the container can be created at all — and it is

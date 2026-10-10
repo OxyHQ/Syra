@@ -8,9 +8,8 @@ import { albumGenreNames } from '../../db/catalog/genres';
 import { classifyAlbumType, ensureContributedAlbum, resolveAlbum } from './resolveAlbum';
 
 /**
- * `albums.artist_id` and `albums.cover_art_id` are real foreign keys now (the
- * second is NOT NULL), so both parents are created per test rather than being
- * free-floating ObjectIds as they were under Mongo.
+ * `albums.artist_id` and `albums.cover_art_id` are real foreign keys (the
+ * second is NOT NULL), so both parents are created per test.
  */
 let ARTIST_ID = '';
 let COVER_ART = '';

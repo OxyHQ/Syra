@@ -1,5 +1,5 @@
 ##
-## Docker Compose — local PostgreSQL for the Mongo->Postgres migration.
+## Docker Compose — local PostgreSQL for the backend.
 ##
 ## Separate from any application docker-compose file: this holds only the
 ## database a developer needs running next to `bun run --cwd packages/backend
@@ -16,8 +16,8 @@
 
 services:
   postgres:
-    # Plain `postgres:17`, not a PostGIS image. Syra has no `2dsphere` Mongo
-    # index and no geospatial query to port — see `src/db/extensions.ts` for
+    # Plain `postgres:17`, not a PostGIS image. Syra has no geospatial index
+    # and no geospatial query — see `src/db/extensions.ts` for
     # why `REQUIRED_EXTENSIONS` is deliberately empty. Pinning a heavier image
     # here would imply an extension dependency this schema does not have.
     #

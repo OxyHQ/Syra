@@ -36,9 +36,8 @@ function multerTempFiles(): Set<string> {
 }
 
 /**
- * BOTH databases: the catalogue is Postgres, and `connect()` stays because
- * `tracks.routes` mounts handlers from `recommendations.controller`, whose
- * module graph still opens Mongoose at import time.
+ * Postgres: the catalogue, and everything `tracks.routes` mounts from
+ * `recommendations.controller`, reads it.
  */
 beforeAll(async () => {
   await connectDb();

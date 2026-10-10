@@ -176,8 +176,8 @@ export type ResolveTrackResult =
  *  - `ok` — the resolved, playable track.
  *
  * THROWS if the database is unreachable — `getDb()` when the pool was never
- * opened, or the driver on a failed query. The Mongoose version's doc claimed
- * "never throws", which this deliberately does not repeat: the three outcomes
+ * opened, or the driver on a failed query. It deliberately does not claim
+ * "never throws": the three outcomes
  * above are all answers about a TRACK, and "cannot ask" is not one of them.
  * Mapping an outage onto `not_found` would hide it behind a normal-looking 404,
  * so it propagates and the caller answers 500.
@@ -203,8 +203,7 @@ export async function resolveTrack(trackId: string): Promise<ResolveTrackResult>
       /**
        * The album's cover is the fallback when the track carries none of its
        * own — the same fallback the catalog serializer applies, resolved in this
-       * query rather than as the per-track `AlbumModel.findById` behind a Map
-       * cache that the Mongo version needed.
+       * query rather than with a per-track album lookup.
        */
       albumCoverArtId: albums.coverArtId,
     })

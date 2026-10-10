@@ -14,9 +14,8 @@
  * the SAME function artists, credits and locker album grouping use. It has to be
  * the same one: `catalog_entities.name_key` is one column serving both types, so
  * two normalisations would put two key spaces in it and quietly break any
- * cross-type query written against it later. Under Mongoose a `pre('save')` hook
- * computed it; there is no such hook here, so every write below calls the
- * function explicitly.
+ * cross-type query written against it later. There is no save hook to compute
+ * it, so every write below calls the function explicitly.
  *
  * The Oxy identity fetch is an injected dependency (`makeOxyUsersFetcher(oxy)`
  * at the call site) so this module stays decoupled from the server and
@@ -24,18 +23,15 @@
  *
  * ## `type = 'person'` is stated on every read, never inferred
  *
- * Mongoose's discriminator injected it into `PersonModel.find`/`findOne`/
- * `findOneAndUpdate`. One table with a `type` column does not, and an unscoped
+ * One table with a `type` column scopes nothing implicitly, and an unscoped
  * read here would resolve a credit to an ARTIST row that happens to hold the
  * same strong key — which is how the wrong author landed on a moderation record
  * last task.
  *
  * The two unique constraints (`catalog_entities_linked_oxy_user_id_key`,
- * `catalog_entities_href_key`) are collection-wide rather than per-type, exactly
- * as the Mongo sparse-unique indexes they were ported from were. So a strong key
- * already held by an ARTIST row is not resolvable to a person, and
- * {@link findOrCreatePerson} answers `null` for it — the same outcome Mongo
- * reached by throwing `E11000` into the caller's per-credit `catch`.
+ * `catalog_entities_href_key`) are table-wide rather than per-type. So a strong
+ * key already held by an ARTIST row is not resolvable to a person, and
+ * {@link findOrCreatePerson} answers `null` for it.
  */
 
 import { and, eq, isNotNull, isNull, or, sql } from 'drizzle-orm';
@@ -150,8 +146,7 @@ async function findOrCreatePerson(credit: EpisodePerson): Promise<PersonRow | nu
   if (credit.href) {
     const existing = await findPerson(eq(catalogEntities.href, credit.href));
     if (existing) {
-      // The Mongo form carried `$set: { img }` alongside `$setOnInsert`, so a
-      // credit's avatar refreshed on every import. Kept.
+      // A credit's avatar refreshes on every import.
       if (credit.img && credit.img !== existing.img) {
         await getDb()
           .update(catalogEntities)
@@ -180,9 +175,8 @@ async function findOrCreatePerson(credit: EpisodePerson): Promise<PersonRow | nu
    * Low-confidence — name-only. Match ONLY other name-only persons, never a
    * strong-key person of the same name.
    *
-   * `is null` on both strong keys is the port of Mongo's `{ $exists: false }`,
-   * and the two are the same test here: a Postgres column is null or a value,
-   * with no third "absent" state for a declared column to be in.
+   * `is null` on both strong keys: a Postgres column is null or a value, with no
+   * third "absent" state for a declared column to be in.
    */
   const existing = await findPerson(
     and(
@@ -207,8 +201,7 @@ async function findOrCreatePerson(credit: EpisodePerson): Promise<PersonRow | nu
    *
    * `catalog_entities_artist_name_key_key` is partial on `type = 'artist'`, so a
    * name-only PERSON has no unique constraint to conflict with — two imports
-   * racing on the same unknown name legitimately create two rows, exactly as
-   * Mongo's `PersonModel.create` did. Deduping them would need a constraint the
+   * racing on the same unknown name legitimately create two rows. Deduping them would need a constraint the
    * schema deliberately does not have, because two different people really can
    * share a name.
    */
@@ -358,14 +351,8 @@ export async function buildCreatorPersons(
  * The shape {@link enrichPersons} needs, and that
  * `db/podcasts/persons.ts`'s `CreditIdentity` is satisfied by.
  *
- * The `mongoose.Types.ObjectId` arm on `_id`/`linkedArtistId` is GONE, and with
- * it the `_id` spelling: both existed only so a Mongoose document and a drizzle
- * row could reach these functions during the split, and the split is over —
- * `search.controller`'s people query and the podcast reads are both on drizzle
- * now, so there is exactly one caller shape. Renaming `_id` to `id` rather than
- * just narrowing its type is deliberate: leaving a Mongo-named field on a type
- * nothing Mongo-shaped can reach any more is the sort of residue that gets
- * copied forward.
+ * `search.controller`'s people query and the podcast reads are both on drizzle,
+ * so there is exactly one caller shape, keyed `id`.
  */
 export interface PersonLike {
   id: string;

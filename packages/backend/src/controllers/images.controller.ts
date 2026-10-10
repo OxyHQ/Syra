@@ -106,14 +106,14 @@ export const getImage = async (req: Request, res: Response, next: NextFunction) 
      *
      * This endpoint SERVES what `uploadImage` above mints, and that id comes
      * from `services/imageAssetService.ts`, which mints a uuid v7. A
-     * `mongoose.Types.ObjectId.isValid` guard here therefore 400'd every image
-     * uploaded since the cutover — including the `/api/images/<id>` URLs
-     * `db/catalog/serialize.ts` puts on every cover art it serialises, so a
-     * 201 from the upload endpoint produced a URL this endpoint refused.
+     * 24-hex-only guard here would 400 every newly uploaded image — including
+     * the `/api/images/<id>` URLs `db/catalog/serialize.ts` puts on every cover
+     * art it serialises, so a 201 from the upload endpoint would produce a URL
+     * this endpoint refused.
      *
-     * `playlists.controller` fixed the same guard on the WRITE side (validating
-     * a client-supplied `coverArt`); this is the read side of that one id
-     * space, and it outlived that fix.
+     * `playlists.controller` applies the same guard on the WRITE side
+     * (validating a client-supplied `coverArt`); this is the read side of that
+     * one id space.
      */
     if (!isLiveEntityId(id)) {
       return res.status(400).json({

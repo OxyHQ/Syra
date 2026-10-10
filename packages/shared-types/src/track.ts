@@ -103,7 +103,7 @@ export const sourceProvenanceSchema = z.object({
 });
 export type SourceProvenance = z.infer<typeof sourceProvenanceSchema>;
 
-/** Every provenance provider, for Mongoose `enum` declarations. */
+/** Every provenance provider, as a runtime array (schema CHECKs, enum columns). */
 export const PROVENANCE_PROVIDERS = provenanceProviderSchema.options;
 
 /**

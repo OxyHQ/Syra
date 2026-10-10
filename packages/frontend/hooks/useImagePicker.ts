@@ -144,7 +144,7 @@ export function useImagePicker(options: UseImagePickerOptions = {}) {
   }, [allowsEditing, aspect, quality]);
 
   /**
-   * Upload image to backend and return image ID (MongoDB ObjectId string)
+   * Upload image to backend and return its image ID
    * Uses authenticated client from oxyServices with current user's token
    */
   const uploadImage = useCallback(

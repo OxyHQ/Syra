@@ -496,19 +496,9 @@ export async function enrichArtistProfile(artistId: string): Promise<ArtistEnric
   /**
    * The write and its provenance entry commit TOGETHER.
    *
-   * The Mongo version issued them as two `updateOne`s with a verification read
-   * between them, because Mongoose strict mode DISCARDS a `$set` on an
-   * undeclared path — silently, with no throw — so "did the fields land" was a
-   * real question that had to be asked at runtime, and a background job could
-   * otherwise append a provenance entry per run forever while persisting
-   * nothing.
-   *
-   * That question cannot be asked here because it cannot be false: an unknown
-   * column key is a `tsc` error, and an unknown column in SQL is a runtime
-   * error, so a write that returns is a write that landed. The verification
-   * read, `readPath`, and the "nothing persisted" result arm are deleted rather
-   * than translated — they were compensating for a database behaviour this one
-   * does not have.
+   * There is no "did the fields land" verification read: an unknown column key
+   * is a `tsc` error, and an unknown column in SQL is a runtime error, so a
+   * write that returns is a write that landed.
    */
   await getDb().transaction(async (tx) => {
     await tx.update(catalogEntities).set(set).where(eq(catalogEntities.id, artistId));
@@ -769,21 +759,8 @@ export async function recoverCoverArt(input: {
 }
 
 /**
- * `enrichAlbumCoverArt` is DELETED, not ported, and the reason is worth keeping.
- *
- * It repaired "an EXISTING album's missing cover art" — a state that cannot
- * exist. `albums.cover_art_id` is NOT NULL (and `models/Album.ts:69` declared
- * `coverArt: { type: String, required: true }` for the same reason: an album is
- * not created at all unless real artwork was found), so its second line —
- * `if (album.coverArt) return skipped` — was unconditionally true.
- *
- * It had no production caller either: the only references anywhere were its own
- * definition and its own tests, and those reached the working arm by `$unset`-ing
- * `coverArt` after creation, i.e. by constructing a document Mongoose would have
- * refused to save. Under a NOT NULL column that fixture is unrepresentable, so a
- * faithful port would have been a function that provably does nothing plus tests
- * that could no longer set it up.
- *
- * `recoverCoverArt` above is the live half of this pair and is untouched: it runs
+ * There is no "repair an EXISTING album's missing cover art" path: that state
+ * cannot exist, because `albums.cover_art_id` is NOT NULL and an album is not
+ * created at all unless real artwork was found. `recoverCoverArt` above runs
  * BEFORE an album exists and is what decides whether the container can be created.
  */

@@ -70,9 +70,8 @@ export async function fetchAndValidateTrack(trackId: string): Promise<TrackValid
     };
   }
 
-  // Serialized through `toTrackDtos`, which returns a real `Track` — the Mongo
-  // path went through `formatTrackWithCoverArt`, typed `any` on both ends, so
-  // this function's declared `track?: Track` was never actually checked.
+  // Serialized through `toTrackDtos`, which returns a real `Track`, so this
+  // function's declared `track?: Track` is checked by the compiler.
   const [track] = await toTrackDtos([row]);
   if (!track) {
     return {

@@ -4,16 +4,14 @@
  *
  * ## `null` is a value here, and it has to be written deliberately
  *
- * Mongoose's document API let a caller write `state.activeDeviceId = undefined`
- * and have `.save()` emit `$unset`, so "clear this field" and "leave this field
- * alone" were spelled the same way. Drizzle draws the line the other way round:
- * an `undefined` in a `set` object is DROPPED from the statement, and only an
+ * "Clear this field" and "leave this field alone" are spelled differently: an
+ * `undefined` in a `set` object is DROPPED from the statement, and only an
  * explicit `null` clears a column.
  *
  * That distinction is load-bearing in exactly one place, and it is a real
  * behaviour rather than a style point — `handleDeviceDisconnect`'s failover
- * clears `activeDeviceId` when the last active device goes away. Ported
- * literally, `undefined` would have left the departed device named as active
+ * clears `activeDeviceId` when the last active device goes away. Written as
+ * `undefined`, it would have left the departed device named as active
  * forever, with the state paused and pointing at a client that is gone.
  * {@link PlaybackStatePatch} therefore admits `null` on every nullable column,
  * and callers pass it on purpose.

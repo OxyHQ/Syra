@@ -54,7 +54,7 @@ export type FingerprintResult =
  * bit set arrives as a decimal above 2^31 — `3849189879`, not `-445777417`.
  * `TrackFingerprint` stores signed int32 and the comparator reads the bit
  * pattern, so `| 0` folds the two spellings onto the same value. Skipping the
- * fold would store numbers MongoDB cannot hold as `Int32` AND make the same
+ * fold would store numbers that do not fit a signed int32 AND make the same
  * recording compare as a different one.
  *
  * Verified against fpcalc 1.5.1: its output for a 30 s file is item-for-item

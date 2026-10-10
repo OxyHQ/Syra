@@ -12,8 +12,8 @@ import {
 import { makeArtist, makeTrack, relate } from './radioFixtures';
 
 /**
- * BOTH databases: the candidate pools read Postgres, and pool 1's co-listen
- * graph (`CatalogRelation`) is Task 15's vertical and still Mongoose.
+ * The candidate pools and pool 1's co-listen graph (`catalog_relations`) both
+ * read Postgres.
  */
 beforeAll(async () => {
   await connectDb();
@@ -361,7 +361,7 @@ describe('buildRadioPage — determinism', () => {
     const artistA = await makeArtist({ name: 'A', genres: ['house'] });
     const artistB = await makeArtist({ name: 'B', genres: ['house'] });
     // Identical popularity across the board, so ordering is decided entirely by
-    // the seeded tie-break shuffle rather than by the Mongo sort.
+    // the seeded tie-break shuffle rather than by a database sort.
     for (let i = 0; i < 10; i += 1) {
       await makeTrack({
         artistId: i % 2 === 0 ? artistA : artistB,

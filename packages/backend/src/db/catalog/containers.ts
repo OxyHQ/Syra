@@ -1,20 +1,12 @@
 /**
  * Track-bearing containers — albums, artists and playlists that hold at least
- * one playable track. The drizzle replacement for `utils/playableContainers.ts`.
+ * one playable track.
  *
- * ## The `$lookup` / `$convert` rule evaporates
+ * ## Joins are typed by construction
  *
- * The Mongo pipelines carried a rule with its own paragraph in `AGENTS.md`:
- * when a `$lookup` correlates fields of different BSON types, convert on the
- * LOCAL side in `let` and leave the foreign field a bare path, or the comparison
- * becomes unindexable and every lookup degrades into a collection scan. That
- * existed because `PlaylistTrack.trackId` was a string while `Track._id` was an
- * ObjectId — a mismatch the schema itself created.
- *
- * With real foreign keys the two sides are the same type by construction, so
- * these are ordinary indexed joins and the rule has nothing left to apply to.
- * It is deleted rather than translated, along with `andMongoFilters`: drizzle
- * composes with `and()`.
+ * With real foreign keys both sides of every join are the same type, so these
+ * are ordinary indexed joins with no type conversion to place. Filters compose
+ * with drizzle's `and()`.
  *
  * ## What was measured, and the one index that was missing
  *
@@ -28,9 +20,8 @@
  * `album_id` index, and Postgres 17 has no index skip scan — so a probe keyed on
  * `album_id` alone had to scan that whole partial index. `GET /albums/:id/tracks`
  * cost 190 buffers where 9 sufficed, and the cost scaled with the size of
- * `tracks` rather than with the album. `models/Track.ts:134` declares
- * `albumId: { type: String, index: true }`, so Mongo had the index and the port
- * had dropped it; migration `0016` restores it and
+ * `tracks` rather than with the album. Migration `0016` adds a standalone
+ * `album_id` index and
  * `__tests__/containers.explain.test.ts` asserts the planner actually reaches it
  * rather than asserting the definition exists.
  *
@@ -40,9 +31,8 @@
  * `semi join -> top-N sort -> limit`, and it does not walk an ordered index to
  * stop early: forcing `enable_hashjoin=off`, `enable_mergejoin=off`,
  * `enable_sort=off` and `enable_seqscan=off` in every combination still sorts
- * after the join. That is a real improvement over the Mongo pipelines — which
- * ran the `$lookup` before `$sort`/`$limit` AND could not index the correlation
- * — but "the relational form evaluates only the page it returns" would be false,
+ * after the join. The join itself is indexed, but "the relational form
+ * evaluates only the page it returns" would be false,
  * so it is not claimed anywhere.
  */
 
@@ -97,24 +87,22 @@ export { asc, desc };
  *
  * ## It is also the FAITHFUL ordering
  *
- * This is not a performance hack traded against behaviour. Mongo sorts a missing
- * field as the lowest value, so `{ 'stats.followers': -1 }` put artists with no
- * follower count LAST — which is `NULLS LAST`. `desc()` would have moved them to
- * the front of every shelf.
+ * This is not a performance hack traded against behaviour. Artists with no
+ * follower count belong LAST on a most-followed shelf — which is `NULLS LAST`.
+ * `desc()` would move them to the front of every shelf.
  */
 export function descNullsLast(column: PgColumn): SQL {
   return sql`${column} desc nulls last`;
 }
 
 /**
- * "Rows that have an image first" — the replacement for `utils/imageFirstSort.ts`.
+ * "Rows that have an image first".
  *
- * The Mongo helper prepended `{ coverArt: -1 }` (or `{ image: -1 }`) to a sort
- * document. That expressed the intent only incidentally: descending on a string
- * field puts non-null values ahead of missing ones, but it ALSO orders the rows
- * that do have an image by the lexical value of their image id — an arbitrary
- * tie-break nobody asked for, which then took precedence over the popularity or
- * date the caller actually sorted by, since it came first in the document.
+ * Sorting descending on the image column itself would express the intent only
+ * incidentally: it puts non-null values ahead of missing ones, but it ALSO
+ * orders the rows that do have an image by the lexical value of their image id
+ * — an arbitrary tie-break nobody asked for, which would then take precedence
+ * over the popularity or date the caller actually sorted by.
  *
  * This sorts on the PREDICATE instead, so it separates "has an image" from "has
  * none" and leaves every subsequent ordering term to do the rest. It is the
@@ -146,20 +134,17 @@ function hasPlayableTrack(containerColumn: PgColumn, containerId: PgColumn): SQL
  * CONTAINER, independently of whether its tracks are still individually
  * playable.
  *
- * The Mongo filter was `{ isAvailable: { $ne: false } }` — "absent counts as
- * available", so existing albums needed no backfill. `albums.is_available` is
- * `NOT NULL DEFAULT true` here, so absent is unrepresentable and the exact
- * equality is equivalent as well as indexable.
+ * `albums.is_available` is `NOT NULL DEFAULT true`, so absent is
+ * unrepresentable and the exact equality is correct as well as indexable.
  */
 function availableAlbum(): SQL {
   return eq(albums.isAvailable, true);
 }
 
 /**
- * `catalog_entities` holds both artists and persons in one table. Mongoose's
- * discriminator injected `{ type: 'artist' }` into `find()` but NOT into
- * `aggregate()`, and every container read was an aggregation — a live bug class.
- * There is no implicit scoping here at all: this condition is written out, and a
+ * `catalog_entities` holds both artists and persons in one table. Implicit
+ * scoping is a bug class (any read path that bypasses it sees both kinds), so
+ * there is no implicit scoping here at all: this condition is written out, and a
  * reader can see it.
  */
 function artistEntity(): SQL {
@@ -257,11 +242,8 @@ export function playableArtistsWhere(): SQL {
  * One level deeper than the album and artist predicates, because playlist
  * membership lives in `playlist_tracks`.
  *
- * Under Mongo this was the nested `$lookup` that made playlist-bearing endpoints
- * take 20 s: `PlaylistTrack.trackId` was a string and `Track._id` an ObjectId, so
- * the correlation could not use an index unless the conversion was applied on
- * exactly the right side. `playlist_tracks.track_id` is a real foreign key to
- * `tracks.id` now, so the inner probe is a primary-key lookup and there is no
+ * `playlist_tracks.track_id` is a real foreign key to `tracks.id`, so the inner
+ * probe is a primary-key lookup and there is no
  * conversion to place.
  */
 export function playablePlaylistsWhere(): SQL {

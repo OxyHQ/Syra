@@ -1,15 +1,13 @@
 /**
- * Restore the creator-uploaded tracks the clean-start cutover left behind.
+ * Restore creator-uploaded tracks from an exported snapshot.
  *
- * The Postgres cutover did not migrate data, so `tracks` came up empty. Podcasts
- * rebuild themselves from RSS; uploads cannot — nobody but the creator has the
- * original. Three tracks were in production, their audio and HLS ladders are
- * still in S3 untouched, and their rows survive in the final Mongo archive.
+ * Podcasts rebuild themselves from RSS; uploads cannot — nobody but the creator
+ * has the original. The tracks' audio and HLS ladders live in S3, and their rows
+ * are in `data/uploaded-tracks.json`.
  *
- * This reads a JSON export of those rows (`data/uploaded-tracks.json`, produced
- * from the archive) and writes them through drizzle, so `tsc` validates every
- * column name — the migration's own gate against a field that flattened
- * differently than its Mongo name suggests (`audioSource.url` -> `audioSourceUrl`,
+ * This reads that export and writes it through drizzle, so `tsc` validates every
+ * column name — the gate against a field whose column is named differently than
+ * its exported key suggests (`audioSource.url` -> `audioSourceUrl`,
  * `metadata.genre` -> `metadataGenre`, the `hls` array -> its own child table).
  *
  * Idempotent: every insert is `onConflictDoNothing`, so a partial run resumes by
@@ -59,7 +57,7 @@ type AlbumType = (typeof ALBUM_TYPES)[number];
 type AudioFormat = (typeof AUDIO_FORMATS)[number];
 type ImageOwnerType = (typeof IMAGE_ASSET_OWNER_TYPES)[number];
 
-/** The shape the export carries — Mongo documents, not the Postgres row type. */
+/** The shape the export carries — nested documents, not the Postgres row type. */
 interface ExportedTrack {
   _id: string;
   title: string;

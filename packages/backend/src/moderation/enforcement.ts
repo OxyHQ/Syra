@@ -209,9 +209,8 @@ async function restore(
       if (previous.visibility === undefined) {
         return { changed: false, reason: 'No previous playlist visibility was recorded' };
       }
-      // `playlists.visibility` carries a CHECK constraint, where the Mongoose
-      // enum was inert under `updateOne` — so a recorded value that is not a
-      // real visibility used to be written back verbatim and is now refused.
+      // `playlists.visibility` carries a CHECK constraint, so a recorded value
+      // that is not a real visibility would be refused by the write.
       // Parsed rather than trusted, at the boundary of a row this process wrote
       // in an earlier revision and may not have written at all.
       const recorded = playlistVisibilitySchema.safeParse(previous.visibility);
@@ -236,9 +235,8 @@ async function restore(
       /**
        * Parsed rather than trusted, for the same reason the playlist branch
        * above parses its recorded visibility: `houses.visibility_discovery`
-       * carries a CHECK constraint where the Mongoose enum was inert under
-       * `updateOne`, so a recorded value that is not a real axis level used to
-       * be written back verbatim and would now abort the transaction.
+       * carries a CHECK constraint, so a recorded value that is not a real axis
+       * level would abort the transaction.
        */
       const recorded = Object.values(HouseDiscovery).find((level) => level === previous.visibility);
       if (recorded === undefined) {

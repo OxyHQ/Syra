@@ -19,18 +19,16 @@ import { setAlbumGenres } from '../../db/catalog/genres';
  * track, an explicit track). Building them here keeps each test about the one
  * behaviour it is asserting instead of about required columns.
  *
- * ## Every builder now creates its own parents
+ * ## Every builder creates its own parents
  *
- * The Mongo versions defaulted `artistId` to a fresh, DANGLING `ObjectId` —
- * fine when nothing checked, and impossible now: `tracks.artist_id` and
+ * A dangling default `artistId` is impossible: `tracks.artist_id` and
  * `albums.artist_id` are real foreign keys, and `albums.cover_art_id` is a NOT
  * NULL foreign key. So `makeTrack` and `makeAlbum` create the artist (and the
  * cover asset) they need when the caller does not supply one. A test that
  * wants a specific artist still passes `artistId` and gets exactly that.
  *
- * Every builder writes Postgres. `CatalogRelation` and `UserTasteProfile` were
- * the last two on Mongoose and moved with Task 15, so a radio suite needs only
- * the `test/postgres` hooks — {@link relate} writes `catalog_relations` and
+ * Every builder writes Postgres, so a radio suite needs only the
+ * `test/postgres` hooks — {@link relate} writes `catalog_relations` and
  * {@link makeTasteProfile} writes `user_taste_profiles` and its two children.
  *
  * {@link makeTasteProfile} takes ARTIST IDS, not arbitrary strings.
@@ -66,8 +64,7 @@ export async function makeArtist(
       type: 'artist',
       // Unique by default: `catalog_entities_artist_name_key_key` is a unique
       // partial index on `name_key`, so two fixtures both called "Test Artist"
-      // would collide. The Mongo collection had the same index and the same
-      // hazard; it simply was not exercised, because most suites made one.
+      // would collide.
       name: over.name ?? 'Test Artist',
       nameKey: over.name ? over.name.toLowerCase() : `test-artist-${uuidv7()}`,
       genres: over.genres ?? [],

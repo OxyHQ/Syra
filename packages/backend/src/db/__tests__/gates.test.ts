@@ -709,8 +709,8 @@ describe('catalog schema (Task 2)', () => {
       ),
     ).rejects.toThrow();
 
-    // Person, no source: accepted — the CHECK must not tighten anything
-    // Mongoose left open (persons never had a `source` field at all).
+    // Person, no source: accepted — persons never carry a `source` field, so
+    // the CHECK must not require one.
     const [person] = await db
       .insert(catalogEntities)
       .values({ name: 'CHECK-fixture-person-no-source', type: 'person' })
@@ -1002,14 +1002,9 @@ describe('catalog dedup constraints (Task 19a)', () => {
   /**
    * The dedup keys the upload path relies on, asserted against POSTGRES.
    *
-   * Every one of these was covered before — by `models/{Album,CatalogEntity,
-   * Track}.test.ts`, against Mongoose. Those models' readers had all moved to
-   * drizzle, so the assertions guarded schemas nothing queried: the same shape
-   * as the `indexTrackAcoustically` twin Task 19a found next door. The
-   * constraints themselves were declared here all along and had NO test.
-   *
-   * Deleting the model tests without moving these would have quietly dropped
-   * the only statement anywhere that two releases cannot share a UPC.
+   * These are the only statement anywhere that, for example, two releases
+   * cannot share a UPC — so they are asserted against the real constraints,
+   * not against a model.
    */
 
   /** Albums require a cover: `cover_art_id` is NOT NULL, so every fixture needs one. */
@@ -1031,8 +1026,7 @@ describe('catalog dedup constraints (Task 19a)', () => {
   // create an album with no cover art". `albums.cover_art_id` is NOT NULL, so
   // drizzle's `$inferInsert` makes `coverArtId` a REQUIRED property — the
   // omission this would test does not compile. That is strictly stronger than
-  // the Mongoose `required: true` it replaced (a runtime rejection), and it is
-  // why every album fixture below carries a real `image_assets` row. Writing
+  // a runtime rejection, and it is why every album fixture below carries a real `image_assets` row. Writing
   // the test would mean casting past the type that already prevents it.
 
   it('refuses two albums sharing a MusicBrainz release id, and lets NULLs coexist', async () => {
@@ -1044,7 +1038,7 @@ describe('catalog dedup constraints (Task 19a)', () => {
     const coverArtId = await seedCoverArt('dedup');
 
     // `release_date` is NOT NULL with no default — every album fixture carries
-    // one, which the Mongoose equivalents never had to.
+    // one.
     const album = (title: string, extra: Record<string, string> = {}) => ({
       title,
       artistId: artist.id,
@@ -1258,8 +1252,8 @@ describe('library and playlist schema (Task 3)', () => {
 
   it('has no Library table — five junctions carry its arrays instead', () => {
     const present = tablesIn(libraryModule).map((table) => getTableConfig(table).name);
-    // `UserLibrary` (Mongo collection `userlibraries`) is gone entirely — not
-    // renamed, not left as an empty shell.
+    // There is no `UserLibrary` table at all — not renamed, not left as an
+    // empty shell.
     expect(present).not.toContain('libraries');
     expect(present).not.toContain('user_libraries');
     expect(present).not.toContain('user_library');
@@ -1299,11 +1293,9 @@ describe('library and playlist schema (Task 3)', () => {
   it('cascades a deleted playlist into user_saved_playlists — the orphan RELATIONS.md found live in production', async () => {
     const db = getDb();
 
-    // RELATIONS.md: playlists ARE hard-deleted (`deletePlaylist`), and the
-    // Mongo path cleaned up `PlaylistTrack` but never `Library.savedPlaylists`
-    // — a real orphan this CASCADE fixes without any application change. Task
-    // 11 deleted the explicit cleanup along with the model, so the cascade
-    // below is now the only thing doing it.
+    // RELATIONS.md: playlists ARE hard-deleted (`deletePlaylist`), and no
+    // application code removes the saved-playlist rows that point at one —
+    // the cascade below is the only thing doing it.
     const [playlist] = await db
       .insert(playlists)
       .values({
@@ -1976,7 +1968,7 @@ describe('creators and uploads schema (Task 5)', () => {
         'contribution_attestations_track_id_key',
       );
 
-      // `position` is what preserves the Mongo array's ORDER in both markers
+      // `position` is what preserves the markers' ORDER in both markers
       // tables; two rows sharing one position on the same parent is an order
       // nobody can reconstruct.
       await db.insert(contributionAttestationProvenanceMarkers).values({
@@ -2152,7 +2144,7 @@ describe('creators and uploads schema (Task 5)', () => {
     }
   });
 
-  it('rejects claim evidence past the 4000-character limit Mongoose declared', async () => {
+  it('rejects claim evidence past the 4000-character limit', async () => {
     const db = getDb();
 
     const [artist] = await db
@@ -2327,10 +2319,10 @@ describe('creators and uploads schema (Task 5)', () => {
     }
   });
 
-  it('indexes the two sweeps and the purge that Mongo left to scan', async () => {
+  it('indexes the two sweeps and the purge', async () => {
     const db = getDb();
     // Verified against the MIGRATED catalogue, not the drizzle declaration.
-    // `deleted_at` and `matched_track_id` had NO Mongo index at all: the
+    // `deleted_at` and `matched_track_id` both need an index: the
     // expiry sweeper's phase-3 query (`deletedAt <= graceCutoff`) and the
     // takedown purge's `find({ matchedTrackId })` both scan the one
     // collection this design expects to reach millions of rows.
@@ -2349,13 +2341,10 @@ describe('creators and uploads schema (Task 5)', () => {
    * `user_uploads.expires_at` looks exactly like a sweep target and must not be
    * one.
    *
-   * `models/UserUpload.ts` declined a Mongo TTL index for a reason its own doc
-   * comment spelled out — a blind row delete leaves every one of the file's S3
-   * objects orphaned and skips the T−14d warning the retention policy promises
-   * — and a test on that model asserted the absence. Task 13 deleted the model,
-   * so the assertion moves here rather than disappearing with it: registering
-   * this column would hand the column to `sweepExpiredRows`, which IS that
-   * blind delete.
+   * A blind row delete leaves every one of the file's S3 objects orphaned and
+   * skips the T−14d warning the retention policy promises, and registering
+   * this column would hand it to `sweepExpiredRows`, which IS that blind
+   * delete.
    */
   it('keeps user_uploads.expires_at OUT of the blind expiry sweep', () => {
     const swept = EXPIRY_SWEEP_TARGETS.map(
@@ -2476,8 +2465,7 @@ describe('rooms and live schema (Task 6)', () => {
     expectForeignKey(seriesEpisodes, 'series_id', 'series', 'cascade');
     expectForeignKey(seriesEpisodes, 'room_id', 'rooms', 'set null');
     expectForeignKey(roomMediaQueueItems, 'room_id', 'rooms', 'cascade');
-    // The deliberate schema improvement: Mongoose says `required: true`, but
-    // rooms are hard-deleted with no cleanup, so the column is relaxed to
+    // Deliberately nullable: rooms are hard-deleted with no cleanup, so the column is relaxed to
     // nullable with SET NULL. See `schema/rooms.ts`'s file-level doc comment.
     expectForeignKey(recordings, 'room_id', 'rooms', 'set null');
     expect(getTableColumns(recordings).roomId.notNull).toBe(false);
@@ -2844,7 +2832,7 @@ describe('rooms and live schema (Task 6)', () => {
     }
   });
 
-  it('holds the participant bounds and the HH:mm recurrence shape Mongoose declared', async () => {
+  it('holds the participant bounds and the HH:mm recurrence shape', async () => {
     const db = getDb();
 
     // Both boundaries, because a CHECK written one off (`< 10000` rather than
@@ -2884,9 +2872,8 @@ describe('rooms and live schema (Task 6)', () => {
       expect(accepted.id).toBeTruthy();
 
       // `series.room_template_max_participants` carries the IDENTICAL bounds
-      // from the same Mongoose declaration (`models/Series.ts:111-116`) and had
-      // no test at all (Task 6 review, Minor 2) — two constraints from one
-      // source, only one of them held.
+      // as `rooms.max_participants` — two constraints from one rule, so both
+      // are held.
       await expectRefusedBy(
         Promise.resolve(
           db.insert(series).values({
@@ -2902,9 +2889,8 @@ describe('rooms and live schema (Task 6)', () => {
         'series_room_template_max_participants_check',
       );
 
-      // `models/Series.ts:84`'s own `match: /^\d{2}:\d{2}$/`. Mongoose enforces
-      // it on every save today, so a port that dropped it would silently
-      // loosen validation the scheduling code still assumes.
+      // `HH:mm`: the scheduling code assumes this shape, so the database
+      // refuses anything else.
       await expectRefusedBy(
         Promise.resolve(
           db.insert(series).values({
@@ -2923,16 +2909,12 @@ describe('rooms and live schema (Task 6)', () => {
     }
   });
 
-  it("enforces the two pre('validate') broadcast invariants Mongoose ran on every save", async () => {
+  it('enforces the two broadcast invariants on every write', async () => {
     const db = getDb();
     /**
-     * `RoomSchema.pre('validate')` (`models/Room.ts:344-360`) enforces three
-     * invariants in application code. Task 6 ported 11 `maxlength`/`match`
-     * declarations as CHECKs on the grounds that Mongoose enforces them on
-     * every save — and then silently dropped these, which the review caught
-     * (I3). Two are expressible without conflict and are now real constraints;
-     * the third is not, for the reason recorded in the `houseId` column
-     * comment and in this task's report.
+     * Rooms carry three broadcast invariants (`models/Room.ts:344-360`). Two
+     * are expressible without conflict and are real constraints; the third is
+     * not, for the reason recorded in the `broadcastKind` column comment.
      */
     // (1) A non-broadcast room may not carry a broadcastKind — the hook clears
     // it on every save (`models/Room.ts:349-351`).
@@ -2983,7 +2965,7 @@ describe('rooms and live schema (Task 6)', () => {
       })
       .returning({ id: rooms.id });
     // A broadcast room with NO broadcastKind is deliberately still accepted:
-    // Mongoose defaults it to 'user' rather than rejecting, and Postgres has no
+    // the application defaults it to 'user' rather than rejecting, and Postgres has no
     // per-row conditional default, so the converse CHECK would reject a write
     // the application makes legal. See the `broadcastKind` column comment.
     const [broadcastWithoutKind] = await db
@@ -3074,9 +3056,8 @@ describe('rooms and live schema (Task 6)', () => {
     // this makes a silently-narrowed scan fail by name instead.
     expect(definitions.size).toBeGreaterThanOrEqual(listingIndexes.length + 2);
 
-    // The one partial index Mongo had no counterpart for at all: every LiveKit
-    // webhook delivery does `findOne({ activeIngressId })` against an
-    // unindexed column today.
+    // Every LiveKit webhook delivery does `findOne({ activeIngressId })`, so
+    // this partial index serves the hottest write-side lookup in the vertical.
     expect(definitions.get('rooms_active_ingress_id_idx')).toContain(
       'WHERE (active_ingress_id IS NOT NULL)',
     );
@@ -3228,13 +3209,7 @@ describe('user, taste and listening schema (Task 7)', () => {
     expect(present).toEqual([...EXPECTED_TABLES].sort());
   });
 
-  it('registers every Mongo TTL index that was ported, with its own retention', () => {
-    // `grep -rn "expireAfterSeconds" packages/backend/src` returns FOUR
-    // declarations: these two, plus `ModerationOutbox` and `ModerationEvent`,
-    // which are Task 8's. So this task lands two of the four — the brief's
-    // prose says three, and its own table says two; the grep is what settles
-    // it (see this task's report).
-    //
+  it('registers every expiry target with its own retention', () => {
     // Asserted as an exact, ordered list of `table.column:retentionSeconds`
     // rather than a length: a registry entry pointed at the wrong column, or
     // carrying the wrong retention, is exactly the mistake that leaves rows
@@ -3336,8 +3311,8 @@ describe('user, taste and listening schema (Task 7)', () => {
      *   about: a check that certifies the thing it was supposed to refuse.
      *
      * So this asks the sharper question: does the planner use an index whose
-     * LEADING key is the probed column — the property a Mongo index had by
-     * construction and `findUnsupportedExpiryColumns` checks from `indkey[0]`?
+     * LEADING key is the probed column — the property
+     * `findUnsupportedExpiryColumns` checks from `indkey[0]`?
      * The expected set comes from the catalogue, the actual index comes from
      * the plan, and both halves have to agree. An empty expected set fails on
      * its own, so a dropped index cannot pass by leaving nothing to compare.
@@ -3785,8 +3760,8 @@ describe('user, taste and listening schema (Task 7)', () => {
     const db = getDb();
 
     try {
-      // Mongoose enforces the enum per element (`models/NotificationPreference
-      // .ts:58`); an array column keeps that only if the CHECK does. Raw SQL
+      // The enum applies per element; an array column keeps that only if the
+      // CHECK does. Raw SQL
       // for the same reason as the `catalog_relations` kind above — the
       // TypeScript enum refuses this at compile time, the database is what has
       // to refuse it at run time.
@@ -3866,8 +3841,8 @@ describe('user, taste and listening schema (Task 7)', () => {
     const playerUser = 'CHECK-fixture-player';
 
     /**
-     * Every numeric bound Mongoose declared across `UserSettings` and
-     * `UserMusicPreferences`, each with a value BELOW and a value ABOVE the
+     * Every numeric bound across `user_settings` and
+     * `user_music_preferences`, each with a value BELOW and a value ABOVE the
      * range plus both boundary values, driven from one table so a new bounded
      * column cannot be added with only the half of the test that was easy to
      * write.
@@ -4211,9 +4186,9 @@ describe('user, taste and listening schema (Task 7)', () => {
     const oxyUserId = 'CHECK-fixture-one-row-user';
 
     try {
-      // Five separate Mongoose `unique: true` declarations on `oxyUserId`
-      // (`UserSettings:112`, `UserMusicPreferences:35`, `UserBehavior:29`,
-      // `UserTasteProfile:49`, `NotificationPreference:57`). Every reader of
+      // Five tables keyed one-row-per-account on `oxyUserId` (`user_settings`,
+      // `user_music_preferences`, `user_behavior`, `user_taste_profiles`,
+      // `notification_preferences`). Every reader of
       // all five is a `findOne({ oxyUserId })`, so a second row is a value
       // nobody can predict rather than a duplicate nobody notices.
       await db.insert(userSettings).values({ oxyUserId });
@@ -4263,15 +4238,12 @@ describe('user, taste and listening schema (Task 7)', () => {
 
   it('protects the two privacy lists on user_settings, and only those', () => {
     // `GET /api/profile/settings/:userId` (`routes/profileSettings.ts:41`)
-    // serves ANY user's whole settings document to any authenticated caller:
-    // `ensureUserSettings` narrows the TYPE with `.lean<UserSettingsLean>()`
-    // but never projects, so `privacy.hiddenWords` and `privacy.restrictedUsers`
-    // — one person's muted words and the accounts they have restricted — are
-    // already on the wire today. Registering them gives the Postgres port a
-    // structural guard (`findImplicitWholeRowReads` refuses a bare
-    // `db.select().from(userSettings)`) rather than leaving it to whoever ports
-    // that route to remember. The route itself is Mongo-path code and is
-    // raised in this task's report, not changed here.
+    // serves ANY user's settings to any authenticated caller, so
+    // `privacy.hiddenWords` and `privacy.restrictedUsers` — one person's
+    // muted words and the accounts they have restricted — must never ride along
+    // on a whole-row read. Registering them is a structural guard
+    // (`findImplicitWholeRowReads` refuses a bare `db.select().from(userSettings)`)
+    // rather than something each route has to remember.
     expect(PROTECTED_COLUMNS_BY_TABLE.user_settings).toEqual([
       'privacyHiddenWords',
       'privacyRestrictedUsers',

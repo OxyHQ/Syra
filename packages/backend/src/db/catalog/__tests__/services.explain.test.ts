@@ -252,7 +252,7 @@ const PROBES: readonly { readonly name: string; readonly sql: string }[] = [
   },
   {
     // `controllers/artists.controller.ts` — `loadContributedTrackIds` step 1,
-    // the artist's own track ids feeding the Mongo attestation lookup.
+    // the artist's own track ids feeding the attestation lookup.
     name: 'contributedTrackIds',
     sql: `select id from tracks where artist_id = '${MARKER}-art-5'`,
   },

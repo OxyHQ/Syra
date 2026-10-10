@@ -23,8 +23,7 @@ afterAll(disconnectDb);
 /**
  * The track row plus its rendition ladder, which is a CHILD TABLE now.
  *
- * The Mongo assertions read `reloaded.hls[0]`; the ladder lives in
- * `track_hls_renditions` and its order is `position`, so a reader without the
+ * The ladder lives in `track_hls_renditions` and its order is `position`, so a reader without the
  * `ORDER BY` would compare against whatever row Postgres returned first.
  */
 /** The fingerprint row for a track, or undefined — a child table read. */

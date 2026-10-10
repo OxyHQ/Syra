@@ -1,14 +1,13 @@
 /**
  * `genres` — the real, enumerable genre taxonomy.
  *
- * Mongo let `Album.genre` be a bare `string[]`, and the genre-card browse
- * feature (and, on the track side, `browse.controller.ts`'s `distinct('genre',
- * ...)`) worked by scanning every stored value for the distinct set. A
- * Postgres `text[]` can answer "does this row's array contain X" (with a GIN
- * index) but cannot answer "what genres EXIST across the whole catalog"
- * without the same kind of scan Mongo already did — so a genre becomes a real
- * row here, and `album_genres` (in `catalog.ts`, alongside the `albums` table
- * it joins) is the junction that replaces the array.
+ * A bare `string[]` genre field makes the genre-card browse feature (and, on
+ * the track side, `browse.controller.ts`'s distinct-genre read) scan every
+ * stored value for the distinct set. A Postgres `text[]` can answer "does this
+ * row's array contain X" (with a GIN index) but cannot answer "what genres EXIST
+ * across the whole catalog" without that scan — so a genre is a real row here,
+ * and `album_genres` (in `catalog.ts`, alongside the `albums` table it joins) is
+ * the junction in place of the array.
  *
  * ## `kind` — two verticals, one table, a discriminator between them
  *
@@ -62,8 +61,8 @@
  * first spelling to arrive wins the row and later spellings resolve to it.
  *
  * Deliberately just a name and a kind: no colour, no icon, no sort order.
- * Every one of those was presentation state the Mongo browse controller
- * derived at read time (`GENRE_COLORS[genre]`), never stored — carrying it
+ * Every one of those is presentation state the browse controller derives at
+ * read time (`GENRE_COLORS[genre]`), never stored — carrying it
  * here would give a genre row two owners.
  */
 

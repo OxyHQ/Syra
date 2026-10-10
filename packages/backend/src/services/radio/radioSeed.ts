@@ -73,10 +73,9 @@ const USER_SEED_LIKED_TRACK_LIMIT = 20;
 /**
  * The seed columns every track-derived station reads.
  *
- * There is no `isObjectId` filter anywhere in this file any more, and its
- * absence is the point: every id column here is `text`, so an id of any shape
- * simply matches no row. The Mongo version had to pre-check because `$in` with a
- * non-ObjectId string THROWS rather than returning nothing.
+ * There is no id-shape filter anywhere in this file, and its absence is the
+ * point: every id column here is `text`, so an id of any shape simply matches
+ * no row.
  */
 const SEED_TRACK_COLUMNS = {
   id: tracks.id,
@@ -386,8 +385,8 @@ async function resolveUserSeed(oxyUserId: string | undefined): Promise<SeedResol
   // Most recently liked rather than a random draw: the tail is the freshest
   // signal — and it keeps the station reproducible. `listMembership` returns
   // oldest first, ordered by `user_liked_tracks.created_at`, which is the
-  // column Task 11 added precisely because the Mongo array's append order was
-  // what this line read and a junction table has none of its own.
+  // column that exists precisely because this line reads append order and a
+  // junction table has none of its own.
   const likedTrackIds = likedTracks.slice(-USER_SEED_LIKED_TRACK_LIMIT);
 
   const personalized = topGenres.length > 0 || topArtists.length > 0;

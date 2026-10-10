@@ -7,12 +7,11 @@ import type { NextFunction, Request, Response } from 'express';
 /**
  * `GET /api/images/:id` — the id-shape guard, and nothing else.
  *
- * The live defect this file pins: the guard was
- * `mongoose.Types.ObjectId.isValid`, while `services/imageAssetService.ts`
- * mints a uuid v7 for every image uploaded since the cutover. So the endpoint
- * that SERVES an image 400'd every image the endpoint beside it had just
- * minted, and every `/api/images/<id>` URL `db/catalog/serialize.ts` writes
- * into a cover art field.
+ * The defect this file pins: `services/imageAssetService.ts` mints a uuid v7
+ * for every new image, so a 24-hex-only guard makes the endpoint that SERVES an
+ * image 400 every image the endpoint beside it has just minted, and every
+ * `/api/images/<id>` URL `db/catalog/serialize.ts` writes into a cover art
+ * field.
  *
  * `playlists.controller.test.ts` covers the same guard on the WRITE side (a
  * client-supplied `coverArt`). That fix landed; this one — the read side of the
@@ -23,8 +22,8 @@ import type { NextFunction, Request, Response } from 'express';
  *
  * `getImageAssetStream` returns `null` for an id matching no row WITHOUT
  * reaching S3, so a well-formed id that names nothing is a 404 that proves the
- * request got PAST the guard. That is the discriminator: under the old guard a
- * uuid v7 never reached the query at all and came back 400.
+ * request got PAST the guard. That is the discriminator: under a 24-hex-only
+ * guard a uuid v7 never reaches the query at all and comes back 400.
  *
  * The malformed cases are not decoration — they are what stops a blanket
  * removal of the guard from passing this file. Deleting the guard outright
@@ -86,12 +85,12 @@ describe('GET /api/images/:id', () => {
   });
 
   /**
-   * The Mongo-era shape stays live permanently: a backfill copies the original
-   * id verbatim, so a row migrated from Mongo keeps its ObjectId forever. This
-   * is the assertion that stops the fix from becoming "accept uuids instead of
-   * ObjectIds" rather than "accept both".
+   * The 24-hex legacy shape stays live permanently: a backfill copies the
+   * original id verbatim, so a backfilled row keeps its 24-hex id forever. This
+   * is the assertion that stops the guard from becoming "accept uuids instead
+   * of 24-hex ids" rather than "accept both".
    */
-  it('still lets a 24-hex ObjectId reach the lookup', async () => {
+  it('still lets a 24-hex legacy id reach the lookup', async () => {
     const res = await getThrough('6a7682e9da69b80bbfbf97bd');
 
     expect(res._status).toBe(404);

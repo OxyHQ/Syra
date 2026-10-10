@@ -7,9 +7,8 @@ import { getLyrics } from './lyrics.controller';
 import type { Request, Response } from 'express';
 
 /**
- * Postgres only. `lyricsService` moved to drizzle in Task 10b while this suite
- * still seeded Mongo, which is why it was red: the handler reached `getDb()`
- * before anything had connected. Nothing in this path touches Mongoose now.
+ * Postgres only. `lyricsService` reads through drizzle, so the handler reaches
+ * `getDb()` and the suite must connect before it runs.
  */
 beforeAll(connectDb);
 afterEach(clearDb);

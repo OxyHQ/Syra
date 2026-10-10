@@ -1,7 +1,7 @@
 /**
  * Rooms and live schema — `houses`, `series`, `rooms`, `recordings` and the
- * per-user preference row, plus the three child tables their Mongo arrays
- * become.
+ * per-user preference row, plus the three child tables their ordered arrays
+ * live in.
  *
  * Ported from `packages/backend/src/models/{House,Room,RoomUserPreference,
  * Recording,Series}.ts`, field by field, against
@@ -10,8 +10,8 @@
  * ## `Room.topicId` is DROPPED — the dangling `ref: 'Topic'` resolved
  *
  * `models/Room.ts:224` declares `topicId: { type: Schema.Types.ObjectId, ref:
- * 'Topic' }` and **there is no `Topic` model anywhere in this repo**. Mongo
- * never checked the `ref`, so the declaration cost nothing and nobody noticed.
+ * 'Topic' }` and **there is no `Topic` model anywhere in this repo**. Nothing
+ * ever checked the `ref`, so the declaration cost nothing and nobody noticed.
  * A real foreign key cannot point at a table that does not exist, so this port
  * had to decide rather than carry it, and the evidence says drop:
  *
@@ -32,16 +32,12 @@
  * free-text `string`, `models/Room.ts:219`) is a DIFFERENT and genuinely-used
  * field and is ported normally, as `rooms.topic`.
  *
- * One loose end this task deliberately does NOT touch, because it is live
- * Mongo-path code outside a schema task's scope: `PUBLIC_ROOM_FIELDS` still
- * lists `'topicId'` (`routes/rooms.routes.ts:89`). It is inert today (the
- * field is absent from every document) and stays inert, but whichever task
- * ports `rooms.routes.ts` off Mongoose must delete that entry in the same
- * change — there will be no column for it to name.
+ * `routes/rooms.routes.ts` must therefore never list `topicId` in its
+ * response allowlist — there is no column for it to name.
  *
  * ## Two child tables this task's brief did not name
  *
- * The brief's `Produces` list names six tables. Eight land, because two Mongo
+ * The brief's `Produces` list names six tables. Eight land, because two source
  * arrays are arrays of OBJECTS with a known, shared sub-schema, and this
  * schema already settled what that shape becomes: a child table, regardless of
  * query-by-element evidence (`catalog.ts`'s `track_hls_renditions` correction
@@ -121,17 +117,16 @@
  * The column is ported (it is written on every row, and the intent is real).
  * The INDEX is not, per this schema's "an index with no reader is dropped in
  * writing" convention — and deliberately no `EXPIRY_SWEEP_TARGETS` entry is
- * added either, because `db/expiry.ts`'s registry replaces a Mongo TTL index,
- * and this was never one: adding a sweep here would start deleting recordings
- * Mongo has never deleted, which is a product decision and not a port. Raised
+ * added either: adding a sweep here would start deleting recordings that have
+ * never been deleted, which is a product decision rather than a schema one. Raised
  * in this task's report instead. Whoever adds the sweeper adds the supporting
  * index with it — `findUnsupportedExpiryColumns` will fail the gate if they
  * do not.
  *
  * ## Indexes dropped, and why
  *
- * Every drop below replaces a Mongo `index: true` (or a compound index) with
- * NOTHING, because tracing the real call sites found no reader:
+ * Every index below was declared on the source model and is deliberately NOT
+ * built, because tracing the real call sites found no reader:
  *
  *  - `Series.{ isActive, 'recurrence.type' }` — its own comment says "Find
  *    active series for scheduling". There is no scheduler: episodes are
@@ -143,12 +138,12 @@
  *    `seriesId`. It is assigned once (`routes/series.routes.ts:415`) and
  *    listed in the response allowlist; that is all. `rooms_series_id_idx`
  *    below exists for a different reason (the `ON DELETE SET NULL` lookup),
- *    and is deliberately not the compound Mongo declared.
+ *    and is deliberately not the declared compound.
  *  - `Recording.{ host, status, createdAt }` — `Recording.find({ host })` has
  *    no call site. `host` is read only as a `$group` key
  *    (`routes/rooms.routes.ts:1128`, top-hosts), which is served by
  *    `recordings_ready_host_idx` below — an index that matches the query that
- *    exists rather than the one Mongo declared.
+ *    exists rather than the one the model declared.
  *  - `Recording.{ expiresAt, status }` — see above.
  *  - `House.createdBy` / `Series.createdBy` standalone — grepped: neither is
  *    ever a query filter. Both are read off an already-loaded document for
@@ -248,9 +243,9 @@ export const RECORDING_ACCESS_LEVELS = ['public', 'participants'] as const;
 /** `models/RoomUserPreference.ts` `LiveVisibility`. */
 export const LIVE_VISIBILITIES = ['active', 'speaking'] as const;
 
-// ── Mongoose `maxlength` declarations, ported as CHECKs ───────────────────
-// Mongoose enforces these on every save today, so dropping them would quietly
-// loosen validation the application still relies on. Same treatment
+// ── `maxlength` limits, enforced as CHECKs ────────────────────────────────
+// The application relies on these bounds, so the database enforces them on
+// every write. Same treatment
 // `creators.ts` gives `ArtistClaim.evidence`.
 
 /** `models/House.ts:169-179`. */
@@ -340,8 +335,8 @@ export const houses = pgTable(
      * global room listing, which is the hottest path in this vertical.
      */
     index('houses_visibility_rooms_idx').on(t.visibilityRooms),
-    // Replaces Mongo's `{ name: 'text', description: 'text' }`, which
-    // `routes/houses.routes.ts:203` queries with `$text`.
+    // Full-text search over name and description, which
+    // `routes/houses.routes.ts:203` queries.
     index('houses_search_gin').using('gin', t.searchVector),
   ],
 );
@@ -356,7 +351,7 @@ export const houseMembers = pgTable(
       .notNull()
       .references(() => houses.id, { onDelete: 'cascade' }),
     /**
-     * An Oxy account id — no foreign key. Named `oxyUserId`, not Mongo's
+     * An Oxy account id — no foreign key. Named `oxyUserId`, not
      * `userId` (`models/House.ts:98`): every Oxy account id in this schema is
      * `oxy_user_id` across all 51 tables that preceded this one, and this is
      * the same thing (RELATIONS.md classifies it CROSS-SERVICE alongside
@@ -405,7 +400,7 @@ export const series = pgTable(
     recurrenceDayOfWeek: integer(),
     /** 1-31; only meaningful for monthly. */
     recurrenceDayOfMonth: integer(),
-    /** `HH:mm`, 24-hour — the CHECK below is Mongoose's own `match` regex. */
+    /** `HH:mm`, 24-hour — enforced by the CHECK below. */
     recurrenceTime: text().notNull(),
     /** An IANA timezone, e.g. `America/New_York`. */
     recurrenceTimezone: text().notNull().default('UTC'),
@@ -437,8 +432,8 @@ export const series = pgTable(
       'series_recurrence_day_of_month_check',
       sql`${t.recurrenceDayOfMonth} is null or ${t.recurrenceDayOfMonth} between 1 and 31`,
     ),
-    // Mongoose's own `match: /^\d{2}:\d{2}$/` (models/Series.ts:84). `~` with
-    // an anchored POSIX class is the same assertion.
+    // `HH:mm`: `~` with an anchored POSIX class asserts two digits, a colon,
+    // two digits.
     check('series_recurrence_time_check', sql`${t.recurrenceTime} ~ '^[0-9]{2}:[0-9]{2}$'`),
     check(
       'series_room_template_type_check',
@@ -549,10 +544,9 @@ export const rooms = pgTable(
      * room with no `broadcastKind` gets defaulted to `'user'`,
      * `models/Room.ts:345-347`) is deliberately NOT expressed as
      * `type <> 'broadcast' or broadcast_kind is not null`: Postgres has no
-     * per-row conditional default, so that CHECK would REJECT an insert
-     * Mongoose accepts and silently fills in. Enforcing it would tighten the
-     * contract past what the application does, which is a different thing from
-     * porting it.
+     * per-row conditional default, so that CHECK would REJECT an insert the
+     * application expects to be filled in. Enforcing it would tighten the
+     * contract past what the application does.
      */
     broadcastKind: text({ enum: ROOM_BROADCAST_KINDS }),
     // ── Lifecycle ─────────────────────────────────────────────────────────
@@ -629,9 +623,9 @@ export const rooms = pgTable(
     ),
     /**
      * `RoomSchema.pre('validate')` (`models/Room.ts:349-351`) clears
-     * `broadcastKind` on every save of a non-broadcast room. Ported on the same
-     * grounds as the 11 `maxlength`/`match` CHECKs below — Mongoose enforces it
-     * on every save today, so leaving it out would quietly loosen validation.
+     * `broadcastKind` on every save of a non-broadcast room. Enforced on the
+     * same grounds as the 11 `maxlength`/`match` CHECKs below — leaving it out
+     * would quietly loosen validation the application relies on.
      * See the `broadcastKind` column for why only this direction is a CHECK.
      */
     // Named `..._requires_type_check`, not `rooms_broadcast_kind_check` —
@@ -647,7 +641,7 @@ export const rooms = pgTable(
      * room's speaker permission is forced to `'invited'`, because a broadcast
      * is not a room anyone may speak in. Expressible with no conflict — the
      * column already defaults to `'invited'`, so this rejects only an explicit
-     * widening that Mongoose would have silently overwritten.
+     * widening the application would otherwise silently overwrite.
      */
     check(
       'rooms_broadcast_speaker_permission_check',
@@ -735,9 +729,7 @@ export const rooms = pgTable(
       .where(sql`${t.archived} = false`),
     /**
      * `Room.findOne({ activeIngressId })` — `routes/livekitWebhook.routes.ts:76`,
-     * which runs on EVERY LiveKit webhook delivery. Mongo has no index for it
-     * at all, so this is a genuine improvement rather than a port; partial
-     * because the column is null on every room that is not currently
+     * which runs on EVERY LiveKit webhook delivery. Partial because the column is null on every room that is not currently
      * streaming, which is nearly all of them.
      */
     index('rooms_active_ingress_id_idx')
@@ -745,7 +737,7 @@ export const rooms = pgTable(
       .where(sql`${t.activeIngressId} is not null`),
     /**
      * Support for `series`' `ON DELETE SET NULL`, which has to find every
-     * referencing room. Deliberately NOT Mongo's `{ seriesId, scheduledStart }`
+     * referencing room. Deliberately NOT a `{ seriesId, scheduledStart }`
      * compound — nothing queries a room by series (see the file-level doc
      * comment), so the sort key would be indexing for a reader that does not
      * exist.
@@ -781,7 +773,7 @@ export const rooms = pgTable(
   ],
 );
 
-// ── room_media_queue_items (child of rooms — Mongo's `podcastQueue`) ───────
+// ── room_media_queue_items (child of rooms — the room's `podcastQueue`) ────
 
 export const roomMediaQueueItems = pgTable(
   'room_media_queue_items',
@@ -831,7 +823,7 @@ export const roomMediaQueueItems = pgTable(
       sql`(${t.kind} = 'podcast' and ${t.episodeId} is not null and ${t.trackId} is null)
           or (${t.kind} = 'track' and ${t.trackId} is not null and ${t.episodeId} is null and ${t.syraPodcastId} is null)`,
     ),
-    // Preserves the Mongo array's ORDER — this queue is popped head-first
+    // Preserves the queue's ORDER — this queue is popped head-first
     // (`advancePodcastQueueForRoom`), so a lost order is a lost queue.
     unique('room_media_queue_items_room_id_position_key').on(t.roomId, t.position),
   ],
@@ -858,7 +850,7 @@ export const seriesEpisodes = pgTable(
     scheduledStart: timestamptz().notNull(),
     /**
      * The series' own 1-based counter (`Series.nextEpisodeNumber` at write
-     * time), distinct from `position`, which preserves the Mongo array's
+     * time), distinct from `position`, which preserves the source array's
      * index. Both are ported because both exist: `position` is this schema's
      * ordinal convention for every array-turned-child-table, `episodeNumber`
      * is a domain value that appears in generated room titles
@@ -883,8 +875,8 @@ export const recordings = pgTable(
   {
     id: generatedId(),
     /**
-     * NULLABLE and `SET NULL`, unlike Mongoose's `required: true` — the one
-     * deliberate schema improvement in this file. See the file-level doc
+     * NULLABLE and `SET NULL`, although the model declared it `required` —
+     * deliberately. See the file-level doc
      * comment for why neither CASCADE nor RESTRICT is right.
      */
     roomId: text().references(() => rooms.id, { onDelete: 'set null' }),
@@ -902,8 +894,7 @@ export const recordings = pgTable(
      */
     objectKey: text().notNull(),
     /**
-     * `integer`, where Mongo stored a `Number` (a double) — a deliberate
-     * narrowing to the house convention, matching `user_uploads.sizeBytes`
+     * `integer`, not a double — the house convention, matching `user_uploads.sizeBytes`
      * (`creators.ts:311`) and `image_assets.byteSize` (`catalog.ts:228`). The
      * ceiling is 2.1 GB, which a single room's recorded audio does not
      * approach (24 h of Opus at 64 kbps is roughly 700 MB). Recorded as a
@@ -944,9 +935,9 @@ export const recordings = pgTable(
     /**
      * The top-hosts aggregate (`routes/rooms.routes.ts:1128`), which matches
      * `status: 'ready'` ALONE — no `access` filter — and groups by host. The
-     * partial index above cannot serve it (it is narrower), and Mongo's
-     * `{ host, status, createdAt }` was built for a `find({ host })` that has
-     * no call site. This indexes the query that exists.
+     * partial index above cannot serve it (it is narrower), and a
+     * `{ host, status, createdAt }` compound would serve a `find({ host })` that
+     * has no call site. This indexes the query that exists.
      */
     index('recordings_ready_host_idx').on(t.host).where(sql`${t.status} = 'ready'`),
     /**
@@ -976,8 +967,8 @@ export const roomUserPreferences = pgTable(
   {
     id: generatedId(),
     /**
-     * An Oxy account id — no foreign key. Renamed from Mongo's `userId` for
-     * the same reason as `house_members.oxyUserId`; see that column.
+     * An Oxy account id — no foreign key. Named `oxyUserId` rather than
+     * `userId` for the same reason as `house_members.oxyUserId`; see that column.
      */
     oxyUserId: text().notNull(),
     liveVisibility: text({ enum: LIVE_VISIBILITIES }).notNull().default('active'),
@@ -989,8 +980,7 @@ export const roomUserPreferences = pgTable(
       'room_user_preferences_live_visibility_check',
       sql`${t.liveVisibility} in (${sql.raw(inList(LIVE_VISIBILITIES))})`,
     ),
-    // One row per account — a direct port of Mongo's unique `userId`, and the
-    // index the batched `{ userId: { $in: [...] } }` read
+    // One row per account, and the index the batched `{ userId: { $in: [...] } }` read
     // (`routes/rooms.routes.ts:1228`) needs. No separate standalone index is
     // added; an index dropped in writing, per Task 2's convention.
     unique('room_user_preferences_oxy_user_id_key').on(t.oxyUserId),

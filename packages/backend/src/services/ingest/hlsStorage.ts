@@ -58,8 +58,8 @@ export interface StoreHlsTarget {
    * Which id space {@link StoreHlsTarget.recordId} belongs to, and therefore
    * which of `track_keys`' three parent columns the AES key is filed under.
    *
-   * Mongo stored the key row with no discriminator at all, so "these three id
-   * spaces never collide" lived only in a comment. A caller has to say which of
+   * Without a discriminator, "these three id spaces never collide" would live
+   * only in a comment. A caller has to say which of
    * the three it is holding — `'track'` from `ingestTrack`, `'user_upload'`
    * from `ingestUserUpload`, `'episode'` from `ingestEpisode` — and the column
    * that choice selects carries a real `ON DELETE cascade` back to that row.

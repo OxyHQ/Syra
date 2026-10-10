@@ -1,8 +1,8 @@
 /**
  * `db/user/settings.ts` — the two projections and the clearing semantics.
  *
- * Both are behaviour the Mongo version got WRONG rather than behaviour this port
- * reproduces, so both are asserted here rather than described in a comment.
+ * Both are easy to get wrong, so both are asserted here rather than described
+ * in a comment.
  */
 
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'bun:test';
@@ -107,18 +107,16 @@ describe('the two reads', () => {
 
 describe('null clears, undefined leaves alone', () => {
   /**
-   * The defect this port fixes. `routes/profileSettings.ts` cleared five
-   * optional fields by assigning `undefined` into a `$set`; **Mongoose 9 strips
-   * undefined-valued keys out of an update**, so every one of those branches was
-   * a no-op — the request succeeded, the response echoed the unchanged document,
-   * and the field kept its old value. Measured on 9.7.4 against a real mongod,
-   * with an explicit `null` as the control.
+   * `routes/profileSettings.ts` clears five optional fields. Clearing by
+   * assigning `undefined` would be a no-op — an update drops undefined-valued
+   * keys, so the request succeeds, the response echoes the unchanged row, and
+   * the field keeps its old value. Clearing has to be an explicit `null`.
    *
    * Each field is set, then cleared, then a THIRD write touches something else
    * entirely — the sequencing matters, because a `set()` that dropped every key
    * would pass the "still cleared" half by never writing anything at all.
    */
-  it('clears each of the five fields the Mongo handler could not', async () => {
+  it('clears each of the five optional fields', async () => {
     await updateUserSettings(OWNER, {
       appearancePrimaryColor: '#ff0000',
       profileCustomizationDisplayName: 'Nate',
@@ -172,11 +170,10 @@ describe('null clears, undefined leaves alone', () => {
 
 describe('reading another account does not write one', () => {
   /**
-   * The Mongo route find-or-created, so `GET /settings/:userId` — which answers
-   * for ANY id an authenticated caller names — was an unbounded write anybody
-   * could drive: one row per id anyone ever asked about, keyed by a string they
-   * chose. The viewer read needs nothing the row provides, so it no longer
-   * creates one.
+   * `GET /settings/:userId` answers for ANY id an authenticated caller names, so
+   * a find-or-create there would be an unbounded write anybody could drive: one
+   * row per id anyone ever asked about, keyed by a string they chose. The viewer
+   * read needs nothing the row provides, so it does not create one.
    */
   it('leaves no row behind for an account that has none', async () => {
     const before = await settingsRowCount();
@@ -212,9 +209,8 @@ describe('the row is created on first read', () => {
 
     expect(fresh.appearance.themeMode).toBe('system');
     expect(fresh.privacy.profileVisibility).toBe('public');
-    // Absent from the Mongo document until something wrote them; every Postgres
-    // column carries its default, so the nested groups always render. A
-    // deliberate widening — see `db/user/settings.ts`.
+    // Every column carries its default, so the nested groups always render —
+    // see `db/user/settings.ts`.
     expect(fresh.profileCustomization.coverPhotoEnabled).toBe(true);
     expect(fresh.interests.tags).toEqual([]);
     expect(fresh.feedSettings.recency.halfLifeHours).toBe(24);

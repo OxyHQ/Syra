@@ -110,9 +110,9 @@ export interface HouseVisibility {
  * (admin-adds), so existing behaviour is preserved with no backfill.
  *
  * The `houses` table gives all three columns these same values as column
- * DEFAULTs and marks them `notNull`, so unlike the Mongo document this is a
- * fallback for a caller that omits the field rather than for a row that lacks
- * it — a stored house always has all three.
+ * DEFAULTs and marks them `notNull`, so this is a fallback for a caller that
+ * omits the field rather than for a row that lacks it — a stored house always
+ * has all three.
  */
 export const DEFAULT_HOUSE_VISIBILITY: HouseVisibility = {
   discovery: HouseDiscovery.LISTED,
@@ -161,11 +161,10 @@ export type MediaQueueKind = 'podcast' | 'track';
  * playable audio URL is ALWAYS resolved server-side at play-time (never trusted
  * from the client).
  *
- * A single flat shape rather than a strict union, unchanged from the Mongoose
- * subdocument this replaces. Where the Mongo comment could only ASSERT that "the
- * parse/seed paths guarantee the right fields are populated for each kind", the
- * `room_media_queue_items_kind_ids_check` CHECK now enforces it — including the
- * negative half that stops a `'track'` row carrying an `episodeId`.
+ * A single flat shape rather than a strict union. The
+ * `room_media_queue_items_kind_ids_check` CHECK enforces that the right fields
+ * are populated for each kind — including the negative half that stops a
+ * `'track'` row carrying an `episodeId`.
  *
  * For a podcast item, `syraPodcastId` (when present) is cross-checked against the
  * resolved episode's show at play-time to reject a mismatched pairing.

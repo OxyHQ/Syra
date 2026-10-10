@@ -160,7 +160,7 @@
  * was never the guard on this data. The guards here are
  * `PROTECTED_COLUMNS_BY_TABLE` (`protectedColumns.ts`) plus the hand-written
  * DTO allowlist `toUploadTrackDto`. Registered there: this table's flattened
- * `rawTags*` columns (Mongoose `select: false` on both models), `fingerprint`
+ * `rawTags*` columns (server-only on both tables), `fingerprint`
  * ("thousands of integers... exposing it would hand a client the acoustic
  * index it would need to enumerate the catalog"), `sha256` (the same audio
  * content hash `tracks.sha256` is protected for), and the attestation's `ip`
@@ -180,9 +180,7 @@
  * ## No expiry-sweep entry, deliberately
  *
  * `UserUpload.expiresAt` looks exactly like the TTL columns `expiry.ts`
- * exists for, and it must NOT be registered there. Mongo's TTL index was
- * declined on this collection for a reason the model spells out: a blind row
- * delete leaves every one of the file's S3 objects orphaned and skips the
+ * exists for, and it must NOT be registered there: a blind row delete leaves every one of the file's S3 objects orphaned and skips the
  * T-14d warning the retention policy promises. `sweepExpiredRows` is exactly
  * that blind delete. `services/uploads/expirySweeper.ts` is the sweeper —
  * notice, then soft-delete, then objects-before-document — and it stays the
@@ -195,15 +193,11 @@
  * album view groups by `album_key`, and there is no search endpoint over
  * uploads at all. A GIN index nothing can query is cost with no reader.
  *
- * ## `deletedAt: null` vs `deletedAt: { $exists: false }`
+ * ## "Not soft-deleted" has one spelling
  *
- * The Mongo readers use both spellings for "not soft-deleted"
- * (`controllers/uploads.controller.ts:680` vs `services/uploads/
- * matchCatalog.ts:169`), which are NOT the same predicate in Mongo — an
- * explicitly-stored `null` matches the first and not the second. They agree
- * today only because nothing ever stores an explicit null. In Postgres both
- * are `deleted_at is null`, so the divergence disappears at the port rather
- * than being carried forward.
+ * Every reader (`controllers/uploads.controller.ts`, `services/uploads/
+ * matchCatalog.ts`) asks `deleted_at is null`; there is no second predicate for
+ * an absent value to diverge from.
  */
 
 import { sql } from 'drizzle-orm';
@@ -261,7 +255,7 @@ export const COPYRIGHT_REPORT_STATUSES = ['pending', 'approved', 'rejected'] as 
  * These carry the same values as `tracks`' `TRACK_STATUSES`/`AUDIO_FORMATS`
  * today, and the first pass of this file shared those. That was inconsistent
  * with the rule the file itself states one paragraph up: `UserUpload`
- * declares its OWN Mongoose enums (`models/UserUpload.ts:93,215`), so a value
+ * declares its OWN enums (`models/UserUpload.ts:93,215`), so a value
  * added to the catalog's ingest states would have become silently legal for a
  * locker file too. The coupling that does exist — a locker file becomes a
  * `Track` at promote time — is a MAPPING, and if it needs enforcing it needs
@@ -319,7 +313,7 @@ export const userUploads = pgTable(
     trackNumber: integer(),
     discNumber: integer(),
     year: integer(),
-    /** Mongoose gives every upload an implicit `[]`; matched here, as `tracks.tags` is. */
+    /** Every upload defaults to `[]`, as `tracks.tags` does. */
     genres: text().array().notNull().default(sql`array[]::text[]`),
     /**
      * `UploadLyrics` — jsonb, and dead. Nothing writes it and nothing reads
@@ -487,17 +481,15 @@ export const userUploads = pgTable(
      */
     index('user_uploads_expires_at_idx').on(t.expiresAt).where(sql`${t.deletedAt} is null`),
     /**
-     * The sweeper's phase 3 (`deletedAt <= graceCutoff`), which had NO Mongo
-     * index at all: it runs on every tick, unattended, over the one
-     * collection this design expects to reach millions of rows. Adding it is
-     * "add the index Mongo needed and lacked", the same call `catalog.ts`
-     * made for the playability partials.
+     * The sweeper's phase 3 (`deletedAt <= graceCutoff`): it runs on every
+     * tick, unattended, over the one table this design expects to reach
+     * millions of rows, the same call `catalog.ts` made for the playability
+     * partials.
      */
     index('user_uploads_deleted_at_idx').on(t.deletedAt),
     /**
      * The takedown purge's first leg (`takedown.ts:363`,
-     * `find({ matchedTrackId })`) — also unindexed in Mongo, same table, same
-     * reasoning.
+     * `find({ matchedTrackId })`) — same table, same reasoning.
      */
     index('user_uploads_matched_track_id_idx').on(t.matchedTrackId),
     // See `catalog_entities_image_id_idx`'s comment (`catalog.ts`) for why
@@ -511,12 +503,12 @@ export const userUploads = pgTable(
     index('user_uploads_cover_art_sizes_xlarge_id_idx').on(t.coverArtSizesXlargeId),
     index('user_uploads_cover_art_sizes_xxlarge_id_idx').on(t.coverArtSizesXxlargeId),
     index('user_uploads_cover_art_sizes_original_id_idx').on(t.coverArtSizesOriginalId),
-    // Mongo's standalone `{ albumKey: 1 }` is dropped in writing: every
+    // No standalone `album_key` index, deliberately: every
     // reader of it is scoped to one owner first, and the compound index
     // above leads with `owner_oxy_user_id`.
     //
-    // Mongo's standalone `{ ownerOxyUserId: 1 }` is dropped for the other
-    // reason an index goes away in writing: it is the LEADING COLUMN of the
+    // No standalone `owner_oxy_user_id` index either, for the other reason an
+    // index is left out: it is the LEADING COLUMN of the
     // three compound indexes above (and of the unique constraint), and a
     // btree prefix serves an owner-only lookup on its own. Same convention
     // `library.ts` used for `devices.oxy_user_id` — recorded here because a
@@ -620,9 +612,8 @@ export const artistClaims = pgTable(
       sql`${t.status} in (${sql.raw(inList(ARTIST_CLAIM_STATUSES))})`,
     ),
     /**
-     * Mongoose's `maxlength` on both text fields, expressed where it is
-     * actually enforced. The first `maxlength` any task has had to port —
-     * this schema already turns Mongoose's `min:`/`max:` validators into
+     * A `maxlength` on both text fields, expressed where it is actually
+     * enforced. This schema already turns `min:`/`max:` validators into
      * CHECKs (`catalog_entities_strike_count_check`,
      * `albums_popularity_check`), so the string analogue follows the same
      * rule rather than being dropped as "app-level validation" or changing
@@ -652,13 +643,13 @@ export const artistClaims = pgTable(
     index('artist_claims_oxy_user_id_created_at_idx').on(t.oxyUserId, t.createdAt.desc()),
     /** The review queue, oldest first (`listArtistClaims`). */
     index('artist_claims_status_created_at_idx').on(t.status, t.createdAt),
-    // Mongo's standalone `{ artistId: 1 }` is dropped in writing: no reader
+    // No standalone `artist_id` index, deliberately: no reader
     // queries claims by artist across all statuses — the one artist-scoped
     // query is `status: 'pending'`, which the partial unique index above
     // serves on its leading column.
     //
-    // Mongo's standalone `{ oxyUserId: 1 }` and `{ status: 1 }` are dropped
-    // as leading-column prefixes of the two compound indexes above:
+    // No standalone `oxy_user_id` or `status` index: each is a leading-column
+    // prefix of the two compound indexes above:
     // `listMyArtistClaims` filters `oxyUserId` and sorts `createdAt`, and
     // `listArtistClaims` filters `status` and sorts `createdAt`, so each
     // compound index already serves its own column alone.
@@ -795,14 +786,13 @@ export const contributorStandings = pgTable(
   (t) => [
     check('contributor_standings_strike_count_check', sql`${t.strikeCount} >= 0`),
     unique('contributor_standings_oxy_user_id_key').on(t.oxyUserId),
-    // Mongo's standalone `{ uploadsDisabled: 1 }` and `{ terminated: 1 }` are
-    // dropped in writing: `canContributePublicly` and
+    // No standalone `uploads_disabled` or `terminated` index, deliberately: `canContributePublicly` and
     // `getContributorStanding` both look this table up BY `oxyUserId` and
     // read the two booleans off the loaded row. Neither is ever a query
     // filter — same shape as `podcasts.claimable`, dropped for the same
     // reason in Task 4.
     //
-    // Mongo's standalone `{ oxyUserId: 1 }` is dropped as redundant with the
+    // No standalone `oxy_user_id` index: it would be redundant with the
     // unique constraint above, which Postgres backs with its own btree —
     // every lookup in this file's three call sites is by that column.
   ],
@@ -821,7 +811,7 @@ export const contributorStrikes = pgTable(
     /** Named foreign key below — see `user_upload_provenance_markers` for why. */
     contributorStandingId: text().notNull(),
     reason: text().notNull(),
-    /** Mirrors the Mongo subdocument's own `createdAt: { default: Date.now }`. */
+    /** When the strike was recorded. */
     createdAt: createdAt(),
     /**
      * Optional per-strike audit pointer to the offending track. SET NULL, not
@@ -883,20 +873,18 @@ export const copyrightReports = pgTable(
     /**
      * The review queue. ASCENDING on `created_at`, matching the one reader
      * (`listCopyrightReports` sorts oldest first — a report waiting is a work
-     * still being distributed), rather than Mongo's declared `-1`; a Postgres
-     * btree serves either direction, so the declaration follows the query.
+     * still being distributed); a btree serves either direction, so the declaration follows the query.
      */
     index('copyright_reports_status_created_at_idx').on(t.status, t.createdAt),
-    // Mongo's standalone `{ artistId: 1 }`, `{ artistId: 1, status: 1 }` and
-    // `{ reporterOxyUserId: 1 }` are dropped in writing: grepped every
-    // reader of this collection — `findOne({ trackId, status })`,
+    // No `artist_id`, `(artist_id, status)` or `reporter_oxy_user_id` index,
+    // deliberately: grepped every reader of this table — `findOne({ trackId, status })`,
     // `find({ status })`, `findById`, `deleteOne` — and none of them filters
     // by artist or by reporter. The `artist_id` FK's RESTRICT check does a
     // sequential scan here on an artist delete, which no code path performs
     // (RELATIONS.md fact 1).
     //
-    // Mongo's standalone `{ trackId: 1 }` and `{ status: 1 }` are dropped as
-    // leading-column prefixes of the two compound indexes above, which serve
+    // No standalone `track_id` or `status` index: each is a leading-column
+    // prefix of the two compound indexes above, which serve
     // `{ trackId }` and `{ status }` alone as well as the pairs.
   ],
 );

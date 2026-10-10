@@ -18,10 +18,8 @@ const testDeps = { getToken: async () => 'test-service-token' };
 /**
  * Real `podcasts` rows, not bare strings.
  *
- * `user_podcast_subscriptions.podcast_id` is a real foreign key — the one that
- * kept this junction on Mongoose through Task 11 — so a subscription fixture
- * naming a show that does not exist is `23503`, where Mongo stored `'show-1'`
- * happily. Both shows are created per test.
+ * `user_podcast_subscriptions.podcast_id` is a real foreign key, so a
+ * subscription fixture naming a show that does not exist is `23503`. Both shows are created per test.
  */
 const PODCAST_ID = uuidv7();
 const OTHER_PODCAST_ID = uuidv7();

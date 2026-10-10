@@ -34,19 +34,17 @@
  *
  * ## The decay pass is set-wise, not a cursor
  *
- * `tasteDecay` walked every profile with a Mongo cursor and issued one
- * `profile.save()` each. The same pass is five statements here, independent of
- * how many profiles exist. What made the cursor's per-profile isolation
- * worthwhile was that one document could fail validation without aborting the
- * rest; a set-wise `UPDATE` has no per-row failure mode to isolate, and its
- * all-or-nothing transaction is the stronger guarantee.
+ * The pass is five statements, independent of how many profiles exist, rather
+ * than one write per profile from a cursor. Per-profile isolation would only be
+ * worth having if one profile could fail without aborting the rest; a set-wise
+ * `UPDATE` has no per-row failure mode to isolate, and its all-or-nothing
+ * transaction is the stronger guarantee.
  *
- * The pass stays idempotent and time-proportional for the reason it always was:
+ * The pass is idempotent and time-proportional:
  * the factor is computed from each profile's OWN `last_decay_at`, so running it
  * twice in quick succession barely changes anything the second time, and a
  * missed tick costs nothing. `now()` is Postgres's transaction timestamp, so
- * every statement in the pass shares one instant — the same property the Mongo
- * version got by capturing `Date.now()` once.
+ * every statement in the pass shares one instant.
  */
 
 import { and, eq, inArray, lt, sql } from 'drizzle-orm';
@@ -66,8 +64,8 @@ const PRUNE_THRESHOLD = 0.05;
 /**
  * A profile is skipped when too little time has passed for decay to matter.
  *
- * The Mongo pass computed the factor and skipped when it was `>= 0.999`. That
- * is the same test as an elapsed-time floor — `0.5^(e/H) < 0.999` ⟺
+ * The rule is "skip when the decay factor is `>= 0.999`". That is the same
+ * test as an elapsed-time floor — `0.5^(e/H) < 0.999` ⟺
  * `e > H · ln(0.999)/ln(0.5)` — and expressing it as a floor keeps the
  * predicate on a bare column, where an index could serve it, instead of on a
  * computed expression where none ever could.
@@ -145,12 +143,12 @@ export async function findTasteWeights(
  * parent's `total_signal` did not is a profile that disagrees with itself.
  *
  * `totalSignalDelta` is the caller's own already-clamped contribution — a play's
- * `max(0, weight)`, a like's 2.5, a follow's 4 — matching the Mongo line
+ * `max(0, weight)`, a like's 2.5, a follow's 4 — so
  * `totalSignal = max(0, totalSignal + max(0, weight))`, where a skip's negative
  * weight cools the individual buckets but never reduces the maturity signal.
  *
- * **A non-existent artist is now a `23503`**, where Mongo stored the string: the
- * artist side is a real foreign key. Every caller derives the id from a row it
+ * **A non-existent artist is a `23503`**: the artist side is a real foreign
+ * key. Every caller derives the id from a row it
  * has already read (`tracks.artist_id`, or a `catalog_entities` row it just
  * selected), so the only way to hit it is an artist deleted between that read
  * and this write. All three callers already treat this as best-effort and log
@@ -191,9 +189,9 @@ export async function applyTasteSignal(
  * conflict key twice, with `21000: ON CONFLICT DO UPDATE command cannot affect
  * row a second time`. `applyFollowSignal` can produce exactly that: it lowercases
  * an artist's genre list, so an artist tagged `['Rock', 'rock']` yields two
- * `rock` deltas. The Mongo version looped and bumped the bucket twice, which is
- * a SUM — so summing here is also what preserves the old behaviour, rather than
- * merely avoiding the error.
+ * `rock` deltas. The intended result is a SUM — the bucket bumped twice — so
+ * summing here is the defined behaviour, not merely a way of avoiding the
+ * error.
  *
  * The non-positive branch is at most one key in practice — `recordPlay` applies
  * a skip's negative weight to the played track's single genre and single artist
@@ -287,9 +285,7 @@ async function applyArtistDeltas(
  * Drop everything past the cap, lowest weight first — `list.sort(); list.length
  * = max` against a table.
  *
- * The key is a tiebreak so the trim is reproducible; Mongo's was decided by the
- * array's insertion order surviving a stable sort, which was arbitrary in a
- * different way rather than defined.
+ * The key is a tiebreak so the trim is reproducible rather than arbitrary.
  */
 async function trimGenres(tx: DbOrTransaction, tasteProfileId: string): Promise<void> {
   const survivors = tx
@@ -338,14 +334,12 @@ export interface TasteDecayResult {
  *
  * Five statements for the whole pass — decay and prune each child, then settle
  * the parents — rather than one round trip per profile. See this file's doc
- * comment for why the cursor's per-profile isolation is not lost by doing so.
+ * comment for why per-profile isolation is not lost by doing so.
  *
- * `total_signal` is recomputed as the sum of the surviving ARTIST weights only,
- * which is what the Mongo pass did (`for (const a of profile.artists) total +=
- * a.weight`). That makes decay the one writer whose `total_signal` is a real
- * sum rather than an accumulator of deltas — a pre-existing quirk of the model,
- * ported as-is because nothing reads the field and changing it here would be an
- * unreviewed behaviour change smuggled into a port.
+ * `total_signal` is recomputed as the sum of the surviving ARTIST weights only.
+ * That makes decay the one writer whose `total_signal` is a real sum rather
+ * than an accumulator of deltas — a known quirk, left as-is because nothing
+ * reads the field.
  */
 export async function decayDueTasteProfiles(): Promise<TasteDecayResult> {
   return getDb().transaction(async (tx) => {

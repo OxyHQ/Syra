@@ -328,8 +328,7 @@ describe('loadCreditedOn — secondary participation', () => {
 describe('loadCreditedOn — the cap counts TRACKS, not credit rows', () => {
   /**
    * The review's finding: `credits.nameKey` is one-to-many, so a `LIMIT` over
-   * the joined shape bounds credit ROWS. Mongo bounded 50 documents and folded
-   * roles afterwards. Without the two-query form, an artist credited twice on
+   * the joined shape bounds credit ROWS, not tracks. Without the two-query form, an artist credited twice on
    * every track gets half a shelf — and the shortfall scales with how rich
    * their credits are, which is the opposite of the intent.
    *

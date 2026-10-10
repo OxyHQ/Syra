@@ -3,12 +3,11 @@
  *
  * The sibling of `uploads.controller.test.ts`'s "clears the stored palette when
  * the new cover art has none". Both controllers had the same defect for the
- * same reason, and it is a difference between the two ORMs rather than anything
- * about podcasts or uploads:
+ * same reason, and it is a rule of the ORM rather than anything about podcasts
+ * or uploads:
  *
  * > **In drizzle, `undefined` in a `.set()` means "leave this column alone";
- * > `null` means "clear it". In Mongoose they were the same thing** — assigning
- * > `undefined` to a path made `save()` issue `$unset`.
+ * > `null` means "clear it".** Code that means "clear" must say `null`.
  *
  * Here the stripping is explicit as well as implicit: `db/podcasts/podcasts.ts`'s
  * `definedOnly` drops undefined keys BEFORE drizzle would. That helper is right

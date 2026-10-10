@@ -1,7 +1,7 @@
 /**
  * Pure radio programming logic: scoring, diversity and the seeded PRNG.
  *
- * This module deliberately contains no Mongo queries and no model imports —
+ * This module deliberately contains no database queries and no model imports —
  * every function here is a total function of its arguments, which is what makes
  * the station's output reproducible and unit testable.
  */

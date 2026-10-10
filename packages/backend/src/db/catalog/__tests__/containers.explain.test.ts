@@ -280,8 +280,8 @@ beforeAll(async () => {
           )
           .limit(50),
         // `GET /api/browse/genres` — the genre cards. `distinct on` plus the
-        // matching leading `order by` is what turns Mongo's 1 + N round trips
-        // (a `distinct`, then a sorted `find().limit(1)` per genre) into one.
+        // matching leading `order by` answers it in one round trip rather than
+        // 1 + N (a `distinct`, then a sorted lookup per genre).
         browseGenreCards: tx
           .selectDistinctOn([tracks.genre], { genre: tracks.genre, coverArtId: tracks.coverArtId })
           .from(tracks)
@@ -521,9 +521,7 @@ describe('the artist and playlist paths reach their indexes', () => {
   });
 
   it('the playlist playability probe indexes both hops', () => {
-    // Membership by playlist, then the track by primary key — the hop that could
-    // not be indexed at all under Mongo, where `PlaylistTrack.trackId` was a
-    // string and `Track._id` an ObjectId.
+    // Membership by playlist, then the track by primary key.
     const indexes = indexesIn('playlistHasPlayable');
     // TWO indexes on `playlist_tracks` lead with `playlist_id` — the unique
     // `(playlist_id, position)` and the plain `(playlist_id, track_id)` — and
@@ -582,10 +580,8 @@ describe('Task 10c-3: the controller list queries reach an index', () => {
    * rows, so the choice among them is a cost estimate, and naming one would be
    * asserting an arbitrary tie-break exactly as `albumHasPlayable` above says.
    *
-   * The consequence is real and is NOT a port regression: Mongo sorted on the
-   * same four keys with no compound index either, so both stores sort every
-   * playable track to return a page of twenty. What changed is that it is now
-   * measured. Recorded for whoever sizes the catalogue: the fix is a compound
+   * The consequence is real: with no compound index on the same four keys, every
+   * playable track is sorted to return a page of twenty. Recorded for whoever sizes the catalogue: the fix is a compound
    * index matching the shelf's own ordering, which is a schema decision and not
    * this task's to take.
    */

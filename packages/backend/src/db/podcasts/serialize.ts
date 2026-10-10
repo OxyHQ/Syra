@@ -3,17 +3,14 @@
  * `services/podcasts/podcastSerializers.ts`.
  *
  * Same allowlist discipline as `db/catalog/serialize.ts`, and for the same
- * reason: the Mongo serializers here were already hand-written object literals
- * rather than spreads, but they took a DOCUMENT — `_id`, `podcastId` and every
- * date arrived as `ObjectId`/`Date`, and six fields arrived as embedded
- * subdocument arrays that are child TABLES now. Handing a drizzle row to the old
- * function type-checked (its input was a structural type with every field
- * optional-ish) and produced `{"id": undefined}` plus four silently missing
- * collections. Every function below names its row type and its context.
+ * reason: a serializer whose input is a structural type with every field
+ * optional-ish type-checks against the wrong row and produces `{"id":
+ * undefined}` plus silently missing collections. Every function below names
+ * its row type and its context.
  *
  * ## What moved out of the row and has to be handed in
  *
- * Six arrays became child tables and one became a junction, so a DTO cannot be
+ * Six lists are child tables and one is a junction, so a DTO cannot be
  * built from a `podcasts`/`episodes` row alone:
  *
  *   `podcast.categories`  ← `podcast_categories` → `genres.name`
@@ -34,15 +31,13 @@
  * Every optional field in `@syra/shared-types` is `.optional()`, never
  * `.nullable()`, so a Postgres `null` handed straight through fails the SDK's
  * own parse. {@link optional} converts once; {@link compact} drops a nested
- * object whose parts are all absent, which is what a missing Mongo subdocument
- * looked like on the wire.
+ * object whose parts are all absent, so an empty nested object is omitted from
+ * the wire rather than sent as `{}`.
  *
  * ## `cache.s3Key` and the two HLS keys are OWNER-ONLY
  *
- * `episodeSchema` declares all three and the Mongo serializer emitted all three
- * to everyone, which this module carried over as parity while flagging it as a
- * product question it could not answer unilaterally. The answer is here now: an
- * S3 object key is internal storage layout, it is the input to every presigned
+ * `episodeSchema` declares all three, but they are not for everyone: an S3
+ * object key is internal storage layout, it is the input to every presigned
  * URL the stream path mints, and a listener has no use for it — so it goes to
  * the show's owner and to nobody else. Same for `etag`/`lastModified`, which are
  * the crawler's conditional-GET bookkeeping.
@@ -95,7 +90,7 @@ function optional<T>(value: T | null | undefined): T | undefined {
 
 /**
  * Drop every `undefined`-valued key, and return `undefined` when nothing is
- * left — the shape a missing Mongo subdocument had.
+ * left, so an all-absent nested object is omitted entirely.
  */
 function compact<T extends object>(value: T): T | undefined {
   const entries = Object.entries(value).filter(([, item]) => item !== undefined);
@@ -154,11 +149,8 @@ function toImageSizes(
 /**
  * The artwork bundle a cover-less episode inherits from its parent show.
  *
- * The Mongo version of this was a projection string
- * (`PODCAST_ARTWORK_PROJECTION = 'image imageSizes imageSourceUrl primaryColor
- * secondaryColor'`) plus a structural interface nothing checked against it. Here
- * it is built by {@link podcastArtwork} from a real row, so the two cannot
- * disagree about which fields inheritance covers.
+ * Built by {@link podcastArtwork} from a real row, so the row and this type
+ * cannot disagree about which fields inheritance covers.
  */
 export interface PodcastArtwork {
   image?: string;
@@ -328,10 +320,9 @@ export interface EpisodeDtoContext {
 /**
  * `podcastArtwork` is REQUIRED (not optional) so a new call site cannot silently
  * forget it and ship cover-less episodes; pass `undefined` explicitly when the
- * parent show's artwork genuinely is not available. Carried over verbatim from
- * the Mongo serializer, which had the same signature for the same reason — and
- * `context` is required now for the same reason again, one level up: the viewer
- * is not a thing to inherit a default for.
+ * parent show's artwork genuinely is not available. `context` is required for
+ * the same reason, one level up: the viewer is not a thing to inherit a
+ * default for.
  */
 export function toEpisodeDto(
   row: EpisodeRow,
@@ -411,11 +402,10 @@ export function toEpisodeDto(
     persons: context.persons ? [...context.persons] : undefined,
     source: row.source,
     /**
-     * `cacheStatus` is the whole subdocument's presence signal — the Mongo
-     * document either had a `cache` object or had none, and `schema/podcasts.ts`
-     * flattened it with every column nullable and NO default precisely so that
-     * distinction survives. A row with a null status emits no `cache` at all,
-     * which is what an absent subdocument looked like.
+     * `cacheStatus` is the whole `cache` object's presence signal — an episode
+     * either has a cache or has none, and `schema/podcasts.ts` flattened it with
+     * every column nullable and NO default precisely so that distinction
+     * survives. A row with a null status emits no `cache` at all.
      *
      * The two KEYS inside it are owner-only; `status` and `cachedAt` are not —
      * they say whether we hold a mirror and since when, which is not storage

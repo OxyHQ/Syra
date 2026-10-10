@@ -31,8 +31,8 @@ import { orderByIds, rankByTaste, topRelatedArtistIds } from './taste';
  *
  * ## `getMadeForYou`'s recently-played read does NOT filter by time
  *
- * `findRecentTrackIds` orders by `played_at` and never filters it, which is what
- * the Mongo read did. That is deliberate and `db/user/listening.ts` records why
+ * `findRecentTrackIds` orders by `played_at` and never filters it. That is
+ * deliberate and `db/user/listening.ts` records why
  * at length: the ids become an EXCLUSION set, so reading a row the expiry sweep
  * has not yet reached costs one track staying out of recommendations for at most
  * one sweep interval. Do not "tighten" this into a time filter — the sweep is
@@ -214,7 +214,7 @@ export async function getSimilarTracks(
   const exclude = [trackId, ...collaborative.map((t) => t.id)];
 
   // Composed with `and()`, so the seed's `or(...)` cannot be clobbered by the
-  // playability condition the way spreading two Mongo filter objects could.
+  // playability condition the way spreading two filter objects could.
   const similarity = seed.genre
     ? or(eq(tracks.genre, seed.genre), eq(tracks.artistId, seed.artistId))
     : eq(tracks.artistId, seed.artistId);

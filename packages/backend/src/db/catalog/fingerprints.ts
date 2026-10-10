@@ -10,20 +10,14 @@
  * afford, so the matcher first narrows to recordings of a comparable length
  * (`track_fingerprints_duration_idx`) and only then compares bit error rates.
  *
- * This module exists because the write used to live in `models/TrackFingerprint.ts`
- * beside the Mongoose model. A subtle disagreement between the producers is
- * exactly what shows up months later as "matching works for new tracks and not
- * old ones", so the write stays in ONE place as it was.
+ * A subtle disagreement between the producers is exactly what shows up months
+ * later as "matching works for new tracks and not old ones", so the write stays
+ * in ONE place.
  *
- * ALL THREE producers are here: `services/ingest/ingestTrack.ts`,
+ * ALL THREE producers call it: `services/ingest/ingestTrack.ts`,
  * `scripts/backfillTrackFingerprints.ts`, and the publish path in
- * `controllers/uploads.controller.ts`. That last one is the reason this
- * paragraph used to read differently — it called a MONGOOSE
- * `indexTrackAcoustically` of the same name in `models/TrackFingerprint.ts`, so
- * a published track wrote its fingerprint to a collection nothing read. Task 13
- * moved the controller and Task 19a deleted the twin, whose only remaining
- * importer was its own test; that test's assertions live in
- * `__tests__/fingerprints.test.ts` now, against this function.
+ * `controllers/uploads.controller.ts`. Its behaviour is asserted in
+ * `__tests__/fingerprints.test.ts`.
  */
 
 import { eq } from 'drizzle-orm';

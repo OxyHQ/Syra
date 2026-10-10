@@ -7,10 +7,10 @@
  *
  * ## This is the table the expiry sweep exists for
  *
- * It is the only high-arrival-rate table in this vertical, and Mongo bounded it
- * with a 90-day TTL index. `db/expiry.ts` carries the replacement entry; nothing
- * here reaps, and nothing here should. **Neither reader may start filtering on
- * `played_at` as a substitute** — {@link findRecentTrackIds} deliberately does
+ * It is the only high-arrival-rate table in this vertical, and it is bounded to
+ * 90 days by its entry in `db/expiry.ts`; nothing here reaps, and nothing here
+ * should. **Neither reader may start filtering on `played_at` as a
+ * substitute** — {@link findRecentTrackIds} deliberately does
  * not filter by time, and `schema/user.ts` records at length why that is safe
  * (the rows become a recently-played exclusion set, so a stale one costs one
  * track staying out of recommendations for at most one sweep interval) rather
@@ -18,9 +18,8 @@
  *
  * ## Why the miner is keyset-paginated rather than one big read
  *
- * The Mongo miner used a server-side cursor, so its 500,000-event cap never
- * materialised in one buffer. Selecting the same cap in one drizzle statement
- * would — so {@link forEachMinableEvent} pages through
+ * The miner caps at 500,000 events, and selecting that many in one drizzle
+ * statement would materialise them in one buffer — so {@link forEachMinableEvent} pages through
  * `(oxy_user_id, played_at, id)`, which is a TOTAL order and therefore cannot
  * skip or repeat a row across pages the way an `offset` can under concurrent
  * inserts. `listening_events_oxy_user_id_played_at_idx` serves both the ordering
@@ -90,12 +89,11 @@ export async function insertListeningEvent(
  *
  * `desc(playedAt)` rather than a raw `desc` string: `played_at` is `notNull()`,
  * so the `NULLS FIRST` inversion Postgres applies to a descending sort has no
- * null branch to put first, and the order matches Mongo's `{ playedAt: -1 }`.
+ * null branch to put first: the order is simply newest first.
  *
  * Duplicates are NOT collapsed here. The caller folds the result into a `Set`
  * with its liked tracks, so de-duplicating in SQL would cost a `distinct` for a
- * result the caller discards — and `limit` means the most recent N EVENTS, which
- * is what the Mongo read returned.
+ * result the caller discards — and `limit` means the most recent N EVENTS.
  */
 export async function findRecentTrackIds(
   oxyUserId: string,

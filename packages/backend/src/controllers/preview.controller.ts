@@ -94,7 +94,7 @@ export const getTrackPreview = async (req: Request, res: Response, next: NextFun
 
     /**
      * Every optional key is spread conditionally rather than assigned a `null`.
-     * Postgres returns `null` where Mongo simply had no key, and every optional
+     * Postgres returns `null` for an unset column, and every optional
      * field on `PreviewSourceRef` is `?:` (undefined), not nullable — handing a
      * `null` through would put one on a field typed `string | undefined`.
      */

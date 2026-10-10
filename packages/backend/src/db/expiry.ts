@@ -1,46 +1,25 @@
 /**
- * Expiry Sweep registry — the replacement for Mongo TTL indexes
+ * Expiry Sweep registry
  *
  * Postgres has no TTL index. Every table that needs one adds an entry here
  * rather than growing its own cleanup path. The registry stays here because
  * it would name THIS schema's own tables; the mechanism that sweeps it
  * (`sweepExpiredRows`, `sweepAllExpiredRows`, `ExpirySweepTarget`) lives in
- * `@oxy.so/db/expiry` — see that module's doc comment for the full shape and
- * for why a TTL index is a behaviour of the SOURCE that does not survive a
- * Mongo-to-Postgres port on its own.
+ * `@oxy.so/db/expiry` — see that module's doc comment for the full shape.
  *
- * ## THE RULE, because it is the quietest failure in this migration
+ * ## THE RULE, because it is the quietest failure in this schema
  *
- * **A TTL index is a behaviour of the SOURCE that does not survive the port.**
- * Mongo reaps; Postgres does not. A table ported without a registry entry
- * grows FOREVER — no error, no failing test, no symptom of any kind until
- * disk. It is structurally invisible because the thing doing the work was
- * never in this code to be missed: there is no deleted call site, no orphaned
- * function, nothing a reviewer diffing the port would see go absent.
- *
- * So porting a collection was not done when its schema and migration existed:
- * if its Mongoose model declared `expireAfterSeconds`, it was done only once a
- * matching entry existed here. All four such models have been ported, and the
- * rule generalises past its origin — a table that needs rows to stop existing
- * needs an entry here, whatever made it need one.
+ * **Nothing reaps a table that has no entry here.** A table that needs rows to
+ * stop existing and has no registry entry grows FOREVER — no error, no failing
+ * test, no symptom of any kind until disk. It is structurally invisible because
+ * there is no call site to go missing.
  *
  * ## WHAT IS AND IS NOT GATED — read this before adding a table
  *
- * A gate in `__tests__/gates.test.ts` ("accounts for every Mongoose TTL index")
- * used to WALK `src/models/*.ts` for
- * `<Model>Schema.index({ field: 1 }, { … expireAfterSeconds … })` and fail a
- * vertical that ported a TTL-bearing model without adding an entry here — so the
- * SET of declarations came from the files rather than from a grep in somebody's
- * report. It was deleted in 8cd87a8 on its own instruction ("the next time this
- * number moves is when Task 8 deletes those models, and at that point the right
- * change is to DELETE this gate with them rather than lower the floor to zero").
- * It cannot read a declaration that exists in no file.
+ * What holds the registry, all of it against Postgres:
  *
- * What still holds the registry, all of it against Postgres rather than against
- * Mongoose, so none of it went with the models:
- *
- *  - `__tests__/gates.test.ts`, "registers every Mongo TTL index that was
- *    ported, with its own retention" — the exact, ORDERED list of
+ *  - `__tests__/gates.test.ts`, "registers every expiry target with its own
+ *    retention" — the exact, ORDERED list of
  *    `table.column:retentionSeconds`, not a count. A target pointed at the wrong
  *    column or carrying the wrong retention is caught; both are mistakes that
  *    leave rows either immortal or deleted early, and neither moves a length.
@@ -54,9 +33,7 @@
  *    sweep", the negative direction.
  *
  * **What nothing gates: that a NEW table which ought to be swept gets an entry.**
- * The deleted walk never covered that either — it only ever caught a Mongoose
- * model being ported without one — so nothing regressed when it went. But no
- * check derives the required SET from anything now; the list below is what the
+ * No check derives the required SET from anything; the list below is what the
  * assertions compare against, so a table that needs expiry and is simply never
  * added here is invisible to all of them, which is precisely this file's own
  * "grows FOREVER, with no symptom of any kind until disk".
@@ -83,14 +60,9 @@
  * on the same 30-minute Redis-locked maintenance tick as the two recommendation
  * jobs that read these tables.
  *
- * It was deliberately unwired before that, and the reason it could no longer
- * stay so is the point: while both tables were empty and Mongo's TTL monitor was
- * still reaping the live store, an inert registry cost nothing. Task 15 ported
- * both writers, so these tables ARE the live store — and an unwired registry
- * from that moment means both grow FOREVER, with no error, no failing test and
- * no symptom of any kind until disk. That is the failure this file's own rule
- * calls structurally invisible, and porting the writer is exactly when it
- * becomes real.
+ * An unwired registry means every table here grows FOREVER, with no error, no
+ * failing test and no symptom of any kind until disk — the failure this file's
+ * own rule calls structurally invisible.
  *
  * **`listening_events` sets the batch size.** It is the only table here with a
  * high arrival rate (one row per play), and `sweepExpiredRows`' per-call
@@ -114,22 +86,19 @@ import {
 } from './schema/user';
 
 /**
- * Every table that had a Mongo TTL index. A table with an expiry column but no
- * entry here is never swept.
+ * Every table whose rows expire. A table with an expiry column but no entry
+ * here is never swept.
  *
- * Both entries are checked for INTENT, not merely replicated — `@oxy.so/db`'s
- * own instruction, because a TTL index deletes unconditionally and can be
- * written to mean "mark expired":
+ * Each entry is checked for INTENT — `@oxy.so/db`'s own instruction, because a
+ * sweep deletes unconditionally and an expiry column can be written to mean
+ * "mark expired":
  *
  *  - Deleting a `notification_suppressions` row is what RE-ARMS a notification.
  *    The row is a claim ticket, not history; the only cost of deleting one is
  *    that the same notification may be sent again, which is exactly what
- *    `expiresAt` passing is supposed to permit. This entry no longer carries the
- *    caveat it used to: `claimSuppression` read no deadline at all under
- *    Mongoose, so an unswept row kept suppressing past its own, and the sweep's
- *    lag was therefore load-bearing. Task 15's `on conflict … where expires_at
- *    <= now()` (`db/user/notifications.ts`) CLAIMS an expired row rather than
- *    colliding with it, so this sweep is now pure housekeeping — it reclaims
+ *    `expiresAt` passing is supposed to permit. The claim's `on conflict … where
+ *    expires_at <= now()` (`db/user/notifications.ts`) CLAIMS an expired row
+ *    rather than colliding with it, so this sweep is pure housekeeping — it reclaims
  *    space and decides nothing.
  *  - Deleting a `listening_events` row costs raw signal that has already been
  *    folded into the durable aggregates (`user_taste_profiles`,
@@ -146,8 +115,7 @@ export const EXPIRY_SWEEP_TARGETS: readonly ExpirySweepTarget[] = [
   {
     table: notificationSuppressions,
     column: notificationSuppressions.expiresAt,
-    // `expireAfterSeconds: 0` — the column IS the deadline
-    // (`models/NotificationSuppression.ts:37`).
+    // The column IS the deadline.
     retentionSeconds: 0,
     reason:
       'A suppression claim past its own expiresAt; deleting it re-arms the notification, which is ' +
@@ -156,9 +124,7 @@ export const EXPIRY_SWEEP_TARGETS: readonly ExpirySweepTarget[] = [
   {
     table: listeningEvents,
     column: listeningEvents.playedAt,
-    // `expireAfterSeconds: LISTENING_EVENT_TTL_SEC`
-    // (`models/ListeningEvent.ts:95`), read from the schema module so the two
-    // cannot drift.
+    // Read from the schema module so the two cannot drift.
     retentionSeconds: LISTENING_EVENT_RETENTION_SECONDS,
     reason:
       'A raw play older than 90 days, already folded into the taste profile and relation graph. ' +
@@ -169,18 +135,14 @@ export const EXPIRY_SWEEP_TARGETS: readonly ExpirySweepTarget[] = [
    * The moderation outbox and inbound event log, as a FRAGMENT the package
    * supplies rather than two entries written here.
    *
-   * Same division as everywhere else in this migration: `@oxy.so/db` holds the
+   * Same division as everywhere else in this schema: `@oxy.so/db` holds the
    * sweep MECHANISM, the consumer holds the REGISTRY — and here the consumer's
    * registry names tables the consumer does not own. `@crowdsource.you/core/outbox` is
    * the only place that can say what sweeping either one COSTS (the outbox holds
    * undelivered work; the event log holds the dedupe claim and the audit trail),
-   * so it states the reasons and Syra spreads them in. Both were
-   * `expireAfterSeconds: 0` on an `expiresAt` the writer computes, so
-   * `retentionSeconds` is 0 on both: the column already is the deadline.
-   *
-   * `models/ModerationOutbox.ts` and `models/ModerationEvent.ts` are the two TTL
-   * declarations `gates.test.ts` mapped to a deferred sentinel while this vertical
-   * was still on Mongo. This entry is what closes them.
+   * so it states the reasons and Syra spreads them in. Both expire on an
+   * `expiresAt` the writer computes, so `retentionSeconds` is 0 on both: the
+   * column already is the deadline.
    */
   {
     table: episodeIngestTickets,

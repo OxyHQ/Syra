@@ -309,10 +309,9 @@ Response: {
 ```
 
 `status` is `healthy` only when both are up, `degraded` when Redis is down, and
-`unhealthy` (503) when Postgres is. `services.database.engine` is what the
-cutover made worth reading: it reported Mongoose's `readyState` until the last
-model was removed, and a health endpoint answering about a database the service
-no longer opens reads as green forever.
+`unhealthy` (503) when Postgres is. `services.database.engine` names the
+database the service actually opens, so a health endpoint can never report green
+about a different one.
 
 ### Logging
 - Use Winston for structured logging

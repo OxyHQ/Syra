@@ -22,8 +22,8 @@
  * THE DUMP IS AUTHORITATIVE. An artist whose disambiguation, country or ISNI
  * disappears upstream has it CLEARED here, and an artist who loses a URL loses
  * the row: the conflict `SET` writes `excluded.*` for every mutable column, and
- * the child rows are replaced wholesale rather than merged. Mongo's `$set`
- * omitted absent keys and let stale values survive indefinitely. This table is a
+ * the child rows are replaced wholesale rather than merged, so no stale value
+ * survives. This table is a
  * mirror of somebody else's dataset — when the source stops asserting a fact,
  * the mirror stops asserting it too.
  *
@@ -326,15 +326,12 @@ export async function importMusicBrainzArtists(
   >();
 
   /**
-   * A flush is now a MULTI-TABLE write, and that is what the relational split
-   * cost us.
+   * A flush is a MULTI-TABLE write.
    *
-   * Under Mongo the artist and its URLs were one document, so one `updateOne`
-   * either landed entirely or not at all. Here the parent is upserted and the
-   * children are deleted and rewritten, which is three statements that must not
-   * be observable apart: a crash between them would leave an artist carrying the
-   * PREVIOUS dump's URLs, or none at all, with nothing to indicate it. The
-   * transaction restores the atomicity the document model gave for free, and the
+   * The parent is upserted and the children are deleted and rewritten, which is
+   * three statements that must not be observable apart: a crash between them
+   * would leave an artist carrying the PREVIOUS dump's URLs, or none at all,
+   * with nothing to indicate it. The transaction makes them atomic, and the
    * checkpoint is written only after it commits.
    */
   const flush = async (rowsCovered: number): Promise<void> => {

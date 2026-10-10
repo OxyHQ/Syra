@@ -1,29 +1,20 @@
 /**
  * Response shapes for the rooms-and-live vertical.
  *
- * The routes used to return Mongoose documents directly, so the wire shape was
- * whatever the schema happened to hold. Two things about that shape do not
- * survive the port unchanged, and both are stated here rather than left to be
- * discovered from a diff:
+ * Two things about the wire shape are worth stating rather than leaving to be
+ * discovered:
  *
- *  - **`_id` becomes `id`.** Every ported vertical emits `id`, and the
- *    `rooms`/`houses`/`series`/`recordings` primary key is literally named
- *    `id`. Emitting `_id` would mean carrying a compat alias forward for a
- *    document type that no longer exists. The three frontend call sites that
- *    read `room._id` move with this change. `@syra/shared-types`' DTOs no
- *    longer declare `_id` at all — it was optional alongside a required `id`
- *    while both spellings were live, and Task 16 removed it once nothing
- *    emitted it, so the contract now has exactly one name for a row's id.
- *  - **`topicId` is gone from `PUBLIC_ROOM_FIELDS`.** It named a dropped column
- *    (`schema/rooms.ts` records why: a `ref: 'Topic'` against a model this repo
- *    does not have, `undefined` on every document ever written). Keeping the
- *    entry would name a field no row can produce.
+ *  - **A row's id is `id`, never `_id`.** The `rooms`/`houses`/`series`/
+ *    `recordings` primary key is literally named `id`, and `@syra/shared-types`'
+ *    DTOs do not declare `_id` at all, so the contract has exactly one name for
+ *    a row's id.
+ *  - **There is no `topicId` in `PUBLIC_ROOM_FIELDS`.** No such column exists
+ *    (`schema/rooms.ts` records why), and the entry would name a field no row
+ *    can produce.
  *
- * Everything else is preserved exactly, including the two shapes that stopped
- * being stored the way they are returned: `stats` was a subdocument and is two
- * flat columns now, and `podcastQueue` was an embedded array and is a child
- * table — both are rebuilt into their original nested form below, so no client
- * sees the storage change.
+ * Two shapes are not stored the way they are returned: `stats` is two flat
+ * columns, and `podcastQueue` is a child table — both are rebuilt into their
+ * nested form below, so no client sees the storage layout.
  */
 
 import type { HouseMemberRow, HouseRow } from './houses';
@@ -92,12 +83,11 @@ export interface PublicRoom extends Partial<Record<PublicRoomField, unknown>> {
 /**
  * Build the public view of a room, omitting the internal stream credentials.
  *
- * Reads each allowed field explicitly and returns a NEW object. The Mongo
- * predecessor's warning still applies and is why this shape is kept: an earlier
- * implementation DELETED the credential fields from its input instead, which on
- * a hydrated document was a silent no-op — schema fields were prototype getters,
- * not own properties — so a live RTMP publishing key serialized straight to the
- * client with no error and no failing test.
+ * Reads each allowed field explicitly and returns a NEW object, rather than
+ * DELETING the credential fields from its input: a delete is a silent no-op on
+ * any input whose fields are not own properties (prototype getters, for one),
+ * and then a live RTMP publishing key serializes straight to the client with no
+ * error and no failing test.
  *
  * Accepts a row with or without credentials: the allowlist never names one, so
  * passing a {@link RoomWithCredentials} is safe and is what the manager-scoped
@@ -126,8 +116,8 @@ export function stripInternalStreamFields(
       peakListeners: room.statsPeakListeners,
       totalJoined: room.statsTotalJoined,
     },
-    // Absent rather than `[]` when there is no queue, matching the Mongo field's
-    // `default: undefined` — an empty array would be a new value on the wire.
+    // Absent rather than `[]` when there is no queue — an empty array would be a
+    // new value on the wire.
     ...(queue === undefined || queue.length === 0 ? {} : { podcastQueue: [...queue] }),
   };
 }

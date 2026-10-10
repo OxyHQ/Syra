@@ -55,9 +55,8 @@ describe('registerDevice', () => {
   });
 
   it('re-registering without capabilities CLEARS them, as the upsert always set them', async () => {
-    // Parity with the Mongoose `findOneAndUpdate`, whose update document always
-    // carried `capabilities: input.capabilities ?? []`. The conflict branch of
-    // the drizzle upsert has to set the same key or the field silently becomes
+    // The upsert always carries `capabilities: input.capabilities ?? []`, so the
+    // conflict branch has to set the same key or the field silently becomes
     // sticky — a difference no type would catch, since both spellings compile.
     await registerDevice(USER_A, BASE_INPUT);
     await registerDevice(USER_A, { deviceId: 'device-001', name: 'Same', type: 'web' });
@@ -103,8 +102,8 @@ describe('listDevices', () => {
   it('returns the wire shape the socket promises — id, no oxyUserId, lastSeen a string', async () => {
     // `listDevices` IS the `device:list` payload (three emit sites in
     // `sockets/playerSocket.ts`), and `deviceSchema` is its declared contract.
-    // The Mongoose version emitted raw documents, so `_id`/`__v` reached
-    // clients and `lastSeen` was a Date. Asserted here because nothing else
+    // Emitting raw rows would hand clients undeclared fields and `lastSeen` as a
+    // Date. Asserted here because nothing else
     // parses this payload server-side.
     await registerDevice(USER_A, BASE_INPUT);
 

@@ -21,11 +21,10 @@
  *      fires only when the person row carries neither strong key, which is
  *      exactly the case where the resolver would also have merged them.
  *
- * ## `$elemMatch` over an embedded array becomes a correlated `EXISTS`
+ * ## A correlated `EXISTS` per credit table
  *
- * The Mongo form was `{ persons: { $elemMatch: { linkedOxyUserId } } }` — one
- * condition usable against BOTH collections, because both embedded the same
- * sub-schema. Two tables cannot share one condition, so there are two functions.
+ * Show credits and episode credits live in two tables, and two tables cannot
+ * share one condition, so there are two functions.
  * They are spelled out rather than parameterised over a table: the alternative
  * is selecting through an un-narrowed `PgColumn`, which is the untyped seam this
  * port has already been burned by.
@@ -33,10 +32,8 @@
  * Tiers 1 and 2 land on `podcast_persons_linked_oxy_user_id_idx` /
  * `podcast_persons_href_idx` (and their episode twins), which `schema/
  * podcasts.ts` built for this query by name. Tier 3 has NO index — `name` is
- * unindexed on both credit tables, exactly as it was unindexed inside the Mongo
- * array — so it is a scan of the credit table, hashed and semi-joined rather
- * than probed. That is parity, not a regression, and it is the tier that fires
- * least.
+ * unindexed on both credit tables — so it is a scan of the credit table, hashed
+ * and semi-joined rather than probed. It is the tier that fires least.
  */
 
 import { and, eq, exists, sql, type SQL } from 'drizzle-orm';
@@ -81,13 +78,12 @@ function creditTier(person: CreditIdentity): CreditTier {
 }
 
 /**
- * `lower(a) = lower(b)`, not the Mongo `new RegExp('^' + escaped + '$', 'i')`.
+ * `lower(a) = lower(b)`, not a case-insensitive regex.
  *
- * The regex form needed escaping because an unescaped person name reaching a
- * regex engine is a ReDoS on a public endpoint; a parameterised comparison has
- * no such surface, so the escape helper does not come across. The MATCH is the
- * same one — anchored at both ends, case-insensitive — because `=` on a whole
- * column is already anchored.
+ * A regex would need escaping because an unescaped person name reaching a regex
+ * engine is a ReDoS on a public endpoint; a parameterised comparison has no
+ * such surface. The match is anchored at both ends and case-insensitive,
+ * because `=` on a whole column is already anchored.
  */
 function nameMatches(column: PgColumn, value: string): SQL {
   return sql`lower(${column}) = lower(${value})`;

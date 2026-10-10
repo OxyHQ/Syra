@@ -85,8 +85,7 @@ export async function insertContributorStrike(
  * Add one to the counter and stamp the time, in the DATABASE.
  *
  * `strike_count = strike_count + 1` rather than a read, an increment in
- * JavaScript and a write back: the Mongo version loaded the document, pushed
- * onto its array and saved, so two takedowns resolved concurrently could both
+ * JavaScript and a write back: with a load-modify-save, two takedowns resolved concurrently could both
  * read 2 and both write 3 — a repeat infringer one strike short of the
  * threshold, silently. The returned count is the one the row actually holds.
  */

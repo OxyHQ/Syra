@@ -1,22 +1,13 @@
 /**
- * Catalog serialization, on drizzle — the replacement for `utils/musicHelpers.ts`.
+ * Catalog serialization, on drizzle.
  *
- * ## `toApiFormat` is not ported, and this is the reason
+ * ## Allowlist, never spread-then-delete
  *
- * The Mongo serializer spread the whole document (`{ ...docObj }`) and then
- * DELETED the fields that must not ship. Two things made that fragile, and both
- * were load-bearing in production:
- *
- *  - `select: false` is a QUERY PROJECTION, and `aggregate()` ignores it
- *    entirely. Every container read in `utils/playableContainers.ts` is an
- *    aggregation, so `CatalogEntity.imageSuggestions` — "protected" that way —
- *    was returned in full by `GET /api/artists/:id`.
- *  - A field's absence from the zod schema removed nothing, because the
- *    formatter was untyped and spread first.
- *
- * So the guard was one hand-maintained `delete` list, and the single point of
- * failure was "no track read is ever an aggregation" — a property nobody can
- * hold in their head, which had already lapsed once.
+ * A serializer that spreads the whole row and then DELETES the fields that must
+ * not ship is fragile twice over: a per-query exclusion is skipped by any read
+ * path that does not apply it (that is how `imageSuggestions` was once returned
+ * in full by `GET /api/artists/:id`), and a field's absence from the zod schema
+ * removes nothing when the formatter is untyped and spreads first.
  *
  * Every DTO below instead NAMES each field it returns. A column added to the
  * schema tomorrow is absent from the wire until somebody writes it in here, and
@@ -27,12 +18,11 @@
  *
  * ## `null` is not `undefined`, and the DTOs care
  *
- * Mongo simply had no key for an absent value; Postgres returns `null`. Every
- * optional field in `@syra/shared-types` is `.optional()` (undefined), NOT
+ * Postgres returns `null` for an absent value. Every optional field in `@syra/shared-types` is `.optional()` (undefined), NOT
  * `.nullable()`, so handing a `null` straight through would fail the SDK's own
  * parse. {@link optional} performs that conversion once, and {@link compact}
- * drops a nested object entirely when every part of it is absent — which is what
- * a missing Mongo subdocument looked like.
+ * drops a nested object entirely when every part of it is absent, so the DTO
+ * omits it rather than carrying an empty object.
  */
 
 import type {
@@ -101,7 +91,7 @@ function optional<T>(value: T | null | undefined): T | undefined {
 
 /**
  * Drop every `undefined`-valued key, and return `undefined` when nothing is
- * left — the shape a missing Mongo subdocument had.
+ * left — the shape an absent nested object has on the wire.
  */
 function compact<T extends object>(value: T): T | undefined {
   const entries = Object.entries(value).filter(([, item]) => item !== undefined);
@@ -124,10 +114,9 @@ function iso(value: Date): string {
  * Resolve a stored image reference to its `/api/images/:id` path.
  *
  * Accepts an already-normalised path unchanged, and an entity id in EITHER
- * shape this schema stores — a 24-char ObjectId hex carried over from Mongo, or
- * a uuid v7 minted since. The Mongo helper tested for the ObjectId shape only;
- * keeping that here would silently return `undefined` for every image created
- * after the cutover, which is the failure `isLiveEntityId` exists to prevent.
+ * shape this schema stores — a legacy 24-char hex id, or a uuid v7. Testing for
+ * only one shape would silently return `undefined` for every image of the
+ * other, which is the failure `isLiveEntityId` exists to prevent.
  */
 export function normalizeImageRef(value: unknown): string | undefined {
   if (typeof value !== 'string' || value.length === 0) return undefined;
@@ -147,8 +136,7 @@ export function imageVariantLookup(assets: readonly ImageAssetRow[]): ImageVaria
   const byId = new Map<string, CatalogImageVariant>();
   for (const asset of assets) {
     const url = normalizeImageRef(asset.id);
-    // A variant is only renderable with real dimensions; the Mongo normalizer
-    // skipped entries missing `id`/`url` for the same reason.
+    // A variant is only renderable with real dimensions.
     if (!url || asset.width === null || asset.height === null) continue;
     byId.set(asset.id, { id: asset.id, url, width: asset.width, height: asset.height });
   }

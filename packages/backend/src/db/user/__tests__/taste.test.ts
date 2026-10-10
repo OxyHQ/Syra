@@ -143,8 +143,7 @@ describe('duplicate keys in one signal', () => {
    *
    * `applyFollowSignal` produces exactly that shape: it lowercases an artist's
    * genre list, so an artist tagged `['Rock', 'rock']` yields two `rock` deltas.
-   * Without the merge this throws; with it the two SUM, which is also what the
-   * Mongo version's loop did.
+   * Without the merge this throws; with it the two SUM.
    */
   it('merges repeated keys instead of raising 21000', async () => {
     const artistId = await makeArtist();
@@ -293,9 +292,9 @@ describe('the decay pass', () => {
   });
 
   /**
-   * The elapsed-time floor. `0.5^(e/H) >= 0.999` was the Mongo skip; expressed
-   * as `e > H · ln(0.999)/ln(0.5)` it is ~93 minutes, so a profile decayed a
-   * minute ago must be left entirely alone — including its `last_decay_at`,
+   * The elapsed-time floor. A profile is skipped while `0.5^(e/H) >= 0.999`;
+   * expressed as `e > H · ln(0.999)/ln(0.5)` it is ~93 minutes, so a profile
+   * decayed a minute ago must be left entirely alone — including its `last_decay_at`,
    * which a pass that "processed" it would move.
    */
   it('skips a profile too recently decayed for decay to matter', async () => {
@@ -359,8 +358,7 @@ describe('the decay pass', () => {
       .where(eq(userTasteProfiles.oxyUserId, USER));
 
     // 10 + 6 halved = 8, and NOT the 100 the accumulator held — the decay pass
-    // is the one writer whose `total_signal` is a real sum. Ported as-is from
-    // the Mongo pass (`for (const a of profile.artists) total += a.weight`).
+    // is the one writer whose `total_signal` is a real sum of the weights.
     expect(profile.totalSignal).toBeCloseTo(8, 2);
   });
 

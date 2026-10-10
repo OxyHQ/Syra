@@ -13,13 +13,11 @@ import { logger } from '../utils/logger';
 import { describeErrorSafely } from '../utils/error';
 
 /**
- * Ported here rather than deferred with the rest of Task 13's vertical, and the
- * reason is structural: `tracks.copyright_report_id` really
- * `.references(() => copyrightReports.id)`. A hybrid split survives a
- * cross-vertical READ and cannot survive a cross-vertical FOREIGN KEY — leaving
- * this table on Mongoose while `takeDownTrack` is drizzle means the takedown
- * writes a Mongo `_id` into a column constrained against `copyright_reports`,
- * and Postgres refuses it with `23503`.
+ * `copyright_reports` lives in the same store as `tracks`, and the reason is
+ * structural: `tracks.copyright_report_id` really
+ * `.references(() => copyrightReports.id)`, so the report id `takeDownTrack`
+ * writes must name a row in `copyright_reports` or Postgres refuses it with
+ * `23503`.
  */
 
 /**
@@ -135,11 +133,11 @@ const copyrightReportStatusSchema = z.enum(['pending', 'approved', 'rejected']);
 type CopyrightReportRow = typeof copyrightReports.$inferSelect;
 
 /**
- * An explicit allowlist, exactly as it was: every key is named, nothing is
- * spread. `updated_at` is a column here and was not a field on the Mongo
- * document, so it stays off the wire by simply not being written down.
+ * An explicit allowlist: every key is named, nothing is spread. `updated_at` is
+ * not part of the response, so it stays off the wire by simply not being
+ * written down.
  *
- * `reporterOxyUserId` IS on it, deliberately and unchanged — this response is
+ * `reporterOxyUserId` IS on it, deliberately — this response is
  * reachable only behind `requireComplianceReviewer`, and knowing who filed a
  * DMCA notice is the reviewer's job.
  */

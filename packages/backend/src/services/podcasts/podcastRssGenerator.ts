@@ -8,11 +8,10 @@
  * uploaded file — HLS is the in-app encrypted path and is NOT a valid podcast
  * enclosure. Built with a small string builder (no heavy XML dependency).
  *
- * ## It takes DTOs now, not documents
+ * ## It takes DTOs, not rows
  *
- * It used to take `IPodcast`/`IEpisode` and read `podcast.categories`,
- * `podcast.funding`, `episode.audioSource` and `episode.pubDate` straight off
- * the Mongo document. Four of those are child tables or flattened columns since
+ * `podcast.categories`, `podcast.funding`, `episode.audioSource` and
+ * `episode.pubDate` are child tables or flattened columns in
  * `schema/podcasts.ts`, so a `podcasts` ROW cannot answer them — only a
  * serialized `Podcast`/`Episode` can, and the caller is already building both.
  * Taking the DTO also means this module has no database dependency at all, which
@@ -54,9 +53,8 @@ function enclosureMime(episode: Episode): string {
 /**
  * Make an artwork reference absolute against the public API origin.
  *
- * The Mongo version emitted `podcast.image` verbatim, and that field held a bare
- * 24-character image id — so every `<itunes:image href="…">` in every generated
- * feed carried a hex string where a URL belongs. Apple and Podcast Index both
+ * Emitting a bare image id verbatim would put an id string where a URL belongs
+ * in every `<itunes:image href="…">` of every generated feed. Apple and Podcast Index both
  * reject that, silently, by showing no artwork. The DTO normalises the id to
  * `/api/images/:id`, which is a real path but still relative, and an RSS feed is
  * read by a third party that has no origin to resolve it against. So it is made

@@ -1,11 +1,10 @@
 /**
  * Rebuild the podcast catalogue from `data/podcast-feeds.txt`.
  *
- * The Postgres cutover was a clean start, so the catalogue came up empty. Shows
- * and episodes are a MIRROR of external RSS rather than original data —
+ * Shows and episodes are a MIRROR of external RSS rather than original data —
  * `importFeed` is documented idempotent, "re-running upserts the same
  * show/episodes" — so the feed URLs are the only input needed to reconstruct
- * them, and they were exported before the cutover.
+ * them.
  *
  * Idempotent by construction: re-running skips nothing and breaks nothing, so a
  * partial run needs no bookkeeping to resume. Just run it again.

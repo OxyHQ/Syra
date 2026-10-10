@@ -5,12 +5,10 @@
  * ## The id is minted before the upload, and that ordering is load-bearing
  *
  * The S3 key embeds the asset id (`getS3ImageKey`), so the id has to exist
- * before the object does. `uuidv7()` mints it locally, exactly as
- * `new mongoose.Types.ObjectId()` did — the column keeps `generatedId()`'s
+ * before the object does. `uuidv7()` mints it locally — the column keeps `generatedId()`'s
  * default for rows written without one, and an explicit value simply wins.
  *
- * The consequence is unchanged from the Mongo version and worth stating: an
- * upload that succeeds and an insert that then fails leaves an orphaned S3
+ * The consequence is worth stating: an upload that succeeds and an insert that then fails leaves an orphaned S3
  * object with no row. That is the safe direction — a row pointing at a missing
  * object would 404 on read — and the reverse ordering cannot be built, because
  * the key is not known until the id is.
@@ -157,8 +155,8 @@ export async function getImageAssetColors(
     .where(eq(imageAssets.id, imageId))
     .limit(1);
 
-  // `secondaryColor` alone is not a palette — the Mongo version keyed the whole
-  // result on `primaryColor` being present, and that is preserved.
+  // `secondaryColor` alone is not a palette — the whole result is keyed on
+  // `primaryColor` being present.
   if (!asset?.primaryColor) return undefined;
 
   return {

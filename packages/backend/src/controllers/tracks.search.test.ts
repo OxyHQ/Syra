@@ -25,8 +25,7 @@ import { getTrackById, searchTracks } from './tracks.controller';
  * to the right column, still filters by playability, and cannot be made to
  * evaluate the user's string as a program.
  *
- * DETAIL changed serializer: `toApiFormat` SPREAD the Mongo document, so
- * `credits`, `sources` and the HLS ladder rode along for free. They are child
+ * DETAIL carries `credits`, `sources` and the HLS ladder. They are child
  * tables and `toTrackDto` is an allowlist, which omits in silence — so this
  * asserts all three arrive, with values.
  */
@@ -182,7 +181,7 @@ describe('GET /api/tracks/search', () => {
 });
 
 describe('GET /api/tracks/:id', () => {
-  it('carries the credits, sources and HLS ladder the Mongo spread used to', async () => {
+  it('carries the credits, sources and HLS ladder', async () => {
     const trackId = await seedTrack({
       title: 'Detailed',
       hlsMasterKey: 'hls/detailed/master.m3u8',
@@ -243,8 +242,8 @@ describe('GET /api/tracks/:id', () => {
     // assertion below would be about the wrong object.
     expect(track.id).toBe(trackId);
 
-    // Stored ORDER, not just presence: `position` is what preserves the Mongo
-    // array's order, and a read that sorted by anything else would reorder the
+    // Stored ORDER, not just presence: `position` is what preserves each
+    // list's order, and a read that sorted by anything else would reorder the
     // ladder a player walks.
     expect(track.credits?.map((credit) => credit.name)).toEqual(['A Producer', 'A Writer']);
     expect(track.sources?.map((source) => source.externalId)).toEqual(['mbid-123']);

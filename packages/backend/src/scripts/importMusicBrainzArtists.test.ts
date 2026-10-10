@@ -291,7 +291,7 @@ describe('importMusicBrainzArtists', () => {
     await importMusicBrainzArtists(importOptions(dump));
 
     const stones = await readArtist(STONES_MBID);
-    // Nullable COLUMNS now, where Mongo simply had no key.
+    // Nullable COLUMNS.
     expect(stones?.beginDate).toBeNull();
     expect(stones?.endDate).toBeNull();
     expect(stones?.disambiguation).toBeNull();
@@ -319,8 +319,7 @@ describe('importMusicBrainzArtists', () => {
   /**
    * The fixture that tells REPLACEMENT from MERGE.
    *
-   * Under Mongo the whole `urls` array was one `$set`, so a URL removed upstream
-   * disappeared for free. Here the children are separate rows, and an
+   * The children are separate rows, and an
    * implementation that only inserted (or upserted on `(artist_id, position)`)
    * would leave the withdrawn relationship behind forever — with `position 1`
    * still occupied, so it would not even collide.

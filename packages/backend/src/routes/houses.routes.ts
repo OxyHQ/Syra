@@ -282,11 +282,10 @@ router.patch('/:id', async (req: AuthRequest, res: Response) => {
     }
 
     /**
-     * `null` CLEARS and `undefined` LEAVES ALONE. The Mongoose original assigned
-     * `undefined` to clear and `save()` issued `$unset`; drizzle DROPS an
-     * `undefined`-valued key, so keeping that spelling would make "remove the
-     * avatar" silently keep the old one — the exact defect that shipped twice in
-     * earlier verticals.
+     * `null` CLEARS and `undefined` LEAVES ALONE. Drizzle DROPS an
+     * `undefined`-valued key, so using `undefined` to clear would make "remove
+     * the avatar" silently keep the old one — a defect that has shipped twice
+     * before.
      */
     const update: Parameters<typeof updateHouse>[1] = {};
 

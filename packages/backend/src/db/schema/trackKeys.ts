@@ -22,11 +22,10 @@
  *
  * ## One column per id space, not one polymorphic column plus a `kind`
  *
- * Mongo stored a bare `trackId` that meant a track, a locker upload or an
- * episode depending on which pipeline wrote it, and the port carried that
- * across with a `kind` discriminator. That was expressible, but it was still a
- * column no foreign key can hang off, because Postgres has no conditional
- * reference — and the absence had a live consequence rather than a theoretical
+ * A bare `trackId` that means a track, a locker upload or an episode depending
+ * on which pipeline wrote it, plus a `kind` discriminator, is expressible, but
+ * it is still a column no foreign key can hang off, because Postgres has no
+ * conditional reference — and the absence had a live consequence rather than a theoretical
  * one. With no cascade, every caller deleting a parent had to remember to
  * delete the key, and `services/uploads/expirySweeper.ts` — the path that runs
  * unattended every hour — never did, so most expired uploads left an AES key

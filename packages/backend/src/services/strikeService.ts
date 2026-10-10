@@ -51,12 +51,11 @@ interface StrikeSubject {
  * threshold, write the decision back), and two concurrent strikes against one
  * artist — an ordinary shape for a batch takedown — could otherwise each see
  * two strikes and each write `strikeCount = 2` while three rows exist, so the
- * third strike would never terminate anybody. Mongo's read-modify-write had the
- * same race and no way to close it; this is one line.
+ * third strike would never terminate anybody. The row lock closes that race in
+ * one line.
  *
  * Returns null when no `type = 'artist'` row has that id. `type` is written out
- * because `catalog_entities` holds persons too, and Mongoose's discriminator
- * used to inject it invisibly.
+ * because `catalog_entities` holds persons too.
  */
 async function lockArtist(
   tx: Parameters<Parameters<ReturnType<typeof getDb>['transaction']>[0]>[0],
@@ -76,9 +75,9 @@ async function lockArtist(
  * Strikes this artist currently holds, counted from the rows rather than read
  * off the stored counter.
  *
- * The Mongo version INCREMENTED `strikeCount` on add but RECOMPUTED it from
- * `strikes.length` on remove, so the two disagreed the moment the counter
- * drifted. Counting the child table in both directions makes the column a cache
+ * Incrementing `strikeCount` on add but recomputing it on remove would let the
+ * two disagree the moment the counter drifted. Counting the child table in both
+ * directions makes the column a cache
  * of a fact the database can always re-derive.
  */
 async function countStrikes(
@@ -159,10 +158,9 @@ function terminationFields(): {
  * (copyrightRemoved = true). Termination is irreversible via removeStrike.
  *
  * The strike row, the artist's counters and the bulk takedown all commit
- * TOGETHER. Under Mongo the artist was saved first and the takedown issued
- * afterwards, so a failure between the two left an artist marked terminated
- * whose catalogue was still playable — a state nothing detected and nothing
- * retried.
+ * TOGETHER. Saving the artist first and issuing the takedown afterwards would
+ * let a failure between the two leave an artist marked terminated whose
+ * catalogue was still playable — a state nothing detects and nothing retries.
  */
 export async function addStrike(
   artistId: string,

@@ -10,8 +10,9 @@
  * ## Reordering cannot be one `UPDATE`, and this was measured
  *
  * `unique(playlist_id, position)` is checked PER ROW as an `UPDATE` walks its
- * result, not once at the end — so the Mongo shift `updateMany({ order: { $gte:
- * n } }, { $inc: { order: k } })` has no direct translation. Verified against
+ * result, not once at the end — so a single shift
+ * `update … set position = position + k where position >= n` collides with
+ * itself. Verified against
  * the real server rather than assumed:
  *
  *     create table _t(a int, b int, unique(a, b));
@@ -27,12 +28,6 @@
  * maximum, then writes the final positions, which are all at or below that
  * maximum. Neither statement can collide, and the argument is arithmetic
  * rather than a claim about statement ordering.
- *
- * The same constraint exists on Mongo (`PlaylistTrackSchema.index({ playlistId:
- * 1, order: 1 }, { unique: true })`), so an arbitrary reorder there is a
- * duplicate-key error too wherever that index was actually built. This is a
- * latent bug the port turns into a certainty and then fixes, not one the port
- * introduces.
  */
 
 import { and, asc, count, eq, inArray, sql, sum } from 'drizzle-orm';
@@ -53,8 +48,8 @@ export async function findPlaylistById(id: string): Promise<PlaylistRow | undefi
 /**
  * Every collaborator of a playlist, as the DTO renders them.
  *
- * Ordered by `addedAt` so the list is stable between requests: the embedded
- * Mongo array had an order and a table has none, and an unordered list that
+ * Ordered by `addedAt` so the list is stable between requests: a table has no
+ * intrinsic order, and an unordered list that
  * changes between two identical requests reads to a client as a change.
  */
 export async function findPlaylistCollaborators(
@@ -83,8 +78,7 @@ export async function findPlaylistCollaborators(
  * A viewer's role on a playlist, or `undefined` when they hold none.
  *
  * One indexed point lookup on `unique(playlist_id, oxy_user_id)` rather than
- * loading the whole collaborator list to search it in memory, which is what
- * the Mongo version did with an embedded array.
+ * loading the whole collaborator list to search it in memory.
  */
 export async function findCollaboratorRole(
   playlistId: string,
@@ -193,8 +187,8 @@ export async function findPlaylistsForUser(oxyUserId: string): Promise<PlaylistR
     getDb()
       .select()
       .from(reachable)
-      // `is not null` rather than the Mongo helper's `{ coverArt: -1 }`, which
-      // also tie-broke by the lexical value of the image id and took precedence
+      // `is not null` rather than a descending sort on `cover_art_id`, which would
+      // also tie-break by the lexical value of the image id and take precedence
       // over the date the caller actually sorted by. See `db/catalog/
       // containers.ts`'s `imageFirst`, which this is the inlined form of —
       // inlined because it has to address the union's columns, not the table's.
@@ -222,7 +216,7 @@ export async function findPlaylistTracks(
  * Recompute `track_count` and `total_duration` from the playlist's PLAYABLE
  * tracks.
  *
- * One statement where Mongo needed three round trips and a `Map`: the join is
+ * One statement: the join is
  * the same `playable_track_filter` every catalog read composes, so a track
  * taken down stops counting towards a playlist's duration without any
  * playlist-side bookkeeping.

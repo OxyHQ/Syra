@@ -83,10 +83,7 @@ export type UploadRow = Omit<
  * produces "not found", which is also the right answer for privacy — a stranger
  * must not be able to tell a locker id apart from a nonexistent one.
  *
- * `deleted_at is null` is the single spelling of "not soft-deleted". Mongo's
- * readers used two (`deletedAt: null` and `deletedAt: { $exists: false }`),
- * which are NOT the same predicate there and agreed only because nothing ever
- * stored an explicit null; in Postgres the divergence is not representable.
+ * `deleted_at is null` is the single spelling of "not soft-deleted".
  */
 export async function findOwnedUpload(
   uploadId: string,
@@ -180,27 +177,26 @@ export interface LockerAlbum {
  *
  * There is no per-user `albums` table and there must not be one — a private
  * file may not create a catalog container — so a release is an aggregation over
- * the computed `album_key`, exactly as the Mongo `$group` was.
+ * the computed `album_key`.
  *
- * The four `$first`-after-`$sort` fields become ordered aggregates — see
+ * The four "first value in track order" fields are ordered aggregates — see
  * {@link first} — and deliberately NOT `min()`. The ordering they aggregate in
- * is the same `(disc_number, track_number)` the Mongo `$sort` used, which is
- * also the tail of the `(owner_oxy_user_id, album_key, disc_number,
+ * is `(disc_number, track_number)`, which is also the tail of the `(owner_oxy_user_id, album_key, disc_number,
  * track_number)` index this query reads.
  */
 export async function listLockerAlbums(ownerOxyUserId: string): Promise<LockerAlbum[]> {
   /**
-   * `$first` after `$sort: { albumKey, discNumber, trackNumber }`.
+   * The first value in `(albumKey, discNumber, trackNumber)` order.
    *
-   * `min()` would be the obvious aggregate and is a different answer: `$first`
+   * `min()` would be the obvious aggregate and is a different answer: "first"
    * means "the value carried by the lowest-numbered track", so a release whose
    * opener has no cover but whose track 7 does must report no cover, not track
    * 7's. `(array_agg(x order by …))[1]` is that, exactly.
    *
-   * `nulls first` on both ordinals because Mongo's ascending sort puts a
-   * missing field BEFORE a present one and Postgres's puts it after — the same
-   * inversion `desc()`/`descNullsLast` has, in the other direction. An untagged
-   * track number is the lowest-numbered track here, as it was there.
+   * `nulls first` on both ordinals because an untagged track number counts as
+   * the lowest-numbered track, and Postgres's ascending sort would otherwise put
+   * it after — the same inversion `desc()`/`descNullsLast` has, in the other
+   * direction.
    */
   const first = (column: SQLWrapper): SQL =>
     sql`(array_agg(${column} order by ${userUploads.discNumber} nulls first, ${userUploads.trackNumber} nulls first))[1]`;
@@ -227,13 +223,13 @@ export async function listLockerAlbums(ownerOxyUserId: string): Promise<LockerAl
           // A file with no album tags has no release to belong to; grouping the
           // untagged ones would invent an album called nothing. `<> ''` as well
           // as `is not null` because `buildAlbumKey` answers a non-empty `"||"`
-          // for a file with no tags at all, and the Mongo filter excluded both.
+          // for a file with no tags at all, and both mean "no release".
           sql`${userUploads.albumKey} is not null and ${userUploads.albumKey} <> ''`,
         ),
       )
       .groupBy(userUploads.albumKey)
-      // Same `nulls first` reasoning as the window ordering above: Mongo's
-      // ascending `$sort` on the three display fields put an absent value first.
+      // Same `nulls first` reasoning as the window ordering above: an absent
+      // display field sorts first.
       .orderBy(
         sql`${first(userUploads.albumArtistName)} asc nulls first`,
         sql`${first(userUploads.year)} asc nulls first`,
@@ -250,8 +246,7 @@ export async function listLockerAlbums(ownerOxyUserId: string): Promise<LockerAl
  * silence. Owner is in the same query, so somebody else's locker item is not
  * addressable at all: it resolves to nothing, exactly as a nonexistent id does.
  *
- * The empty-list guard is load-bearing in a way the Mongo `$in` did not need:
- * `inArray(column, [])` generates `in ()`, which is a Postgres syntax error
+ * The empty-list guard is load-bearing: `inArray(column, [])` generates `in ()`, which is a Postgres syntax error
  * rather than an empty result.
  */
 export async function findQueueableUploads(
@@ -511,8 +506,8 @@ export async function findUploadsDueForNotice(
         ),
       )
       // `asc`, and `expires_at` is NULLABLE — but every row here has already been
-      // narrowed to a range, so a null cannot reach the sort. Spelled `asc` for
-      // the same reason the Mongo sort was `1`: soonest first is what decides
+      // narrowed to a range, so a null cannot reach the sort. Spelled `asc`
+      // because soonest first is what decides
       // which files a capped batch warns about.
       .orderBy(asc(userUploads.expiresAt))
       .limit(limit)

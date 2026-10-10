@@ -22,29 +22,31 @@ import { getArtistById, getMyContributions, getMyImageSuggestions } from './arti
 /**
  * ONE test for a whole class of leak, rather than N ad-hoc ones.
  *
- * THE CLASS: a field believed private because it is `select: false` and/or absent
- * from a zod schema, reachable on a route that either
- *   (a) reads through an AGGREGATION — which ignores `select: false` outright, or
- *   (b) serialises by SPREADING a document through an untyped formatter — which
- *       ignores the schema.
- * Either condition alone defeats BOTH guards.
+ * THE RULE: the protected-column registry is the guard. A server-only column is
+ * listed in `PROTECTED_COLUMNS_BY_TABLE`, so `publicColumns()` removes it from
+ * the ROW TYPE and a serializer that names it fails `tsc`; and every serializer
+ * is an ALLOWLIST that names each field it emits, never a spread.
  *
- * This is not hypothetical. `CatalogEntity.imageSuggestions` met both: the
- * catalog helpers read artists with `aggregate()`, `formatArtistWithImage` spreads
- * through `toApiFormat`, and `GET /api/artists/:id` served pending profile photos —
- * guesses about what a real person looks like — to anyone, for any artist with a
- * playable track.
+ * WHY: a per-field exclusion plus a spreading formatter leaks. A field kept off
+ * the wire only by an exclusion on the READ (a projection that omits it, a
+ * hand-maintained `delete` list) reaches any route whose read skips that
+ * exclusion, and a formatter that spreads the whole row then puts it on the
+ * wire. That is how `imageSuggestions` leaked: `GET /api/artists/:id` served
+ * pending profile photos — guesses about what a real person looks like — to
+ * anyone, for any artist with a playable track.
  *
- * WHICH GUARD HOLDS WHERE, measured by removing each one and re-running:
- *   - catalog reads    -> `stripExternalCatalogFields` (a denylist). Removing
- *     `select: false` from `Track.sha256` leaked it from ELEVEN handlers at once,
- *     so the strip is the guard that survives a read becoming an aggregation.
+ * WHICH GUARD HOLDS WHERE:
+ *   - catalog reads    -> `publicColumns()` plus the `toArtistDto` /
+ *     `toTrackDto` allowlists. The serializer test below also hands a
+ *     whole-row select straight to the DTO, so a read that skips
+ *     `publicColumns()` is covered too.
  *   - the locker       -> `toUploadTrackDto`, an explicit object literal (an
- *     ALLOWLIST — strictly stronger: a field added to `UserUpload` tomorrow is
- *     excluded by default). No `delete` exists for it, deliberately: a delete on a
- *     serializer that never names the field can never fire, and would advertise a
- *     denylist where the real guard is an allowlist.
- *   - attestations     -> the `$lookup` projects two fields and no more.
+ *     ALLOWLIST: a field added to `UserUpload` tomorrow is excluded by
+ *     default). No `delete` exists for it, deliberately: a delete on a
+ *     serializer that never names the field can never fire, and would advertise
+ *     a denylist where the real guard is an allowlist.
+ *   - attestations     -> `findAttestationsByTrackIds` projects two fields and
+ *     no more.
  *
  * NOT a leak, and must not be "fixed" into one: `CatalogEntity.imageLicence` is
  * public on purpose. CC BY-SA is satisfied BY displaying the author and licence;
@@ -76,19 +78,11 @@ import { getArtistById, getMyContributions, getMyImageSuggestions } from './arti
 /**
  * POSTGRES ONLY.
  *
- * This block used to say the opposite, and the reason it was wrong is worth
- * keeping: nothing here reads a Mongoose model, but `entityProfile.controller`
- * still GATED every handler on `isDatabaseConnected()` — Mongoose readiness —
- * so without a Mongo connection every request answered 503 and these suites had
- * to open one. The guard was the whole dependency.
- *
- * Task 15 switched that gate to `isPostgresConnected()`, and the Mongo hooks
- * went with it. `db/__tests__/connectivityGates.test.ts` used to keep this true
- * by walking this controller's whole import graph and failing if anything it
- * reached opened a model; it was retired in 8cd87a8 together with its subject.
- * Nothing polices it now because nothing can violate it — `mongoose` is not a
- * dependency and `src/models/` does not exist, so reintroducing a model is a
- * package install and a new directory, not a silent import.
+ * Every read these handlers make is Postgres, and `entityProfile.controller`
+ * gates each one on `isPostgresConnected()`, so opening Postgres is the whole
+ * dependency. Nothing polices it because nothing can violate it: there is no
+ * second database driver and `src/models/` does not exist, so adding another
+ * store is a package install and a new directory, not a silent import.
  */
 beforeAll(async () => {
   await connectDb();
@@ -315,22 +309,15 @@ describe('server-only fields never reach a catalog response', () => {
 
   /**
    * The route test above can pass for the wrong reason, so this tests the
-   * SERIALIZER directly — and what makes it the right test changed with the
-   * port, which is worth stating rather than leaving the old rationale in place.
+   * SERIALIZER directly.
    *
-   * Under Mongo the danger was that `select: false` is a query projection and
-   * `aggregate()` ignores it, so a document arrived with the field present and
-   * the ONLY guard was the `delete` in `stripExternalCatalogFields`. This test
-   * reproduced that: hand the formatter a document shaped the way an aggregation
-   * returns one, assert the strip fires.
-   *
-   * On Postgres the mechanism is an ALLOWLIST, not a denylist: `toTrackDto` and
-   * `toArtistDto` name every field they emit, and `publicColumns()` removes
-   * `sha256`, `images` and `image_suggestions` from the row TYPE so a serializer
-   * naming one does not compile. That is strictly stronger — but only for a
-   * caller that used `publicColumns()`. A caller that selects the whole row is
-   * exactly the modern equivalent of the aggregation, so that is what this seeds:
-   * a full `select()` carrying the protected columns, handed to the real DTO.
+   * `toTrackDto` and `toArtistDto` are ALLOWLISTS that name every field they
+   * emit, and `publicColumns()` removes `sha256`, `images` and
+   * `image_suggestions` from the row TYPE so a serializer naming one does not
+   * compile. The type guard holds only for a caller that used
+   * `publicColumns()`. A caller that selects the whole row is the read that
+   * skips the exclusion, so that is what this seeds: a full `select()` carrying
+   * the protected columns, handed to the real DTO.
    */
   it('drops server-only columns from a row selected WITHOUT publicColumns()', async () => {
     const artistId = await makeArtistWithSuggestions();
@@ -370,10 +357,9 @@ describe('server-only fields never reach a catalog response', () => {
    * sweep.
    *
    * `toUploadTrackDto` is an explicit object literal — every key written out, no
-   * spread, no `schema.parse()`, no `passthrough`. That is an ALLOWLIST, which is
-   * strictly stronger than the catalog funnel's denylist: a field added to
-   * `UserUpload` tomorrow is excluded by default instead of needing somebody to
-   * remember a `delete`.
+   * spread, no `schema.parse()`, no `passthrough`. That is an ALLOWLIST: a field
+   * added to `UserUpload` tomorrow is excluded by default instead of needing
+   * somebody to remember a `delete`.
    *
    * The thing that can silently destroy that property is somebody "simplifying"
    * the literal into a spread. This test is what fails when they do, and it is

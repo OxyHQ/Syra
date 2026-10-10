@@ -58,10 +58,8 @@ function playlistProvider(): ModerationSubjectProvider {
     subjectType: 'custom.syra.playlist',
 
     async snapshot(reportedId: string): Promise<ModerationSubjectSnapshot | null> {
-      // No id-shape guard on the Postgres providers: `playlists.id` is `text`,
-      // so a malformed id matches no row and the query answers the question the
-      // guard used to. The Mongo providers below keep theirs, because an id of
-      // the wrong shape reaches Mongoose as a CastError rather than a miss.
+      // No id-shape guard: `playlists.id` is `text`, so a malformed id matches no
+      // row and the query answers the question a guard would.
       const [playlist] = await getDb()
         .select({
           id: playlists.id,
@@ -172,10 +170,8 @@ function artistProvider(): ModerationSubjectProvider {
           claimedByOxyUserId: catalogEntities.claimedByOxyUserId,
         })
         .from(catalogEntities)
-        // `type = 'artist'` restores what `ArtistModel` did implicitly: it is a
-        // Mongoose DISCRIMINATOR, so every query through it carried the type
-        // filter. `catalog_entities` holds persons in the same table and drizzle
-        // adds nothing, so the filter is written out — a person reported as an
+        // `type = 'artist'`: `catalog_entities` holds persons in the same table
+        // and drizzle adds no implicit type filter, so it is written out — a person reported as an
         // artist profile is not this provider's subject.
         .where(and(eq(catalogEntities.id, reportedId), eq(catalogEntities.type, 'artist')))
         .limit(1);
@@ -353,8 +349,8 @@ function roomProvider(): ModerationSubjectProvider {
        * credential for broadcasting INTO the room. A juror who read them could
        * take over the stream of the room they were asked to judge.
        *
-       * This used to be a hand-written Mongo projection listing nine fields,
-       * where forgetting one exclusion was all it took. `findPublicRoomById`
+       * A hand-written projection listing nine fields would make forgetting one
+       * exclusion all it took. `findPublicRoomById`
        * reads through `publicColumns(rooms, PROTECTED_COLUMNS_BY_TABLE)`, so all
        * four stream credentials are absent from the returned TYPE — reaching for
        * one below fails `tsc` rather than shipping it, and the guard no longer

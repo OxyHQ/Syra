@@ -35,9 +35,8 @@ export async function registerDevice(
  * Returns the WIRE shape, because this result is broadcast verbatim as the
  * `/player` socket's `device:list` payload (`sockets/playerSocket.ts`, three
  * emit sites). `@syra/shared-types`' `deviceSchema` is that payload's declared
- * contract; the Mongoose version emitted raw documents, so clients received
- * `_id`/`__v` they were never promised and a `Date` where the schema says
- * string. Mapping once here is what makes the three emits correct rather than
+ * contract; emitting raw rows would hand clients fields they were never
+ * promised and a `Date` where the schema says string. Mapping once here is what makes the three emits correct rather than
  * three chances to forget.
  */
 export async function listDevices(userId: string): Promise<Device[]> {

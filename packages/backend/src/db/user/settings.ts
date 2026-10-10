@@ -22,13 +22,9 @@
  *    which any authenticated caller may ask for ANY account, and which returns
  *    NOTHING BUT the nine viewer-visible privacy flags.
  *
- * That second route served the whole document to any caller under Mongoose, and
- * not through an oversight a reviewer would spot: `ensureUserSettings` narrowed
- * the TypeScript type with `.lean<UserSettingsLean>()` and never projected, so
- * the type said four fields while the object carried all of them. The type was
- * the guard and a type is not one. `utils/userSettings.ts` also held an
- * `extractPublicProfileData` that WOULD have projected them out; it had no
- * callers anywhere in `packages/`, and is deleted rather than ported.
+ * That second route must project in SQL, not merely narrow a TypeScript type: a
+ * type that says four fields over an object carrying all of them is not a
+ * guard.
  *
  * ## Why an ALLOWLIST of nine, rather than the document minus two
  *
@@ -53,14 +49,10 @@
  *
  * ## Every group is now always present
  *
- * A genuine difference from Mongo, deliberately taken. `profileCustomization`,
- * `interests` and `feedSettings` had no Mongoose default, so they were ABSENT
- * from the document until something wrote them; every Postgres column is
- * `notNull().default(...)`, so the nested groups always render. The values are
- * the same defaults Mongoose would have applied on first write, and every
- * frontend reader is optional-chained, so this widens the response rather than
- * changing it. `ensureUserSettings`' backfill of a missing `profileCustomization`
- * has nothing left to do and is gone with it.
+ * `profileCustomization`, `interests` and `feedSettings` are never absent:
+ * every column is `notNull().default(...)`, so the nested groups always render,
+ * and no backfill of a missing group is needed. Every frontend reader is
+ * optional-chained regardless.
  */
 
 import { eq } from 'drizzle-orm';
@@ -204,9 +196,8 @@ export interface UserSettingsDto {
 /**
  * A nullable column as the document rendered it: absent, not `null`.
  *
- * Mongoose stored these as missing keys (`default: undefined`), and
  * `JSON.stringify` drops an `undefined` value, so mapping null to undefined is
- * what keeps the serialized response byte-identical to the Mongo one.
+ * what keeps an unset field out of the serialized response entirely.
  */
 function optional<T>(value: T | null): T | undefined {
   return value ?? undefined;
@@ -321,13 +312,12 @@ const VIEWER_PRIVACY_DEFAULTS: ViewerVisiblePrivacy = {
  * why the allowlist is the shape that survives the next column added to this
  * table, and for the single caller that decided the field set.
  *
- * ## It does NOT create a row, and the Mongo version did
+ * ## It does NOT create a row
  *
  * This route answers for ANY account id an authenticated caller cares to name,
- * so `ensureUserSettings`' find-or-create made a GET into an unbounded write
- * that any caller could drive: one `user_settings` row per id anyone ever asked
- * about, keyed by a string they chose. Faithful to Mongo, and not worth keeping
- * once the read needs nothing the row provides.
+ * so a find-or-create would make a GET into an unbounded write that any caller
+ * could drive: one `user_settings` row per id anyone ever asked about, keyed by
+ * a string they chose — and the read needs nothing the row provides.
  *
  * An absent row and a default row are indistinguishable through this projection
  * — all nine columns are `notNull()` with defaults — so returning
@@ -369,8 +359,8 @@ async function selectViewerPrivacy(
  * The patch {@link updateUserSettings} accepts — already validated and clamped
  * by the route, one property per column.
  *
- * `null` means CLEAR and `undefined` means LEAVE ALONE, which is the distinction
- * the Mongo version could not express. See {@link updateUserSettings}.
+ * `null` means CLEAR and `undefined` means LEAVE ALONE. See
+ * {@link updateUserSettings}.
  */
 export interface UserSettingsPatch {
   appearanceThemeMode?: ThemeMode;
@@ -405,22 +395,14 @@ export interface UserSettingsPatch {
 /**
  * Apply a patch, creating the row when the caller has none.
  *
- * ## `null` clears, and under Mongoose nothing did
+ * ## `null` clears
  *
- * The Mongo route expressed "clear this field" by assigning `undefined` into its
- * `$set` object, for five fields: `appearance.primaryColor`,
+ * Five fields can be cleared: `appearance.primaryColor`,
  * `profileCustomization.{displayName,coverImage}`,
  * `feedSettings.diversity.maxConsecutiveSameAuthor` and
- * `feedSettings.quality.minEngagementRate`. **Mongoose 9 strips undefined-valued
- * keys out of an update**, so all five branches were no-ops: the request
- * succeeded, the response echoed the unchanged document, and the field kept its
- * old value. Measured on 9.7.4 against a real mongod, with an explicit `null`
- * as the control to prove the probe could tell the two apart.
- *
- * So this is not a port of the old behaviour — it is the intent that behaviour
- * failed to implement, and clearing works here where it did not there. Recorded
- * as a deliberate difference rather than silently matched, because "the field
- * did not clear" is a defect however long it has been shipping.
+ * `feedSettings.quality.minEngagementRate`. Assigning `undefined` would be a
+ * no-op — the request would succeed, the response would echo the unchanged
+ * row, and the field would keep its old value.
  *
  * `buildUpdateSet` drops undefined-valued keys, which is why `null` is the
  * clearing value and why every clearable property above is typed `| null`.

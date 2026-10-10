@@ -1,9 +1,7 @@
 /**
- * Real-Postgres test helper for bun test suites — the drizzle counterpart of
- * `test/mongo.ts`.
+ * Real-Postgres test helper for bun test suites.
  *
- * Usage, deliberately the same three hooks the Mongo helper uses so a ported
- * suite reads the same way:
+ * Usage — three hooks:
  *
  *   import { connectDb, clearDb, disconnectDb } from '../test/postgres';
  *   beforeAll(connectDb);

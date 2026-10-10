@@ -1,17 +1,10 @@
 /**
  * `indexTrackAcoustically` — the one writer of `track_fingerprints`.
  *
- * WHY THIS FILE EXISTS. These five behaviours were covered, but against the
- * WRONG implementation. Two functions of this name existed: the live drizzle one
- * here, and a Mongoose twin in `models/TrackFingerprint.ts` whose only importer
- * was its own colocated test. That test's describe block called itself "the one
- * writer" while all three real producers — `services/ingest/ingestTrack.ts`,
+ * All three real producers — `services/ingest/ingestTrack.ts`,
  * `scripts/backfillTrackFingerprints.ts` and `controllers/uploads.controller.ts`
- * — had moved to this module. It passed, it read like meaningful coverage, and
- * it exercised code nothing called.
- *
- * Task 19a deleted the twin and moved its assertions here, so the refusals below
- * guard the function that actually runs. `backfillTrackFingerprints.test.ts`
+ * — call this module, so the refusals below guard the function that actually
+ * runs. `backfillTrackFingerprints.test.ts`
  * imports this module too, but only to SEED a row — it asserts none of this.
  */
 
@@ -30,8 +23,8 @@ const VALUES = [1, -445777417, 3, 4, 5];
 
 /**
  * Real parent rows. `track_fingerprints.track_id` is a real
- * `.references(() => tracks.id)`, which the Mongoose collection had no
- * equivalent of — the twin's fixtures were bare strings naming nothing.
+ * `.references(() => tracks.id)`, so a fixture cannot be a bare string naming
+ * nothing.
  */
 const TRACK_IDS = ['track-1', 'track-empty', 'track-bad', 'track-signed'] as const;
 
