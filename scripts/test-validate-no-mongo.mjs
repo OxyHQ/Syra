@@ -121,8 +121,6 @@ function filler(extra = {}) {
       + "const fixtures = ['mongodb+srv://user:pass@cluster.mongodb.net/syra',\n"
       + "  'mongodb://127.0.0.1:27017/syra'];\n"
       + "const withPassword = 'mongodb+srv://syra:hunter2-do-not-log@cluster.mongodb.net/syra';\n",
-    "packages/backend/src/db/__tests__/deployWorkflow.test.ts":
-      "// `MONGODB_URI` left in #92, with the Mongo it named. `DATABASE_URL` took its place.\n",
     ".github/workflows/quality.yml":
       "      # carries DATABASE_URL and no MONGODB_URI, /health reports engine=postgres\n",
     ...extra,

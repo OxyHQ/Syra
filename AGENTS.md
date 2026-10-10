@@ -39,7 +39,7 @@ rather than folding it into "tests pass" — the two are not the same check.
 
 - **Port**: `3000` (deployed; ECS sets `PORT` explicitly — the local dev default is `4120`) | **Domain**: `api.syra.fm`
 - **Deploy**: `.github/workflows/deploy-aws.yml` → `linux/arm64` Docker → ECR `237343248947.dkr.ecr.us-west-2.amazonaws.com/oxy/syra` → `ecs update-service --force-new-deployment`
-- **Secrets**: GitHub Actions secrets → SSM `/oxy/syra/*`.
+- **Secrets**: SSM `/oxy/syra/*` (SecureString) is the ONLY source; set or rotate with `aws ssm put-parameter --overwrite` (oxy-infra runbook 46). GitHub holds only CI tokens, and no workflow writes SSM (`deployWorkflow.test.ts`).
 
 ## Domains
 

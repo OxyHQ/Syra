@@ -193,14 +193,6 @@ const KNOWN_EXCEPTIONS = [
   },
   // ---------------------------------------------------------------------------
   {
-    file: "packages/backend/src/db/__tests__/deployWorkflow.test.ts",
-    pattern: "left in #92, with the Mongo it named",
-    reason:
-      "Records that DATABASE_URL replaced MONGODB_URI on the task definition, beside the test "
-      + "asserting the deploy workflow's secret list. That history is what stops someone "
-      + "re-adding the name after meeting an old task definition.",
-  },
-  {
     file: ".github/workflows/quality.yml",
     pattern: "carries DATABASE_URL and no MONGODB_URI",
     reason:
