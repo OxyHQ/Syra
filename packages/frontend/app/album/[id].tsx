@@ -34,7 +34,6 @@ const AlbumScreen: React.FC = () => {
   const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const theme = useTheme();
   const { playTrackList, currentTrack, isPlaying } = usePlayerStore();
   const { shuffle, toggleShuffle } = useQueueStore();
   const gate = useAuthGate();

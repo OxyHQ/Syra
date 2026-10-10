@@ -169,7 +169,7 @@ async function extractPredominantColorsFromBufferInternal(
       .toBuffer({ resolveWithObject: true });
 
     const { data, info } = resized;
-    const { width, height, channels } = info;
+    const { channels } = info;
 
     // Calculate color frequencies
     const colorMap = new Map<string, { count: number; r: number; g: number; b: number }>();
@@ -275,15 +275,6 @@ async function extractPredominantColorsFromBufferInternal(
     });
     throw error;
   }
-}
-
-/**
- * Extract dominant color from image buffer (backward compatibility)
- * Uses sharp to resize and get color statistics
- */
-async function extractColorFromBuffer(imageBuffer: Buffer): Promise<string> {
-  const colors = await extractPredominantColorsFromBufferInternal(imageBuffer);
-  return colors.primary;
 }
 
 /**

@@ -1,7 +1,6 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import * as Skeleton from '@oxy.so/bloom/skeleton';
-import { useTheme } from '@oxy.so/bloom/theme';
 import { Repeat } from './Repeat';
 
 interface StatCardGridSkeletonProps {
@@ -20,8 +19,6 @@ interface StatCardGridSkeletonProps {
  */
 export const StatCardGridSkeleton: React.FC<StatCardGridSkeletonProps> = React.memo(
   ({ count = 4, minWidth = '30%', showPeriodSelector = false }) => {
-    const theme = useTheme();
-
     return (
       <View style={styles.content}>
         {showPeriodSelector && (

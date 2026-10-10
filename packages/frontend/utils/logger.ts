@@ -19,7 +19,6 @@ const PREFIX = '[Session]';
 // Check if logging is enabled via environment variable
 const LOG_LEVEL: LogLevel = (process.env.LOG_LEVEL as LogLevel) || 'info';
 const isProduction = process.env.NODE_ENV === 'production';
-const isDevelopment = process.env.NODE_ENV === 'development';
 
 // Log level hierarchy
 const LOG_LEVELS: Record<LogLevel, number> = {

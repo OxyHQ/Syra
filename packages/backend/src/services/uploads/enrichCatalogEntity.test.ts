@@ -225,7 +225,6 @@ describe('enrichArtistProfile — filling gaps', () => {
     expect(second.status).not.toBe('enriched');
     expect(second.fieldsWritten).toEqual([]);
 
-    const after = await readArtist(artist.id);
     // ONE entry, not two. Enrichment is a background job that may be re-queued
     // after a failure and scheduled over the whole catalogue; an entry per run
     // is an audit log that grows without bound and explains nothing.

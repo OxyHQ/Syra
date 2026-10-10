@@ -3,7 +3,6 @@ import { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, runOnJS } from 'react-native-reanimated';
-import { useTheme } from '@oxy.so/bloom/theme';
 
 const THUMB_SIZE = 20;
 const THUMB_RADIUS = THUMB_SIZE / 2;
@@ -39,7 +38,6 @@ export const Slider: React.FC<SliderProps> = ({
   disabled = false,
   showValue = true,
 }) => {
-  const theme = useTheme();
   const [width, setWidth] = useState(0);
   const widthSV = useSharedValue(0);
   const translateX = useSharedValue(0);

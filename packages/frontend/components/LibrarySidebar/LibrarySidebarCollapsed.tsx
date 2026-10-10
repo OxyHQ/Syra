@@ -17,7 +17,6 @@ interface LibrarySidebarCollapsedProps {
   playlists: Playlist[];
   savedAlbums: Album[];
   followedArtists: Artist[];
-  likedTracksCount: number;
   loading: boolean;
   /** Library load failure, surfaced as a tap-to-retry indicator in the rail. */
   error?: string | null;
@@ -34,7 +33,6 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
   playlists,
   savedAlbums,
   followedArtists,
-  likedTracksCount,
   loading,
   error,
   onRetry,

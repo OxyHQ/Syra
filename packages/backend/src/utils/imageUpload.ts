@@ -9,7 +9,7 @@ export const imageUpload = multer({
   limits: {
     fileSize: 10 * 1024 * 1024, // 10MB limit for image files
   },
-  fileFilter: (req, file, cb) => {
+  fileFilter: (_req, file, cb) => {
     // Accept image formats
     const allowedMimes = [
       'image/jpeg',

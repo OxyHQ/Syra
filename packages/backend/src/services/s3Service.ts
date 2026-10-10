@@ -371,7 +371,7 @@ export async function objectExists(key: string): Promise<boolean> {
   try {
     const metadata = await getObjectMetadata(key);
     return metadata !== null;
-  } catch (error) {
+  } catch {
     return false;
   }
 }

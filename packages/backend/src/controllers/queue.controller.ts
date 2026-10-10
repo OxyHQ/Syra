@@ -146,11 +146,6 @@ export const getQueueHandler = async (req: AuthRequest, res: Response, next: Nex
     // Split tracks into previous, current, and next
     const previous: typeof queue.tracks = [];
     const next: typeof queue.tracks = [];
-    const currentTrack =
-      queue.current >= 0 && queue.current < queue.tracks.length
-        ? queue.tracks[queue.current]
-        : null;
-
     if (queue.current >= 0) {
       previous.push(...queue.tracks.slice(0, queue.current));
       next.push(...queue.tracks.slice(queue.current + 1));

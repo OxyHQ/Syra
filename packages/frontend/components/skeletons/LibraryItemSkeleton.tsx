@@ -1,7 +1,6 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import * as Skeleton from '@oxy.so/bloom/skeleton';
-import { useTheme } from '@oxy.so/bloom/theme';
 import { Repeat } from './Repeat';
 
 interface LibraryItemSkeletonProps {
@@ -15,8 +14,6 @@ interface LibraryItemSkeletonProps {
  */
 export const LibraryItemSkeleton: React.FC<LibraryItemSkeletonProps> = React.memo(
   ({ shape = 'square' }) => {
-    const theme = useTheme();
-
     return (
       <View className="bg-popover" style={styles.libraryItem}>
         {shape === 'circle' ? (

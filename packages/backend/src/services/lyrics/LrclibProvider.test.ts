@@ -18,9 +18,7 @@ const QUERY = {
 
 describe('LrclibProvider.getLyrics — synced lyrics', () => {
   it('returns synced lyrics when syncedLyrics present', async () => {
-    let capturedUrl = '';
-    const provider = makeProvider(async (url) => {
-      capturedUrl = url;
+    const provider = makeProvider(async () => {
       return {
         status: 200,
         body: { syncedLyrics: '[00:01.00] hi\n[00:02.00] yo', plainLyrics: 'hi\nyo' },

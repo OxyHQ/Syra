@@ -56,7 +56,6 @@ export const LibrarySidebar: React.FC = () => {
           playlists={playlists}
           savedAlbums={savedAlbums}
           followedArtists={followedArtists}
-          likedTracksCount={likedTracksCount}
           loading={loading}
           error={error}
           onRetry={retry}

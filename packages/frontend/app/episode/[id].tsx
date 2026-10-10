@@ -27,7 +27,6 @@ type EpisodeChapters = NonNullable<ReturnType<typeof useEpisodeChapters>['data']
 const EpisodeScreen: React.FC = () => {
   const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const theme = useTheme();
   const router = useRouter();
 
   const episodeQuery = useEpisode(id);

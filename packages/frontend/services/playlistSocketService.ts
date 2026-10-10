@@ -28,13 +28,12 @@ type PlaylistUpdatedCallback = (data: {
 class PlaylistSocketService {
   private socket: Socket | null = null;
   private isConnected = false;
-  private currentUserId?: string;
   private joinedPlaylists: Set<string> = new Set();
 
   /**
    * Connect to playlist socket namespace
    */
-  connect(userId?: string, token?: string) {
+  connect(_userId?: string, token?: string) {
     /**
      * `active` as well as `connected` — same fix as the player socket.
      * Checking only `connected` lets a second call fall through while the first
@@ -48,8 +47,6 @@ class PlaylistSocketService {
     }
 
     try {
-      if (userId) this.currentUserId = userId;
-
       // Connect to playlists namespace
       this.socket = io(`${API_URL_SOCKET}/playlists`, {
         transports: ['websocket', 'polling'],

@@ -88,7 +88,7 @@ export function validateUrlSecurity(url: string): { valid: boolean; error?: stri
     // For now, we rely on hostname checks above
 
     return { valid: true };
-  } catch (error) {
+  } catch {
     return { valid: false, error: 'Invalid URL format' };
   }
 }

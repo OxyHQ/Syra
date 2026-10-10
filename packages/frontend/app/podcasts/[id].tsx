@@ -45,7 +45,6 @@ function contrastTextColor(hex: string): string {
 const PodcastShowScreen: React.FC = () => {
   const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const theme = useTheme();
   const router = useRouter();
 
   const showQuery = usePodcast(id);

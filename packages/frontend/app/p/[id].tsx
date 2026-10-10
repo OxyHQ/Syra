@@ -107,7 +107,6 @@ const EntityProfileScreen: React.FC = () => {
   const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const theme = useTheme();
   const { playTrackList, playEpisode, startRadio, currentTrack, currentEpisode, isPlaying } =
     usePlayerStore();
   // The albums, shows and related artists on this profile are all playable, so

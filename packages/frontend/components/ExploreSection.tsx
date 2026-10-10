@@ -1,7 +1,6 @@
 import type React from 'react';
 import { StyleSheet, View, Text } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { useTheme } from '@oxy.so/bloom/theme';
 import { MediaCardRowSkeleton } from '@/components/skeletons';
 import { EmptyState } from '@/components/common/EmptyState';
 
@@ -39,7 +38,6 @@ export const ExploreSection: React.FC<ExploreSectionProps> = ({
   children,
 }) => {
   const { t } = useTranslation();
-  const theme = useTheme();
 
   // The error branch wins over `isLoading`: while a failed query refetches,
   // EmptyState shows its own retry spinner rather than flashing back to the

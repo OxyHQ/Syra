@@ -364,7 +364,6 @@ const HomeSectionBlock: React.FC<HomeSectionBlockProps> = ({
   children,
 }) => {
   const { t } = useTranslation();
-  const theme = useTheme();
 
   if (
     (status === 'ready' && !hasContent) ||
@@ -422,6 +421,11 @@ interface HomeContentProps {
   madeForYouArtists: Artist[];
   madeForYouPlaylists: Playlist[];
   madeForYouAlbums: Album[];
+  /**
+   * Threaded through but not yet read: its one consumer was a broken title
+   * (see 0804161). Whether the non-personalised case gets its own copy is a
+   * product decision, so the plumbing stays.
+   */
   isPersonalized: boolean;
   radioTracks: Track[];
   radioStatus: HomeSectionStatus;
@@ -471,7 +475,6 @@ const HomeContent: React.FC<HomeContentProps> = ({
   madeForYouArtists,
   madeForYouPlaylists,
   madeForYouAlbums,
-  isPersonalized,
   radioTracks,
   radioStatus,
   onRetryRadio,

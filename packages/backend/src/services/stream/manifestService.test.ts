@@ -56,8 +56,6 @@ function makeDeps(variantText: string) {
 describe('buildMasterPlaylistFor', () => {
   it('cap=320: includes all three renditions', async () => {
     const hls = makeRenditions();
-    const deps = makeDeps(FAKE_VARIANT_96);
-
     const result = await buildMasterPlaylistFor(
       { id: TRACK_ID, hls },
       { token: TOKEN, baseUrl: BASE_URL, maxBitrateKbps: 320, basePath: BASE_PATH },
@@ -71,8 +69,6 @@ describe('buildMasterPlaylistFor', () => {
 
   it('cap=160: excludes 320 rendition', async () => {
     const hls = makeRenditions();
-    const deps = makeDeps(FAKE_VARIANT_96);
-
     const result = await buildMasterPlaylistFor(
       { id: TRACK_ID, hls },
       { token: TOKEN, baseUrl: BASE_URL, maxBitrateKbps: 160, basePath: BASE_PATH },
@@ -85,8 +81,6 @@ describe('buildMasterPlaylistFor', () => {
 
   it('cap=96: only includes 96 rendition', async () => {
     const hls = makeRenditions();
-    const deps = makeDeps(FAKE_VARIANT_96);
-
     const result = await buildMasterPlaylistFor(
       { id: TRACK_ID, hls },
       { token: TOKEN, baseUrl: BASE_URL, maxBitrateKbps: 96, basePath: BASE_PATH },
@@ -99,8 +93,6 @@ describe('buildMasterPlaylistFor', () => {
 
   it('emits correct #EXT-X-STREAM-INF BANDWIDTH for each included rendition', async () => {
     const hls = makeRenditions();
-    const deps = makeDeps(FAKE_VARIANT_96);
-
     const result = await buildMasterPlaylistFor(
       { id: TRACK_ID, hls },
       { token: TOKEN, baseUrl: BASE_URL, maxBitrateKbps: 160, basePath: BASE_PATH },

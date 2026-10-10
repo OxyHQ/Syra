@@ -1,7 +1,6 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import * as Skeleton from '@oxy.so/bloom/skeleton';
-import { useTheme } from '@oxy.so/bloom/theme';
 import { ResponsiveGrid } from '@/components/ResponsiveGrid';
 
 interface QuickAccessGridSkeletonProps {
@@ -15,8 +14,6 @@ interface QuickAccessGridSkeletonProps {
  */
 export const QuickAccessGridSkeleton: React.FC<QuickAccessGridSkeletonProps> = React.memo(
   ({ count = 8 }) => {
-    const theme = useTheme();
-
     return (
       <ResponsiveGrid minItemWidth={300} minColumns={2} gap={8} style={styles.compactGrid}>
         {Array.from({ length: count }).map((_, index) => (

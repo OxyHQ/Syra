@@ -33,7 +33,6 @@ export interface EmptyStateProps {
     icon?: keyof typeof Ionicons.glyphMap;
   };
   customIcon?: ReactNode;
-  style?: ViewStyle;
   containerStyle?: ViewStyle;
   /**
    * Container colour, as a Bloom class. Callers used to thread this through
@@ -60,7 +59,6 @@ export const EmptyState = memo<EmptyStateProps>(
     error,
     action,
     customIcon,
-    style,
     containerStyle,
     className,
     titleStyle,

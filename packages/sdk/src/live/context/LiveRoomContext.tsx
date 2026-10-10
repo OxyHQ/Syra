@@ -10,7 +10,6 @@ import Animated, {
   Extrapolation,
   runOnJS,
 } from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 
 import { useLiveConfig } from './LiveConfigContext';
@@ -60,7 +59,6 @@ export function LiveRoomProvider({ children }: { children: React.ReactNode }) {
     () => (Platform.OS === 'web' && dockClassName ? {} : { position: 'absolute' }),
     [dockClassName],
   );
-  const insets = useSafeAreaInsets();
   const { height: screenHeight } = useWindowDimensions();
 
   const useIsDesktopHook = config.useIsDesktop ?? defaultUseIsDesktop;

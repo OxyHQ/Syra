@@ -27,7 +27,7 @@ afterAll(async () => {
 beforeEach(() => {
   posted = [];
   failNextPost = false;
-  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+  globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
     if (failNextPost) {
       throw new Error('network down');
     }

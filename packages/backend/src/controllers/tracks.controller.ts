@@ -268,7 +268,7 @@ const audioUpload = multer({
   limits: {
     fileSize: MAX_AUDIO_UPLOAD_BYTES,
   },
-  fileFilter: (req, file, cb) => {
+  fileFilter: (_req, file, cb) => {
     if (isAllowedAudioMime(file.mimetype)) {
       cb(null, true);
     } else {
@@ -281,7 +281,7 @@ const audioUpload = multer({
  * POST /api/tracks/upload
  * Upload a new track (authenticated, requires artist profile)
  */
-export const uploadTrack = async (req: AuthRequest, res: Response, next: NextFunction) => {
+export const uploadTrack = async (req: AuthRequest, res: Response) => {
   // Handle file upload
   audioUpload(req, res, async (err) => {
     if (err) {

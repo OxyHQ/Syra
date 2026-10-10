@@ -28,7 +28,7 @@ export async function ensureRedisConnected(
     try {
       await client.ping();
       return true;
-    } catch (error) {
+    } catch {
       // If ping fails, client is not actually ready
       return false;
     }
@@ -46,7 +46,7 @@ export async function ensureRedisConnected(
         try {
           await client.ping();
           return true;
-        } catch (error) {
+        } catch {
           return false;
         }
       }
@@ -70,7 +70,7 @@ export async function ensureRedisConnected(
         try {
           await client.ping();
           return true;
-        } catch (error) {
+        } catch {
           return false;
         }
       }
@@ -96,7 +96,7 @@ export async function ensureRedisConnected(
           try {
             await client.ping();
             return true;
-          } catch (pingError) {
+          } catch {
             return false;
           }
         }

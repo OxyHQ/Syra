@@ -39,7 +39,6 @@ const PODCAST_CATEGORIES = [
  * point lets users pull in shows that are not yet mirrored.
  */
 const PodcastsScreen: React.FC = () => {
-  const { t } = useTranslation();
   const router = useRouter();
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   // HOVER MODE: hovering a card themes the WHOLE app from its artwork. All

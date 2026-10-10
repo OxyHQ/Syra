@@ -125,13 +125,11 @@ const SpeakerTile = ({
 };
 
 const ListenerAvatar = ({
-  participant,
   userProfile,
   oxyServices,
   AvatarComponent,
   getCachedFileDownloadUrlSync,
 }: {
-  participant: RoomParticipant;
   userProfile: UserEntity | undefined;
   oxyServices: unknown;
   AvatarComponent: AvatarComponentType;
@@ -198,7 +196,6 @@ const ConnectedListenerAvatar = ({
   const userProfile = useUserById(participant.userId);
   return (
     <ListenerAvatar
-      participant={participant}
       userProfile={userProfile}
       oxyServices={oxyServices}
       AvatarComponent={AvatarComponent}
@@ -313,7 +310,7 @@ export function LiveRoomSheet({
   } = useRoomConnection({ roomId, enabled: !!roomId });
 
   const isRoomLive = room?.status === 'live';
-  const { isLiveKitConnected, micPermissionDenied, livekitRoom } = useRoomAudio({
+  const { micPermissionDenied, livekitRoom } = useRoomAudio({
     roomId,
     isSpeaker: myRole === 'speaker' || myRole === 'host',
     isMuted,
