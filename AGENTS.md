@@ -19,6 +19,10 @@
 | `@syra.fm/sdk` | `packages/sdk/` | Public SDK |
 | `@syra/shared-types` | `packages/shared-types/` | Shared TypeScript DTOs |
 
+## Lint and format
+
+Biome 2.5.15 (root `biome.json`) formats and lints every package; CI runs `bunx biome ci .`. `bun run lint` also runs `expo lint` in frontend and studio, whose `eslint.config.js` keeps ONLY what Biome lacks (eslint-plugin-expo's `EXPO_PUBLIC_*` rules, the React Compiler rules). The frontend's `sonner`/`sonner-native` ban is Biome's `noRestrictedImports`. `bun run lint:fix` / `bun run format` write.
+
 ## A type error in a test file is invisible to the suite AND to the build
 
 Only `bun run typecheck` sees it. Measured in `packages/backend` by introducing

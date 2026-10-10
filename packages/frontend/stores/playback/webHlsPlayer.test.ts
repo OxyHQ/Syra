@@ -11,7 +11,6 @@ import type Hls from 'hls.js';
 
 // Dynamic import of the .web.ts file directly (jest-expo defaults to 'ios';
 // we need the web implementation explicitly).
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const { createWebHlsPlayer } = require('./webHlsPlayer.web') as typeof import('./webHlsPlayer.web');
 
 // ── Fakes ─────────────────────────────────────────────────────────────────────

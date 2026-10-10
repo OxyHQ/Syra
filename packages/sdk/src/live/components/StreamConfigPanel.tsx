@@ -297,11 +297,11 @@ export function StreamConfigPanel({ roomId, roomStatus, initialStreamUrl, initia
   };
 
   // Auto-generate RTMP credentials when switching to the External App tab
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs only when the tab switches; `streamKey` and `generateKey` are read at switch time on purpose.
   useEffect(() => {
     if (mode === 'rtmp' && !streamKey && !generatingRef.current) {
       generateKey();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
   const handleUpdateMetadata = async () => {

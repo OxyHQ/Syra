@@ -9,13 +9,13 @@ export const Loading = ({ color: colorProp, size = 26, style: styleProp }: { col
     const color = colorProp ?? theme.colors.icon;
     const rotation = useSharedValue(0);
 
+    // biome-ignore lint/correctness/useExhaustiveDependencies: start the spin once on mount; `rotation` is a stable Reanimated shared value.
     React.useEffect(() => {
         rotation.value = withRepeat(
             withTiming(360, { duration: 400, easing: Easing.linear }),
             -1,
             false
         );
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const animatedStyle = useAnimatedStyle(() => ({

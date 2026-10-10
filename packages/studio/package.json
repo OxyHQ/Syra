@@ -94,8 +94,10 @@
     "@types/node": "^20.0.0",
     "@types/react": "~19.2.0",
     "@types/react-dom": "~19.2.3",
+    "@typescript-eslint/parser": "^8.70.1",
     "eslint": "^9.25.0",
-    "eslint-config-expo": "~57.0.0",
+    "eslint-plugin-expo": "^1.1.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "jest-expo": "~57.0.2",
     "typescript": "~5.9.2"
   },

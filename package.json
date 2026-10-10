@@ -22,7 +22,9 @@
     "build:studio": "bun run --filter '@syra/studio' build",
     "build:backend": "bun run --filter '@syra/backend' build",
     "test": "bun run --filter '*' test",
-    "lint": "bun run --filter '*' lint",
+    "lint": "biome check . && bun run --filter '@syra/frontend' lint && bun run --filter '@syra/studio' lint",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
     "validate:ai-architecture": "bun ./scripts/validate-ai-architecture.mjs && bun ./scripts/test-validate-ai-architecture.mjs",
     "validate:no-mongo": "bun ./scripts/validate-no-mongo.mjs && bun ./scripts/test-validate-no-mongo.mjs",
     "validate:agents-md": "bun ./scripts/check-agents-md-size.mjs && bun ./scripts/test-check-agents-md-size.mjs",
@@ -35,6 +37,7 @@
     "postinstall": "bun run --filter '@syra/shared-types' build"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.15",
     "@oxy.so/doctor": "1.1.0",
     "@types/node": "^20.0.0",
     "typescript": "~5.9.2"
