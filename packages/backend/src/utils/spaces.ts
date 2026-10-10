@@ -119,17 +119,19 @@ export async function deleteRecordingFromSpaces(objectKey: string): Promise<void
 
 /**
  * S3 upload config handed to the LiveKit EgressClient so it writes the room
- * recording directly to the same bucket. LiveKit's S3 uploader needs STATIC
- * credentials (it cannot assume the ECS task role), read from the same
- * `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` pair as `config/s3.config`.
- * Bucket / region / endpoint are the canonical S3 config values. When the
- * credentials are absent, egress uploads will fail to authenticate at runtime —
- * a deployment concern, not a build concern.
+ * recording directly to the same bucket. Like `config/s3.config`, it passes
+ * the `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` pair only when both are set
+ * (local MinIO). Production sets neither: with no credentials in the request,
+ * LiveKit's S3 uploader uses the AWS default chain on the LiveKit host, whose
+ * instance role (`oxy-livekit` in oxy-infra) may put only under
+ * `agora/recordings/`. Bucket / region / endpoint are the canonical S3 config
+ * values.
  */
 export function getS3UploadConfig(objectKey: string) {
+  const accessKey = process.env.AWS_ACCESS_KEY_ID;
+  const secret = process.env.AWS_SECRET_ACCESS_KEY;
   return {
-    accessKey: process.env.AWS_ACCESS_KEY_ID || '',
-    secret: process.env.AWS_SECRET_ACCESS_KEY || '',
+    ...(accessKey && secret ? { accessKey, secret } : {}),
     bucket: S3_BUCKET_NAME,
     region: S3_REGION,
     endpoint: S3_ENDPOINT,
