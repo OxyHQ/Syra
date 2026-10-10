@@ -238,7 +238,7 @@ function buildMasterPlaylist(renditions: PackagedRendition[]): string {
     lines.push(`#EXT-X-STREAM-INF:BANDWIDTH=${r.bitrateKbps * 1000},CODECS="mp4a.40.2"`);
     lines.push(r.playlistPath);
   }
-  return lines.join('\n') + '\n';
+  return `${lines.join('\n')}\n`;
 }
 
 // ── Entry point ──────────────────────────────────────────────────────────────

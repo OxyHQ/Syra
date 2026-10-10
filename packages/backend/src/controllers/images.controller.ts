@@ -34,7 +34,7 @@ export const uploadImage = async (req: AuthRequest, res: Response, next: NextFun
     }
 
     // Validate file is an image
-    if (!file.mimetype || !file.mimetype.startsWith('image/')) {
+    if (!file.mimetype?.startsWith('image/')) {
       return res.status(400).json({
         error: 'Invalid file type',
         message: 'Only image files are allowed',

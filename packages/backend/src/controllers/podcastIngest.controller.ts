@@ -141,7 +141,7 @@ export async function createEpisodeDraft(req: AuthRequest, res: Response): Promi
   const input = parsed.data;
 
   const podcast = await findPodcastForOwner(id, userId);
-  if (!podcast || podcast.source !== 'syra') {
+  if (podcast?.source !== 'syra') {
     res.status(403).json({ error: 'You do not own this podcast' });
     return;
   }

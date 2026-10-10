@@ -4,5 +4,5 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 mkdirSync(new URL('../dist/browser/', import.meta.url), { recursive: true });
 writeFileSync(
   new URL('../dist/browser/package.json', import.meta.url),
-  JSON.stringify({ type: 'module' }) + '\n',
+  `${JSON.stringify({ type: 'module' })}\n`,
 );

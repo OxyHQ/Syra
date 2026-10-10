@@ -420,7 +420,7 @@ export function initializeRoomSocket(io: Server): Namespace {
         }
 
         const participant = await redisGetParticipant(roomId, userId);
-        if (!participant || participant.role !== 'listener') {
+        if (participant?.role !== 'listener') {
           callback?.({ success: false, error: 'Only a listener can request to speak' });
           return;
         }

@@ -38,7 +38,7 @@ export const reportCopyrightViolation = async (
 
     const { trackId, reason } = req.body;
 
-    if (!trackId || !reason || !reason.trim()) {
+    if (!trackId || !reason?.trim()) {
       return res.status(400).json({
         error: 'Missing required fields',
         message: 'trackId and reason are required',

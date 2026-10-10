@@ -407,7 +407,7 @@ export async function getPodcastRss(req: AuthRequest, res: Response): Promise<vo
   }
 
   const podcast = await findPodcastForViewer(id, req.user?.id);
-  if (!podcast || podcast.source !== 'syra') {
+  if (podcast?.source !== 'syra') {
     res.status(404).json({ error: 'Feed not found' });
     return;
   }
@@ -700,7 +700,7 @@ export async function uploadEpisode(req: AuthRequest, res: Response): Promise<vo
       // Owner-scoped in SQL: "not yours" and "no such show" are one answer here,
       // so an upload attempt cannot be used to probe for a private show's id.
       const podcast = await findPodcastForOwner(id, userId);
-      if (!podcast || podcast.source !== 'syra') {
+      if (podcast?.source !== 'syra') {
         res.status(403).json({ error: 'You do not own this podcast' });
         return;
       }
@@ -938,7 +938,7 @@ export async function updatePodcast(req: AuthRequest, res: Response): Promise<vo
   // Owner-scoped in SQL — same reason as `uploadEpisode`: a PATCH must not be
   // usable to ask whether an id exists.
   const podcast = await findPodcastForOwner(id, userId);
-  if (!podcast || podcast.source !== 'syra') {
+  if (podcast?.source !== 'syra') {
     res.status(403).json({ error: 'You do not own this podcast' });
     return;
   }
@@ -1046,7 +1046,7 @@ async function loadOwnedShowOrRespond(
   }
 
   const podcast = await findPodcastForOwner(id, userId);
-  if (!podcast || podcast.source !== 'syra') {
+  if (podcast?.source !== 'syra') {
     res.status(403).json({ error: 'You do not own this podcast' });
     return undefined;
   }

@@ -222,7 +222,7 @@ for (const path of scanFiles) {
 
 if (violations.length > 0) {
   console.error(
-    'Syra AI architecture violations:\n' + violations.map((item) => `- ${item}`).join('\n'),
+    `Syra AI architecture violations:\n${violations.map((item) => `- ${item}`).join('\n')}`,
   );
   process.exit(1);
 }

@@ -351,7 +351,7 @@ export async function importFeed(
         // but never got its own image — a prior crawl that inserted it beyond
         // the per-import cap below, or before this field existed. An episode
         // that already has `imageId` is left alone: see NO_ARTWORK's comment.
-        if (!existingState || !existingState.imageId) {
+        if (!existingState?.imageId) {
           if (rehostedEpisodeImages < MAX_EPISODE_IMAGE_REHOST) {
             const rehosted = await rehostPodcastImage(ownArtUrl, {
               source: 'rss',

@@ -94,7 +94,7 @@ export const streamAudio = async (req: Request, res: Response, next: NextFunctio
 
     // Get audio metadata
     const metadata = await getTrackAudioMetadata(track);
-    if (!metadata || !metadata.contentLength) {
+    if (!metadata?.contentLength) {
       return sendErrorResponse(res, 404, 'Audio file not found in storage');
     }
 

@@ -104,7 +104,7 @@ export class LrclibProvider implements LyricsProvider {
     }
 
     // Fall back to plain text
-    if (plain && plain.trim()) {
+    if (plain?.trim()) {
       return {
         synced: false,
         lines: plain.split('\n').map((text) => ({ timeMs: 0, text })),

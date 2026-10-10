@@ -32,4 +32,4 @@ for (const file of walk(dist).filter((file) => file.endsWith('.js'))) {
 }
 for (const file of walk(dist).filter((file) => file.endsWith('.map'))) unlinkSync(file);
 mkdirSync(dirname(output), { recursive: true });
-writeFileSync(output, JSON.stringify(inventory, null, 2) + '\n');
+writeFileSync(output, `${JSON.stringify(inventory, null, 2)}\n`);

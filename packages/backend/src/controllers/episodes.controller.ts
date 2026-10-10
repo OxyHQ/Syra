@@ -201,7 +201,7 @@ export async function updateEpisode(req: AuthRequest, res: Response): Promise<vo
   // The show arrives WITH the episode, so ownership is answered from the row
   // rather than from a second unfiltered read of `podcasts`.
   const found = await findEpisodeById(id);
-  if (!found || found.show.source !== 'syra' || !viewerOwnsShow(found.show, userId)) {
+  if (found?.show.source !== 'syra' || !viewerOwnsShow(found.show, userId)) {
     res.status(403).json({ error: 'You do not own this podcast' });
     return;
   }
@@ -267,7 +267,7 @@ async function loadOwnedEpisodeOrRespond(
   }
 
   const found = await findEpisodeById(id);
-  if (!found || found.show.source !== 'syra' || !viewerOwnsShow(found.show, userId)) {
+  if (found?.show.source !== 'syra' || !viewerOwnsShow(found.show, userId)) {
     res.status(403).json({ error: 'You do not own this podcast' });
     return undefined;
   }

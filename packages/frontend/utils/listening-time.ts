@@ -6,7 +6,7 @@ export interface ListeningSample {
 
 /** Count advancing audio, not the seek position. Paused/buffered time is zero. */
 export function listenedBetween(previous: ListeningSample | null, next: ListeningSample): number {
-  if (!previous || !previous.playing) return 0;
+  if (!previous?.playing) return 0;
   const elapsed = (next.at - previous.at) / 1000;
   const advanced = next.position - previous.position;
   if (!Number.isFinite(elapsed) || !Number.isFinite(advanced) || elapsed <= 0 || advanced <= 0)

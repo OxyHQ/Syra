@@ -79,7 +79,7 @@ export const RecordingCard: React.FC<RecordingCardProps> = ({ recording, onPress
     >
       <View style={styles.row}>
         {/* Play icon */}
-        <View style={[styles.playIcon, { backgroundColor: theme.colors.primary + '15' }]}>
+        <View style={[styles.playIcon, { backgroundColor: `${theme.colors.primary}15` }]}>
           <MaterialCommunityIcons name="play-circle" size={28} color={theme.colors.primary} />
         </View>
 

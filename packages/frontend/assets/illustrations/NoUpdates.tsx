@@ -15,8 +15,8 @@ export const NoUpdatesIllustration: React.FC<NoUpdatesIllustrationProps> = ({
 }) => {
   const theme = useTheme();
   const strokeNeutral = theme.colors.text;
-  const accentA = theme.colors.primary + '15';
-  const accentB = theme.colors.primary + '99';
+  const accentA = `${theme.colors.primary}15`;
+  const accentB = `${theme.colors.primary}99`;
   const white = theme.colors.card;
 
   return (

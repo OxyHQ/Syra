@@ -40,7 +40,7 @@ function fixture({
   ]) {
     writeFileSync(
       join(dist, name),
-      code + '\n//# sourceMappingURL=' + name + '.map\n//# debugId=fixture\n',
+      `${code}\n//# sourceMappingURL=${name}.map\n//# debugId=fixture\n`,
     );
     writeFileSync(join(dist, `${name}.map`), JSON.stringify({ sources: [source] }));
   }
@@ -55,14 +55,14 @@ setBudget();
 assert.equal(run().status, 0, 'valid partitioned export');
 setBudget({ fontBytes: 8 });
 assert.match(run().stderr, /fontBytes/, 'font growth fails');
-fixture({ entry: 'globalThis.value = "' + 'x'.repeat(140) + '";' });
+fixture({ entry: `globalThis.value = "${'x'.repeat(140)}";` });
 setBudget();
 assert.match(
   run().stderr,
   /initialJavaScriptBytes/,
   'initial growth fails even with spare translation capacity',
 );
-fixture({ entry: 'globalThis.value = "' + 'x'.repeat(140) + '";', entrySource: locale });
+fixture({ entry: `globalThis.value = "${'x'.repeat(140)}";`, entrySource: locale });
 assert.match(
   run().stderr,
   /initialJavaScriptBytes/,

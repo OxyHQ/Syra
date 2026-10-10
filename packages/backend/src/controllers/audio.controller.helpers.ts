@@ -104,7 +104,7 @@ export async function fetchAndValidateTrack(trackId: string): Promise<TrackValid
  */
 export async function validateAudioFileExists(track: Track): Promise<TrackValidationResult> {
   const metadata = await getTrackAudioMetadata(track);
-  if (!metadata || !metadata.contentLength) {
+  if (!metadata?.contentLength) {
     return {
       isValid: false,
       statusCode: 404,

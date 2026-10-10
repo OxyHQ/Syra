@@ -124,9 +124,9 @@ const SpinnerLoading: React.FC<SpinnerLoadingProps> = ({
   const effectiveIconSize = iconSize ?? sizeConfig.spinner;
 
   // Extract theme values first to avoid optional chaining in dependency arrays
-  const themePrimary = theme && theme.colors ? theme.colors.primary : undefined;
-  const themeTextSecondary = theme && theme.colors ? theme.colors.textSecondary : undefined;
-  const themeText = theme && theme.colors ? theme.colors.text : undefined;
+  const themePrimary = theme?.colors ? theme.colors.primary : undefined;
+  const themeTextSecondary = theme?.colors ? theme.colors.textSecondary : undefined;
+  const themeText = theme?.colors ? theme.colors.text : undefined;
 
   const spinnerColor = useMemo(() => {
     if (color) return color;
@@ -180,7 +180,7 @@ const TopLoading: React.FC<TopLoadingProps> = ({
   const targetHeight = Math.max(0, effectiveIconSize + sizeConfig.spinner + heightOffset);
 
   // Extract theme value to avoid optional chaining in dependency arrays
-  const themePrimary = theme && theme.colors ? theme.colors.primary : undefined;
+  const themePrimary = theme?.colors ? theme.colors.primary : undefined;
 
   const spinnerColor = useMemo(() => color ?? themePrimary ?? '#000000', [color, themePrimary]);
 
@@ -261,9 +261,9 @@ const InlineLoading: React.FC<InlineLoadingProps> = ({
   const sizeConfig = SIZE_CONFIG[size];
 
   // Extract theme values first to avoid optional chaining issues
-  const themePrimary = theme && theme.colors ? theme.colors.primary : undefined;
-  const themeTextSecondary = theme && theme.colors ? theme.colors.textSecondary : undefined;
-  const themeText = theme && theme.colors ? theme.colors.text : undefined;
+  const themePrimary = theme?.colors ? theme.colors.primary : undefined;
+  const themeTextSecondary = theme?.colors ? theme.colors.textSecondary : undefined;
+  const themeText = theme?.colors ? theme.colors.text : undefined;
 
   const spinnerColor = useMemo(() => color ?? themePrimary ?? '#000000', [color, themePrimary]);
 

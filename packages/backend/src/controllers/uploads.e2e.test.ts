@@ -146,7 +146,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await new Promise<void>((r) => server.close(() => r()));
   if (smallUntaggedWav && fs.existsSync(smallUntaggedWav)) fs.unlinkSync(smallUntaggedWav);
-  console.log('\nE2E_OBSERVATIONS_START\n' + observations.join('\n') + '\nE2E_OBSERVATIONS_END');
+  console.log(`\nE2E_OBSERVATIONS_START\n${observations.join('\n')}\nE2E_OBSERVATIONS_END`);
   await disconnectDb();
 });
 
