@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
-import { execFileSync } from 'child_process';
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import express from 'express';
 import { uuidv7 } from '@oxy.so/db';
-import type { Server } from 'http';
+import type { Server } from 'node:http';
 import type { Response, NextFunction } from 'express';
 import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
 import { S3Client, ListObjectsV2Command } from '@aws-sdk/client-s3';

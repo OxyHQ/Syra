@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll } from 'bun:test';
 import express, { type Express } from 'express';
-import type { AddressInfo } from 'net';
-import type { Server } from 'http';
+import type { AddressInfo } from 'node:net';
+import type { Server } from 'node:http';
 import { caseDecidedEventFixture, signWebhookDelivery } from '@crowdsource.you/core/testing';
 import { count, eq } from 'drizzle-orm';
 import { connectDb, clearDb, disconnectDb } from '../test/postgres';

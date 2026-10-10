@@ -30,10 +30,10 @@
  * which is also why a half-finished run needs no cleanup before the next one.
  */
 
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
-import { pipeline } from 'stream/promises';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { pipeline } from 'node:stream/promises';
 import { and, asc, gt, inArray, isNotNull } from 'drizzle-orm';
 import dotenv from 'dotenv';
 import { describeDriverError, isForeignKeyViolation } from '@oxy.so/db';

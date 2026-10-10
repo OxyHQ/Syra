@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
-import { execFile as execFileCb, execFileSync } from 'child_process';
-import crypto from 'crypto';
-import { promisify } from 'util';
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
+import { execFile as execFileCb, execFileSync } from 'node:child_process';
+import crypto from 'node:crypto';
+import { promisify } from 'node:util';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {
   generatePreviewClip,
   generatePreviewClipFromHls,

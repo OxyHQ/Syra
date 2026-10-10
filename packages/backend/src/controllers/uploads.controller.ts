@@ -33,9 +33,9 @@
  * loads the document rather than a branch after it.
  */
 
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { and, eq, sql } from 'drizzle-orm';
 import { describeDriverError, isLiveEntityId, isUniqueViolation, uuidv7 } from '@oxy.so/db';
 import multer from 'multer';

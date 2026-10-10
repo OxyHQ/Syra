@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
-import fs from 'fs';
-import os from 'os';
+import fs from 'node:fs';
+import os from 'node:os';
 import multer from 'multer';
 import { and, asc, count, eq, sql } from 'drizzle-orm';
 import { isLiveEntityId, uuidv7 } from '@oxy.so/db';

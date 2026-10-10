@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'bun:test';
-import fs from 'fs';
-import path from 'path';
+import fs from 'node:fs';
+import path from 'node:path';
 
 /**
  * Does every optional input these services accept actually get SUPPLIED by

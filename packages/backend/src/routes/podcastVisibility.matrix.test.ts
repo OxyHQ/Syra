@@ -47,8 +47,8 @@
 
 import { afterAll, afterEach, beforeAll, describe, expect, it, mock } from 'bun:test';
 import express from 'express';
-import type { Server } from 'http';
-import { Readable } from 'stream';
+import type { Server } from 'node:http';
+import { Readable } from 'node:stream';
 import { eq, sql } from 'drizzle-orm';
 import { uuidv7 } from '@oxy.so/db';
 import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';

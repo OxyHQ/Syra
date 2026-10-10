@@ -25,7 +25,7 @@
  */
 
 import type { Response } from 'express';
-import type { Readable } from 'stream';
+import type { Readable } from 'node:stream';
 import { eq } from 'drizzle-orm';
 import { isLiveEntityId } from '@oxy.so/db';
 import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';

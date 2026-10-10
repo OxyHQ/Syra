@@ -19,8 +19,8 @@
  * fills a gap. A field that is absent from the file is absent from the result.
  */
 
-import crypto from 'crypto';
-import fs from 'fs';
+import crypto from 'node:crypto';
+import fs from 'node:fs';
 import { probeAudio } from '../ingest/probeAudio';
 import { splitArtistCredit } from './artistNames';
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from 'bun:test';
-import path from 'path';
+import path from 'node:path';
 import {
   buildRawTagDump,
   extractMetadata,

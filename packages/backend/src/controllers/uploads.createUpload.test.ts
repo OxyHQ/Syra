@@ -14,10 +14,10 @@
 
 import { describe, it, expect, beforeAll, afterEach, afterAll, mock } from 'bun:test';
 import express from 'express';
-import http from 'http';
-import fs from 'fs';
-import path from 'path';
-import type { AddressInfo } from 'net';
+import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
+import type { AddressInfo } from 'node:net';
 import { eq, sql } from 'drizzle-orm';
 import { uuidv7 } from '@oxy.so/db';
 import { connectDb, clearDb, disconnectDb } from '../test/postgres';

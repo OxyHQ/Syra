@@ -1,9 +1,9 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'bun:test';
 import express from 'express';
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
-import type { Server } from 'http';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import type { Server } from 'node:http';
 import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
 import { uuidv7 } from '@oxy.so/db';
 import { normalizeNameKey } from '@syra/shared-types';

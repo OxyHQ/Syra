@@ -14,8 +14,8 @@
  * — no real S3 credentials required in test environments.
  */
 
-import fs from 'fs';
-import path from 'path';
+import fs from 'node:fs';
+import path from 'node:path';
 import type { HlsRendition } from '@syra/shared-types';
 import { uploadToS3 } from '../s3Service';
 import { getDb } from '../../db/postgres';

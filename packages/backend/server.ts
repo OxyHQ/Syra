@@ -2,7 +2,7 @@ import { env } from './src/config/env';
 import { startPlatformActivity } from './src/services/platformActivity';
 
 import express from 'express';
-import http from 'http';
+import http from 'node:http';
 import compression from 'compression';
 import cors from 'cors';
 import { Server as SocketIOServer, type Socket, type Namespace } from 'socket.io';

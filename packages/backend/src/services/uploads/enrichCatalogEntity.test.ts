@@ -23,7 +23,7 @@ import {
 } from './enrichCatalogEntity';
 import type { ArtistPhotoSuggestionDeps } from './enrichCatalogEntity';
 import { extractMetadata, type ExtractedPicture } from './extractMetadata';
-import path from 'path';
+import path from 'node:path';
 import { ensureContributedAlbum } from './resolveAlbum';
 import payloads from './__fixtures__/enrichment-payloads.json';
 

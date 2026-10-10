@@ -10,12 +10,12 @@
  *  5. Clean up intermediate files.
  */
 
-import { execFile as execFileCb } from 'child_process';
-import crypto from 'crypto';
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
-import { promisify } from 'util';
+import { execFile as execFileCb } from 'node:child_process';
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { promisify } from 'node:util';
 
 const execFile = promisify(execFileCb);
 

@@ -14,9 +14,9 @@
  */
 
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
-import fs from 'fs';
-import { Readable } from 'stream';
-import { pipeline } from 'stream/promises';
+import fs from 'node:fs';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { eq } from 'drizzle-orm';
 import { uuidv7 } from '@oxy.so/db';
 import { clearDb, connectDb, disconnectDb } from '../test/postgres';

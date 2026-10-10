@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
-import path from 'path';
+import path from 'node:path';
 import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
 import { getDb } from '../../db/postgres';
 import { isrcRegistry } from '../../db/schema/catalog';

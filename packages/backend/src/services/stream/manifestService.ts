@@ -24,7 +24,7 @@
  * it would only re-create the coupling to one entity's storage layout.
  */
 
-import type { Readable } from 'stream';
+import type { Readable } from 'node:stream';
 import type { HlsRendition } from '@syra/shared-types';
 import { streamFromS3, getPresignedUrl } from '../s3Service';
 import { rewriteVariantPlaylist } from './playlistRewrite';

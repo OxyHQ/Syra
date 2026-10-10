@@ -16,8 +16,8 @@
  * screening step must never have.
  */
 
-import { execFile as execFileCb } from 'child_process';
-import { promisify } from 'util';
+import { execFile as execFileCb } from 'node:child_process';
+import { promisify } from 'node:util';
 
 const execFile = promisify(execFileCb);
 

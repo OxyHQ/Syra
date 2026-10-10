@@ -20,9 +20,9 @@
  */
 
 import { describe, expect, it } from 'bun:test';
-import fs from 'fs';
-import { Readable } from 'stream';
-import { pipeline } from 'stream/promises';
+import fs from 'node:fs';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { sqlStateOf } from '@oxy.so/db';
 import { isDriverError } from '../postgres';
 

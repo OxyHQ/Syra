@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
-import { execFile as execFileCb, execFileSync } from 'child_process';
-import { promisify } from 'util';
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
+import { execFile as execFileCb, execFileSync } from 'node:child_process';
+import { promisify } from 'node:util';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { packageToEncryptedHls, HLS_BITRATES_KBPS, LOCKER_HLS_BITRATES_KBPS } from './hlsPackager';
 
 function hasBinary(name: string): boolean {

@@ -16,7 +16,7 @@
  * the key is not known until the id is.
  */
 
-import type { Readable } from 'stream';
+import type { Readable } from 'node:stream';
 import { eq } from 'drizzle-orm';
 import { uuidv7 } from '@oxy.so/db';
 import type { CatalogImageSizes, CatalogImageVariant } from '@syra/shared-types';

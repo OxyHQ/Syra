@@ -14,9 +14,9 @@
  * the part that silently imports the wrong field when it is wrong.
  */
 
-import fs from 'fs';
-import path from 'path';
-import readline from 'readline';
+import fs from 'node:fs';
+import path from 'node:path';
+import readline from 'node:readline';
 
 // ── PostgreSQL COPY text format ─────────────────────────────────────────────
 

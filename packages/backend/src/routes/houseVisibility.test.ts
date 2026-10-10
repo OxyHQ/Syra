@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'bun:test';
 import express from 'express';
-import type { Server } from 'http';
+import type { Server } from 'node:http';
 import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
 import { clearDb, connectDb, disconnectDb } from '../test/postgres';
 import {

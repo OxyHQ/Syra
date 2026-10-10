@@ -14,10 +14,10 @@
  * re-enqueueing it.
  */
 
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
-import type { Readable } from 'stream';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import type { Readable } from 'node:stream';
 import { eq } from 'drizzle-orm';
 import type { AudioSource } from '@syra/shared-types';
 import { getDb } from '../../db/postgres';

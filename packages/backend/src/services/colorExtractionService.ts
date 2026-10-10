@@ -1,6 +1,6 @@
-import * as https from 'https';
-import * as http from 'http';
-import { URL } from 'url';
+import * as https from 'node:https';
+import * as http from 'node:http';
+import { URL } from 'node:url';
 import sharp from 'sharp';
 import { logger } from '../utils/logger';
 import { validateUrlSecurity } from '../utils/urlSecurity';

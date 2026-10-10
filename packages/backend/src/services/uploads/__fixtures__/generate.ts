@@ -34,11 +34,11 @@
  * enough to be a valid stream in every container, short enough to commit.
  */
 
-import { execFile as execFileCb } from 'child_process';
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
-import { promisify } from 'util';
+import { execFile as execFileCb } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { promisify } from 'node:util';
 
 const execFile = promisify(execFileCb);
 

@@ -10,7 +10,7 @@ import {
   type S3StreamOptions,
 } from './s3Service';
 import { logger } from '../utils/logger';
-import type { Readable } from 'stream';
+import type { Readable } from 'node:stream';
 
 /**
  * Audio Storage Service
