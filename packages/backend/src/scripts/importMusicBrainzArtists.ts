@@ -140,14 +140,21 @@ const ARTIST_TYPE_NAMES: Readonly<Record<string, ArtistType>> = {
  * else. The result keeps that precision (`1960`, not `1960-01-01`), because
  * inventing a day is inventing a fact.
  */
-function partialDate(columns: string[], year: number, month: number, day: number): string | undefined {
+function partialDate(
+  columns: string[],
+  year: number,
+  month: number,
+  day: number,
+): string | undefined {
   const yearValue = unescapeCopyValue(columns[year]);
   if (!yearValue) return undefined;
   const monthValue = unescapeCopyValue(columns[month]);
   if (!monthValue) return yearValue;
   const dayValue = unescapeCopyValue(columns[day]);
   const padded = monthValue.padStart(2, '0');
-  return dayValue ? `${yearValue}-${padded}-${dayValue.padStart(2, '0')}` : `${yearValue}-${padded}`;
+  return dayValue
+    ? `${yearValue}-${padded}-${dayValue.padStart(2, '0')}`
+    : `${yearValue}-${padded}`;
 }
 
 // ── Passes ──────────────────────────────────────────────────────────────────
@@ -456,9 +463,10 @@ export async function importMusicBrainzArtists(
         }),
         ...(artistType !== undefined && { artistType }),
         ...(areaId !== undefined && areaNames.has(areaId) && { areaName: areaNames.get(areaId) }),
-        ...(areaId !== undefined && countryCodes.has(areaId) && {
-          countryCode: countryCodes.get(areaId),
-        }),
+        ...(areaId !== undefined &&
+          countryCodes.has(areaId) && {
+            countryCode: countryCodes.get(areaId),
+          }),
         ...(beginDate !== undefined && { beginDate }),
         ...(endDate !== undefined && { endDate }),
         ...(isni.has(id) && { isni: isni.get(id) }),
@@ -498,7 +506,7 @@ async function main(): Promise<void> {
 
 if (require.main === module) {
   main().catch((err: unknown) => {
-    logger.error(err instanceof Error ? err.stack ?? err.message : String(err));
+    logger.error(err instanceof Error ? (err.stack ?? err.message) : String(err));
     process.exitCode = 1;
   });
 }

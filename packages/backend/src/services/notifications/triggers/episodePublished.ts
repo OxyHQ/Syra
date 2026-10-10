@@ -66,18 +66,21 @@ export async function notifySubscribersOfNewEpisode(
 
   let notified = 0;
   for (const recipientId of subscriberIds) {
-    const result = await notifyUser({
-      recipientId,
-      actorId: episode.podcastId,
-      event: 'episode.published',
-      entityId: episode.episodeId,
-      entityType: 'episode',
-      title: episode.podcastTitle,
-      message: episode.episodeTitle,
-      data: { podcastId: episode.podcastId, episodeId: episode.episodeId },
-      // One notification per show per subscriber per window, however many episodes land.
-      coalesceGroupId: episode.podcastId,
-    }, deps);
+    const result = await notifyUser(
+      {
+        recipientId,
+        actorId: episode.podcastId,
+        event: 'episode.published',
+        entityId: episode.episodeId,
+        entityType: 'episode',
+        title: episode.podcastTitle,
+        message: episode.episodeTitle,
+        data: { podcastId: episode.podcastId, episodeId: episode.episodeId },
+        // One notification per show per subscriber per window, however many episodes land.
+        coalesceGroupId: episode.podcastId,
+      },
+      deps,
+    );
     if (result.emitted) {
       notified += 1;
     }

@@ -31,7 +31,14 @@ import {
 import { uploadToS3, streamFromS3 } from './s3Service';
 
 /** `createImageSizes` (`catalogImageAssets.ts`) always stamps exactly these six. */
-const CATALOG_IMAGE_SIZE_NAMES = ['small', 'medium', 'large', 'xlarge', 'xxlarge', 'original'] as const;
+const CATALOG_IMAGE_SIZE_NAMES = [
+  'small',
+  'medium',
+  'large',
+  'xlarge',
+  'xxlarge',
+  'original',
+] as const;
 
 /**
  * The provenance of a mirrored catalog image.
@@ -92,27 +99,25 @@ export async function storeImageAsset(input: StoreImageAssetInput): Promise<{
     },
   });
 
-  await getDb()
-    .insert(imageAssets)
-    .values({
-      id: imageId,
-      s3Key,
-      filename: input.filename,
-      contentType: input.contentType,
-      byteSize: input.buffer.length,
-      width: input.width,
-      height: input.height,
-      ownerType: input.ownerType,
-      uploadedBy: input.uploadedBy,
-      primaryColor: input.primaryColor,
-      secondaryColor: input.secondaryColor,
-      catalogProvider: input.catalog?.provider,
-      catalogEntityType: input.catalog?.entityType,
-      catalogExternalId: input.catalog?.externalId,
-      catalogSize: input.catalog?.size,
-      catalogSourceUrlHash: input.catalog?.sourceUrlHash,
-      catalogSourceContentHash: input.catalog?.sourceContentHash,
-    });
+  await getDb().insert(imageAssets).values({
+    id: imageId,
+    s3Key,
+    filename: input.filename,
+    contentType: input.contentType,
+    byteSize: input.buffer.length,
+    width: input.width,
+    height: input.height,
+    ownerType: input.ownerType,
+    uploadedBy: input.uploadedBy,
+    primaryColor: input.primaryColor,
+    secondaryColor: input.secondaryColor,
+    catalogProvider: input.catalog?.provider,
+    catalogEntityType: input.catalog?.entityType,
+    catalogExternalId: input.catalog?.externalId,
+    catalogSize: input.catalog?.size,
+    catalogSourceUrlHash: input.catalog?.sourceUrlHash,
+    catalogSourceContentHash: input.catalog?.sourceContentHash,
+  });
 
   return { id: imageId, s3Key };
 }
@@ -141,7 +146,7 @@ export async function getImageAssetStream(imageId: string): Promise<{
 }
 
 export async function getImageAssetColors(
-  imageId: string
+  imageId: string,
 ): Promise<StoredImageAssetColors | undefined> {
   const [asset] = await getDb()
     .select({
@@ -163,7 +168,7 @@ export async function getImageAssetColors(
 }
 
 export async function getImageAssetSourceContentHash(
-  imageId: string | undefined
+  imageId: string | undefined,
 ): Promise<string | undefined> {
   if (!imageId) return undefined;
 
@@ -204,10 +209,12 @@ export interface ExistingCatalogImageSet {
  */
 export async function findExistingCatalogImageSet(
   hashColumn: 'sourceUrlHash' | 'sourceContentHash',
-  hash: string
+  hash: string,
 ): Promise<ExistingCatalogImageSet | undefined> {
   const column =
-    hashColumn === 'sourceUrlHash' ? imageAssets.catalogSourceUrlHash : imageAssets.catalogSourceContentHash;
+    hashColumn === 'sourceUrlHash'
+      ? imageAssets.catalogSourceUrlHash
+      : imageAssets.catalogSourceContentHash;
 
   const rows = await getDb()
     .select({
@@ -234,7 +241,10 @@ export async function findExistingCatalogImageSet(
   // first six-size match below always resolves to it deterministically.
   const bySize = new Map<string, (typeof rows)[number]>();
   for (const row of rows) {
-    if (row.size && CATALOG_IMAGE_SIZE_NAMES.includes(row.size as (typeof CATALOG_IMAGE_SIZE_NAMES)[number])) {
+    if (
+      row.size &&
+      CATALOG_IMAGE_SIZE_NAMES.includes(row.size as (typeof CATALOG_IMAGE_SIZE_NAMES)[number])
+    ) {
       if (!bySize.has(row.size)) bySize.set(row.size, row);
     }
   }
@@ -263,7 +273,12 @@ export async function findExistingCatalogImageSet(
   if (!large?.sourceUrlHash || !large.sourceContentHash) return undefined;
 
   return {
-    imageId: imageSizes.large?.id ?? imageSizes.xlarge?.id ?? imageSizes.medium?.id ?? imageSizes.original?.id ?? '',
+    imageId:
+      imageSizes.large?.id ??
+      imageSizes.xlarge?.id ??
+      imageSizes.medium?.id ??
+      imageSizes.original?.id ??
+      '',
     imageSizes,
     primaryColor: large.primaryColor ?? undefined,
     secondaryColor: large.secondaryColor ?? undefined,

@@ -184,7 +184,9 @@ describe('the deploy workflow can actually run its own gate', () => {
     // `src/test/postgres.ts` opens the schema, it does not create it.
     const steps = workflow.jobs.test.steps;
     const migrateAt = steps.findIndex((step) => step.run?.includes('db:migrate'));
-    const suiteAt = steps.findIndex((step) => step.run?.includes('cd packages/backend && bun run test'));
+    const suiteAt = steps.findIndex((step) =>
+      step.run?.includes('cd packages/backend && bun run test'),
+    );
     expect(migrateAt).toBeGreaterThanOrEqual(0);
     expect(suiteAt).toBeGreaterThanOrEqual(0);
     expect(migrateAt).toBeLessThan(suiteAt);
@@ -282,7 +284,10 @@ describe('runtime secrets come from SSM, and no workflow writes one', () => {
     const named = workflowFiles.flatMap(({ source }) =>
       [...source.matchAll(/\bsecrets\.([A-Za-z0-9_]+)/g)].map((match) => match[1]),
     );
-    expect(named.length, 'no secret is read anywhere, so the matcher measures nothing').toBeGreaterThan(0);
+    expect(
+      named.length,
+      'no secret is read anywhere, so the matcher measures nothing',
+    ).toBeGreaterThan(0);
     for (const name of new Set(named)) {
       expect(CI_ONLY_SECRETS, `a workflow reads app secret ${name} from GitHub`).toContain(name);
     }
@@ -312,9 +317,7 @@ describe('runtime secrets come from SSM, and no workflow writes one', () => {
       0,
     );
     for (const name of injected) {
-      expect(overrides[name]).toBe(
-        `arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/${name}`,
-      );
+      expect(overrides[name]).toBe(`arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/${name}`);
     }
   });
 

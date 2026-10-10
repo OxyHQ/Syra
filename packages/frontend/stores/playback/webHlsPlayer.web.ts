@@ -115,7 +115,10 @@ class WebHlsPlayerImpl implements PlayerEngine {
    *   `player.addListener('playbackStatusUpdate', cb)`
    * The event name is validated at call time so callers don't silently miss typos.
    */
-  addListener(event: 'playbackStatusUpdate', callback: (status: PlaybackStatusUpdate) => void): void {
+  addListener(
+    event: 'playbackStatusUpdate',
+    callback: (status: PlaybackStatusUpdate) => void,
+  ): void {
     if (event === 'playbackStatusUpdate') {
       this.listeners.push(callback);
     }
@@ -177,10 +180,7 @@ class WebHlsPlayerImpl implements PlayerEngine {
  * @param url  - The HLS master playlist URL (tokenized; EXT-X-KEY fetched automatically).
  * @param deps - Optional DI override for unit tests (inject fake Audio + Hls constructors).
  */
-export function createWebHlsPlayer(
-  url: string,
-  deps?: WebHlsPlayerDeps,
-): PlayerEngine {
+export function createWebHlsPlayer(url: string, deps?: WebHlsPlayerDeps): PlayerEngine {
   const resolved: WebHlsPlayerDeps = deps ?? { AudioCtor: Audio, HlsCtor: Hls };
   return new WebHlsPlayerImpl(url, resolved);
 }

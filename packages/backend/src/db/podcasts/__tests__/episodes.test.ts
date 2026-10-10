@@ -32,7 +32,7 @@ async function makeShow(): Promise<string> {
 }
 
 async function showCounters(
-  podcastId: string
+  podcastId: string,
 ): Promise<{ episodeCount: number; lastEpisodeAt: Date | null }> {
   const [row] = await getDb()
     .select({ episodeCount: podcasts.episodeCount, lastEpisodeAt: podcasts.lastEpisodeAt })
@@ -118,13 +118,10 @@ describe('insertEpisode — recordOnShow', () => {
      * exactly the "comment standing in for a guard" this port keeps finding.
      */
     const showId = await makeShow();
-    await getDb()
-      .update(podcasts)
-      .set({ episodeCount: 2147483647 })
-      .where(eq(podcasts.id, showId));
+    await getDb().update(podcasts).set({ episodeCount: 2147483647 }).where(eq(podcasts.id, showId));
 
     await expect(
-      insertEpisode(episodeValues(showId, 'Overflows', new Date()), {}, { recordOnShow: true })
+      insertEpisode(episodeValues(showId, 'Overflows', new Date()), {}, { recordOnShow: true }),
     ).rejects.toThrow();
 
     const rows = await getDb()
@@ -155,7 +152,7 @@ describe('insertEpisode — recordOnShow', () => {
 
     await insertEpisode(shared, {}, { recordOnShow: true });
     await expect(
-      insertEpisode({ ...shared, title: 'Clash' }, {}, { recordOnShow: true })
+      insertEpisode({ ...shared, title: 'Clash' }, {}, { recordOnShow: true }),
     ).rejects.toThrow();
 
     expect((await showCounters(showId)).episodeCount).toBe(1);
@@ -168,7 +165,7 @@ describe('insertEpisode — recordOnShow', () => {
   });
 });
 
-describe('episodeStats — the RSS path\'s recompute', () => {
+describe("episodeStats — the RSS path's recompute", () => {
   it('counts the rows and returns the newest pub_date as a Date', async () => {
     const showId = await makeShow();
     const older = new Date('2026-03-01T10:00:00.000Z');

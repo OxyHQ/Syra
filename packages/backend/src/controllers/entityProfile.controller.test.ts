@@ -47,8 +47,14 @@ function makeRes(): CapturedRes {
   return {
     _status: 200,
     _body: undefined,
-    status(code) { this._status = code; return this; },
-    json(body) { this._body = body; return this; },
+    status(code) {
+      this._status = code;
+      return this;
+    },
+    json(body) {
+      this._body = body;
+      return this;
+    },
   };
 }
 
@@ -56,7 +62,9 @@ function makeReq(id: string): Request {
   return { params: { id }, query: {}, user: undefined } as unknown as Request;
 }
 
-const failNext: NextFunction = (err) => { throw err; };
+const failNext: NextFunction = (err) => {
+  throw err;
+};
 
 async function seedPlayableTrack(artistId: string, title: string): Promise<void> {
   await getDb().insert(tracks).values({
@@ -73,12 +81,16 @@ async function seedPlayableTrack(artistId: string, title: string): Promise<void>
 /** An artist row; returns its id. */
 async function makeArtist(
   name: string,
-  overrides: Partial<typeof catalogEntities.$inferInsert> = {}
+  overrides: Partial<typeof catalogEntities.$inferInsert> = {},
 ): Promise<string> {
   const [artist] = await getDb()
     .insert(catalogEntities)
     .values({
-      type: 'artist', name, nameKey: normalizeNameKey(name), source: 'cc', ...overrides,
+      type: 'artist',
+      name,
+      nameKey: normalizeNameKey(name),
+      source: 'cc',
+      ...overrides,
     })
     .returning({ id: catalogEntities.id });
 
@@ -104,7 +116,11 @@ async function makePerson(name: string, linkedArtistId?: string): Promise<string
  * fixture has to create the child row explicitly — and `position` is required,
  * because that column is what preserves the order the Mongo array had.
  */
-async function makeShowCrediting(title: string, feedUrl: string, personName: string): Promise<string> {
+async function makeShowCrediting(
+  title: string,
+  feedUrl: string,
+  personName: string,
+): Promise<string> {
   const id = uuidv7();
   await getDb().insert(podcasts).values({ id, title, source: 'rss', feedUrl, status: 'active' });
   await getDb()
@@ -118,20 +134,22 @@ async function makeEpisodeCrediting(
   podcastId: string,
   podcastTitle: string,
   title: string,
-  personName: string
+  personName: string,
 ): Promise<string> {
   const id = uuidv7();
-  await getDb().insert(episodes).values({
-    id,
-    podcastId,
-    podcastTitle,
-    title,
-    guid: id,
-    pubDate: new Date(),
-    source: 'rss',
-    enclosureUrl: `https://x/${id}.mp3`,
-    status: 'ready',
-  });
+  await getDb()
+    .insert(episodes)
+    .values({
+      id,
+      podcastId,
+      podcastTitle,
+      title,
+      guid: id,
+      pubDate: new Date(),
+      source: 'rss',
+      enclosureUrl: `https://x/${id}.mp3`,
+      status: 'ready',
+    });
   await getDb()
     .insert(episodePersons)
     .values({ episodeId: id, position: 0, name: personName, role: 'guest' });
@@ -145,9 +163,13 @@ function bodyData(res: CapturedRes): EntityProfile {
 describe('GET /api/p/:id — unified entity profile', () => {
   it('artist id → kind:artist with music + linked-person appearsIn', async () => {
     const artistId = await makeArtist('Jane Music', {
-      genres: ['rock', 'indie'], primaryColor: '#111', secondaryColor: '#222', verified: true,
+      genres: ['rock', 'indie'],
+      primaryColor: '#111',
+      secondaryColor: '#222',
+      verified: true,
       // The embedded `stats` subdocument is flat columns now.
-      statsFollowers: 123, statsMonthlyListeners: 456,
+      statsFollowers: 123,
+      statsMonthlyListeners: 456,
     });
     await seedPlayableTrack(artistId, 'Jane Track');
     // A Person linked to this artist drives the podcast appearances.
@@ -220,7 +242,10 @@ describe('GET /api/p/:id — unified entity profile', () => {
 
     const hidden = uuidv7();
     await getDb().insert(podcasts).values({
-      id: hidden, title: 'Pulled Show', source: 'rss', feedUrl: 'https://f/pulled.xml',
+      id: hidden,
+      title: 'Pulled Show',
+      source: 'rss',
+      feedUrl: 'https://f/pulled.xml',
       status: 'unavailable',
     });
     // The hidden show has to CREDIT the person too, or its absence from the
@@ -255,7 +280,11 @@ describe('GET /api/p/:id — unified entity profile', () => {
 
   it('invalid id → 404', async () => {
     const res = makeRes();
-    await getEntityProfile(makeReq('not-an-id-in-either-shape'), res as unknown as Response, failNext);
+    await getEntityProfile(
+      makeReq('not-an-id-in-either-shape'),
+      res as unknown as Response,
+      failNext,
+    );
     expect(res._status).toBe(404);
   });
 });

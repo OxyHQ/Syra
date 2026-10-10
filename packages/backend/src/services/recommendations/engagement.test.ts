@@ -47,7 +47,9 @@ describe('deriveCompletion', () => {
 
 describe('countsAsGlobalPlay', () => {
   it('counts a play at/above the completion threshold', () => {
-    expect(countsAsGlobalPlay({ completion: PLAY_COMPLETION_THRESHOLD, skipped: false })).toBe(true);
+    expect(countsAsGlobalPlay({ completion: PLAY_COMPLETION_THRESHOLD, skipped: false })).toBe(
+      true,
+    );
   });
 
   it('does not count a skip even with high completion', () => {

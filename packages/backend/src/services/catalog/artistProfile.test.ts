@@ -42,7 +42,7 @@ afterAll(disconnectDb);
  * expressible without `$unset`.
  */
 async function makeArtist(
-  overrides: Partial<typeof catalogEntities.$inferInsert> = {}
+  overrides: Partial<typeof catalogEntities.$inferInsert> = {},
 ): Promise<ArtistProfileSource & { id: string }> {
   const suffix = uuidv7();
   const [artist] = await getDb()
@@ -92,9 +92,9 @@ async function makeTrack(
   if (!track) throw new Error('makeTrack: insert returned no row');
 
   if (credits?.length) {
-    await getDb().insert(trackCredits).values(
-      credits.map((credit, position) => ({ trackId: track.id, position, ...credit }))
-    );
+    await getDb()
+      .insert(trackCredits)
+      .values(credits.map((credit, position) => ({ trackId: track.id, position, ...credit })));
   }
   return track.id;
 }
@@ -153,26 +153,30 @@ async function makePlaylist(
   if (!playlist) throw new Error('makePlaylist: insert returned no row');
 
   if (trackIds.length > 0) {
-    await getDb().insert(playlistTracks).values(
-      trackIds.map((trackId, position) => ({
-        playlistId: playlist.id,
-        trackId,
-        addedAt: new Date(),
-        position,
-      }))
-    );
+    await getDb()
+      .insert(playlistTracks)
+      .values(
+        trackIds.map((trackId, position) => ({
+          playlistId: playlist.id,
+          trackId,
+          addedAt: new Date(),
+          position,
+        })),
+      );
   }
 
   if (collaborators?.length) {
-    await getDb().insert(playlistCollaborators).values(
-      collaborators.map((oxyUserId) => ({
-        playlistId: playlist.id,
-        oxyUserId,
-        username: 'friend',
-        role: 'editor' as const,
-        addedAt: new Date(),
-      }))
-    );
+    await getDb()
+      .insert(playlistCollaborators)
+      .values(
+        collaborators.map((oxyUserId) => ({
+          playlistId: playlist.id,
+          oxyUserId,
+          username: 'friend',
+          role: 'editor' as const,
+          addedAt: new Date(),
+        })),
+      );
   }
   return playlist.id;
 }
@@ -260,7 +264,7 @@ describe('loadCreditedOn — secondary participation', () => {
     expect(credited[0]?.roles.sort()).toEqual(['artist', 'producer']);
   });
 
-  it('excludes the artist\'s OWN releases — those are the discography', async () => {
+  it("excludes the artist's OWN releases — those are the discography", async () => {
     const artist = await makeArtist({ name: 'Solo', nameKey: 'solo' });
     await makeTrack(artist.id, {
       credits: [{ name: 'Solo', role: 'artist', nameKey: 'solo' }],
@@ -353,8 +357,8 @@ describe('loadCreditedOn — the cap counts TRACKS, not credit rows', () => {
   });
 });
 
-describe('loadPlaylistsFeaturing — readability is canViewPlaylist\'s decision', () => {
-  it('includes a public playlist that contains one of the artist\'s tracks', async () => {
+describe("loadPlaylistsFeaturing — readability is canViewPlaylist's decision", () => {
+  it("includes a public playlist that contains one of the artist's tracks", async () => {
     const artist = await makeArtist();
     const trackId = await makeTrack(artist.id);
     const playlistId = await makePlaylist([trackId]);
@@ -443,8 +447,18 @@ describe('loadProfileState', () => {
     const artist = {
       ...(await makeArtist()),
       sources: [
-        { provider: 'cc' as const, externalId: 'mb-1', importedAt: '2026-01-01', fields: ['bio', 'country'] },
-        { provider: 'cc' as const, externalId: 'wd-1', importedAt: '2026-01-02', fields: ['country', 'image'] },
+        {
+          provider: 'cc' as const,
+          externalId: 'mb-1',
+          importedAt: '2026-01-01',
+          fields: ['bio', 'country'],
+        },
+        {
+          provider: 'cc' as const,
+          externalId: 'wd-1',
+          importedAt: '2026-01-02',
+          fields: ['country', 'image'],
+        },
       ],
     };
 
@@ -452,7 +466,7 @@ describe('loadProfileState', () => {
     expect(state.externallySourcedFields.sort()).toEqual(['bio', 'country', 'image']);
   });
 
-  it('separates tracks a third party contributed from the artist\'s own', async () => {
+  it("separates tracks a third party contributed from the artist's own", async () => {
     const artist = await makeArtist();
     const own = await makeTrack(artist.id);
     const contributed = await makeTrack(artist.id);
@@ -472,7 +486,12 @@ describe('loadProfileState', () => {
 
 describe('loadArtistProfileSections', () => {
   it('assembles every section for one artist', async () => {
-    const artist = await makeArtist({ name: 'Full Profile', nameKey: 'full profile', claimable: true, origin: 'contributed' });
+    const artist = await makeArtist({
+      name: 'Full Profile',
+      nameKey: 'full profile',
+      claimable: true,
+      origin: 'contributed',
+    });
     const artistId = artist.id;
 
     const albumId = await makeAlbum(artistId, { type: 'ep' });

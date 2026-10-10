@@ -94,7 +94,7 @@ interface CoverlessPodcast {
 async function backfillOnePodcast(
   podcast: CoverlessPodcast,
   stats: PodcastCoverBackfillStats,
-  options: PodcastCoverBackfillOptions
+  options: PodcastCoverBackfillOptions,
 ): Promise<void> {
   if (options.dryRun) {
     // A dry run cannot know whether the feed actually carries a cover without
@@ -120,7 +120,7 @@ async function backfillOnePodcast(
 }
 
 export async function backfillPodcastCovers(
-  options: PodcastCoverBackfillOptions = {}
+  options: PodcastCoverBackfillOptions = {},
 ): Promise<PodcastCoverBackfillStats> {
   const stats: PodcastCoverBackfillStats = {
     podcastsScanned: 0,
@@ -146,8 +146,8 @@ export async function backfillPodcastCovers(
               eq(podcasts.source, 'rss'),
               isNull(podcasts.imageId),
               isNotNull(podcasts.feedUrl),
-              gt(podcasts.id, lastId)
-            )
+              gt(podcasts.id, lastId),
+            ),
       )
       .orderBy(asc(podcasts.id))
       .limit(BATCH_SIZE);
@@ -157,7 +157,8 @@ export async function backfillPodcastCovers(
 
     const coverless = batch.filter((p): p is CoverlessPodcast => p.feedUrl !== null);
 
-    const remaining = options.limit === undefined ? coverless.length : options.limit - stats.podcastsScanned;
+    const remaining =
+      options.limit === undefined ? coverless.length : options.limit - stats.podcastsScanned;
     const queue = coverless.slice(0, Math.max(remaining, 0));
 
     async function worker(): Promise<void> {
@@ -184,7 +185,7 @@ async function main(): Promise<void> {
     if (!Number.isInteger(limit) || limit < 0) {
       throw new Error(
         `--limit needs a non-negative whole number, got ${JSON.stringify(process.argv[limitFlag + 1])}. ` +
-          'Refusing to run: an unparseable limit would otherwise mean no limit at all.'
+          'Refusing to run: an unparseable limit would otherwise mean no limit at all.',
       );
     }
   }
@@ -195,7 +196,7 @@ async function main(): Promise<void> {
     concurrency = Number(process.argv[concurrencyFlag + 1]);
     if (!Number.isInteger(concurrency) || concurrency < 1) {
       throw new Error(
-        `--concurrency needs a whole number of at least 1, got ${JSON.stringify(process.argv[concurrencyFlag + 1])}.`
+        `--concurrency needs a whole number of at least 1, got ${JSON.stringify(process.argv[concurrencyFlag + 1])}.`,
       );
     }
   }
@@ -204,7 +205,7 @@ async function main(): Promise<void> {
   logger.info(
     `[backfill-podcast-covers] starting${dryRun ? ' (dry run — nothing will be written)' : ''}` +
       `${limit !== undefined ? ` (limit ${limit} podcasts)` : ''}` +
-      ` (concurrency ${concurrency ?? DEFAULT_CONCURRENCY})`
+      ` (concurrency ${concurrency ?? DEFAULT_CONCURRENCY})`,
   );
 
   const stats = await backfillPodcastCovers({ dryRun, limit, concurrency });
@@ -212,13 +213,13 @@ async function main(): Promise<void> {
   logger.info(
     `[backfill-podcast-covers] ${stats.podcastsScanned} podcast(s) scanned | ` +
       `${stats.podcastsFixed} cover(s) re-hosted | ${stats.podcastsNoArt} genuinely have no show art | ` +
-      `${stats.podcastsFailed} feed failure(s)`
+      `${stats.podcastsFailed} feed failure(s)`,
   );
 
   if (stats.podcastsFailed > 0) {
     logger.warn(
       `[backfill-podcast-covers] ${stats.podcastsFailed} feed(s) could not be re-imported this pass. ` +
-        'Re-running retries only those — fixed shows are skipped.'
+        'Re-running retries only those — fixed shows are skipped.',
     );
   }
 }

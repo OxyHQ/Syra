@@ -218,13 +218,14 @@ async function fingerprintOne(
      * the statement payload instead.
      */
     if (isDriverError(err)) {
-      logger.warn(
-        `[backfill-fingerprints] the database refused the fingerprint for ${track.id}`,
-        { driver: describeDriverError(err) },
-      );
+      logger.warn(`[backfill-fingerprints] the database refused the fingerprint for ${track.id}`, {
+        driver: describeDriverError(err),
+      });
     } else {
       // Staging or `fpcalc`: no statement, and the message IS the diagnosis.
-      logger.warn(`[backfill-fingerprints] could not read audio for ${track.id}`, { err: describeErrorSafely(err) });
+      logger.warn(`[backfill-fingerprints] could not read audio for ${track.id}`, {
+        err: describeErrorSafely(err),
+      });
     }
   } finally {
     await fs.promises.rm(stagedPath, { force: true }).catch(() => undefined);

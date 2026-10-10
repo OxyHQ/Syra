@@ -25,7 +25,10 @@ import * as schema from './schema';
 /** Seconds `closePostgres` waits for in-flight queries before forcing the socket shut. */
 const CLOSE_TIMEOUT_SECONDS = 5;
 
-let handle: { db: OxyDatabase<typeof schema>; client: ReturnType<typeof createDatabase>['client'] } | null = null;
+let handle: {
+  db: OxyDatabase<typeof schema>;
+  client: ReturnType<typeof createDatabase>['client'];
+} | null = null;
 
 /**
  * Open the connection pool. Call once during startup, before serving traffic.
@@ -57,7 +60,7 @@ export async function connectPostgres(): Promise<OxyDatabase<typeof schema>> {
   if (!url) {
     throw new Error(
       'DATABASE_URL is not set. Start a local Postgres with: ' +
-      'docker compose -f docker-compose.postgres.yml up -d postgres'
+        'docker compose -f docker-compose.postgres.yml up -d postgres',
     );
   }
 

@@ -3,7 +3,12 @@ import { logger } from '../utils/logger';
 import { ConnectPlaybackState, Queue, PlaybackCommand } from '@syra/shared-types';
 import { getQueue, setCurrentIndex } from '../services/queueService';
 import { registerDevice, listDevices, heartbeat } from '../services/playback/deviceService';
-import { applyCommand, updateProgress, handleDeviceDisconnect, toConnectPlaybackState } from '../services/playback/playbackStateService';
+import {
+  applyCommand,
+  updateProgress,
+  handleDeviceDisconnect,
+  toConnectPlaybackState,
+} from '../services/playback/playbackStateService';
 import type { DeviceType } from '@syra/shared-types';
 import { oxy } from '../oxyClient';
 import { describeErrorSafely } from '../utils/error';
@@ -32,16 +37,27 @@ export const setupPlayerSocket = (io: SocketIOServer) => {
       socket.join(playerRoom);
     });
 
-    socket.on('device:register', async (input: { deviceId: string; name: string; type: DeviceType; capabilities?: string[] }) => {
-      try {
-        if (!input.deviceId || !input.name || !input.type) return;
-        await registerDevice(userId, input);
-        socketDeviceId = input.deviceId;
-        playerNamespace.to(playerRoom).emit('device:list', await listDevices(userId));
-      } catch (error) {
-        logger.error('Error handling device:register', { err: describeErrorSafely(error), userId });
-      }
-    });
+    socket.on(
+      'device:register',
+      async (input: {
+        deviceId: string;
+        name: string;
+        type: DeviceType;
+        capabilities?: string[];
+      }) => {
+        try {
+          if (!input.deviceId || !input.name || !input.type) return;
+          await registerDevice(userId, input);
+          socketDeviceId = input.deviceId;
+          playerNamespace.to(playerRoom).emit('device:list', await listDevices(userId));
+        } catch (error) {
+          logger.error('Error handling device:register', {
+            err: describeErrorSafely(error),
+            userId,
+          });
+        }
+      },
+    );
 
     socket.on('device:list', async () => {
       try {
@@ -56,7 +72,10 @@ export const setupPlayerSocket = (io: SocketIOServer) => {
         const state = await applyCommand(userId, command);
         playerNamespace.to(playerRoom).emit('playback:state', toConnectPlaybackState(state));
       } catch (error) {
-        logger.error('Error handling playback:command', { err: describeErrorSafely(error), userId });
+        logger.error('Error handling playback:command', {
+          err: describeErrorSafely(error),
+          userId,
+        });
       }
     });
 
@@ -66,7 +85,10 @@ export const setupPlayerSocket = (io: SocketIOServer) => {
         const state = await updateProgress(userId, socketDeviceId, data.positionMs, data.isPlaying);
         socket.to(playerRoom).emit('playback:state', toConnectPlaybackState(state));
       } catch (error) {
-        logger.error('Error handling playback:progress', { err: describeErrorSafely(error), userId });
+        logger.error('Error handling playback:progress', {
+          err: describeErrorSafely(error),
+          userId,
+        });
       }
     });
 
@@ -94,49 +116,54 @@ export const setupPlayerSocket = (io: SocketIOServer) => {
       }
     });
 
-    socket.on('track:change', async (data: { trackId?: string; index?: number; direction?: 'next' | 'previous' }) => {
-      try {
-        const { trackId, index, direction } = data;
+    socket.on(
+      'track:change',
+      async (data: { trackId?: string; index?: number; direction?: 'next' | 'previous' }) => {
+        try {
+          const { trackId, index, direction } = data;
 
-        if (index !== undefined) {
-          await setCurrentIndex(userId, index);
-          const queue = await getQueue(userId);
-          if (queue) {
-            socket.to(playerRoom).emit('track:change', { index, queue });
-          }
-        } else if (direction === 'next' || direction === 'previous') {
-          const queue = await getQueue(userId);
-          if (!queue || queue.tracks.length === 0) return;
+          if (index !== undefined) {
+            await setCurrentIndex(userId, index);
+            const queue = await getQueue(userId);
+            if (queue) {
+              socket.to(playerRoom).emit('track:change', { index, queue });
+            }
+          } else if (direction === 'next' || direction === 'previous') {
+            const queue = await getQueue(userId);
+            if (!queue || queue.tracks.length === 0) return;
 
-          let newIndex = queue.current;
-          if (direction === 'next') {
-            newIndex = Math.min(queue.current + 1, queue.tracks.length - 1);
-          } else {
-            newIndex = Math.max(queue.current - 1, 0);
-          }
+            let newIndex = queue.current;
+            if (direction === 'next') {
+              newIndex = Math.min(queue.current + 1, queue.tracks.length - 1);
+            } else {
+              newIndex = Math.max(queue.current - 1, 0);
+            }
 
-          await setCurrentIndex(userId, newIndex);
-          const updatedQueue = await getQueue(userId);
-          if (updatedQueue) {
-            socket.to(playerRoom).emit('track:change', { index: newIndex, queue: updatedQueue });
-          }
-        } else if (trackId) {
-          const queue = await getQueue(userId);
-          if (!queue) return;
-
-          const trackIndex = queue.tracks.findIndex(t => t.id === trackId);
-          if (trackIndex >= 0) {
-            await setCurrentIndex(userId, trackIndex);
+            await setCurrentIndex(userId, newIndex);
             const updatedQueue = await getQueue(userId);
             if (updatedQueue) {
-              socket.to(playerRoom).emit('track:change', { index: trackIndex, queue: updatedQueue });
+              socket.to(playerRoom).emit('track:change', { index: newIndex, queue: updatedQueue });
+            }
+          } else if (trackId) {
+            const queue = await getQueue(userId);
+            if (!queue) return;
+
+            const trackIndex = queue.tracks.findIndex((t) => t.id === trackId);
+            if (trackIndex >= 0) {
+              await setCurrentIndex(userId, trackIndex);
+              const updatedQueue = await getQueue(userId);
+              if (updatedQueue) {
+                socket
+                  .to(playerRoom)
+                  .emit('track:change', { index: trackIndex, queue: updatedQueue });
+              }
             }
           }
+        } catch (error) {
+          logger.error('Error handling track:change', { err: describeErrorSafely(error) });
         }
-      } catch (error) {
-        logger.error('Error handling track:change', { err: describeErrorSafely(error) });
-      }
-    });
+      },
+    );
 
     socket.on('seek', async (data: { position: number }) => {
       try {
@@ -151,7 +178,11 @@ export const setupPlayerSocket = (io: SocketIOServer) => {
     });
 
     socket.on('disconnect', async (reason: string) => {
-      logger.info('Client disconnected from player namespace', { socketId: socket.id, userId, reason });
+      logger.info('Client disconnected from player namespace', {
+        socketId: socket.id,
+        userId,
+        reason,
+      });
       socket.leave(playerRoom);
 
       if (socketDeviceId) {
@@ -160,7 +191,11 @@ export const setupPlayerSocket = (io: SocketIOServer) => {
           playerNamespace.to(playerRoom).emit('playback:state', toConnectPlaybackState(state));
           playerNamespace.to(playerRoom).emit('device:list', await listDevices(userId));
         } catch (error) {
-          logger.error('Error handling disconnect failover', { err: describeErrorSafely(error), userId, deviceId: socketDeviceId });
+          logger.error('Error handling disconnect failover', {
+            err: describeErrorSafely(error),
+            userId,
+            deviceId: socketDeviceId,
+          });
         }
       }
     });

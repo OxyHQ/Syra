@@ -16,7 +16,7 @@ import {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 async function makeArtist(
-  overrides: Partial<typeof catalogEntities.$inferInsert> = {}
+  overrides: Partial<typeof catalogEntities.$inferInsert> = {},
 ): Promise<string> {
   const [artist] = await getDb()
     .insert(catalogEntities)

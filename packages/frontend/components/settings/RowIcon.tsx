@@ -16,10 +16,6 @@ interface RowIconProps {
 export const RowIcon: React.FC<RowIconProps> = ({ name, destructive }) => {
   const { colors } = useTheme();
   return (
-    <Ionicons
-      name={name}
-      size={20}
-      color={destructive ? colors.error : colors.textSecondary}
-    />
+    <Ionicons name={name} size={20} color={destructive ? colors.error : colors.textSecondary} />
   );
 };

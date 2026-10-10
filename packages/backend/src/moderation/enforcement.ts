@@ -1,8 +1,5 @@
 import { eq } from 'drizzle-orm';
-import type {
-  EnforcementEffect,
-  ModerationEnforcementConfig,
-} from '@crowdsource.you/core/outbox';
+import type { EnforcementEffect, ModerationEnforcementConfig } from '@crowdsource.you/core/outbox';
 import { PlaylistVisibility, playlistVisibilitySchema } from '@syra/shared-types';
 import { setHouseDiscovery, findHouseById } from '../db/rooms/houses';
 import { findPublicRoomById, setRoomArchived } from '../db/rooms/rooms';
@@ -243,9 +240,7 @@ async function restore(
        * `updateOne`, so a recorded value that is not a real axis level used to
        * be written back verbatim and would now abort the transaction.
        */
-      const recorded = Object.values(HouseDiscovery).find(
-        (level) => level === previous.visibility,
-      );
+      const recorded = Object.values(HouseDiscovery).find((level) => level === previous.visibility);
       if (recorded === undefined) {
         return { changed: false, reason: 'The recorded house visibility is not a real one' };
       }

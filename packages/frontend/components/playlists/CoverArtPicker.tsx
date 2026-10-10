@@ -1,5 +1,14 @@
 import React, { useMemo, useState } from 'react';
-import { StyleSheet, View, Text, Pressable, Image, Platform, Alert, ActivityIndicator } from 'react-native';
+import {
+  StyleSheet,
+  View,
+  Text,
+  Pressable,
+  Image,
+  Platform,
+  Alert,
+  ActivityIndicator,
+} from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxy.so/bloom/theme';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
@@ -92,7 +101,7 @@ export const CoverArtPicker: React.FC<CoverArtPickerProps> = ({
             style: 'cancel',
           },
         ],
-        { cancelable: true }
+        { cancelable: true },
       );
     }
   };
@@ -131,7 +140,7 @@ export const CoverArtPicker: React.FC<CoverArtPickerProps> = ({
           </Text>
         </View>
       )}
-      
+
       {/* Overlay - shown on press/hover (web only) */}
       {Platform.OS === 'web' && (
         <View
@@ -143,14 +152,8 @@ export const CoverArtPicker: React.FC<CoverArtPickerProps> = ({
             },
           ]}
         >
-          <MaterialCommunityIcons
-            name="camera"
-            size={24}
-            color="#FFFFFF"
-          />
-          <Text style={styles.overlayText}>
-            {value ? 'Change' : 'Add'} Cover Art
-          </Text>
+          <MaterialCommunityIcons name="camera" size={24} color="#FFFFFF" />
+          <Text style={styles.overlayText}>{value ? 'Change' : 'Add'} Cover Art</Text>
         </View>
       )}
     </Pressable>

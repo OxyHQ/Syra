@@ -62,10 +62,19 @@ function ensureLiveUserById(
     .then((user) => user ?? undefined);
 }
 
-const liveToast = Object.assign((message: string) => { toast(message); }, {
-  success: (message: string) => { toast.success(message); },
-  error: (message: string) => { toast.error(message); },
-});
+const liveToast = Object.assign(
+  (message: string) => {
+    toast(message);
+  },
+  {
+    success: (message: string) => {
+      toast.success(message);
+    },
+    error: (message: string) => {
+      toast.error(message);
+    },
+  },
+);
 
 /**
  * Dependency-injected configuration for the `@syra.fm/sdk` engine, mapping every
@@ -82,8 +91,10 @@ export const liveConfig: LiveConfig = {
   useIsDesktop,
   useUserById: useLiveUserById,
   ensureUserById: ensureLiveUserById,
-  getCachedFileDownloadUrl: async (_oxy, fileId, variant) => oxyServices.assets.publicUrl(fileId, variant),
-  getCachedFileDownloadUrlSync: (_oxy, fileId, variant) => oxyServices.assets.publicUrl(fileId, variant),
+  getCachedFileDownloadUrl: async (_oxy, fileId, variant) =>
+    oxyServices.assets.publicUrl(fileId, variant),
+  getCachedFileDownloadUrlSync: (_oxy, fileId, variant) =>
+    oxyServices.assets.publicUrl(fileId, variant),
   AvatarComponent: Avatar as LiveConfig['AvatarComponent'],
   toast: liveToast,
   introSound: require('@syra.fm/sdk/src/live/assets/sounds/intro.mp3'),

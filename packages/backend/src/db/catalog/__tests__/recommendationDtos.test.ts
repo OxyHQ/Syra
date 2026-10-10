@@ -77,9 +77,17 @@ function makeRes(): CapturedRes {
   return {
     _status: 200,
     _body: undefined,
-    status(code) { this._status = code; return this; },
-    set() { return this; },
-    json(body) { this._body = body; return this; },
+    status(code) {
+      this._status = code;
+      return this;
+    },
+    set() {
+      return this;
+    },
+    json(body) {
+      this._body = body;
+      return this;
+    },
   };
 }
 
@@ -156,7 +164,7 @@ async function makeTrack(
   title: string,
   artistId: string,
   artistName: string,
-  albumId: string
+  albumId: string,
 ): Promise<string> {
   const [track] = await getDb()
     .insert(tracks)
@@ -225,7 +233,13 @@ describe('getSimilarTracksHandler', () => {
     await getSimilarTracksHandler(makeReq({ id: seedTrackId }), res as unknown as Response, next);
 
     const body = res._body as {
-      tracks: { id: string; title: string; artistName: string; duration: number; coverArt?: string }[];
+      tracks: {
+        id: string;
+        title: string;
+        artistName: string;
+        duration: number;
+        coverArt?: string;
+      }[];
     };
 
     // Vacuity floor, and it also pins the seed exclusion: the only similar

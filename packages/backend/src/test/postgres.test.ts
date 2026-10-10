@@ -26,7 +26,14 @@ const AT = 'postgres://u:p@127.0.0.1:5545';
 
 describe('assertDisposableDatabase', () => {
   it('accepts a database that names itself disposable', () => {
-    for (const name of ['syra_test', 'syra_tests', 'syra_ci', 'syra_task16', 'syra_task13a', 'test']) {
+    for (const name of [
+      'syra_test',
+      'syra_tests',
+      'syra_ci',
+      'syra_task16',
+      'syra_task13a',
+      'test',
+    ]) {
       expect(() => assertDisposableDatabase(`${AT}/${name}`)).not.toThrow();
     }
   });
@@ -126,14 +133,14 @@ async function withDatabaseUrl(url: string, run: () => Promise<unknown>): Promis
 
 describe('the guard is wired into the destructive path', () => {
   it('clearDb refuses rather than truncating', async () => {
-    await expect(
-      withDatabaseUrl(`${AT}/syra_dev`, () => clearDb())
-    ).rejects.toThrow(/Refusing to run the suite against the database "syra_dev"/);
+    await expect(withDatabaseUrl(`${AT}/syra_dev`, () => clearDb())).rejects.toThrow(
+      /Refusing to run the suite against the database "syra_dev"/,
+    );
   });
 
   it('connectDb refuses before opening the pool', async () => {
-    await expect(
-      withDatabaseUrl(`${AT}/syra_dev`, () => connectDb())
-    ).rejects.toThrow(/Refusing to run the suite against the database "syra_dev"/);
+    await expect(withDatabaseUrl(`${AT}/syra_dev`, () => connectDb())).rejects.toThrow(
+      /Refusing to run the suite against the database "syra_dev"/,
+    );
   });
 });

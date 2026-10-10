@@ -91,9 +91,8 @@ function isAudioQuality(value: unknown): value is AudioQuality {
  * "leave alone", which is what `buildUpdateSet` does with an undefined value.
  */
 export function coerceMusicPreferencesPatch(input: unknown): MusicPreferencesPatch {
-  const body: Record<string, unknown> = typeof input === 'object' && input !== null
-    ? (input as Record<string, unknown>)
-    : {};
+  const body: Record<string, unknown> =
+    typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {};
   const patch: MusicPreferencesPatch = {};
 
   if (typeof body.defaultVolume === 'number') patch.defaultVolume = clamp(body.defaultVolume, 0, 1);

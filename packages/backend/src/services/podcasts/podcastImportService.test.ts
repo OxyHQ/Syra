@@ -36,7 +36,6 @@ async function readEpisode(podcastId: string, guid: string) {
   return row;
 }
 
-
 beforeAll(connectDb);
 afterEach(async () => {
   await clearDb();
@@ -128,7 +127,9 @@ async function fakeFetchWithEpisodeArt(): Promise<SafeFetchResult> {
     status: 200,
     headers: {},
     finalUrl: 'https://feeds.example/daily.xml',
-    response: Readable.from([Buffer.from(FEED_WITH_EPISODE_ART, 'utf-8')]) as unknown as IncomingMessage,
+    response: Readable.from([
+      Buffer.from(FEED_WITH_EPISODE_ART, 'utf-8'),
+    ]) as unknown as IncomingMessage,
   };
 }
 
@@ -176,7 +177,14 @@ describe('importFeed — cover re-host (search/bulk-import deep path)', () => {
       expect(context.entityType).toBe('podcast'); // re-host runs as a podcast cover
       return {
         imageId: SYRA_IMAGE_ID,
-        imageSizes: { large: { id: SYRA_IMAGE_ID, url: `/api/images/${SYRA_IMAGE_ID}`, width: 640, height: 640 } },
+        imageSizes: {
+          large: {
+            id: SYRA_IMAGE_ID,
+            url: `/api/images/${SYRA_IMAGE_ID}`,
+            width: 640,
+            height: 640,
+          },
+        },
         primaryColor: '#123456',
         secondaryColor: '#654321',
         sourceUrlHash: 'u',
@@ -241,7 +249,7 @@ describe('importFeed — cover re-host (search/bulk-import deep path)', () => {
     expect(row?.lastEpisodeAt?.toISOString()).toBe('2025-01-01T08:00:00.000Z');
   });
 
-  it('keeps the feed\'s category order, which is not alphabetical order', async () => {
+  it("keeps the feed's category order, which is not alphabetical order", async () => {
     setCatalogImageMirrorImplementationForTests(async () => undefined);
 
     const result = await importFeed(candidate.feedUrl, {
@@ -360,13 +368,18 @@ describe('importFeed — episode-level cover re-host', () => {
         : {
             imageId: SYRA_IMAGE_ID,
             imageSizes: {
-              large: { id: SYRA_IMAGE_ID, url: `/api/images/${SYRA_IMAGE_ID}`, width: 640, height: 640 },
+              large: {
+                id: SYRA_IMAGE_ID,
+                url: `/api/images/${SYRA_IMAGE_ID}`,
+                width: 640,
+                height: 640,
+              },
             },
             primaryColor: '#123456',
             secondaryColor: '#654321',
             sourceUrlHash: 'u',
             sourceContentHash: 'c',
-          }
+          },
     );
 
     const first = await importFeed(candidate.feedUrl, {
@@ -386,14 +399,19 @@ describe('importFeed — episode-level cover re-host', () => {
         ? {
             imageId: EPISODE_IMAGE_ID,
             imageSizes: {
-              large: { id: EPISODE_IMAGE_ID, url: `/api/images/${EPISODE_IMAGE_ID}`, width: 640, height: 640 },
+              large: {
+                id: EPISODE_IMAGE_ID,
+                url: `/api/images/${EPISODE_IMAGE_ID}`,
+                width: 640,
+                height: 640,
+              },
             },
             primaryColor: '#abcdef',
             secondaryColor: '#fedcba',
             sourceUrlHash: 'u',
             sourceContentHash: 'c',
           }
-        : undefined
+        : undefined,
     );
 
     const second = await importFeed(candidate.feedUrl, {
@@ -447,7 +465,12 @@ describe('importFeed — episode-level cover re-host', () => {
       return {
         imageId: SYRA_IMAGE_ID,
         imageSizes: {
-          large: { id: SYRA_IMAGE_ID, url: `/api/images/${SYRA_IMAGE_ID}`, width: 640, height: 640 },
+          large: {
+            id: SYRA_IMAGE_ID,
+            url: `/api/images/${SYRA_IMAGE_ID}`,
+            width: 640,
+            height: 640,
+          },
         },
         sourceUrlHash: 'u',
         sourceContentHash: 'c',

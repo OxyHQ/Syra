@@ -184,7 +184,16 @@
  */
 
 import { sql } from 'drizzle-orm';
-import { boolean, check, doublePrecision, index, integer, pgTable, text, unique } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  check,
+  doublePrecision,
+  index,
+  integer,
+  pgTable,
+  text,
+  unique,
+} from 'drizzle-orm/pg-core';
 import {
   createdAt,
   generatedId,
@@ -311,11 +320,11 @@ export const userSettings = pgTable(
   (t) => [
     check(
       'user_settings_theme_mode_check',
-      sql`${t.appearanceThemeMode} in (${sql.raw(inList(THEME_MODES))})`
+      sql`${t.appearanceThemeMode} in (${sql.raw(inList(THEME_MODES))})`,
     ),
     check(
       'user_settings_profile_visibility_check',
-      sql`${t.privacyProfileVisibility} in (${sql.raw(inList(PROFILE_VISIBILITIES))})`
+      sql`${t.privacyProfileVisibility} in (${sql.raw(inList(PROFILE_VISIBILITIES))})`,
     ),
     // The five bounded feed numbers (`models/UserSettings.ts:97-107`). Mongoose
     // enforces each on every save, so a port that dropped them would silently
@@ -323,11 +332,11 @@ export const userSettings = pgTable(
     // `maxlength`/`match` declarations.
     check(
       'user_settings_feed_diversity_same_author_penalty_check',
-      sql`${t.feedDiversitySameAuthorPenalty} between 0.5 and 1.0`
+      sql`${t.feedDiversitySameAuthorPenalty} between 0.5 and 1.0`,
     ),
     check(
       'user_settings_feed_diversity_same_topic_penalty_check',
-      sql`${t.feedDiversitySameTopicPenalty} between 0.5 and 1.0`
+      sql`${t.feedDiversitySameTopicPenalty} between 0.5 and 1.0`,
     ),
     /**
      * No `is null or …` guard on either of the two NULLABLE bounded columns
@@ -339,19 +348,19 @@ export const userSettings = pgTable(
      */
     check(
       'user_settings_feed_diversity_max_consecutive_check',
-      sql`${t.feedDiversityMaxConsecutiveSameAuthor} between 1 and 10`
+      sql`${t.feedDiversityMaxConsecutiveSameAuthor} between 1 and 10`,
     ),
     check(
       'user_settings_feed_recency_half_life_hours_check',
-      sql`${t.feedRecencyHalfLifeHours} between 6 and 72`
+      sql`${t.feedRecencyHalfLifeHours} between 6 and 72`,
     ),
     check(
       'user_settings_feed_recency_max_age_hours_check',
-      sql`${t.feedRecencyMaxAgeHours} between 24 and 336`
+      sql`${t.feedRecencyMaxAgeHours} between 24 and 336`,
     ),
     check(
       'user_settings_feed_quality_min_engagement_rate_check',
-      sql`${t.feedQualityMinEngagementRate} between 0 and 1`
+      sql`${t.feedQualityMinEngagementRate} between 0 and 1`,
     ),
     // One row per account: every reader is a `findOne({ oxyUserId })`
     // (`utils/userSettings.ts:21`), and the unique index is what makes that
@@ -359,7 +368,7 @@ export const userSettings = pgTable(
     // separate index is added — an index dropped in writing, per Task 2's
     // convention.
     unique('user_settings_oxy_user_id_key').on(t.oxyUserId),
-  ]
+  ],
 );
 
 // ── user_music_preferences ────────────────────────────────────────────────
@@ -389,14 +398,14 @@ export const userMusicPreferences = pgTable(
     check('user_music_preferences_crossfade_check', sql`${t.crossfade} between 0 and 12`),
     check(
       'user_music_preferences_audio_quality_check',
-      sql`${t.audioQuality} in (${sql.raw(inList(AUDIO_QUALITIES))})`
+      sql`${t.audioQuality} in (${sql.raw(inList(AUDIO_QUALITIES))})`,
     ),
     check(
       'user_music_preferences_download_quality_check',
-      sql`${t.downloadQuality} in (${sql.raw(inList(AUDIO_QUALITIES))})`
+      sql`${t.downloadQuality} in (${sql.raw(inList(AUDIO_QUALITIES))})`,
     ),
     unique('user_music_preferences_oxy_user_id_key').on(t.oxyUserId),
-  ]
+  ],
 );
 
 // ── user_behavior (declared, never written — see the file-level doc comment) ──
@@ -423,10 +432,10 @@ export const userBehavior = pgTable(
   (t) => [
     check(
       'user_behavior_active_hours_check',
-      sql`${t.activeHours} <@ array[${sql.raw(numericInList(ACTIVE_HOURS))}]::integer[]`
+      sql`${t.activeHours} <@ array[${sql.raw(numericInList(ACTIVE_HOURS))}]::integer[]`,
     ),
     unique('user_behavior_oxy_user_id_key').on(t.oxyUserId),
-  ]
+  ],
 );
 
 // ── user_taste_profiles + its two weight children ─────────────────────────
@@ -451,7 +460,7 @@ export const userTasteProfiles = pgTable(
   (t) => [
     check('user_taste_profiles_total_signal_check', sql`${t.totalSignal} >= 0`),
     unique('user_taste_profiles_oxy_user_id_key').on(t.oxyUserId),
-  ]
+  ],
 );
 
 export const userTasteGenres = pgTable(
@@ -476,7 +485,7 @@ export const userTasteGenres = pgTable(
     // `list.find(...)` held. Its leading column also serves "load this
     // profile's genres", so no separate index.
     unique('user_taste_genres_taste_profile_id_genre_key').on(t.tasteProfileId, t.genre),
-  ]
+  ],
 );
 
 export const userTasteArtists = pgTable(
@@ -510,7 +519,7 @@ export const userTasteArtists = pgTable(
      * planner probe in `__tests__/gates.test.ts`, not by this comment.
      */
     index('user_taste_artists_artist_id_idx').on(t.artistId),
-  ]
+  ],
 );
 
 // ── listening_events (TTL-bounded, 90-day retention) ──────────────────────
@@ -554,7 +563,10 @@ export const listeningEvents = pgTable(
   (t) => [
     check('listening_events_listened_sec_check', sql`${t.listenedSec} >= 0`),
     check('listening_events_completion_check', sql`${t.completion} between 0 and 1`),
-    check('listening_events_source_check', sql`${t.source} in (${sql.raw(inList(LISTENING_SOURCES))})`),
+    check(
+      'listening_events_source_check',
+      sql`${t.source} in (${sql.raw(inList(LISTENING_SOURCES))})`,
+    ),
     // Co-occurrence mining walks each user's events in time order
     // (`coOccurrenceJob.ts:79`, `sort({ oxyUserId: 1, playedAt: 1 })`). Its
     // leading column also serves `findRecentTrackIds`' per-user newest-first
@@ -579,7 +591,7 @@ export const listeningEvents = pgTable(
      */
     index('listening_events_track_id_idx').on(t.trackId),
     index('listening_events_artist_id_idx').on(t.artistId),
-  ]
+  ],
 );
 
 // ── catalog_relations (the precomputed recommendation graph) ──────────────
@@ -599,7 +611,10 @@ export const catalogRelations = pgTable(
     computedAt: timestamptz().notNull().defaultNow(),
   },
   (t) => [
-    check('catalog_relations_kind_check', sql`${t.kind} in (${sql.raw(inList(CATALOG_RELATION_KINDS))})`),
+    check(
+      'catalog_relations_kind_check',
+      sql`${t.kind} in (${sql.raw(inList(CATALOG_RELATION_KINDS))})`,
+    ),
     check('catalog_relations_score_check', sql`${t.score} >= 0`),
     check('catalog_relations_co_count_check', sql`${t.coCount} >= 0`),
     // The primary read: top related entities for one source, best score first
@@ -608,7 +623,7 @@ export const catalogRelations = pgTable(
     index('catalog_relations_kind_source_id_score_idx').on(t.kind, t.sourceId, t.score.desc()),
     // The upsert key: exactly one edge per (kind, source, target).
     unique('catalog_relations_kind_source_id_target_id_key').on(t.kind, t.sourceId, t.targetId),
-  ]
+  ],
 );
 
 // ── notification_preferences / notification_suppressions ──────────────────
@@ -632,10 +647,10 @@ export const notificationPreferences = pgTable(
     // array column keeps that. Trivially satisfied by the empty default.
     check(
       'notification_preferences_disabled_events_check',
-      sql`${t.disabledEvents} <@ ${sql.raw(textArrayLiteral(SYRA_NOTIFICATION_EVENTS))}`
+      sql`${t.disabledEvents} <@ ${sql.raw(textArrayLiteral(SYRA_NOTIFICATION_EVENTS))}`,
     ),
     unique('notification_preferences_oxy_user_id_key').on(t.oxyUserId),
-  ]
+  ],
 );
 
 export const notificationSuppressions = pgTable(
@@ -672,5 +687,5 @@ export const notificationSuppressions = pgTable(
      * `expires_at <= now()` is a range scan rather than a full one.
      */
     index('notification_suppressions_expires_at_idx').on(t.expiresAt),
-  ]
+  ],
 );

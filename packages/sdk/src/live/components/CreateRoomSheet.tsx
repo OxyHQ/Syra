@@ -23,7 +23,8 @@ import { LIVE_COLOR, LIVE_TINT_COLOR } from '../colors';
  * session, a network drop) looked like a button that did nothing.
  */
 export const CREATE_ROOM_ERRORS = {
-  createFailed: "Couldn't create the room. Check your connection and that you're signed in, then try again.",
+  createFailed:
+    "Couldn't create the room. Check your connection and that you're signed in, then try again.",
   scheduleMissing: 'Enter a scheduled start time to schedule the room.',
 } as const;
 
@@ -46,9 +47,24 @@ const TOPICS = [
 ] as const;
 
 const ROOM_TYPES = [
-  { value: 'talk' as const, label: 'Talk', icon: 'microphone' as const, description: 'Open conversation' },
-  { value: 'stage' as const, label: 'Stage', icon: 'account-voice' as const, description: 'Panel discussion' },
-  { value: 'broadcast' as const, label: 'Broadcast', icon: 'broadcast' as const, description: 'One-to-many stream' },
+  {
+    value: 'talk' as const,
+    label: 'Talk',
+    icon: 'microphone' as const,
+    description: 'Open conversation',
+  },
+  {
+    value: 'stage' as const,
+    label: 'Stage',
+    icon: 'account-voice' as const,
+    description: 'Panel discussion',
+  },
+  {
+    value: 'broadcast' as const,
+    label: 'Broadcast',
+    icon: 'broadcast' as const,
+    description: 'One-to-many stream',
+  },
 ] as const;
 
 /**
@@ -89,500 +105,586 @@ interface CreateRoomSheetProps {
   houses?: House[];
 }
 
-export const CreateRoomSheet = forwardRef<CreateRoomSheetRef, CreateRoomSheetProps>(({
-  onClose,
-  onRoomCreated,
-  mode = 'standalone',
-  ScrollViewComponent,
-  hideFooter = false,
-  onFormStateChange,
-  houses,
-}, ref) => {
-  const Scroll = ScrollViewComponent || ScrollView;
-  const { useTheme, roomsService, toast } = useLiveConfig();
-  const theme = useTheme();
-  const { joinLiveRoom } = useLiveRoom();
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [topic, setTopic] = useState('');
-  const [scheduledStart, setScheduledStart] = useState('');
-  const [speakerPermission, setSpeakerPermission] = useState<'everyone' | 'followers' | 'invited'>('invited');
-  const [roomType, setRoomType] = useState<'talk' | 'stage' | 'broadcast'>('talk');
-  const [selectedHouse, setSelectedHouse] = useState<House | null>(null);
-  const [recordingEnabled, setRecordingEnabled] = useState(true);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+export const CreateRoomSheet = forwardRef<CreateRoomSheetRef, CreateRoomSheetProps>(
+  (
+    {
+      onClose,
+      onRoomCreated,
+      mode = 'standalone',
+      ScrollViewComponent,
+      hideFooter = false,
+      onFormStateChange,
+      houses,
+    },
+    ref,
+  ) => {
+    const Scroll = ScrollViewComponent || ScrollView;
+    const { useTheme, roomsService, toast } = useLiveConfig();
+    const theme = useTheme();
+    const { joinLiveRoom } = useLiveRoom();
+    const [title, setTitle] = useState('');
+    const [description, setDescription] = useState('');
+    const [topic, setTopic] = useState('');
+    const [scheduledStart, setScheduledStart] = useState('');
+    const [speakerPermission, setSpeakerPermission] = useState<
+      'everyone' | 'followers' | 'invited'
+    >('invited');
+    const [roomType, setRoomType] = useState<'talk' | 'stage' | 'broadcast'>('talk');
+    const [selectedHouse, setSelectedHouse] = useState<House | null>(null);
+    const [recordingEnabled, setRecordingEnabled] = useState(true);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
-  const isValid = title.trim().length > 0;
-  const isBroadcast = roomType === 'broadcast';
+    const isValid = title.trim().length > 0;
+    const isBroadcast = roomType === 'broadcast';
 
-  useEffect(() => {
-    onFormStateChange?.({ isValid, loading, hasScheduledStart: !!scheduledStart.trim() });
-  }, [isValid, loading, scheduledStart, onFormStateChange]);
+    useEffect(() => {
+      onFormStateChange?.({ isValid, loading, hasScheduledStart: !!scheduledStart.trim() });
+    }, [isValid, loading, scheduledStart, onFormStateChange]);
 
-  const buildCreatePayload = () => ({
-    title: title.trim(),
-    description: description.trim() || undefined,
-    topic: topic.trim() || undefined,
-    speakerPermission: isBroadcast ? 'invited' as const : speakerPermission,
-    type: roomType,
-    ownerType: selectedHouse ? 'house' as const : 'profile' as const,
-    houseId: selectedHouse?.id,
-    recordingEnabled,
-  });
+    const buildCreatePayload = () => ({
+      title: title.trim(),
+      description: description.trim() || undefined,
+      topic: topic.trim() || undefined,
+      speakerPermission: isBroadcast ? ('invited' as const) : speakerPermission,
+      type: roomType,
+      ownerType: selectedHouse ? ('house' as const) : ('profile' as const),
+      houseId: selectedHouse?.id,
+      recordingEnabled,
+    });
 
-  // Keep the sheet open and say what went wrong where the user is looking, so
-  // they can fix it and retry. Screen readers get it announced too.
-  const showError = (message: string) => {
-    setError(message);
-    AccessibilityInfo.announceForAccessibility?.(message);
-  };
+    // Keep the sheet open and say what went wrong where the user is looking, so
+    // they can fix it and retry. Screen readers get it announced too.
+    const showError = (message: string) => {
+      setError(message);
+      AccessibilityInfo.announceForAccessibility?.(message);
+    };
 
-  const handleCreateAndStart = async () => {
-    if (!isValid || loading) return;
+    const handleCreateAndStart = async () => {
+      if (!isValid || loading) return;
 
-    setError(null);
-    setLoading(true);
-    try {
-      const room = await roomsService.createRoom(buildCreatePayload());
+      setError(null);
+      setLoading(true);
+      try {
+        const room = await roomsService.createRoom(buildCreatePayload());
 
-      if (room) {
-        const started = await roomsService.startRoom(room.id);
-        onClose();
-        if (started) {
-          joinLiveRoom(room.id);
+        if (room) {
+          const started = await roomsService.startRoom(room.id);
+          onClose();
+          if (started) {
+            joinLiveRoom(room.id);
+          } else {
+            toast.error('Room created but failed to start');
+          }
+          onRoomCreated?.(room);
         } else {
-          toast.error('Room created but failed to start');
+          showError(CREATE_ROOM_ERRORS.createFailed);
         }
-        onRoomCreated?.(room);
-      } else {
+      } catch (err) {
+        console.error('Error creating room:', err);
         showError(CREATE_ROOM_ERRORS.createFailed);
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      console.error('Error creating room:', err);
-      showError(CREATE_ROOM_ERRORS.createFailed);
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
 
-  const handleSchedule = async () => {
-    if (!isValid || loading) return;
+    const handleSchedule = async () => {
+      if (!isValid || loading) return;
 
-    if (!scheduledStart.trim()) {
-      showError(CREATE_ROOM_ERRORS.scheduleMissing);
-      return;
-    }
+      if (!scheduledStart.trim()) {
+        showError(CREATE_ROOM_ERRORS.scheduleMissing);
+        return;
+      }
 
-    setError(null);
-    setLoading(true);
-    try {
-      const room = await roomsService.createRoom({
-        ...buildCreatePayload(),
-        scheduledStart: scheduledStart.trim(),
-      });
+      setError(null);
+      setLoading(true);
+      try {
+        const room = await roomsService.createRoom({
+          ...buildCreatePayload(),
+          scheduledStart: scheduledStart.trim(),
+        });
 
-      if (room) {
-        onClose();
-        onRoomCreated?.(room);
-      } else {
+        if (room) {
+          onClose();
+          onRoomCreated?.(room);
+        } else {
+          showError(CREATE_ROOM_ERRORS.createFailed);
+        }
+      } catch (err) {
+        console.error('Error creating room:', err);
         showError(CREATE_ROOM_ERRORS.createFailed);
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      console.error('Error creating room:', err);
-      showError(CREATE_ROOM_ERRORS.createFailed);
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
 
-  const handleCreateForEmbed = async () => {
-    if (!isValid || loading) return;
+    const handleCreateForEmbed = async () => {
+      if (!isValid || loading) return;
 
-    setError(null);
-    setLoading(true);
-    try {
-      const room = await roomsService.createRoom(buildCreatePayload());
+      setError(null);
+      setLoading(true);
+      try {
+        const room = await roomsService.createRoom(buildCreatePayload());
 
-      if (room) {
-        onClose();
-        onRoomCreated?.(room);
-      } else {
+        if (room) {
+          onClose();
+          onRoomCreated?.(room);
+        } else {
+          showError(CREATE_ROOM_ERRORS.createFailed);
+        }
+      } catch (err) {
+        console.error('Error creating room:', err);
         showError(CREATE_ROOM_ERRORS.createFailed);
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      console.error('Error creating room:', err);
-      showError(CREATE_ROOM_ERRORS.createFailed);
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
 
-  useImperativeHandle(ref, () => ({
-    handleCreateAndStart,
-    handleSchedule,
-    handleCreateForEmbed,
-  }), [handleCreateAndStart, handleSchedule, handleCreateForEmbed]);
+    useImperativeHandle(
+      ref,
+      () => ({
+        handleCreateAndStart,
+        handleSchedule,
+        handleCreateForEmbed,
+      }),
+      [handleCreateAndStart, handleSchedule, handleCreateForEmbed],
+    );
 
-  const renderFooterContent = () => {
-    if (hideFooter) return null;
-    return (
-      <View style={[styles.footer, { borderTopColor: theme.colors.border, backgroundColor: theme.colors.background }]}>
-        {mode === 'standalone' ? (
-          <>
+    const renderFooterContent = () => {
+      if (hideFooter) return null;
+      return (
+        <View
+          style={[
+            styles.footer,
+            { borderTopColor: theme.colors.border, backgroundColor: theme.colors.background },
+          ]}
+        >
+          {mode === 'standalone' ? (
+            <>
+              <TouchableOpacity
+                style={[
+                  styles.primaryButton,
+                  {
+                    backgroundColor: isValid
+                      ? theme.colors.primary
+                      : theme.colors.backgroundSecondary,
+                    opacity: loading ? 0.6 : 1,
+                  },
+                ]}
+                onPress={handleCreateAndStart}
+                disabled={!isValid || loading}
+              >
+                <MaterialCommunityIcons
+                  name="play"
+                  size={20}
+                  color={isValid ? theme.colors.card : theme.colors.textSecondary}
+                />
+                <Text
+                  style={[
+                    styles.primaryButtonText,
+                    { color: isValid ? theme.colors.card : theme.colors.textSecondary },
+                  ]}
+                >
+                  {loading ? 'Creating...' : 'Start Now'}
+                </Text>
+              </TouchableOpacity>
+
+              {scheduledStart.trim() && (
+                <TouchableOpacity
+                  style={[
+                    styles.secondaryButton,
+                    {
+                      backgroundColor: theme.colors.backgroundSecondary,
+                      borderColor: theme.colors.border,
+                      opacity: loading ? 0.6 : 1,
+                    },
+                  ]}
+                  onPress={handleSchedule}
+                  disabled={!isValid || loading}
+                >
+                  <MaterialCommunityIcons name="calendar" size={20} color={theme.colors.text} />
+                  <Text style={[styles.secondaryButtonText, { color: theme.colors.text }]}>
+                    Schedule Room
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </>
+          ) : (
             <TouchableOpacity
               style={[
                 styles.primaryButton,
                 {
-                  backgroundColor: isValid ? theme.colors.primary : theme.colors.backgroundSecondary,
+                  backgroundColor: isValid
+                    ? theme.colors.primary
+                    : theme.colors.backgroundSecondary,
                   opacity: loading ? 0.6 : 1,
                 },
               ]}
-              onPress={handleCreateAndStart}
+              onPress={handleCreateForEmbed}
               disabled={!isValid || loading}
             >
               <MaterialCommunityIcons
-                name="play"
+                name="radio"
                 size={20}
                 color={isValid ? theme.colors.card : theme.colors.textSecondary}
               />
               <Text
-                style={[styles.primaryButtonText, { color: isValid ? theme.colors.card : theme.colors.textSecondary }]}
+                style={[
+                  styles.primaryButtonText,
+                  { color: isValid ? theme.colors.card : theme.colors.textSecondary },
+                ]}
               >
-                {loading ? 'Creating...' : 'Start Now'}
+                {loading ? 'Creating...' : 'Create Room'}
               </Text>
             </TouchableOpacity>
+          )}
+        </View>
+      );
+    };
 
-            {scheduledStart.trim() && (
-              <TouchableOpacity
-                style={[
-                  styles.secondaryButton,
-                  { backgroundColor: theme.colors.backgroundSecondary, borderColor: theme.colors.border, opacity: loading ? 0.6 : 1 },
-                ]}
-                onPress={handleSchedule}
-                disabled={!isValid || loading}
-              >
-                <MaterialCommunityIcons name="calendar" size={20} color={theme.colors.text} />
-                <Text style={[styles.secondaryButtonText, { color: theme.colors.text }]}>
-                  Schedule Room
-                </Text>
-              </TouchableOpacity>
-            )}
-          </>
-        ) : (
+    return (
+      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+        <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
           <TouchableOpacity
-            style={[
-              styles.primaryButton,
-              {
-                backgroundColor: isValid ? theme.colors.primary : theme.colors.backgroundSecondary,
-                opacity: loading ? 0.6 : 1,
-              },
-            ]}
-            onPress={handleCreateForEmbed}
-            disabled={!isValid || loading}
+            onPress={onClose}
+            style={styles.headerCloseBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
           >
-            <MaterialCommunityIcons
-              name="radio"
-              size={20}
-              color={isValid ? theme.colors.card : theme.colors.textSecondary}
-            />
-            <Text
-              style={[styles.primaryButtonText, { color: isValid ? theme.colors.card : theme.colors.textSecondary }]}
-            >
-              {loading ? 'Creating...' : 'Create Room'}
-            </Text>
+            <MaterialCommunityIcons name="close" size={20} color={theme.colors.text} />
           </TouchableOpacity>
-        )}
-      </View>
-    );
-  };
-
-  return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
-        <TouchableOpacity
-          onPress={onClose}
-          style={styles.headerCloseBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Close"
-        >
-          <MaterialCommunityIcons name="close" size={20} color={theme.colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.colors.text }]}>
-          Create Room
-        </Text>
-        <View style={{ width: 28 }} />
-      </View>
-
-      {error && (
-        <View
-          testID="create-room-error"
-          accessibilityRole="alert"
-          accessibilityLiveRegion="assertive"
-          style={[styles.errorBanner, { backgroundColor: LIVE_TINT_COLOR, borderColor: LIVE_COLOR }]}
-        >
-          <MaterialCommunityIcons name="alert-circle-outline" size={18} color={LIVE_COLOR} />
-          <Text style={[styles.errorText, { color: theme.colors.text }]}>{error}</Text>
+          <Text style={[styles.headerTitle, { color: theme.colors.text }]}>Create Room</Text>
+          <View style={{ width: 28 }} />
         </View>
-      )}
 
-      <Scroll
-        style={{ flex: 1 }}
-        contentContainerStyle={[styles.scrollContent, hideFooter && { paddingBottom: 72 }]}
-        keyboardShouldPersistTaps="handled"
-      >
-        {/* Room Type Selector */}
-        <View style={[styles.inputSection, styles.sectionPadded]}>
-          <Text style={[styles.label, { color: theme.colors.text }]}>Room Type</Text>
-          <View style={styles.typeSelector} accessibilityRole="radiogroup" accessibilityLabel="Room type">
-            {ROOM_TYPES.map((rt) => {
-              const selected = roomType === rt.value;
-              return (
-                <TouchableOpacity
-                  key={rt.value}
-                  style={[
-                    styles.typeCard,
-                    {
-                      backgroundColor: selected ? theme.colors.primary : theme.colors.backgroundSecondary,
-                      borderColor: selected ? theme.colors.primary : theme.colors.border,
-                    },
-                  ]}
-                  onPress={() => setRoomType(rt.value)}
-                  {...choiceProps(`${rt.label}. ${rt.description}`, selected)}
-                  testID={`create-room-type-${rt.value}`}
-                >
-                  <MaterialCommunityIcons
-                    name={rt.icon}
-                    size={22}
-                    color={selected ? '#FFFFFF' : theme.colors.textSecondary}
-                  />
-                  <Text style={[styles.typeCardLabel, { color: selected ? '#FFFFFF' : theme.colors.text }]}>
-                    {rt.label}
-                  </Text>
-                  <Text style={[styles.typeCardDesc, { color: selected ? 'rgba(255,255,255,0.8)' : theme.colors.textSecondary }]}>
-                    {rt.description}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
+        {error && (
+          <View
+            testID="create-room-error"
+            accessibilityRole="alert"
+            accessibilityLiveRegion="assertive"
+            style={[
+              styles.errorBanner,
+              { backgroundColor: LIVE_TINT_COLOR, borderColor: LIVE_COLOR },
+            ]}
+          >
+            <MaterialCommunityIcons name="alert-circle-outline" size={18} color={LIVE_COLOR} />
+            <Text style={[styles.errorText, { color: theme.colors.text }]}>{error}</Text>
           </View>
-        </View>
+        )}
 
-        {/* House Picker */}
-        {houses && houses.length > 0 && (
+        <Scroll
+          style={{ flex: 1 }}
+          contentContainerStyle={[styles.scrollContent, hideFooter && { paddingBottom: 72 }]}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Room Type Selector */}
+          <View style={[styles.inputSection, styles.sectionPadded]}>
+            <Text style={[styles.label, { color: theme.colors.text }]}>Room Type</Text>
+            <View
+              style={styles.typeSelector}
+              accessibilityRole="radiogroup"
+              accessibilityLabel="Room type"
+            >
+              {ROOM_TYPES.map((rt) => {
+                const selected = roomType === rt.value;
+                return (
+                  <TouchableOpacity
+                    key={rt.value}
+                    style={[
+                      styles.typeCard,
+                      {
+                        backgroundColor: selected
+                          ? theme.colors.primary
+                          : theme.colors.backgroundSecondary,
+                        borderColor: selected ? theme.colors.primary : theme.colors.border,
+                      },
+                    ]}
+                    onPress={() => setRoomType(rt.value)}
+                    {...choiceProps(`${rt.label}. ${rt.description}`, selected)}
+                    testID={`create-room-type-${rt.value}`}
+                  >
+                    <MaterialCommunityIcons
+                      name={rt.icon}
+                      size={22}
+                      color={selected ? '#FFFFFF' : theme.colors.textSecondary}
+                    />
+                    <Text
+                      style={[
+                        styles.typeCardLabel,
+                        { color: selected ? '#FFFFFF' : theme.colors.text },
+                      ]}
+                    >
+                      {rt.label}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.typeCardDesc,
+                        { color: selected ? 'rgba(255,255,255,0.8)' : theme.colors.textSecondary },
+                      ]}
+                    >
+                      {rt.description}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* House Picker */}
+          {houses && houses.length > 0 && (
+            <View style={styles.inputSection}>
+              <Text style={[styles.label, styles.sectionPadded, { color: theme.colors.text }]}>
+                Create for
+              </Text>
+              <FlatList
+                accessibilityRole="radiogroup"
+                accessibilityLabel="Create for"
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                data={[null, ...houses]}
+                keyExtractor={(item) => item?.id ?? 'personal'}
+                contentContainerStyle={styles.chipList}
+                renderItem={({ item }) => {
+                  const selected = item === null ? !selectedHouse : selectedHouse?.id === item.id;
+                  return (
+                    <TouchableOpacity
+                      style={[
+                        styles.chip,
+                        {
+                          backgroundColor: selected
+                            ? theme.colors.primary
+                            : theme.colors.backgroundSecondary,
+                        },
+                      ]}
+                      onPress={() => setSelectedHouse(item)}
+                      {...choiceProps(item ? item.name : 'Personal', selected)}
+                    >
+                      {item && (
+                        <MaterialCommunityIcons
+                          name="home-group"
+                          size={14}
+                          color={selected ? '#FFFFFF' : theme.colors.textSecondary}
+                          style={{ marginRight: 4 }}
+                        />
+                      )}
+                      <Text
+                        style={[
+                          styles.chipText,
+                          { color: selected ? '#FFFFFF' : theme.colors.text },
+                        ]}
+                      >
+                        {item ? item.name : 'Personal'}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                }}
+              />
+            </View>
+          )}
+
+          <View style={[styles.inputSection, styles.sectionPadded]}>
+            <Text style={[styles.label, { color: theme.colors.text }]}>Title *</Text>
+            <TextInput
+              style={[
+                styles.input,
+                { backgroundColor: theme.colors.backgroundSecondary, color: theme.colors.text },
+              ]}
+              placeholder="What's your room about?"
+              placeholderTextColor={theme.colors.textTertiary}
+              value={title}
+              onChangeText={setTitle}
+              maxLength={100}
+            />
+            <Text style={[styles.charCount, { color: theme.colors.textTertiary }]}>
+              {title.length}/100
+            </Text>
+          </View>
+
           <View style={styles.inputSection}>
-            <Text style={[styles.label, styles.sectionPadded, { color: theme.colors.text }]}>Create for</Text>
+            <Text style={[styles.label, styles.sectionPadded, { color: theme.colors.text }]}>
+              Topic
+            </Text>
             <FlatList
               accessibilityRole="radiogroup"
-              accessibilityLabel="Create for"
+              accessibilityLabel="Topic"
               horizontal
               showsHorizontalScrollIndicator={false}
-              data={[null, ...houses]}
-              keyExtractor={(item) => item?.id ?? 'personal'}
+              data={TOPICS}
+              keyExtractor={(item) => item}
               contentContainerStyle={styles.chipList}
               renderItem={({ item }) => {
-                const selected = item === null ? !selectedHouse : selectedHouse?.id === item.id;
+                const selected = topic === item;
                 return (
                   <TouchableOpacity
                     style={[
                       styles.chip,
                       {
-                        backgroundColor: selected ? theme.colors.primary : theme.colors.backgroundSecondary,
+                        backgroundColor: selected
+                          ? theme.colors.primary
+                          : theme.colors.backgroundSecondary,
                       },
                     ]}
-                    onPress={() => setSelectedHouse(item)}
-                    {...choiceProps(item ? item.name : 'Personal', selected)}
+                    onPress={() => setTopic(selected ? '' : item)}
+                    {...choiceProps(item, selected)}
                   >
-                    {item && (
-                      <MaterialCommunityIcons
-                        name="home-group"
-                        size={14}
-                        color={selected ? '#FFFFFF' : theme.colors.textSecondary}
-                        style={{ marginRight: 4 }}
-                      />
-                    )}
-                    <Text style={[styles.chipText, { color: selected ? '#FFFFFF' : theme.colors.text }]}>
-                      {item ? item.name : 'Personal'}
+                    <Text
+                      style={[styles.chipText, { color: selected ? '#FFFFFF' : theme.colors.text }]}
+                    >
+                      {item}
                     </Text>
                   </TouchableOpacity>
                 );
               }}
             />
           </View>
-        )}
 
-        <View style={[styles.inputSection, styles.sectionPadded]}>
-          <Text style={[styles.label, { color: theme.colors.text }]}>Title *</Text>
-          <TextInput
-            style={[styles.input, { backgroundColor: theme.colors.backgroundSecondary, color: theme.colors.text }]}
-            placeholder="What's your room about?"
-            placeholderTextColor={theme.colors.textTertiary}
-            value={title}
-            onChangeText={setTitle}
-            maxLength={100}
-          />
-          <Text style={[styles.charCount, { color: theme.colors.textTertiary }]}>
-            {title.length}/100
-          </Text>
-        </View>
-
-        <View style={styles.inputSection}>
-          <Text style={[styles.label, styles.sectionPadded, { color: theme.colors.text }]}>Topic</Text>
-          <FlatList
-            accessibilityRole="radiogroup"
-            accessibilityLabel="Topic"
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            data={TOPICS}
-            keyExtractor={(item) => item}
-            contentContainerStyle={styles.chipList}
-            renderItem={({ item }) => {
-              const selected = topic === item;
-              return (
-                <TouchableOpacity
-                  style={[
-                    styles.chip,
-                    {
-                      backgroundColor: selected ? theme.colors.primary : theme.colors.backgroundSecondary,
-                    },
-                  ]}
-                  onPress={() => setTopic(selected ? '' : item)}
-                  {...choiceProps(item, selected)}
-                >
-                  <Text style={[styles.chipText, { color: selected ? '#FFFFFF' : theme.colors.text }]}>
-                    {item}
-                  </Text>
-                </TouchableOpacity>
-              );
-            }}
-          />
-        </View>
-
-        <View style={[styles.inputSection, styles.sectionPadded]}>
-          <Text style={[styles.label, { color: theme.colors.text }]}>Description</Text>
-          <TextInput
-            style={[styles.textArea, { backgroundColor: theme.colors.backgroundSecondary, color: theme.colors.text }]}
-            placeholder="Tell people what to expect..."
-            placeholderTextColor={theme.colors.textTertiary}
-            value={description}
-            onChangeText={setDescription}
-            multiline
-            numberOfLines={3}
-            maxLength={500}
-          />
-        </View>
-
-        {/* Hide speaker permission for broadcast (backend forces invited) */}
-        {!isBroadcast && (
           <View style={[styles.inputSection, styles.sectionPadded]}>
-            <Text style={[styles.label, { color: theme.colors.text }]}>Who can speak?</Text>
-            <View style={styles.radioGroup} accessibilityRole="radiogroup" accessibilityLabel="Who can speak?">
-              {([
-                { value: 'everyone' as const, label: 'Everyone', icon: 'earth' as const },
-                { value: 'followers' as const, label: 'People you follow', icon: 'account-group' as const },
-                { value: 'invited' as const, label: 'Only invited speakers', icon: 'account-plus' as const },
-              ]).map((option, index, arr) => {
-                const selected = speakerPermission === option.value;
-                const isFirst = index === 0;
-                const isLast = index === arr.length - 1;
-                return (
-                  <TouchableOpacity
-                    key={option.value}
-                    style={[
-                      styles.radioRow,
-                      {
-                        backgroundColor: theme.colors.backgroundSecondary,
-                        borderTopLeftRadius: isFirst ? 12 : 0,
-                        borderTopRightRadius: isFirst ? 12 : 0,
-                        borderBottomLeftRadius: isLast ? 12 : 0,
-                        borderBottomRightRadius: isLast ? 12 : 0,
-                      },
-                    ]}
-                    onPress={() => setSpeakerPermission(option.value)}
-                    {...choiceProps(option.label, selected)}
-                  >
-                    <MaterialCommunityIcons
-                      name={option.icon}
-                      size={18}
-                      color={selected ? theme.colors.primary : theme.colors.textSecondary}
-                    />
-                    <Text style={[styles.radioLabel, { color: selected ? theme.colors.primary : theme.colors.text }]}>
-                      {option.label}
-                    </Text>
-                    <View
+            <Text style={[styles.label, { color: theme.colors.text }]}>Description</Text>
+            <TextInput
+              style={[
+                styles.textArea,
+                { backgroundColor: theme.colors.backgroundSecondary, color: theme.colors.text },
+              ]}
+              placeholder="Tell people what to expect..."
+              placeholderTextColor={theme.colors.textTertiary}
+              value={description}
+              onChangeText={setDescription}
+              multiline
+              numberOfLines={3}
+              maxLength={500}
+            />
+          </View>
+
+          {/* Hide speaker permission for broadcast (backend forces invited) */}
+          {!isBroadcast && (
+            <View style={[styles.inputSection, styles.sectionPadded]}>
+              <Text style={[styles.label, { color: theme.colors.text }]}>Who can speak?</Text>
+              <View
+                style={styles.radioGroup}
+                accessibilityRole="radiogroup"
+                accessibilityLabel="Who can speak?"
+              >
+                {[
+                  { value: 'everyone' as const, label: 'Everyone', icon: 'earth' as const },
+                  {
+                    value: 'followers' as const,
+                    label: 'People you follow',
+                    icon: 'account-group' as const,
+                  },
+                  {
+                    value: 'invited' as const,
+                    label: 'Only invited speakers',
+                    icon: 'account-plus' as const,
+                  },
+                ].map((option, index, arr) => {
+                  const selected = speakerPermission === option.value;
+                  const isFirst = index === 0;
+                  const isLast = index === arr.length - 1;
+                  return (
+                    <TouchableOpacity
+                      key={option.value}
                       style={[
-                        styles.radioCircle,
+                        styles.radioRow,
                         {
-                          borderColor: selected ? theme.colors.primary : theme.colors.border,
-                          backgroundColor: selected ? theme.colors.primary : 'transparent',
+                          backgroundColor: theme.colors.backgroundSecondary,
+                          borderTopLeftRadius: isFirst ? 12 : 0,
+                          borderTopRightRadius: isFirst ? 12 : 0,
+                          borderBottomLeftRadius: isLast ? 12 : 0,
+                          borderBottomRightRadius: isLast ? 12 : 0,
                         },
                       ]}
+                      onPress={() => setSpeakerPermission(option.value)}
+                      {...choiceProps(option.label, selected)}
                     >
-                      {selected && (
-                        <MaterialCommunityIcons name="check" size={12} color="#FFFFFF" />
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
+                      <MaterialCommunityIcons
+                        name={option.icon}
+                        size={18}
+                        color={selected ? theme.colors.primary : theme.colors.textSecondary}
+                      />
+                      <Text
+                        style={[
+                          styles.radioLabel,
+                          { color: selected ? theme.colors.primary : theme.colors.text },
+                        ]}
+                      >
+                        {option.label}
+                      </Text>
+                      <View
+                        style={[
+                          styles.radioCircle,
+                          {
+                            borderColor: selected ? theme.colors.primary : theme.colors.border,
+                            backgroundColor: selected ? theme.colors.primary : 'transparent',
+                          },
+                        ]}
+                      >
+                        {selected && (
+                          <MaterialCommunityIcons name="check" size={12} color="#FFFFFF" />
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             </View>
-          </View>
-        )}
+          )}
 
-        {mode === 'standalone' && (
-          <View style={[styles.inputSection, styles.sectionPadded]}>
-            <Text style={[styles.label, { color: theme.colors.text }]}>Schedule (Optional)</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: theme.colors.backgroundSecondary, color: theme.colors.text }]}
-              placeholder="e.g., 2024-03-20 14:00"
-              placeholderTextColor={theme.colors.textTertiary}
-              value={scheduledStart}
-              onChangeText={setScheduledStart}
-            />
-          </View>
-        )}
-
-        <View style={[styles.inputSection, styles.sectionPadded]}>
-          <TouchableOpacity
-            style={[styles.toggleRow, { backgroundColor: theme.colors.backgroundSecondary }]}
-            onPress={() => setRecordingEnabled(!recordingEnabled)}
-          >
-            <MaterialCommunityIcons
-              name={recordingEnabled ? 'record-circle' : 'record-circle-outline'}
-              size={20}
-              color={recordingEnabled ? '#FF0000' : theme.colors.textSecondary}
-            />
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.toggleLabel, { color: theme.colors.text }]}>
-                Auto-record
-              </Text>
-              <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>
-                Record audio when room goes live (max 1h, expires in 6 months)
-              </Text>
-            </View>
-            <View
-              style={[
-                styles.toggleIndicator,
-                {
-                  backgroundColor: recordingEnabled ? theme.colors.primary : theme.colors.border,
-                },
-              ]}
-            >
-              <View
+          {mode === 'standalone' && (
+            <View style={[styles.inputSection, styles.sectionPadded]}>
+              <Text style={[styles.label, { color: theme.colors.text }]}>Schedule (Optional)</Text>
+              <TextInput
                 style={[
-                  styles.toggleDot,
-                  recordingEnabled && { transform: [{ translateX: 14 }] },
+                  styles.input,
+                  { backgroundColor: theme.colors.backgroundSecondary, color: theme.colors.text },
                 ]}
+                placeholder="e.g., 2024-03-20 14:00"
+                placeholderTextColor={theme.colors.textTertiary}
+                value={scheduledStart}
+                onChangeText={setScheduledStart}
               />
             </View>
-          </TouchableOpacity>
-        </View>
-      </Scroll>
+          )}
 
-      {renderFooterContent()}
-    </View>
-  );
-});
+          <View style={[styles.inputSection, styles.sectionPadded]}>
+            <TouchableOpacity
+              style={[styles.toggleRow, { backgroundColor: theme.colors.backgroundSecondary }]}
+              onPress={() => setRecordingEnabled(!recordingEnabled)}
+            >
+              <MaterialCommunityIcons
+                name={recordingEnabled ? 'record-circle' : 'record-circle-outline'}
+                size={20}
+                color={recordingEnabled ? '#FF0000' : theme.colors.textSecondary}
+              />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.toggleLabel, { color: theme.colors.text }]}>Auto-record</Text>
+                <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>
+                  Record audio when room goes live (max 1h, expires in 6 months)
+                </Text>
+              </View>
+              <View
+                style={[
+                  styles.toggleIndicator,
+                  {
+                    backgroundColor: recordingEnabled ? theme.colors.primary : theme.colors.border,
+                  },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.toggleDot,
+                    recordingEnabled && { transform: [{ translateX: 14 }] },
+                  ]}
+                />
+              </View>
+            </TouchableOpacity>
+          </View>
+        </Scroll>
+
+        {renderFooterContent()}
+      </View>
+    );
+  },
+);
 
 CreateRoomSheet.displayName = 'CreateRoomSheet';
 

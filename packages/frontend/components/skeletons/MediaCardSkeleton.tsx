@@ -18,11 +18,7 @@ export const MediaCardSkeleton: React.FC<MediaCardSkeletonProps> = React.memo(
 
     return (
       <View style={styles.container}>
-        <Skeleton.Box
-          width="100%"
-          borderRadius={borderRadius}
-          style={styles.image}
-        />
+        <Skeleton.Box width="100%" borderRadius={borderRadius} style={styles.image} />
         <View style={styles.textContainer}>
           <Skeleton.Box width="90%" height={14} borderRadius={4} />
           <Skeleton.Box width="60%" height={12} borderRadius={4} />

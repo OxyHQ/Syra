@@ -90,7 +90,7 @@ export type UploadRow = Omit<
  */
 export async function findOwnedUpload(
   uploadId: string,
-  ownerOxyUserId: string
+  ownerOxyUserId: string,
 ): Promise<UploadRow | undefined> {
   const [upload] = await getDb()
     .select(UPLOAD_COLUMNS)
@@ -99,8 +99,8 @@ export async function findOwnedUpload(
       and(
         eq(userUploads.id, uploadId),
         eq(userUploads.ownerOxyUserId, ownerOxyUserId),
-        isNull(userUploads.deletedAt)
-      )
+        isNull(userUploads.deletedAt),
+      ),
     )
     .limit(1);
 
@@ -110,7 +110,7 @@ export async function findOwnedUpload(
 /** The same file WITHOUT the soft-delete filter — the manual delete path's read. */
 export async function findOwnedUploadIncludingDeleted(
   uploadId: string,
-  ownerOxyUserId: string
+  ownerOxyUserId: string,
 ): Promise<UploadRow | undefined> {
   const [upload] = await getDb()
     .select(UPLOAD_COLUMNS)
@@ -145,7 +145,7 @@ export async function findOwnedUploadIncludingDeleted(
 export async function listOwnedUploads(
   ownerOxyUserId: string,
   limit: number,
-  offset: number
+  offset: number,
 ): Promise<{ uploads: UploadRow[]; total: number }> {
   const live = and(eq(userUploads.ownerOxyUserId, ownerOxyUserId), isNull(userUploads.deletedAt));
 
@@ -205,39 +205,41 @@ export async function listLockerAlbums(ownerOxyUserId: string): Promise<LockerAl
   const first = (column: SQLWrapper): SQL =>
     sql`(array_agg(${column} order by ${userUploads.discNumber} nulls first, ${userUploads.trackNumber} nulls first))[1]`;
 
-  return getDb()
-    .select({
-      albumKey: sql<string>`${userUploads.albumKey}`,
-      albumName: sql<string | null>`${first(userUploads.albumName)}`,
-      albumArtistName: sql<string | null>`${first(userUploads.albumArtistName)}`,
-      year: sql<number | null>`${first(userUploads.year)}`,
-      coverArtId: sql<string | null>`${first(userUploads.coverArtId)}`,
-      trackCount: sql<number>`count(*)::int`,
-      totalDuration: sql<number>`coalesce(sum(${userUploads.duration}), 0)::double precision`,
-      trackIds: sql<
-        string[]
-      >`array_agg(${userUploads.id} order by ${userUploads.discNumber} nulls first, ${userUploads.trackNumber} nulls first)`,
-    })
-    .from(userUploads)
-    .where(
-      and(
-        eq(userUploads.ownerOxyUserId, ownerOxyUserId),
-        isNull(userUploads.deletedAt),
-        // A file with no album tags has no release to belong to; grouping the
-        // untagged ones would invent an album called nothing. `<> ''` as well
-        // as `is not null` because `buildAlbumKey` answers a non-empty `"||"`
-        // for a file with no tags at all, and the Mongo filter excluded both.
-        sql`${userUploads.albumKey} is not null and ${userUploads.albumKey} <> ''`
+  return (
+    getDb()
+      .select({
+        albumKey: sql<string>`${userUploads.albumKey}`,
+        albumName: sql<string | null>`${first(userUploads.albumName)}`,
+        albumArtistName: sql<string | null>`${first(userUploads.albumArtistName)}`,
+        year: sql<number | null>`${first(userUploads.year)}`,
+        coverArtId: sql<string | null>`${first(userUploads.coverArtId)}`,
+        trackCount: sql<number>`count(*)::int`,
+        totalDuration: sql<number>`coalesce(sum(${userUploads.duration}), 0)::double precision`,
+        trackIds: sql<
+          string[]
+        >`array_agg(${userUploads.id} order by ${userUploads.discNumber} nulls first, ${userUploads.trackNumber} nulls first)`,
+      })
+      .from(userUploads)
+      .where(
+        and(
+          eq(userUploads.ownerOxyUserId, ownerOxyUserId),
+          isNull(userUploads.deletedAt),
+          // A file with no album tags has no release to belong to; grouping the
+          // untagged ones would invent an album called nothing. `<> ''` as well
+          // as `is not null` because `buildAlbumKey` answers a non-empty `"||"`
+          // for a file with no tags at all, and the Mongo filter excluded both.
+          sql`${userUploads.albumKey} is not null and ${userUploads.albumKey} <> ''`,
+        ),
       )
-    )
-    .groupBy(userUploads.albumKey)
-    // Same `nulls first` reasoning as the window ordering above: Mongo's
-    // ascending `$sort` on the three display fields put an absent value first.
-    .orderBy(
-      sql`${first(userUploads.albumArtistName)} asc nulls first`,
-      sql`${first(userUploads.year)} asc nulls first`,
-      sql`${first(userUploads.albumName)} asc nulls first`
-    );
+      .groupBy(userUploads.albumKey)
+      // Same `nulls first` reasoning as the window ordering above: Mongo's
+      // ascending `$sort` on the three display fields put an absent value first.
+      .orderBy(
+        sql`${first(userUploads.albumArtistName)} asc nulls first`,
+        sql`${first(userUploads.year)} asc nulls first`,
+        sql`${first(userUploads.albumName)} asc nulls first`,
+      )
+  );
 }
 
 /**
@@ -254,7 +256,7 @@ export async function listLockerAlbums(ownerOxyUserId: string): Promise<LockerAl
  */
 export async function findQueueableUploads(
   uploadIds: readonly string[],
-  ownerOxyUserId: string
+  ownerOxyUserId: string,
 ): Promise<UploadRow[]> {
   if (uploadIds.length === 0) return [];
 
@@ -266,8 +268,8 @@ export async function findQueueableUploads(
         inArray(userUploads.id, [...uploadIds]),
         eq(userUploads.ownerOxyUserId, ownerOxyUserId),
         isNull(userUploads.deletedAt),
-        eq(userUploads.status, 'ready')
-      )
+        eq(userUploads.status, 'ready'),
+      ),
     );
 }
 
@@ -288,7 +290,7 @@ export async function findQueueableUploads(
  */
 export async function findOwnedUploadForPromotion(
   uploadId: string,
-  ownerOxyUserId: string
+  ownerOxyUserId: string,
 ): Promise<(UploadRow & { sha256: string; fingerprint: number[] }) | undefined> {
   const [upload] = await getDb()
     .select({ ...UPLOAD_COLUMNS, sha256: userUploads.sha256, fingerprint: userUploads.fingerprint })
@@ -297,8 +299,8 @@ export async function findOwnedUploadForPromotion(
       and(
         eq(userUploads.id, uploadId),
         eq(userUploads.ownerOxyUserId, ownerOxyUserId),
-        isNull(userUploads.deletedAt)
-      )
+        isNull(userUploads.deletedAt),
+      ),
     )
     .limit(1);
 
@@ -322,7 +324,7 @@ export async function findOwnedUploadForPromotion(
  */
 export async function findUploadBySha256(
   ownerOxyUserId: string,
-  sha256: string
+  sha256: string,
 ): Promise<{ id: string } | undefined> {
   const [existing] = await getDb()
     .select({ id: userUploads.id })
@@ -331,8 +333,8 @@ export async function findUploadBySha256(
       and(
         eq(userUploads.ownerOxyUserId, ownerOxyUserId),
         eq(userUploads.sha256, sha256),
-        isNull(userUploads.deletedAt)
-      )
+        isNull(userUploads.deletedAt),
+      ),
     )
     .limit(1);
 
@@ -359,7 +361,7 @@ export async function findUploadBySha256(
  */
 export async function findUploadHoldingHashSlot(
   ownerOxyUserId: string,
-  sha256: string
+  sha256: string,
 ): Promise<{ id: string } | undefined> {
   const [existing] = await getDb()
     .select({ id: userUploads.id })
@@ -405,7 +407,9 @@ async function withHls(rows: readonly StorageRefRow[]): Promise<UploadStorageRef
 }
 
 /** Storage refs for a named set of uploads. */
-export async function findUploadStorageRefs(uploadIds: readonly string[]): Promise<UploadStorageRef[]> {
+export async function findUploadStorageRefs(
+  uploadIds: readonly string[],
+): Promise<UploadStorageRef[]> {
   if (uploadIds.length === 0) return [];
   const rows = await getDb()
     .select(STORAGE_REF_COLUMNS)
@@ -424,9 +428,9 @@ export async function findLockerStorageRefs(ownerOxyUserId: string): Promise<Upl
 }
 
 /** Storage refs for the locker copies linked to one catalog track. */
-export async function findUploadsMatchedToTrack(trackId: string): Promise<
-  (UploadStorageRef & { sha256: string })[]
-> {
+export async function findUploadsMatchedToTrack(
+  trackId: string,
+): Promise<(UploadStorageRef & { sha256: string })[]> {
   const rows = await getDb()
     .select({ ...STORAGE_REF_COLUMNS, sha256: userUploads.sha256 })
     .from(userUploads)
@@ -439,7 +443,7 @@ export async function findUploadsMatchedToTrack(trackId: string): Promise<
 /** Storage refs for every locker copy of these exact bytes, excluding ids already doomed. */
 export async function findUploadsBySha256(
   shas: readonly string[],
-  excludeIds: readonly string[]
+  excludeIds: readonly string[],
 ): Promise<UploadStorageRef[]> {
   if (shas.length === 0) return [];
 
@@ -448,11 +452,8 @@ export async function findUploadsBySha256(
     .from(userUploads)
     .where(
       excludeIds.length > 0
-        ? and(
-            inArray(userUploads.sha256, [...shas]),
-            notInArray(userUploads.id, [...excludeIds])
-          )
-        : inArray(userUploads.sha256, [...shas])
+        ? and(inArray(userUploads.sha256, [...shas]), notInArray(userUploads.id, [...excludeIds]))
+        : inArray(userUploads.sha256, [...shas]),
     );
   return withHls(rows);
 }
@@ -468,7 +469,7 @@ export async function findUploadsBySha256(
 export async function findFingerprintCandidates(
   minDurationSec: number,
   maxDurationSec: number,
-  excludeIds: readonly string[]
+  excludeIds: readonly string[],
 ): Promise<(UploadStorageRef & { fingerprint: number[] })[]> {
   const rows = await getDb()
     .select({ ...STORAGE_REF_COLUMNS, fingerprint: userUploads.fingerprint })
@@ -477,8 +478,8 @@ export async function findFingerprintCandidates(
       and(
         gte(userUploads.fingerprintDurationSec, minDurationSec),
         lte(userUploads.fingerprintDurationSec, maxDurationSec),
-        excludeIds.length > 0 ? notInArray(userUploads.id, [...excludeIds]) : undefined
-      )
+        excludeIds.length > 0 ? notInArray(userUploads.id, [...excludeIds]) : undefined,
+      ),
     );
 
   const withRenditions = await withHls(rows);
@@ -491,29 +492,31 @@ export async function findFingerprintCandidates(
 export async function findUploadsDueForNotice(
   now: Date,
   noticeHorizon: Date,
-  limit: number
+  limit: number,
 ): Promise<{ id: string; ownerOxyUserId: string; expiresAt: Date | null }[]> {
-  return getDb()
-    .select({
-      id: userUploads.id,
-      ownerOxyUserId: userUploads.ownerOxyUserId,
-      expiresAt: userUploads.expiresAt,
-    })
-    .from(userUploads)
-    .where(
-      and(
-        isNull(userUploads.deletedAt),
-        isNull(userUploads.deletionNoticeSentAt),
-        gt(userUploads.expiresAt, now),
-        lte(userUploads.expiresAt, noticeHorizon)
+  return (
+    getDb()
+      .select({
+        id: userUploads.id,
+        ownerOxyUserId: userUploads.ownerOxyUserId,
+        expiresAt: userUploads.expiresAt,
+      })
+      .from(userUploads)
+      .where(
+        and(
+          isNull(userUploads.deletedAt),
+          isNull(userUploads.deletionNoticeSentAt),
+          gt(userUploads.expiresAt, now),
+          lte(userUploads.expiresAt, noticeHorizon),
+        ),
       )
-    )
-    // `asc`, and `expires_at` is NULLABLE — but every row here has already been
-    // narrowed to a range, so a null cannot reach the sort. Spelled `asc` for
-    // the same reason the Mongo sort was `1`: soonest first is what decides
-    // which files a capped batch warns about.
-    .orderBy(asc(userUploads.expiresAt))
-    .limit(limit);
+      // `asc`, and `expires_at` is NULLABLE — but every row here has already been
+      // narrowed to a range, so a null cannot reach the sort. Spelled `asc` for
+      // the same reason the Mongo sort was `1`: soonest first is what decides
+      // which files a capped batch warns about.
+      .orderBy(asc(userUploads.expiresAt))
+      .limit(limit)
+  );
 }
 
 /** Phase 2: live files past their expiry. */
@@ -530,7 +533,7 @@ export async function findExpiredUploadIds(now: Date, limit: number): Promise<st
 /** Phase 3: soft-deleted files past the grace window, with their storage refs. */
 export async function findUploadsPastGrace(
   graceCutoff: Date,
-  limit: number
+  limit: number,
 ): Promise<UploadStorageRef[]> {
   const rows = await getDb()
     .select(STORAGE_REF_COLUMNS)
@@ -541,7 +544,10 @@ export async function findUploadsPastGrace(
 }
 
 /** Stamp a batch of uploads as warned. Returns how many rows moved. */
-export async function markDeletionNoticeSent(uploadIds: readonly string[], now: Date): Promise<number> {
+export async function markDeletionNoticeSent(
+  uploadIds: readonly string[],
+  now: Date,
+): Promise<number> {
   if (uploadIds.length === 0) return 0;
   const updated = await getDb()
     .update(userUploads)
@@ -590,7 +596,7 @@ export async function deleteUploads(uploadIds: readonly string[]): Promise<numbe
 
 /** Each upload's HLS ladder, in ladder order. One query for the whole batch. */
 export async function loadUploadHls(
-  uploadIds: readonly string[]
+  uploadIds: readonly string[],
 ): Promise<Map<string, HlsRendition[]>> {
   if (uploadIds.length === 0) return new Map();
 
@@ -630,7 +636,7 @@ export async function loadUploadHls(
 export async function setUploadHls(
   db: DbOrTransaction,
   uploadId: string,
-  hls: readonly HlsRendition[]
+  hls: readonly HlsRendition[],
 ): Promise<void> {
   await db
     .delete(userUploadHlsRenditions)
@@ -645,7 +651,7 @@ export async function setUploadHls(
       manifestKey: rendition.manifestKey,
       bitrateKbps: rendition.bitrateKbps,
       encrypted: rendition.encrypted,
-    }))
+    })),
   );
 }
 
@@ -653,7 +659,7 @@ export async function setUploadHls(
 export async function setUploadProvenanceMarkers(
   db: DbOrTransaction,
   uploadId: string,
-  markers: readonly ProvenanceMarker[]
+  markers: readonly ProvenanceMarker[],
 ): Promise<void> {
   await db
     .delete(userUploadProvenanceMarkers)
@@ -668,6 +674,6 @@ export async function setUploadProvenanceMarkers(
       code: marker.code,
       weight: marker.weight,
       detail: marker.detail,
-    }))
+    })),
   );
 }

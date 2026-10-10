@@ -19,7 +19,12 @@ const BrowseScreen: React.FC = () => {
   const router = useRouter();
   const { startRadio } = usePlayerStore();
 
-  const { data: genresData, isLoading: genresLoading, error: genresError, refetch: refetchGenres } = useQuery({
+  const {
+    data: genresData,
+    isLoading: genresLoading,
+    error: genresError,
+    refetch: refetchGenres,
+  } = useQuery({
     queryKey: ['browse', 'genres'],
     queryFn: () => browseService.getGenres(),
     staleTime: 1000 * 60 * 10,
@@ -27,24 +32,28 @@ const BrowseScreen: React.FC = () => {
 
   const genres = useMemo(() => genresData?.genres || [], [genresData]);
 
-  const handleGenreClick = useCallback((genreName: string) => {
-    router.push({ pathname: '/search', params: { q: genreName } });
-  }, [router]);
+  const handleGenreClick = useCallback(
+    (genreName: string) => {
+      router.push({ pathname: '/search', params: { q: genreName } });
+    },
+    [router],
+  );
 
   // A genre is a seed, not a fixed tracklist: play it as a station so it keeps
   // going past the first page instead of ending after 50 tracks.
-  const handleGenrePlay = useCallback((genreName: string) => {
-    startRadio({ seedType: 'genre', seedId: genreName });
-  }, [startRadio]);
+  const handleGenrePlay = useCallback(
+    (genreName: string) => {
+      startRadio({ seedType: 'genre', seedId: genreName });
+    },
+    [startRadio],
+  );
 
   return (
     <>
-      <SEO
-        title={t('browse.seo.title')}
-        description={t('browse.seo.description')}
-      />
+      <SEO title={t('browse.seo.title')} description={t('browse.seo.description')} />
       <ScrollView
-        className="bg-surface" style={styles.container}
+        className="bg-surface"
+        style={styles.container}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >

@@ -24,7 +24,8 @@ const UserProfileScreen: React.FC = () => {
       <>
         <SEO title={`${username || 'User'} - Syra`} description={t('user.seo.description')} />
         <ScrollView
-          className="bg-surface" style={styles.container}
+          className="bg-surface"
+          style={styles.container}
           showsVerticalScrollIndicator={false}
         >
           <ProfileHeaderSkeleton />
@@ -56,12 +57,13 @@ const UserProfileScreen: React.FC = () => {
 
   return (
     <>
-      <SEO 
-        title={`${displayName} (@${profileData.username}) - Syra`} 
-        description={profileData.bio || `Profile page for ${displayName}`} 
+      <SEO
+        title={`${displayName} (@${profileData.username}) - Syra`}
+        description={profileData.bio || `Profile page for ${displayName}`}
       />
       <ScrollView
-        className="bg-surface" style={styles.container}
+        className="bg-surface"
+        style={styles.container}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
@@ -79,10 +81,10 @@ const UserProfileScreen: React.FC = () => {
                 {displayName}
               </Text>
               {profileData.verified && (
-                <MaterialCommunityIcons 
-                  name="check-circle" 
-                  size={24} 
-                  color={theme.colors.primary} 
+                <MaterialCommunityIcons
+                  name="check-circle"
+                  size={24}
+                  color={theme.colors.primary}
                   style={styles.verifiedBadge}
                 />
               )}
@@ -132,10 +134,10 @@ const UserProfileScreen: React.FC = () => {
             {t('user.publicPlaylists')}
           </Text>
           <View style={styles.emptyState}>
-            <MaterialCommunityIcons 
-              name="playlist-music" 
-              size={48} 
-              color={theme.colors.textSecondary} 
+            <MaterialCommunityIcons
+              name="playlist-music"
+              size={48}
+              color={theme.colors.textSecondary}
             />
             <Text className="text-muted-foreground" style={styles.emptyText}>
               {t('user.noPublicPlaylists')}
@@ -241,8 +243,3 @@ const styles = StyleSheet.create({
 });
 
 export default UserProfileScreen;
-
-
-
-
-

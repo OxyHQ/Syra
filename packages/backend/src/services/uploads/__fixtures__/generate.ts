@@ -72,10 +72,7 @@ function frame(id: string, payload: Buffer): Buffer {
 function textFrame(id: string, ...values: string[]): Buffer {
   return frame(
     id,
-    Buffer.concat([
-      Buffer.from([UTF8_ENCODING]),
-      Buffer.from(values.join('\u0000'), 'utf8'),
-    ]),
+    Buffer.concat([Buffer.from([UTF8_ENCODING]), Buffer.from(values.join('\u0000'), 'utf8')]),
   );
 }
 
@@ -241,11 +238,7 @@ function injectItunesAtoms(source: Buffer, atoms: Buffer[]): Buffer {
 
   const addition = Buffer.concat(atoms);
   const insertAt = ilst.start + ilst.size;
-  const out = Buffer.concat([
-    source.subarray(0, insertAt),
-    addition,
-    source.subarray(insertAt),
-  ]);
+  const out = Buffer.concat([source.subarray(0, insertAt), addition, source.subarray(insertAt)]);
 
   for (const box of [ilst, meta, udta, moov]) {
     out.writeUInt32BE(box.size + addition.length, box.start);
@@ -262,11 +255,21 @@ function injectItunesAtoms(source: Buffer, atoms: Buffer[]): Buffer {
 async function makeCoverArt(tmpDir: string, name: string, hue: number): Promise<Buffer> {
   const out = path.join(tmpDir, `${name}.jpg`);
   await execFile('ffmpeg', [
-    '-nostdin', '-loglevel', 'error',
-    '-f', 'lavfi', '-i', 'testsrc2=size=96x96:rate=1:duration=1',
-    '-vf', `hue=h=${hue},format=yuvj420p`,
-    '-frames:v', '1', '-q:v', '8',
-    out, '-y',
+    '-nostdin',
+    '-loglevel',
+    'error',
+    '-f',
+    'lavfi',
+    '-i',
+    'testsrc2=size=96x96:rate=1:duration=1',
+    '-vf',
+    `hue=h=${hue},format=yuvj420p`,
+    '-frames:v',
+    '1',
+    '-q:v',
+    '8',
+    out,
+    '-y',
   ]);
   return fs.readFileSync(out);
 }
@@ -286,19 +289,30 @@ async function makeAudioBed(
   const notes = [261.63, 329.63, 392.0, 493.88, 440.0];
   const noteDuration = durationSec / notes.length;
   const inputs = notes.flatMap((frequency) => [
-    '-f', 'lavfi',
-    '-t', noteDuration.toFixed(4),
-    '-i', `sine=frequency=${frequency}:sample_rate=44100`,
+    '-f',
+    'lavfi',
+    '-t',
+    noteDuration.toFixed(4),
+    '-i',
+    `sine=frequency=${frequency}:sample_rate=44100`,
   ]);
   const concatInputs = notes.map((_, index) => `[${index}]`).join('');
   const out = path.join(tmpDir, name);
   await execFile('ffmpeg', [
-    '-nostdin', '-loglevel', 'error',
+    '-nostdin',
+    '-loglevel',
+    'error',
     ...inputs,
     '-filter_complex',
     `${concatInputs}concat=n=${notes.length}:v=0:a=1[m];[m]tremolo=f=6:d=0.5[o]`,
-    '-map', '[o]', '-ac', '2', '-ar', '44100',
-    out, '-y',
+    '-map',
+    '[o]',
+    '-ac',
+    '2',
+    '-ar',
+    '44100',
+    out,
+    '-y',
   ]);
   return out;
 }
@@ -314,12 +328,23 @@ async function makeAudioBed(
 async function writeIndieMp3(bedPath: string, tmpDir: string): Promise<void> {
   const raw = path.join(tmpDir, 'indie-raw.mp3');
   await execFile('ffmpeg', [
-    '-nostdin', '-loglevel', 'error',
-    '-i', bedPath,
-    '-map_metadata', '-1',
-    '-write_id3v1', '0', '-id3v2_version', '0',
-    '-c:a', 'libmp3lame', '-b:a', '192k',
-    raw, '-y',
+    '-nostdin',
+    '-loglevel',
+    'error',
+    '-i',
+    bedPath,
+    '-map_metadata',
+    '-1',
+    '-write_id3v1',
+    '0',
+    '-id3v2_version',
+    '0',
+    '-c:a',
+    'libmp3lame',
+    '-b:a',
+    '192k',
+    raw,
+    '-y',
   ]);
 
   const front = await makeCoverArt(tmpDir, 'front', 0);
@@ -398,12 +423,23 @@ async function writeIndieMp3(bedPath: string, tmpDir: string): Promise<void> {
 async function writeUnidentifiedMp3(bedPath: string, tmpDir: string): Promise<void> {
   const raw = path.join(tmpDir, 'unidentified-raw.mp3');
   await execFile('ffmpeg', [
-    '-nostdin', '-loglevel', 'error',
-    '-i', bedPath,
-    '-map_metadata', '-1',
-    '-write_id3v1', '0', '-id3v2_version', '0',
-    '-c:a', 'libmp3lame', '-b:a', '192k',
-    raw, '-y',
+    '-nostdin',
+    '-loglevel',
+    'error',
+    '-i',
+    bedPath,
+    '-map_metadata',
+    '-1',
+    '-write_id3v1',
+    '0',
+    '-id3v2_version',
+    '0',
+    '-c:a',
+    'libmp3lame',
+    '-b:a',
+    '192k',
+    raw,
+    '-y',
   ]);
 
   const tag = buildId3v2Tag([
@@ -430,20 +466,37 @@ async function writeUnidentifiedMp3(bedPath: string, tmpDir: string): Promise<vo
 async function writePurchasedM4a(bedPath: string, tmpDir: string): Promise<void> {
   const raw = path.join(tmpDir, 'purchased-raw.m4a');
   await execFile('ffmpeg', [
-    '-nostdin', '-loglevel', 'error',
-    '-i', bedPath,
-    '-map_metadata', '-1',
-    '-c:a', 'aac', '-b:a', '256k',
-    '-metadata', 'title=Glass Harbour',
-    '-metadata', 'artist=The Longwave Choir',
-    '-metadata', 'album_artist=The Longwave Choir',
-    '-metadata', 'album=Signals At Dusk',
-    '-metadata', 'date=2016-06-10',
-    '-metadata', 'genre=Alternative',
-    '-metadata', 'track=4/11',
-    '-metadata', 'disc=1/1',
-    '-metadata', 'copyright=2016 Longwave Recordings Ltd',
-    raw, '-y',
+    '-nostdin',
+    '-loglevel',
+    'error',
+    '-i',
+    bedPath,
+    '-map_metadata',
+    '-1',
+    '-c:a',
+    'aac',
+    '-b:a',
+    '256k',
+    '-metadata',
+    'title=Glass Harbour',
+    '-metadata',
+    'artist=The Longwave Choir',
+    '-metadata',
+    'album_artist=The Longwave Choir',
+    '-metadata',
+    'album=Signals At Dusk',
+    '-metadata',
+    'date=2016-06-10',
+    '-metadata',
+    'genre=Alternative',
+    '-metadata',
+    'track=4/11',
+    '-metadata',
+    'disc=1/1',
+    '-metadata',
+    'copyright=2016 Longwave Recordings Ltd',
+    raw,
+    '-y',
   ]);
 
   const injected = injectItunesAtoms(fs.readFileSync(raw), [
@@ -526,15 +579,28 @@ async function writeCdRipFlac(bedPath: string, tmpDir: string): Promise<void> {
   ];
 
   await execFile('ffmpeg', [
-    '-nostdin', '-loglevel', 'error',
-    '-i', bedPath,
-    '-i', cover,
-    '-map', '0:a', '-map', '1:v',
-    '-map_metadata', '-1',
-    '-c:a', 'flac', '-c:v', 'copy',
-    '-disposition:v', 'attached_pic',
+    '-nostdin',
+    '-loglevel',
+    'error',
+    '-i',
+    bedPath,
+    '-i',
+    cover,
+    '-map',
+    '0:a',
+    '-map',
+    '1:v',
+    '-map_metadata',
+    '-1',
+    '-c:a',
+    'flac',
+    '-c:v',
+    'copy',
+    '-disposition:v',
+    'attached_pic',
     ...comments.flatMap(([key, value]) => ['-metadata', `${key}=${value}`]),
-    path.join(FIXTURE_DIR, 'cdrip-picard.flac'), '-y',
+    path.join(FIXTURE_DIR, 'cdrip-picard.flac'),
+    '-y',
   ]);
 }
 
@@ -553,12 +619,23 @@ async function writeCdRipFlac(bedPath: string, tmpDir: string): Promise<void> {
  */
 async function writeUntaggedWav(bedPath: string): Promise<void> {
   await execFile('ffmpeg', [
-    '-nostdin', '-loglevel', 'error',
-    '-i', bedPath,
-    '-map_metadata', '-1',
-    '-fflags', '+bitexact',
-    '-c:a', 'pcm_s16le', '-ac', '2', '-ar', '44100',
-    path.join(FIXTURE_DIR, 'untagged.wav'), '-y',
+    '-nostdin',
+    '-loglevel',
+    'error',
+    '-i',
+    bedPath,
+    '-map_metadata',
+    '-1',
+    '-fflags',
+    '+bitexact',
+    '-c:a',
+    'pcm_s16le',
+    '-ac',
+    '2',
+    '-ar',
+    '44100',
+    path.join(FIXTURE_DIR, 'untagged.wav'),
+    '-y',
   ]);
 }
 
@@ -584,13 +661,29 @@ async function writeUntaggedWav(bedPath: string): Promise<void> {
 async function writeFingerprintableUntaggedMp3(tmpDir: string): Promise<void> {
   const bed = await makeAudioBed(tmpDir, 6, 'long-bed.wav');
   await execFile('ffmpeg', [
-    '-nostdin', '-loglevel', 'error',
-    '-i', bed,
-    '-map_metadata', '-1',
-    '-write_id3v1', '0', '-id3v2_version', '0',
-    '-fflags', '+bitexact',
-    '-c:a', 'libmp3lame', '-b:a', '192k', '-ac', '2', '-ar', '44100',
-    path.join(FIXTURE_DIR, 'untagged-fingerprintable.mp3'), '-y',
+    '-nostdin',
+    '-loglevel',
+    'error',
+    '-i',
+    bed,
+    '-map_metadata',
+    '-1',
+    '-write_id3v1',
+    '0',
+    '-id3v2_version',
+    '0',
+    '-fflags',
+    '+bitexact',
+    '-c:a',
+    'libmp3lame',
+    '-b:a',
+    '192k',
+    '-ac',
+    '2',
+    '-ar',
+    '44100',
+    path.join(FIXTURE_DIR, 'untagged-fingerprintable.mp3'),
+    '-y',
   ]);
 }
 
@@ -647,16 +740,80 @@ interface CorpusPiece {
  * so a threshold that clears these clears those by a wider margin.
  */
 const CORPUS_NEGATIVES: ReadonlyArray<CorpusPiece> = [
-  { name: 'n0', notes: [261.63, 329.63, 392.0, 493.88, 440.0, 349.23], textureHz: 420, textureMix: 0.18, tremoloHz: 3.1 },
-  { name: 'n1', notes: [293.66, 349.23, 440.0, 523.25, 392.0, 311.13, 466.16, 261.63], textureHz: 780, textureMix: 0.31, tremoloHz: 5.4 },
-  { name: 'n2', notes: [415.3, 311.13, 246.94, 369.99, 466.16, 277.18, 493.88, 329.63, 220.0, 392.0], textureHz: 1150, textureMix: 0.22, tremoloHz: 7.7 },
-  { name: 'n3', notes: [220.0, 246.94, 277.18, 293.66, 329.63, 369.99, 415.3, 440.0, 466.16, 493.88, 523.25, 587.33], textureHz: 1640, textureMix: 0.44, tremoloHz: 2.6 },
-  { name: 'n4', notes: [523.25, 440.0, 349.23, 261.63, 329.63, 392.0], textureHz: 2210, textureMix: 0.12, tremoloHz: 8.3 },
-  { name: 'n5', notes: [369.99, 493.88, 277.18, 415.3, 220.0, 311.13, 466.16, 349.23], textureHz: 640, textureMix: 0.37, tremoloHz: 4.2 },
-  { name: 'n6', notes: [246.94, 293.66, 392.0, 466.16, 523.25, 311.13, 277.18, 440.0, 329.63, 369.99], textureHz: 2950, textureMix: 0.27, tremoloHz: 6.1 },
-  { name: 'n7', notes: [440.0, 392.0, 349.23, 329.63, 293.66, 277.18, 246.94, 220.0, 493.88, 523.25, 466.16, 415.3], textureHz: 310, textureMix: 0.49, tremoloHz: 3.8 },
-  { name: 'n8', notes: [311.13, 466.16, 220.0, 523.25, 369.99, 261.63], textureHz: 1880, textureMix: 0.15, tremoloHz: 8.9 },
-  { name: 'n9', notes: [493.88, 261.63, 415.3, 293.66, 466.16, 349.23, 220.0, 392.0], textureHz: 990, textureMix: 0.4, tremoloHz: 5.0 },
+  {
+    name: 'n0',
+    notes: [261.63, 329.63, 392.0, 493.88, 440.0, 349.23],
+    textureHz: 420,
+    textureMix: 0.18,
+    tremoloHz: 3.1,
+  },
+  {
+    name: 'n1',
+    notes: [293.66, 349.23, 440.0, 523.25, 392.0, 311.13, 466.16, 261.63],
+    textureHz: 780,
+    textureMix: 0.31,
+    tremoloHz: 5.4,
+  },
+  {
+    name: 'n2',
+    notes: [415.3, 311.13, 246.94, 369.99, 466.16, 277.18, 493.88, 329.63, 220.0, 392.0],
+    textureHz: 1150,
+    textureMix: 0.22,
+    tremoloHz: 7.7,
+  },
+  {
+    name: 'n3',
+    notes: [
+      220.0, 246.94, 277.18, 293.66, 329.63, 369.99, 415.3, 440.0, 466.16, 493.88, 523.25, 587.33,
+    ],
+    textureHz: 1640,
+    textureMix: 0.44,
+    tremoloHz: 2.6,
+  },
+  {
+    name: 'n4',
+    notes: [523.25, 440.0, 349.23, 261.63, 329.63, 392.0],
+    textureHz: 2210,
+    textureMix: 0.12,
+    tremoloHz: 8.3,
+  },
+  {
+    name: 'n5',
+    notes: [369.99, 493.88, 277.18, 415.3, 220.0, 311.13, 466.16, 349.23],
+    textureHz: 640,
+    textureMix: 0.37,
+    tremoloHz: 4.2,
+  },
+  {
+    name: 'n6',
+    notes: [246.94, 293.66, 392.0, 466.16, 523.25, 311.13, 277.18, 440.0, 329.63, 369.99],
+    textureHz: 2950,
+    textureMix: 0.27,
+    tremoloHz: 6.1,
+  },
+  {
+    name: 'n7',
+    notes: [
+      440.0, 392.0, 349.23, 329.63, 293.66, 277.18, 246.94, 220.0, 493.88, 523.25, 466.16, 415.3,
+    ],
+    textureHz: 310,
+    textureMix: 0.49,
+    tremoloHz: 3.8,
+  },
+  {
+    name: 'n8',
+    notes: [311.13, 466.16, 220.0, 523.25, 369.99, 261.63],
+    textureHz: 1880,
+    textureMix: 0.15,
+    tremoloHz: 8.9,
+  },
+  {
+    name: 'n9',
+    notes: [493.88, 261.63, 415.3, 293.66, 466.16, 349.23, 220.0, 392.0],
+    textureHz: 990,
+    textureMix: 0.4,
+    tremoloHz: 5.0,
+  },
 ];
 
 /** The reference recording the positive variants are all derived from. */
@@ -671,14 +828,20 @@ const CORPUS_REFERENCE: CorpusPiece = {
 async function renderCorpusPiece(piece: CorpusPiece, tmpDir: string): Promise<string> {
   const noteDuration = CORPUS_DURATION_SEC / piece.notes.length;
   const inputs = piece.notes.flatMap((frequency) => [
-    '-f', 'lavfi',
-    '-t', noteDuration.toFixed(6),
-    '-i', `sine=frequency=${frequency}:sample_rate=44100`,
+    '-f',
+    'lavfi',
+    '-t',
+    noteDuration.toFixed(6),
+    '-i',
+    `sine=frequency=${frequency}:sample_rate=44100`,
   ]);
   inputs.push(
-    '-f', 'lavfi',
-    '-t', String(CORPUS_DURATION_SEC),
-    '-i', 'anoisesrc=c=pink:a=0.4:r=44100:seed=1',
+    '-f',
+    'lavfi',
+    '-t',
+    String(CORPUS_DURATION_SEC),
+    '-i',
+    'anoisesrc=c=pink:a=0.4:r=44100:seed=1',
   );
 
   const melodyInputs = piece.notes.map((_, index) => `[${index}]`).join('');
@@ -690,11 +853,20 @@ async function renderCorpusPiece(piece: CorpusPiece, tmpDir: string): Promise<st
 
   const out = path.join(tmpDir, `corpus-${piece.name}.wav`);
   await execFile('ffmpeg', [
-    '-nostdin', '-loglevel', 'error',
+    '-nostdin',
+    '-loglevel',
+    'error',
     ...inputs,
-    '-filter_complex', filter,
-    '-map', '[o]', '-ac', '1', '-ar', '44100',
-    out, '-y',
+    '-filter_complex',
+    filter,
+    '-map',
+    '[o]',
+    '-ac',
+    '1',
+    '-ar',
+    '44100',
+    out,
+    '-y',
   ]);
   return out;
 }
@@ -707,12 +879,19 @@ async function renderCorpusPiece(piece: CorpusPiece, tmpDir: string): Promise<st
 async function chromaprintOf(wavPath: string, tmpDir: string, name: string): Promise<number[]> {
   const out = path.join(tmpDir, `${name}.fp`);
   await execFile('ffmpeg', [
-    '-nostdin', '-loglevel', 'error',
-    '-i', wavPath,
-    '-f', 'chromaprint',
-    '-algorithm', '1',
-    '-fp_format', 'raw',
-    out, '-y',
+    '-nostdin',
+    '-loglevel',
+    'error',
+    '-i',
+    wavPath,
+    '-f',
+    'chromaprint',
+    '-algorithm',
+    '1',
+    '-fp_format',
+    'raw',
+    out,
+    '-y',
   ]);
   const raw = fs.readFileSync(out);
   const values: number[] = [];
@@ -723,7 +902,12 @@ async function chromaprintOf(wavPath: string, tmpDir: string, name: string): Pro
 }
 
 /** Bit error rate over the best alignment — the same computation under test. */
-function corpusBitErrorRate(a: number[], b: number[], maxOffset: number, minOverlap: number): number {
+function corpusBitErrorRate(
+  a: number[],
+  b: number[],
+  maxOffset: number,
+  minOverlap: number,
+): number {
   let best = 1;
   for (let offset = -maxOffset; offset <= maxOffset; offset += 1) {
     const aStart = offset >= 0 ? offset : 0;
@@ -760,10 +944,18 @@ async function writeFingerprintCorpus(tmpDir: string): Promise<void> {
       key: 'pinkNoiseMixed',
       extension: 'wav',
       args: [
-        '-f', 'lavfi', '-t', String(CORPUS_DURATION_SEC),
-        '-i', 'anoisesrc=c=pink:a=0.05:r=44100:seed=2',
-        '-filter_complex', '[0][1]amix=inputs=2:weights=1 0.25[o]',
-        '-map', '[o]', '-ac', '1',
+        '-f',
+        'lavfi',
+        '-t',
+        String(CORPUS_DURATION_SEC),
+        '-i',
+        'anoisesrc=c=pink:a=0.05:r=44100:seed=2',
+        '-filter_complex',
+        '[0][1]amix=inputs=2:weights=1 0.25[o]',
+        '-map',
+        '[o]',
+        '-ac',
+        '1',
       ],
     },
   ];
@@ -775,10 +967,14 @@ async function writeFingerprintCorpus(tmpDir: string): Promise<void> {
   for (const variant of variants) {
     const rendered = path.join(tmpDir, `variant-${variant.key}.${variant.extension}`);
     await execFile('ffmpeg', [
-      '-nostdin', '-loglevel', 'error',
-      '-i', referenceWav,
+      '-nostdin',
+      '-loglevel',
+      'error',
+      '-i',
+      referenceWav,
       ...variant.args,
-      rendered, '-y',
+      rendered,
+      '-y',
     ]);
     fingerprints[variant.key] = await chromaprintOf(rendered, tmpDir, variant.key);
   }
@@ -816,9 +1012,7 @@ async function writeFingerprintCorpus(tmpDir: string): Promise<void> {
   // pair where the two agree most closely: the false match the minimum-overlap
   // guard exists to refuse.
   const shortWindow = SHORT_WINDOW_ITEMS;
-  let worst:
-    | { a: string; b: string; rate: number; startA: number; startB: number }
-    | undefined;
+  let worst: { a: string; b: string; rate: number; startA: number; startB: number } | undefined;
   for (let i = 0; i < negatives.length; i += 1) {
     for (let j = i + 1; j < negatives.length; j += 1) {
       const a = negatives[i].values;
@@ -913,7 +1107,9 @@ async function writeFingerprintCorpus(tmpDir: string): Promise<void> {
       }
     }
     const seconds = (window / 8.08).toFixed(1);
-    process.stdout.write(`    ${String(window).padStart(3)} items (~${seconds}s): ${floor.toFixed(4)}\n`);
+    process.stdout.write(
+      `    ${String(window).padStart(3)} items (~${seconds}s): ${floor.toFixed(4)}\n`,
+    );
   }
 }
 
@@ -937,6 +1133,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err: unknown) => {
-  process.stderr.write(`${err instanceof Error ? err.stack ?? err.message : String(err)}\n`);
+  process.stderr.write(`${err instanceof Error ? (err.stack ?? err.message) : String(err)}\n`);
   process.exitCode = 1;
 });

@@ -23,10 +23,7 @@ import { Readable } from 'stream';
  * (e.g. a Mongoose document projection) that carries these fields without
  * matching the full `Track` shape.
  */
-export type TrackAudioRef = Pick<
-  Track,
-  'id' | 'artistId' | 'albumId' | 'title' | 'audioSource'
->;
+export type TrackAudioRef = Pick<Track, 'id' | 'artistId' | 'albumId' | 'title' | 'audioSource'>;
 
 /**
  * Get S3 key for a track
@@ -36,12 +33,7 @@ export function getTrackS3Key(track: TrackAudioRef): string {
     throw new Error(`Track ${track.id} has no audio source`);
   }
   const format = track.audioSource.format || 'mp3';
-  return getS3AudioKey(
-    track.id,
-    track.artistId,
-    track.albumId,
-    format
-  );
+  return getS3AudioKey(track.id, track.artistId, track.albumId, format);
 }
 
 /**
@@ -49,7 +41,7 @@ export function getTrackS3Key(track: TrackAudioRef): string {
  */
 export async function uploadTrackAudio(
   track: TrackAudioRef,
-  audioFile: Buffer | Readable | string
+  audioFile: Buffer | Readable | string,
 ): Promise<string> {
   if (!track.audioSource) {
     throw new Error(`Track ${track.id} has no audio source`);
@@ -80,7 +72,7 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 export async function getTrackStreamUrl(track: TrackAudioRef): Promise<string> {
   const key = getTrackS3Key(track);
-  
+
   // Check cache
   const cached = presignedUrlCache.get(key);
   if (cached && cached.expiresAt > Date.now()) {
@@ -89,7 +81,7 @@ export async function getTrackStreamUrl(track: TrackAudioRef): Promise<string> {
 
   // Generate new pre-signed URL (1 hour expiration)
   const url = await getPresignedUrl(key, 3600);
-  
+
   // Cache it
   presignedUrlCache.set(key, {
     url,
@@ -104,7 +96,7 @@ export async function getTrackStreamUrl(track: TrackAudioRef): Promise<string> {
  */
 export async function streamTrackAudio(
   track: Track,
-  options: S3StreamOptions = {}
+  options: S3StreamOptions = {},
 ): Promise<{
   stream: Readable;
   contentLength: number;
@@ -146,9 +138,3 @@ export async function deleteTrackAudio(track: Track): Promise<void> {
 export function clearPresignedUrlCache(): void {
   presignedUrlCache.clear();
 }
-
-
-
-
-
-

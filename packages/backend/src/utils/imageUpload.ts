@@ -20,11 +20,15 @@ export const imageUpload = multer({
       'image/svg+xml',
       'image/bmp',
     ];
-    
+
     if (allowedMimes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid file type. Only image files (jpeg, png, gif, webp, svg, bmp) are allowed.'));
+      cb(
+        new Error(
+          'Invalid file type. Only image files (jpeg, png, gif, webp, svg, bmp) are allowed.',
+        ),
+      );
     }
   },
 });
@@ -40,8 +44,3 @@ export const singleImageUpload = imageUpload.single('image');
  * Use this when expecting a single image file with field name 'coverArt'
  */
 export const singleCoverArtUpload = imageUpload.single('coverArt');
-
-
-
-
-

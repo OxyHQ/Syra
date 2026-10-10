@@ -1,5 +1,8 @@
 import { Router, Response } from 'express';
-import { requireOxyAuth as requireAuth, type OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
+import {
+  requireOxyAuth as requireAuth,
+  type OxyAuthRequest as AuthRequest,
+} from '@oxy.so/core/server';
 import { logger } from '../utils/logger';
 import { describeErrorSafely } from '../utils/error';
 import { sendErrorResponse, sendSuccessResponse } from '../utils/apiHelpers';
@@ -45,7 +48,12 @@ router.get('/preferences/me', async (req: AuthRequest, res: Response) => {
     return sendSuccessResponse(res, 200, preferences);
   } catch (err) {
     logger.error('[MusicPreferences] Error fetching preferences:', describeErrorSafely(err));
-    return sendErrorResponse(res, 500, 'Internal Server Error', 'Failed to fetch music preferences');
+    return sendErrorResponse(
+      res,
+      500,
+      'Internal Server Error',
+      'Failed to fetch music preferences',
+    );
   }
 });
 
@@ -58,12 +66,17 @@ router.put('/preferences', async (req: AuthRequest, res: Response) => {
     const oxyUserId = getAuthenticatedUserId(req);
     const updatedPreferences = await updateMusicPreferences(
       oxyUserId,
-      coerceMusicPreferencesPatch(req.body)
+      coerceMusicPreferencesPatch(req.body),
     );
     return sendSuccessResponse(res, 200, updatedPreferences);
   } catch (err) {
     logger.error('[MusicPreferences] Error updating preferences:', describeErrorSafely(err));
-    return sendErrorResponse(res, 500, 'Internal Server Error', 'Failed to update music preferences');
+    return sendErrorResponse(
+      res,
+      500,
+      'Internal Server Error',
+      'Failed to update music preferences',
+    );
   }
 });
 

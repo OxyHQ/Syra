@@ -102,7 +102,9 @@ describe('normalizeNameKey', () => {
     // every test above.
     expect(normalizeNameKey('The Beatles')).not.toBe(normalizeNameKey('The Beach Boys'));
     expect(normalizeNameKey('Bon Iver')).not.toBe(normalizeNameKey('Bon Jovi'));
-    expect(new Set(['Radiohead', 'Portishead', 'Massive Attack'].map(normalizeNameKey)).size).toBe(3);
+    expect(new Set(['Radiohead', 'Portishead', 'Massive Attack'].map(normalizeNameKey)).size).toBe(
+      3,
+    );
   });
 });
 
@@ -133,7 +135,12 @@ describe('isDenylistedArtistName', () => {
   });
 
   it('accepts real artists', () => {
-    for (const name of ['Radiohead', 'Unknown Mortal Orchestra', 'The Unknown', 'Various Production']) {
+    for (const name of [
+      'Radiohead',
+      'Unknown Mortal Orchestra',
+      'The Unknown',
+      'Various Production',
+    ]) {
       expect(isDenylistedArtistName(name)).toBe(false);
     }
   });
@@ -169,16 +176,34 @@ describe('buildAlbumKey', () => {
   it('groups across the tagging inconsistencies that split an album', () => {
     const canonical = buildAlbumKey({ albumArtistName: 'Sigur Rós', albumName: '( )', year: 2002 });
 
-    expect(buildAlbumKey({ albumArtistName: 'Sigur Ros', albumName: '( )', year: 2002 })).toBe(canonical);
-    expect(buildAlbumKey({ albumArtistName: 'SIGUR RÓS', albumName: '()', year: 2002 })).toBe(canonical);
-    expect(buildAlbumKey({ albumArtistName: ' Sigur  Rós ', albumName: '(  )', year: 2002 })).toBe(canonical);
+    expect(buildAlbumKey({ albumArtistName: 'Sigur Ros', albumName: '( )', year: 2002 })).toBe(
+      canonical,
+    );
+    expect(buildAlbumKey({ albumArtistName: 'SIGUR RÓS', albumName: '()', year: 2002 })).toBe(
+      canonical,
+    );
+    expect(buildAlbumKey({ albumArtistName: ' Sigur  Rós ', albumName: '(  )', year: 2002 })).toBe(
+      canonical,
+    );
   });
 
   it('separates releases that genuinely differ', () => {
-    const original = buildAlbumKey({ albumArtistName: 'Portishead', albumName: 'Dummy', year: 1994 });
-    const reissue = buildAlbumKey({ albumArtistName: 'Portishead', albumName: 'Dummy', year: 2014 });
+    const original = buildAlbumKey({
+      albumArtistName: 'Portishead',
+      albumName: 'Dummy',
+      year: 1994,
+    });
+    const reissue = buildAlbumKey({
+      albumArtistName: 'Portishead',
+      albumName: 'Dummy',
+      year: 2014,
+    });
     const other = buildAlbumKey({ albumArtistName: 'Portishead', albumName: 'Third', year: 2008 });
-    const different = buildAlbumKey({ albumArtistName: 'Massive Attack', albumName: 'Dummy', year: 1994 });
+    const different = buildAlbumKey({
+      albumArtistName: 'Massive Attack',
+      albumName: 'Dummy',
+      year: 1994,
+    });
 
     // A reissue IS a different release; an absent year is its own bucket rather
     // than a wildcard, or an untagged file would join a dated release by guess.

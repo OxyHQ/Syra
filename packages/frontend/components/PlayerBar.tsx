@@ -22,9 +22,7 @@ interface WebNativePressEvent {
   clientX?: number;
 }
 
-const clamp = (value: number, min: number, max: number) => (
-  Math.min(max, Math.max(min, value))
-);
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 const getProgressPercent = (currentTime: number, duration: number) => {
   if (!Number.isFinite(currentTime) || !Number.isFinite(duration) || duration <= 0) {
@@ -41,33 +39,33 @@ const getProgressPercent = (currentTime: number, duration: number) => {
 export const PlayerBar: React.FC = () => {
   const { t } = useTranslation();
   const theme = useTheme();
-  const toggleNowPlaying = useUIStore(s => s.toggleNowPlaying);
+  const toggleNowPlaying = useUIStore((s) => s.toggleNowPlaying);
   const [isDevicePickerVisible, setIsDevicePickerVisible] = useState(false);
   const [progressBarWidth, setProgressBarWidth] = useState(0);
 
-  const currentTrack = usePlayerStore(s => s.currentTrack);
-  const isPlaying = usePlayerStore(s => s.isPlaying);
-  const isLoading = usePlayerStore(s => s.isLoading);
-  const currentTime = usePlayerStore(s => s.currentTime);
-  const duration = usePlayerStore(s => s.duration);
-  const volume = usePlayerStore(s => s.volume);
-  const pause = usePlayerStore(s => s.pause);
-  const resume = usePlayerStore(s => s.resume);
-  const seek = usePlayerStore(s => s.seek);
-  const setVolume = usePlayerStore(s => s.setVolume);
-  const playNext = usePlayerStore(s => s.playNext);
-  const playPrevious = usePlayerStore(s => s.playPrevious);
+  const currentTrack = usePlayerStore((s) => s.currentTrack);
+  const isPlaying = usePlayerStore((s) => s.isPlaying);
+  const isLoading = usePlayerStore((s) => s.isLoading);
+  const currentTime = usePlayerStore((s) => s.currentTime);
+  const duration = usePlayerStore((s) => s.duration);
+  const volume = usePlayerStore((s) => s.volume);
+  const pause = usePlayerStore((s) => s.pause);
+  const resume = usePlayerStore((s) => s.resume);
+  const seek = usePlayerStore((s) => s.seek);
+  const setVolume = usePlayerStore((s) => s.setVolume);
+  const playNext = usePlayerStore((s) => s.playNext);
+  const playPrevious = usePlayerStore((s) => s.playPrevious);
 
   // Unified now-playing view (track or podcast episode).
   const media = useNowPlayingMedia();
   const hasMedia = media !== null;
   const isEpisode = media?.kind === 'episode';
 
-  const queue = useQueueStore(s => s.queue);
-  const shuffle = useQueueStore(s => s.shuffle);
-  const repeat = useQueueStore(s => s.repeat);
-  const toggleShuffle = useQueueStore(s => s.toggleShuffle);
-  const cycleRepeat = useQueueStore(s => s.cycleRepeat);
+  const queue = useQueueStore((s) => s.queue);
+  const shuffle = useQueueStore((s) => s.shuffle);
+  const repeat = useQueueStore((s) => s.repeat);
+  const toggleShuffle = useQueueStore((s) => s.toggleShuffle);
+  const cycleRepeat = useQueueStore((s) => s.cycleRepeat);
 
   const { isTrackLiked } = useLibrary();
   const toggleLike = useToggleLikeTrack();
@@ -127,7 +125,8 @@ export const PlayerBar: React.FC = () => {
     <View className="bg-background" style={containerStyle}>
       {/* Progress Bar */}
       <Pressable
-        className="bg-border" style={styles.progressBarContainer}
+        className="bg-border"
+        style={styles.progressBarContainer}
         onLayout={(event) => setProgressBarWidth(event.nativeEvent.layout.width)}
         onPress={(e) => {
           if (Platform.OS === 'web') {
@@ -135,14 +134,16 @@ export const PlayerBar: React.FC = () => {
           }
         }}
       >
-        <View
-          className="bg-primary"
-          style={[styles.progressBar, { width: progressFillWidth }]}
-        />
+        <View className="bg-primary" style={[styles.progressBar, { width: progressFillWidth }]} />
       </Pressable>
 
       {/* Main Player Content */}
-      <View style={[styles.content, { paddingHorizontal: SPACING, paddingVertical: SPACING, gap: SPACING }]}>
+      <View
+        style={[
+          styles.content,
+          { paddingHorizontal: SPACING, paddingVertical: SPACING, gap: SPACING },
+        ]}
+      >
         {/* Left: Track Info */}
         <View style={[styles.trackInfo, { gap: SPACING }]}>
           <Pressable
@@ -154,35 +155,29 @@ export const PlayerBar: React.FC = () => {
             style={styles.albumArtPressable}
           >
             {media?.imageUri ? (
-              <Image
-                source={{ uri: media.imageUri }}
-                style={styles.albumArt}
-                contentFit="cover"
-              />
+              <Image source={{ uri: media.imageUri }} style={styles.albumArt} contentFit="cover" />
             ) : (
               <View className="bg-surface" style={styles.albumArtPlaceholder}>
-                <MaterialCommunityIcons name={isEpisode ? 'microphone' : 'music'} size={24} color={theme.colors.textSecondary} />
+                <MaterialCommunityIcons
+                  name={isEpisode ? 'microphone' : 'music'}
+                  size={24}
+                  color={theme.colors.textSecondary}
+                />
               </View>
             )}
           </Pressable>
           <View style={styles.trackDetails}>
-            <Text
-              className="text-foreground" style={styles.trackTitle}
-              numberOfLines={1}
-            >
-              {media
-                ? media.title
-                : (isLoading ? 'Loading...' : 'No track selected')}
+            <Text className="text-foreground" style={styles.trackTitle} numberOfLines={1}>
+              {media ? media.title : isLoading ? 'Loading...' : 'No track selected'}
             </Text>
-            <Text
-              className="text-muted-foreground" style={styles.trackArtist}
-              numberOfLines={1}
-            >
+            <Text className="text-muted-foreground" style={styles.trackArtist} numberOfLines={1}>
               {media
-                // A locker file with no resolved artist ships an empty name by
-                // design; it is an unknown artist, not a missing one.
-                ? media.subtitle || t('uploads.unknownArtist')
-                : (isLoading ? '' : 'Choose a track to play')}
+                ? // A locker file with no resolved artist ships an empty name by
+                  // design; it is an unknown artist, not a missing one.
+                  media.subtitle || t('uploads.unknownArtist')
+                : isLoading
+                  ? ''
+                  : 'Choose a track to play'}
             </Text>
           </View>
           {/* Like is CATALOG-track-only: episodes use the show subscribe action,
@@ -244,13 +239,17 @@ export const PlayerBar: React.FC = () => {
               {
                 backgroundColor: hasMedia ? theme.colors.primary : theme.colors.backgroundSecondary,
                 opacity: hasMedia ? 1 : 0.5,
-              }
+              },
             ]}
             onPress={handlePlayPause}
             disabled={isLoading || !hasMedia}
           >
             {isLoading ? (
-              <MaterialCommunityIcons name="timer-sand" size={24} color={theme.colors.primaryForeground} />
+              <MaterialCommunityIcons
+                name="timer-sand"
+                size={24}
+                color={theme.colors.primaryForeground}
+              />
             ) : (
               <MaterialCommunityIcons
                 name={isPlaying ? 'pause' : 'play'}
@@ -273,7 +272,12 @@ export const PlayerBar: React.FC = () => {
             />
           </Pressable>
           {isEpisode ? (
-            <SkipButton direction="forward" seconds={30} size={22} tint={theme.colors.textSecondary} />
+            <SkipButton
+              direction="forward"
+              seconds={30}
+              size={22}
+              tint={theme.colors.textSecondary}
+            />
           ) : (
             <Pressable
               style={styles.controlButton}
@@ -300,7 +304,11 @@ export const PlayerBar: React.FC = () => {
             accessibilityRole="button"
             accessibilityLabel={t('player.showQueue')}
           >
-            <MaterialCommunityIcons name="playlist-music" size={20} color={theme.colors.textSecondary} />
+            <MaterialCommunityIcons
+              name="playlist-music"
+              size={20}
+              color={theme.colors.textSecondary}
+            />
           </Pressable>
           <Pressable
             style={styles.controlButton}
@@ -330,7 +338,11 @@ export const PlayerBar: React.FC = () => {
             </View>
           </View>
           <Pressable style={styles.controlButton}>
-            <MaterialCommunityIcons name="fullscreen" size={20} color={theme.colors.textSecondary} />
+            <MaterialCommunityIcons
+              name="fullscreen"
+              size={20}
+              color={theme.colors.textSecondary}
+            />
           </Pressable>
         </View>
       </View>

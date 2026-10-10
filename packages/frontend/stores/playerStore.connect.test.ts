@@ -224,7 +224,12 @@ describe('playerStore — applyRemotePlaybackState (Syra Connect)', () => {
     });
 
     await usePlayerStore.getState().applyRemotePlaybackState(
-      makeState({ activeDeviceId: THIS_DEVICE, trackId: 'track-new', positionMs: 30000, isPlaying: true }),
+      makeState({
+        activeDeviceId: THIS_DEVICE,
+        trackId: 'track-new',
+        positionMs: 30000,
+        isPlaying: true,
+      }),
       THIS_DEVICE,
     );
 
@@ -245,7 +250,12 @@ describe('playerStore — applyRemotePlaybackState (Syra Connect)', () => {
     });
 
     await usePlayerStore.getState().applyRemotePlaybackState(
-      makeState({ activeDeviceId: THIS_DEVICE, trackId: 'track-same', positionMs: 60000, isPlaying: false }),
+      makeState({
+        activeDeviceId: THIS_DEVICE,
+        trackId: 'track-same',
+        positionMs: 60000,
+        isPlaying: false,
+      }),
       THIS_DEVICE,
     );
 
@@ -264,7 +274,12 @@ describe('playerStore — applyRemotePlaybackState (Syra Connect)', () => {
     });
 
     await usePlayerStore.getState().applyRemotePlaybackState(
-      makeState({ activeDeviceId: OTHER_DEVICE, trackId: 'track-x', positionMs: 1000, isPlaying: true }),
+      makeState({
+        activeDeviceId: OTHER_DEVICE,
+        trackId: 'track-x',
+        positionMs: 1000,
+        isPlaying: true,
+      }),
       THIS_DEVICE,
     );
 
@@ -282,7 +297,12 @@ describe('playerStore — applyRemotePlaybackState (Syra Connect)', () => {
     });
 
     await usePlayerStore.getState().applyRemotePlaybackState(
-      makeState({ activeDeviceId: OTHER_DEVICE, trackId: 'track-x', positionMs: 1000, isPlaying: true }),
+      makeState({
+        activeDeviceId: OTHER_DEVICE,
+        trackId: 'track-x',
+        positionMs: 1000,
+        isPlaying: true,
+      }),
       THIS_DEVICE,
     );
 
@@ -300,10 +320,12 @@ describe('playerStore — applyRemotePlaybackState (Syra Connect)', () => {
       player: fakeEngine(),
     });
 
-    await usePlayerStore.getState().applyRemotePlaybackState(
-      makeState({ activeDeviceId: THIS_DEVICE, trackId: undefined, isPlaying: false }),
-      THIS_DEVICE,
-    );
+    await usePlayerStore
+      .getState()
+      .applyRemotePlaybackState(
+        makeState({ activeDeviceId: THIS_DEVICE, trackId: undefined, isPlaying: false }),
+        THIS_DEVICE,
+      );
 
     expect(stop).toHaveBeenCalled();
     expect(playTrack).not.toHaveBeenCalled();

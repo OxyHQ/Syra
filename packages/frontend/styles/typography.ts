@@ -82,5 +82,5 @@ export const LETTER_SPACING = {
   wider: 0.5,
 } as const;
 
-export type FontSize = typeof FONT_SIZES[keyof typeof FONT_SIZES];
-export type FontWeight = typeof FONT_WEIGHTS[keyof typeof FONT_WEIGHTS];
+export type FontSize = (typeof FONT_SIZES)[keyof typeof FONT_SIZES];
+export type FontWeight = (typeof FONT_WEIGHTS)[keyof typeof FONT_WEIGHTS];

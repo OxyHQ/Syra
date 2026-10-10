@@ -24,8 +24,3 @@ router.delete('/clear', clearQueueHandler);
 router.put('/current', setCurrentTrack);
 
 export default router;
-
-
-
-
-

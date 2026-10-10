@@ -37,7 +37,9 @@ function RoleButton({
       )}
     >
       {active ? <MaterialCommunityIcons name="check" size={13} color="#fff" /> : null}
-      <Text className={cn('text-xs font-semibold', active ? 'text-white' : 'text-primary')}>{label}</Text>
+      <Text className={cn('text-xs font-semibold', active ? 'text-white' : 'text-primary')}>
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -46,18 +48,35 @@ function PersonChip({ user, onRemove }: { user: User; onRemove: () => void }) {
   const theme = useTheme();
   return (
     <View className="flex-row items-center gap-2 rounded-full border border-border bg-surface pl-1 pr-2 py-1">
-      <Avatar source={user.avatar ?? undefined} variant="thumb" name={user.name.displayName} size={24} />
+      <Avatar
+        source={user.avatar ?? undefined}
+        variant="thumb"
+        name={user.name.displayName}
+        size={24}
+      />
       <Text numberOfLines={1} className="text-xs text-foreground max-w-[140px]">
         {user.name.displayName}
       </Text>
-      <Pressable onPress={onRemove} accessibilityRole="button" accessibilityLabel={`Remove ${user.name.displayName}`}>
+      <Pressable
+        onPress={onRemove}
+        accessibilityRole="button"
+        accessibilityLabel={`Remove ${user.name.displayName}`}
+      >
         <MaterialCommunityIcons name="close-circle" size={16} color={theme.colors.textSecondary} />
       </Pressable>
     </View>
   );
 }
 
-function ChipSection({ title, people, onRemove }: { title: string; people: User[]; onRemove: (id: string) => void }) {
+function ChipSection({
+  title,
+  people,
+  onRemove,
+}: {
+  title: string;
+  people: User[];
+  onRemove: (id: string) => void;
+}) {
   if (people.length === 0) return null;
   return (
     <View className="mt-3">
@@ -77,7 +96,13 @@ function ChipSection({ title, people, onRemove }: { title: string; people: User[
  * users can be added — there is no free-text entry — so the ids submitted always
  * pass the backend's Oxy validation.
  */
-export function HostsGuestsPicker({ value, onChange }: { value: HostsGuests; onChange: (next: HostsGuests) => void }) {
+export function HostsGuestsPicker({
+  value,
+  onChange,
+}: {
+  value: HostsGuests;
+  onChange: (next: HostsGuests) => void;
+}) {
   const theme = useTheme();
   const [query, setQuery] = useState('');
   const debounced = useDebouncedValue(query, 300);
@@ -123,7 +148,11 @@ export function HostsGuestsPicker({ value, onChange }: { value: HostsGuests; onC
       </Text>
 
       <View className="flex-row items-center gap-2 rounded-xl border border-border bg-surface px-3 h-11">
-        <MaterialCommunityIcons name="account-search-outline" size={18} color={theme.colors.textSecondary} />
+        <MaterialCommunityIcons
+          name="account-search-outline"
+          size={18}
+          color={theme.colors.textSecondary}
+        />
         <TextInput
           className="flex-1 text-foreground"
           placeholder="Search by name or @username"
@@ -135,7 +164,11 @@ export function HostsGuestsPicker({ value, onChange }: { value: HostsGuests; onC
         />
         {isFetching ? <ActivityIndicator size="small" color={theme.colors.primary} /> : null}
         {query.length > 0 ? (
-          <Pressable onPress={() => setQuery('')} accessibilityRole="button" accessibilityLabel="Clear search">
+          <Pressable
+            onPress={() => setQuery('')}
+            accessibilityRole="button"
+            accessibilityLabel="Clear search"
+          >
             <MaterialCommunityIcons name="close" size={18} color={theme.colors.textSecondary} />
           </Pressable>
         ) : null}
@@ -150,8 +183,16 @@ export function HostsGuestsPicker({ value, onChange }: { value: HostsGuests; onC
               const isHost = byId(hosts, user.id);
               const isGuest = byId(guests, user.id);
               return (
-                <View key={user.id} className="flex-row items-center gap-3 px-3 py-2.5 border-b border-border">
-                  <Avatar source={user.avatar ?? undefined} variant="thumb" name={user.name.displayName} size={36} />
+                <View
+                  key={user.id}
+                  className="flex-row items-center gap-3 px-3 py-2.5 border-b border-border"
+                >
+                  <Avatar
+                    source={user.avatar ?? undefined}
+                    variant="thumb"
+                    name={user.name.displayName}
+                    size={36}
+                  />
                   <View className="flex-1">
                     <Text numberOfLines={1} className="text-sm font-medium text-foreground">
                       {user.name.displayName}
@@ -162,7 +203,11 @@ export function HostsGuestsPicker({ value, onChange }: { value: HostsGuests; onC
                   </View>
                   <View className="flex-row items-center gap-1.5">
                     <RoleButton label="Host" active={isHost} onPress={() => assign(user, 'host')} />
-                    <RoleButton label="Guest" active={isGuest} onPress={() => assign(user, 'guest')} />
+                    <RoleButton
+                      label="Guest"
+                      active={isGuest}
+                      onPress={() => assign(user, 'guest')}
+                    />
                   </View>
                 </View>
               );

@@ -34,7 +34,7 @@ function isTimeTag(content: string): boolean {
 function parseFraction(frac: string | undefined): number {
   if (!frac) return 0;
   if (frac.length === 2) return parseInt(frac, 10) * 10; // centiseconds → ms
-  return parseInt(frac, 10);                              // milliseconds
+  return parseInt(frac, 10); // milliseconds
 }
 
 /**

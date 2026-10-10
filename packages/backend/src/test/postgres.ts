@@ -121,7 +121,7 @@ export function assertDisposableDatabase(url: string): void {
   if (name === undefined) {
     throw new Error(
       'The test database URL names no database, so it cannot be verified as disposable. ' +
-      'Set TEST_DATABASE_URL to a URL ending in /<database>.'
+        'Set TEST_DATABASE_URL to a URL ending in /<database>.',
     );
   }
 
@@ -129,15 +129,15 @@ export function assertDisposableDatabase(url: string): void {
 
   throw new Error(
     `Refusing to run the suite against the database "${name}": the suite writes fixtures ` +
-    'into it and `clearDb` TRUNCATEs every table, and this name does not declare itself ' +
-    'disposable, so it may be a shared database someone else is using.\n' +
-    'A disposable database names itself one in an underscore-delimited segment — ' +
-    `${[...DISPOSABLE_SEGMENTS].map((s) => `"${s}"`).join(', ')}, or "task<n>" ` +
-    '(e.g. syra_test, syra_ci, syra_task16).\n' +
-    'Create one and point the suite at it:\n' +
-    `  createdb ${name}_test  # or: psql -c 'create database ${name}_test'\n` +
-    `  TEST_DATABASE_URL=<same url, ending in /${name}_test> bun run db:migrate --phase=all --target-database=${name}_test\n` +
-    `  TEST_DATABASE_URL=<same url, ending in /${name}_test> bun test src`
+      'into it and `clearDb` TRUNCATEs every table, and this name does not declare itself ' +
+      'disposable, so it may be a shared database someone else is using.\n' +
+      'A disposable database names itself one in an underscore-delimited segment — ' +
+      `${[...DISPOSABLE_SEGMENTS].map((s) => `"${s}"`).join(', ')}, or "task<n>" ` +
+      '(e.g. syra_test, syra_ci, syra_task16).\n' +
+      'Create one and point the suite at it:\n' +
+      `  createdb ${name}_test  # or: psql -c 'create database ${name}_test'\n` +
+      `  TEST_DATABASE_URL=<same url, ending in /${name}_test> bun run db:migrate --phase=all --target-database=${name}_test\n` +
+      `  TEST_DATABASE_URL=<same url, ending in /${name}_test> bun test src`,
   );
 }
 
@@ -175,8 +175,8 @@ function quotedTableNames(): string[] {
   if (names.length < MINIMUM_TABLES) {
     throw new Error(
       `test/postgres.ts found ${names.length} tables in the schema barrel, below the ` +
-      `floor of ${MINIMUM_TABLES}. clearDb() would leave rows behind — fix the traversal ` +
-      'rather than lowering the floor.'
+        `floor of ${MINIMUM_TABLES}. clearDb() would leave rows behind — fix the traversal ` +
+        'rather than lowering the floor.',
     );
   }
 
@@ -209,13 +209,13 @@ export async function connectDb(): Promise<void> {
   const [migrated] = await getDb().execute<{ present: boolean }>(
     sql`select count(*) = ${quotedTableNames().length} as present
         from information_schema.tables
-        where table_schema = 'public'`
+        where table_schema = 'public'`,
   );
 
   if (!migrated?.present) {
     throw new Error(
       'TEST_DATABASE_URL points at a database whose table count does not match the schema. ' +
-      'Run `bun run db:migrate` against it before running the suite.'
+        'Run `bun run db:migrate` against it before running the suite.',
     );
   }
 }

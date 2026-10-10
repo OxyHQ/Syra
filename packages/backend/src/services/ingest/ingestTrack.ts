@@ -192,7 +192,10 @@ async function indexTrackFingerprint(
       });
     }
   } catch (err) {
-    logger.error('[ingest] acoustic indexing failed (non-fatal)', { trackId, err: describeErrorSafely(err) });
+    logger.error('[ingest] acoustic indexing failed (non-fatal)', {
+      trackId,
+      err: describeErrorSafely(err),
+    });
   }
 }
 
@@ -250,7 +253,10 @@ async function setStatus(trackId: string, status: 'processing' | 'failed'): Prom
  */
 async function setStatusQuietly(trackId: string, status: 'failed'): Promise<void> {
   await setStatus(trackId, status).catch((err: unknown) =>
-    logger.error('[ingest] failed to persist failed status', { trackId, err: describeErrorSafely(err) }),
+    logger.error('[ingest] failed to persist failed status', {
+      trackId,
+      err: describeErrorSafely(err),
+    }),
   );
 }
 
@@ -342,7 +348,7 @@ export async function ingestTrack(
             manifestKey: rendition.manifestKey,
             bitrateKbps: rendition.bitrateKbps,
             encrypted: rendition.encrypted,
-          }))
+          })),
         );
       }
     });
@@ -385,4 +391,3 @@ export async function ingestTrack(
     }
   }
 }
-

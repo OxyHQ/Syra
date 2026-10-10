@@ -47,4 +47,3 @@ export const useVideoMuteStore = create<VideoMuteStore>((set, get) => ({
     }
   },
 }));
-

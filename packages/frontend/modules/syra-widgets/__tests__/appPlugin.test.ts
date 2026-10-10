@@ -61,7 +61,9 @@ describe('withSyraWidgets: assertBaseUrl', () => {
       'utf8',
     );
 
-    const shipped = [...configXml.matchAll(/<string name="(syra_widget_\w+)"[^>]*>([^<]+)<\/string>/g)];
+    const shipped = [
+      ...configXml.matchAll(/<string name="(syra_widget_\w+)"[^>]*>([^<]+)<\/string>/g),
+    ];
 
     // Vacuity floor: a regex that stopped matching would otherwise pass by
     // asserting nothing at all.

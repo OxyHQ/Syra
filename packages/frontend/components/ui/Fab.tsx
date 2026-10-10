@@ -75,7 +75,7 @@ const FabComponent: React.FC<FabProps> = ({
   // Size-derived dimensions for the icon-only circular variant.
   const circleDims = useMemo<ViewStyle>(
     () => ({ width: size, height: size, borderRadius: size / 2 }),
-    [size]
+    [size],
   );
 
   // Horizontal padding revealed between the pill edge and its contents when

@@ -6,11 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useTheme } from '@oxy.so/bloom/theme';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
-import type {
-  UploadBlockedReason,
-  UploadOutcome,
-  UserUploadAsTrack,
-} from '@syra/shared-types';
+import type { UploadBlockedReason, UploadOutcome, UserUploadAsTrack } from '@syra/shared-types';
 import { musicService } from '@/services/musicService';
 import { useLibrary, useToggleLikeTrack } from '@/hooks/useLibrary';
 import { useAuthGate } from '@/hooks/useAuthGate';
@@ -154,7 +150,12 @@ const CatalogTrackPreview: React.FC<{ trackId: string; showAddToLibrary: boolean
     return addAction ? <View style={styles.matchedTrack}>{addAction}</View> : null;
   }
 
-  const artworkUrl = pickCatalogImageUrl(track.images, track.coverArt, 'thumbnail', track.coverArtSizes);
+  const artworkUrl = pickCatalogImageUrl(
+    track.images,
+    track.coverArt,
+    'thumbnail',
+    track.coverArtSizes,
+  );
 
   return (
     <View style={styles.matchedTrack}>
@@ -213,13 +214,7 @@ export const UploadOutcomeCard: React.FC<UploadOutcomeCardProps> = ({
         : theme.colors.textSecondary;
 
   return (
-    <View
-      className="bg-popover"
-      style={[
-        styles.card,
-        { borderColor: accent },
-      ]}
-    >
+    <View className="bg-popover" style={[styles.card, { borderColor: accent }]}>
       <Text className="text-muted-foreground" style={styles.fileName} numberOfLines={1}>
         {fileName}
       </Text>
@@ -246,7 +241,8 @@ export const UploadOutcomeCard: React.FC<UploadOutcomeCardProps> = ({
           </Text>
           <Pressable
             onPress={() => router.push('/library/uploads')}
-            className="bg-surface" style={styles.inlineAction}
+            className="bg-surface"
+            style={styles.inlineAction}
             accessibilityRole="button"
           >
             <Ionicons name="folder-open-outline" size={16} color={theme.colors.text} />
@@ -257,9 +253,7 @@ export const UploadOutcomeCard: React.FC<UploadOutcomeCardProps> = ({
         </>
       )}
 
-      {outcome.outcome === 'stored' && (
-        <StoredOutcome upload={liveUpload ?? outcome.upload} />
-      )}
+      {outcome.outcome === 'stored' && <StoredOutcome upload={liveUpload ?? outcome.upload} />}
 
       {outcome.outcome === 'published' && (
         <>
@@ -295,7 +289,8 @@ export const UploadOutcomeCard: React.FC<UploadOutcomeCardProps> = ({
               {outcome.markers.map((marker) => (
                 <Text
                   key={`${marker.code}-${marker.detail ?? ''}`}
-                  className="text-muted-foreground" style={styles.markerRow}
+                  className="text-muted-foreground"
+                  style={styles.markerRow}
                 >
                   {marker.detail ? `${marker.code} — ${marker.detail}` : marker.code}
                 </Text>
@@ -307,7 +302,8 @@ export const UploadOutcomeCard: React.FC<UploadOutcomeCardProps> = ({
             <Pressable
               onPress={onKeepPrivate}
               disabled={isKeepingPrivate}
-              className="bg-surface" style={styles.inlineAction}
+              className="bg-surface"
+              style={styles.inlineAction}
               accessibilityRole="button"
             >
               {isKeepingPrivate ? (
@@ -366,7 +362,8 @@ const StoredOutcome: React.FC<{ upload: UserUploadAsTrack }> = ({ upload }) => {
       </View>
       <Pressable
         onPress={() => router.push('/library/uploads')}
-        className="bg-surface" style={styles.inlineAction}
+        className="bg-surface"
+        style={styles.inlineAction}
         accessibilityRole="button"
       >
         <Ionicons name="folder-open-outline" size={16} color={theme.colors.text} />

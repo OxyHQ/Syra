@@ -61,13 +61,19 @@ function makeRes(): CapturedRes {
   return {
     _status: 200,
     _body: undefined,
-    status(code) { this._status = code; return this; },
-    json(body) { this._body = body; return this; },
+    status(code) {
+      this._status = code;
+      return this;
+    },
+    json(body) {
+      this._body = body;
+      return this;
+    },
   };
 }
 
 function makeReq(
-  over: { params?: Record<string, string>; body?: unknown; userId?: string } = {}
+  over: { params?: Record<string, string>; body?: unknown; userId?: string } = {},
 ): AuthRequest {
   return {
     params: over.params ?? {},
@@ -91,38 +97,44 @@ async function makeArtist(): Promise<string> {
 
 async function makeTrack(over: Partial<typeof tracks.$inferInsert> = {}): Promise<string> {
   const id = uuidv7();
-  await getDb().insert(tracks).values({
-    id,
-    title: 'Track',
-    artistId: await makeArtist(),
-    artistName: 'Artist',
-    duration: 200,
-    source: 'upload',
-    ...over,
-  });
+  await getDb()
+    .insert(tracks)
+    .values({
+      id,
+      title: 'Track',
+      artistId: await makeArtist(),
+      artistName: 'Artist',
+      duration: 200,
+      source: 'upload',
+      ...over,
+    });
   return id;
 }
 
 async function makeAlbum(): Promise<string> {
   const coverArtId = uuidv7();
-  await getDb().insert(imageAssets).values({
-    id: coverArtId,
-    s3Key: `k/${coverArtId}`,
-    filename: 'c.jpg',
-    contentType: 'image/jpeg',
-    byteSize: 1,
-    ownerType: 'album',
-  });
+  await getDb()
+    .insert(imageAssets)
+    .values({
+      id: coverArtId,
+      s3Key: `k/${coverArtId}`,
+      filename: 'c.jpg',
+      contentType: 'image/jpeg',
+      byteSize: 1,
+      ownerType: 'album',
+    });
 
   const id = uuidv7();
-  await getDb().insert(albums).values({
-    id,
-    title: 'Album',
-    artistId: await makeArtist(),
-    artistName: 'Artist',
-    releaseDate: '2020-01-01',
-    coverArtId,
-  });
+  await getDb()
+    .insert(albums)
+    .values({
+      id,
+      title: 'Album',
+      artistId: await makeArtist(),
+      artistName: 'Artist',
+      releaseDate: '2020-01-01',
+      coverArtId,
+    });
   return id;
 }
 
@@ -136,7 +148,9 @@ async function makeAlbum(): Promise<string> {
  */
 async function makeShow(over: Partial<typeof podcasts.$inferInsert> = {}): Promise<string> {
   const id = uuidv7();
-  await getDb().insert(podcasts).values({ id, title: 'A Show', source: 'syra', ...over });
+  await getDb()
+    .insert(podcasts)
+    .values({ id, title: 'A Show', source: 'syra', ...over });
   return id;
 }
 
@@ -150,7 +164,7 @@ async function makePlaylist(): Promise<string> {
 
 async function call(
   handler: (req: AuthRequest, res: Response, next: NextFunction) => Promise<unknown>,
-  over: Parameters<typeof makeReq>[0]
+  over: Parameters<typeof makeReq>[0],
 ): Promise<CapturedRes> {
   const res = makeRes();
   await handler(makeReq(over), res as unknown as Response, next);
@@ -236,7 +250,7 @@ describe('GET /api/library', () => {
     });
   });
 
-  it('keeps the caller\'s OWN private show in their library', async () => {
+  it("keeps the caller's OWN private show in their library", async () => {
     // The owner arm has to survive the trip through the handler, or making your
     // own show private empties it out of your own library.
     const mine = await makeShow({ visibility: 'private', ownerOxyUserId: USER });
@@ -272,7 +286,9 @@ describe('adding something that does not exist is a 404', () => {
 
   it('savePlaylist', async () => {
     const res = await call(savePlaylist, { params: { id: uuidv7() }, userId: USER });
-    expect(`${res._status} ${JSON.stringify(res._body)}`).toBe('404 {"error":"Playlist not found"}');
+    expect(`${res._status} ${JSON.stringify(res._body)}`).toBe(
+      '404 {"error":"Playlist not found"}',
+    );
   });
 
   it('leaves the library untouched', async () => {
@@ -376,10 +392,12 @@ describe('recently played', () => {
   it('rejects a malformed track id with a 400 and an unknown one with a 404', async () => {
     // Two different failures with two different answers: the first never
     // reaches the database, the second is the foreign key.
-    expect((await call(recordRecentlyPlayed, { body: { trackId: 'nope' }, userId: USER }))._status)
-      .toBe(400);
-    expect((await call(recordRecentlyPlayed, { body: { trackId: uuidv7() }, userId: USER }))._status)
-      .toBe(404);
+    expect(
+      (await call(recordRecentlyPlayed, { body: { trackId: 'nope' }, userId: USER }))._status,
+    ).toBe(400);
+    expect(
+      (await call(recordRecentlyPlayed, { body: { trackId: uuidv7() }, userId: USER }))._status,
+    ).toBe(404);
     expect((await call(recordRecentlyPlayed, { body: {}, userId: USER }))._status).toBe(400);
 
     expect((await getDb().select().from(recentlyPlayed)).length).toBe(0);

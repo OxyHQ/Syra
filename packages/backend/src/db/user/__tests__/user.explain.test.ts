@@ -222,17 +222,23 @@ const PROBES: readonly { readonly name: string; readonly sql: string }[] = [
 type Tx = Parameters<Parameters<ReturnType<typeof getDb>['transaction']>[0]>[0];
 
 async function seed(tx: Tx): Promise<void> {
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into catalog_entities (id, type, name, name_key, source, popularity)
     select '${MARKER}-art-' || g, 'artist', '${MARKER} artist ' || g, '${MARKER}-artist' || g,
            'upload', g % 101
-    from generate_series(1, ${SEEDED_ARTISTS}) g`));
+    from generate_series(1, ${SEEDED_ARTISTS}) g`),
+  );
 
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into tracks (id, title, artist_id, artist_name, duration, source, status, popularity)
     select '${MARKER}-t-' || g, 'Track ' || g, '${MARKER}-art-' || (1 + (g % ${SEEDED_ARTISTS})),
            'Artist', 150 + (g % 120), 'upload', 'ready', g % 101
-    from generate_series(1, ${SEEDED_TRACKS}) g`));
+    from generate_series(1, ${SEEDED_TRACKS}) g`),
+  );
 
   /**
    * `completion` and `skipped` are correlated the way real plays are but NOT
@@ -241,7 +247,9 @@ async function seed(tx: Tx): Promise<void> {
    * event passed the miner's filter could not tell an index that serves the
    * predicate from one that cannot.
    */
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into listening_events (id, oxy_user_id, track_id, artist_id, genre, listened_sec,
                                   completion, skipped, source, played_at)
     select '${MARKER}-ev-' || g, '${MARKER}-u-' || (1 + (g % ${SEEDED_USERS})),
@@ -251,14 +259,17 @@ async function seed(tx: Tx): Promise<void> {
            case when g % 5 = 0 then 0.1 else 0.4 + ((g % 6) / 10.0) end,
            g % 7 = 0, 'radio',
            now() - ((g % 5000) || ' minutes')::interval
-    from generate_series(1, ${SEEDED_EVENTS}) g`));
+    from generate_series(1, ${SEEDED_EVENTS}) g`),
+  );
 
   /**
    * Both kinds, because `findRelatedEdges` always filters on `kind` and a seed
    * holding only one could not tell the index's leading column from a filter.
    * The prime modulus keeps `(kind, source_id, target_id)` unique.
    */
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into catalog_relations (id, kind, source_id, target_id, score, co_count, computed_at)
     select '${MARKER}-rel-' || g,
            case when g % 2 = 0 then 'artist' else 'track' end,
@@ -267,15 +278,19 @@ async function seed(tx: Tx): Promise<void> {
            case when g % 2 = 0 then '${MARKER}-art-' || (1 + ((g * 3) % 499))
                 else '${MARKER}-t-' || (1 + ((g * 3) % 4999)) end,
            ((g % 100) + 1) / 100.0, 2 + (g % 20), now()
-    from generate_series(1, ${SEEDED_RELATIONS}) g`));
+    from generate_series(1, ${SEEDED_RELATIONS}) g`),
+  );
 
   // Half the profiles are already decayed within the floor, so the `due`
   // predicate has both sides to discriminate.
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into user_taste_profiles (id, oxy_user_id, total_signal, last_decay_at)
     select '${MARKER}-tp-' || g, '${MARKER}-u-' || g, (g % 50),
            case when g % 2 = 0 then now() else now() - interval '30 days' end
-    from generate_series(1, ${SEEDED_PROFILES}) g`));
+    from generate_series(1, ${SEEDED_PROFILES}) g`),
+  );
 
   /**
    * The artist modulus is the PRIME 499, not `SEEDED_ARTISTS` (500), and that is
@@ -286,49 +301,70 @@ async function seed(tx: Tx): Promise<void> {
    * now repeats every 998,000 and all 60,000 land. Same trap, and the same fix,
    * as `library.explain.test.ts`' collaborator seed.
    */
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into user_taste_artists (id, taste_profile_id, artist_id, weight)
     select '${MARKER}-ta-' || g, '${MARKER}-tp-' || (1 + (g % ${SEEDED_PROFILES})),
            '${MARKER}-art-' || (1 + (g % 499)), ((g % 90) + 1) / 10.0
     from generate_series(1, 60000) g
-    on conflict do nothing`));
+    on conflict do nothing`),
+  );
 
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into user_taste_genres (id, taste_profile_id, genre, weight)
     select '${MARKER}-tg-' || g, '${MARKER}-tp-' || (1 + (g % ${SEEDED_PROFILES})),
            'genre' || (g % 39), ((g % 90) + 1) / 10.0
     from generate_series(1, 40000) g
-    on conflict do nothing`));
+    on conflict do nothing`),
+  );
 
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into user_settings (id, oxy_user_id)
     select '${MARKER}-us-' || g, '${MARKER}-u-' || g
-    from generate_series(1, ${SEEDED_USERS}) g`));
+    from generate_series(1, ${SEEDED_USERS}) g`),
+  );
 
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into notification_suppressions (id, oxy_user_id, key, expires_at)
     select '${MARKER}-ns-' || g, '${MARKER}-u-' || (1 + (g % ${SEEDED_USERS})),
            'episode.published:${MARKER}-e-' || (1 + (g % ${SEEDED_USERS})),
            now() + interval '6 hours'
     from generate_series(1, ${SEEDED_USERS}) g
-    on conflict do nothing`));
+    on conflict do nothing`),
+  );
 
-  await executeRows(tx, sql.raw(
-    'analyze catalog_entities, tracks, listening_events, catalog_relations, ' +
-    'user_taste_profiles, user_taste_artists, user_taste_genres, user_settings, ' +
-    'notification_suppressions'
-  ));
+  await executeRows(
+    tx,
+    sql.raw(
+      'analyze catalog_entities, tracks, listening_events, catalog_relations, ' +
+        'user_taste_profiles, user_taste_artists, user_taste_genres, user_settings, ' +
+        'notification_suppressions',
+    ),
+  );
 
   const [events] = await executeRows<{ total: number }>(
-    tx, sql.raw(`select count(*)::int as total from listening_events where id like '${MARKER}-%'`));
+    tx,
+    sql.raw(`select count(*)::int as total from listening_events where id like '${MARKER}-%'`),
+  );
   seededEventCount = events?.total ?? 0;
 
   const [relations] = await executeRows<{ total: number }>(
-    tx, sql.raw(`select count(*)::int as total from catalog_relations where id like '${MARKER}-%'`));
+    tx,
+    sql.raw(`select count(*)::int as total from catalog_relations where id like '${MARKER}-%'`),
+  );
   seededRelationCount = relations?.total ?? 0;
 
   const [tasteArtists] = await executeRows<{ total: number }>(
-    tx, sql.raw(`select count(*)::int as total from user_taste_artists where id like '${MARKER}-%'`));
+    tx,
+    sql.raw(`select count(*)::int as total from user_taste_artists where id like '${MARKER}-%'`),
+  );
   seededTasteArtistCount = tasteArtists?.total ?? 0;
 }
 
@@ -345,7 +381,9 @@ beforeAll(async () => {
 
       for (const probe of PROBES) {
         const rows = await executeRows<{ 'QUERY PLAN': string }>(
-          tx, sql.raw(`explain (analyze, buffers) ${probe.sql}`));
+          tx,
+          sql.raw(`explain (analyze, buffers) ${probe.sql}`),
+        );
         plans.set(probe.name, rows.map((row) => row['QUERY PLAN']).join('\n'));
       }
 
@@ -361,8 +399,9 @@ afterAll(closePostgres);
 /** Index names the planner actually used, in the order they appear. */
 function indexesIn(probe: string): string {
   const plan = plans.get(probe) ?? '';
-  const names = [...plan.matchAll(/Index (?:Only )?Scan using (\w+)|Bitmap Index Scan on (\w+)/g)]
-    .map((match) => match[1] ?? match[2]);
+  const names = [
+    ...plan.matchAll(/Index (?:Only )?Scan using (\w+)|Bitmap Index Scan on (\w+)/g),
+  ].map((match) => match[1] ?? match[2]);
   return [...new Set(names)].join(', ');
 }
 

@@ -110,11 +110,14 @@ export function LiveRoomProvider({ children }: { children: React.ReactNode }) {
     opacity: interpolate(progress.value, [1, 2], [0, 1], Extrapolation.CLAMP),
   }));
 
-  const joinLiveRoom = useCallback((roomId: string) => {
-    setActiveRoomId(roomId);
-    setIsExpanded(true);
-    progress.value = withSpring(2, SPRING_CONFIG);
-  }, [progress]);
+  const joinLiveRoom = useCallback(
+    (roomId: string) => {
+      setActiveRoomId(roomId);
+      setIsExpanded(true);
+      progress.value = withSpring(2, SPRING_CONFIG);
+    },
+    [progress],
+  );
 
   const clearRoom = useCallback(() => {
     setActiveRoomId(null);
@@ -140,7 +143,7 @@ export function LiveRoomProvider({ children }: { children: React.ReactNode }) {
 
   const contextValue = useMemo(
     () => ({ activeRoomId, joinLiveRoom, leaveLiveRoom }),
-    [activeRoomId, joinLiveRoom, leaveLiveRoom]
+    [activeRoomId, joinLiveRoom, leaveLiveRoom],
   );
 
   return (
@@ -166,18 +169,20 @@ export function LiveRoomProvider({ children }: { children: React.ReactNode }) {
             {
               bottom: bottomBarOffset,
               borderColor: theme.colors.border,
-              ...(Platform.OS === 'web' ? {
-                backgroundColor: `${theme.colors.card}CC`,
-                backdropFilter: 'blur(20px)',
-                WebkitBackdropFilter: 'blur(20px)',
-                boxShadow: `0 2px 16px ${theme.colors.shadow}`,
-              } : {
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.15,
-                shadowRadius: 12,
-                elevation: 8,
-              }),
+              ...(Platform.OS === 'web'
+                ? {
+                    backgroundColor: `${theme.colors.card}CC`,
+                    backdropFilter: 'blur(20px)',
+                    WebkitBackdropFilter: 'blur(20px)',
+                    boxShadow: `0 2px 16px ${theme.colors.shadow}`,
+                  }
+                : {
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.15,
+                    shadowRadius: 12,
+                    elevation: 8,
+                  }),
             },
             sheetAnimStyle,
           ]}

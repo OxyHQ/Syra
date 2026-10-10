@@ -79,10 +79,7 @@ const INITIAL_DELAY_MS = 5 * 60 * 1000;
  * full year — `lastPlayedAt` is absent until the first play, and treating absence
  * as epoch would expire every untouched upload immediately.
  */
-export function computeUploadExpiry(upload: {
-  createdAt: Date;
-  lastPlayedAt?: Date | null;
-}): Date {
+export function computeUploadExpiry(upload: { createdAt: Date; lastPlayedAt?: Date | null }): Date {
   const lastPlayed = upload.lastPlayedAt?.getTime() ?? 0;
   const created = upload.createdAt.getTime();
   return new Date(Math.max(lastPlayed, created) + UPLOAD_RETENTION_DAYS * DAY_MS);
@@ -122,8 +119,8 @@ export async function recordUploadPlay(
       and(
         eq(userUploads.id, uploadId),
         eq(userUploads.ownerOxyUserId, ownerOxyUserId),
-        isNull(userUploads.deletedAt)
-      )
+        isNull(userUploads.deletedAt),
+      ),
     )
     .returning({ id: userUploads.id });
 
@@ -424,7 +421,10 @@ async function tick(): Promise<void> {
   running = true;
   try {
     const result = await runExpirySweep();
-    if (result.ran && (result.uploadsNoticed || result.uploadsSoftDeleted || result.uploadsHardDeleted)) {
+    if (
+      result.ran &&
+      (result.uploadsNoticed || result.uploadsSoftDeleted || result.uploadsHardDeleted)
+    ) {
       logger.info('[uploads] expiry sweep', result);
     }
   } catch (err) {

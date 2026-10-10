@@ -49,19 +49,7 @@
  */
 
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
-import {
-  and,
-  asc,
-  desc,
-  eq,
-
-  inArray,
-  isNotNull,
-  ne,
-
-  sql,
-  type SQLWrapper,
-} from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, ne, sql, type SQLWrapper } from 'drizzle-orm';
 import { executeRows } from '@oxy.so/db';
 import { closePostgres, getDb } from '../../postgres';
 import { connectUnmanagedDb } from '../../../test/postgres';
@@ -123,19 +111,21 @@ let analyzedColumnCount = 0;
  * make. Same shape as the tidy-fixture rule for narrowing conditions — ask what
  * input makes the two candidates disagree, and put a fixture there.
  */
-async function seed(tx: Parameters<Parameters<ReturnType<typeof getDb>['transaction']>[0]>[0]): Promise<void> {
+async function seed(
+  tx: Parameters<Parameters<ReturnType<typeof getDb>['transaction']>[0]>[0],
+): Promise<void> {
   await executeRows(
     tx,
     sql`insert into image_assets (id, s3_key, filename, content_type, byte_size, owner_type)
         select ${MARKER} || '-img-' || g, ${MARKER} || '/' || g, g || '.jpg', 'image/jpeg', 1000, 'album'
-        from generate_series(1, 400) g`
+        from generate_series(1, 400) g`,
   );
   await executeRows(
     tx,
     sql`insert into catalog_entities (id, type, name, name_key, source, popularity)
         select ${MARKER} || '-art-' || g, 'artist', ${MARKER} || ' artist ' || g,
                ${MARKER} || '-artist' || g, 'upload', g % 101
-        from generate_series(1, 200) g`
+        from generate_series(1, 200) g`,
   );
   await executeRows(
     tx,
@@ -143,7 +133,7 @@ async function seed(tx: Parameters<Parameters<ReturnType<typeof getDb>['transact
         select ${MARKER} || '-alb-' || g, 'Album ' || g,
                ${MARKER} || '-art-' || (1 + (g % 200)), 'Artist', '2020-01-01',
                ${MARKER} || '-img-' || g, g % 101
-        from generate_series(1, 400) g`
+        from generate_series(1, 400) g`,
   );
   await executeRows(
     tx,
@@ -160,13 +150,13 @@ async function seed(tx: Parameters<Parameters<ReturnType<typeof getDb>['transact
                (array['chill','energetic','sad','happy'])[1 + (g % 4)],
                g,
                now() - (g || ' minutes')::interval
-        from generate_series(1, 4000) g`
+        from generate_series(1, 4000) g`,
   );
   await executeRows(
     tx,
     sql`insert into playlists (id, name, owner_oxy_user_id, owner_username, visibility, followers)
         select ${MARKER} || '-pl-' || g, 'Playlist ' || g, 'oxy-' || g, 'user' || g, 'public', g
-        from generate_series(1, 200) g`
+        from generate_series(1, 200) g`,
   );
   await executeRows(
     tx,
@@ -175,7 +165,7 @@ async function seed(tx: Parameters<Parameters<ReturnType<typeof getDb>['transact
                ${MARKER} || '-pl-' || p,
                ${MARKER} || '-t-' || (1 + ((p * 17 + n * 31) % 4000)),
                now(), n
-        from generate_series(1, 200) p, generate_series(0, 19) n`
+        from generate_series(1, 200) p, generate_series(0, 19) n`,
   );
   /**
    * Credits, because the artist playability predicate reads them now: an artist
@@ -196,13 +186,13 @@ async function seed(tx: Parameters<Parameters<ReturnType<typeof getDb>['transact
         select ${MARKER} || '-tc-' || g, ${MARKER} || '-t-' || g, 0,
                'Guest ' || g, 'guest' || g, 'artist',
                ${MARKER} || '-art-' || (181 + (g % 20))
-        from generate_series(1, 600) g`
+        from generate_series(1, 600) g`,
   );
   // Statistics, not just rows: without this the planner still costs every table
   // as if it were empty and the seed changes nothing.
   await executeRows(
     tx,
-    sql`analyze tracks, albums, catalog_entities, playlists, playlist_tracks, track_credits`
+    sql`analyze tracks, albums, catalog_entities, playlists, playlist_tracks, track_credits`,
   );
 }
 
@@ -221,12 +211,12 @@ beforeAll(async () => {
       await seed(tx);
       const [seeded] = await executeRows<{ total: number }>(
         tx,
-        sql`select count(*)::int as total from tracks`
+        sql`select count(*)::int as total from tracks`,
       );
       seededRowCount = seeded.total;
       const [analyzed] = await executeRows<{ total: number }>(
         tx,
-        sql`select count(*)::int as total from pg_stats where tablename = 'tracks'`
+        sql`select count(*)::int as total from pg_stats where tablename = 'tracks'`,
       );
       analyzedColumnCount = analyzed.total;
 
@@ -274,7 +264,7 @@ beforeAll(async () => {
             imageFirst(tracks.coverArtId),
             descNullsLast(tracks.popularity),
             descNullsLast(tracks.playCount),
-            descNullsLast(tracks.createdAt)
+            descNullsLast(tracks.createdAt),
           )
           .limit(20),
         // `GET /api/browse/genres/:genre/tracks`.
@@ -286,7 +276,7 @@ beforeAll(async () => {
             imageFirst(tracks.coverArtId),
             descNullsLast(tracks.popularity),
             descNullsLast(tracks.playCount),
-            descNullsLast(tracks.createdAt)
+            descNullsLast(tracks.createdAt),
           )
           .limit(50),
         // `GET /api/browse/genres` — the genre cards. `distinct on` plus the
@@ -300,7 +290,7 @@ beforeAll(async () => {
             tracks.genre,
             imageFirst(tracks.coverArtId),
             descNullsLast(tracks.popularity),
-            descNullsLast(tracks.playCount)
+            descNullsLast(tracks.playCount),
           )
           .limit(20),
         // `GET /api/tracks` — newest first.
@@ -324,8 +314,8 @@ beforeAll(async () => {
           .where(
             and(
               playableTrackFilter(),
-              inArray(tracks.id, [`${MARKER}-t-1`, `${MARKER}-t-2`, `${MARKER}-t-3`])
-            )
+              inArray(tracks.id, [`${MARKER}-t-1`, `${MARKER}-t-2`, `${MARKER}-t-3`]),
+            ),
           ),
         // `GET /api/albums` — the public album listing.
         albumsListing: tx
@@ -376,8 +366,8 @@ beforeAll(async () => {
           .where(
             and(
               playableTrackFilter(),
-              sql`to_tsvector('english', ${tracks.title}) @@ websearch_to_tsquery('english', 'zqxwv')`
-            )
+              sql`to_tsvector('english', ${tracks.title}) @@ websearch_to_tsquery('english', 'zqxwv')`,
+            ),
           )
           .limit(20),
         // The control: `tracks.comment` carries no index, so the planner has
@@ -389,10 +379,7 @@ beforeAll(async () => {
       };
 
       for (const [name, query] of Object.entries(probes)) {
-        const rows = await executeRows<{ 'QUERY PLAN': string }>(
-          tx,
-          sql`explain ${query}`
-        );
+        const rows = await executeRows<{ 'QUERY PLAN': string }>(tx, sql`explain ${query}`);
         plans.set(name, rows.map((row) => row['QUERY PLAN']).join('\n'));
       }
 
@@ -457,9 +444,7 @@ describe('the album path reaches the index migration 0016 restored', () => {
     // chose rather than "expected false to be true". Verified to discriminate:
     // with `tracks_album_id_idx` dropped, this reports
     // `tracks_artist_id_album_id_idx` and fails.
-    expect(`album tracks: ${indexesIn('albumTracks')}`).toBe(
-      'album tracks: tracks_album_id_idx'
-    );
+    expect(`album tracks: ${indexesIn('albumTracks')}`).toBe('album tracks: tracks_album_id_idx');
   });
 
   /**
@@ -548,8 +533,10 @@ describe('the artist and playlist paths reach their indexes', () => {
     // happened to choose on the day.
     expect(
       `playlist membership: ${
-        /playlist_tracks_playlist_id_(track_id_idx|position_key)/.test(indexes) ? 'indexed' : indexes
-      }`
+        /playlist_tracks_playlist_id_(track_id_idx|position_key)/.test(indexes)
+          ? 'indexed'
+          : indexes
+      }`,
     ).toBe('playlist membership: indexed');
     expect(`playlist track lookup: ${indexes}`).toContain('tracks_pkey');
   });
@@ -629,7 +616,7 @@ describe('Task 10c-3: the controller list queries reach an index', () => {
    */
   it('the tracks listing walks the ordered index without sorting', () => {
     expect(`tracks listing sorts: ${plans.get('tracksListing')?.includes('Sort')}`).toBe(
-      'tracks listing sorts: false'
+      'tracks listing sorts: false',
     );
   });
 
@@ -762,7 +749,7 @@ describe('the probe can tell an index from a scan', () => {
     expect(plans.size).toBe(16);
     expect(`tracks seeded: ${seededRowCount}`).toBe('tracks seeded: 4000');
     expect(`tracks columns in pg_stats: ${analyzedColumnCount > 0}`).toBe(
-      'tracks columns in pg_stats: true'
+      'tracks columns in pg_stats: true',
     );
   });
 });
@@ -778,7 +765,7 @@ describe('the seeding transaction left nothing behind', () => {
             (select count(*) from playlists where id like ${`${MARKER}%`}) +
             (select count(*) from playlist_tracks where id like ${`${MARKER}%`}) +
             (select count(*) from image_assets where id like ${`${MARKER}%`})
-          )::int as total`
+          )::int as total`,
     );
 
     expect(row.total).toBe(0);

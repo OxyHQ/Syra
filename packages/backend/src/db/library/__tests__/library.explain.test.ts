@@ -169,15 +169,21 @@ const PROBES: readonly { readonly name: string; readonly sql: string }[] = [
 type Tx = Parameters<Parameters<ReturnType<typeof getDb>['transaction']>[0]>[0];
 
 async function seed(tx: Tx): Promise<void> {
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into image_assets (id, s3_key, filename, content_type, byte_size, owner_type, width, height)
     select '${MARKER}-img-' || g, '${MARKER}/' || g, g || '.jpg', 'image/jpeg', 1000, 'album', 640, 640
-    from generate_series(1, 500) g`));
+    from generate_series(1, 500) g`),
+  );
 
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into catalog_entities (id, type, name, name_key, source, popularity)
     select '${MARKER}-art-' || g, 'artist', '${MARKER} artist ' || g, '${MARKER}-artist' || g, 'upload', g % 101
-    from generate_series(1, 200) g`));
+    from generate_series(1, 200) g`),
+  );
 
   /**
    * One track in 23 unavailable and one in 31 copyright-removed, coprime so all
@@ -185,32 +191,41 @@ async function seed(tx: Tx): Promise<void> {
    * every track is playable cannot tell a partial index that serves the join
    * from one that cannot.
    */
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into tracks (id, title, artist_id, artist_name, duration, source, status,
                         popularity, is_available, copyright_removed)
     select '${MARKER}-t-' || g, 'Track ' || g, '${MARKER}-art-' || (1 + (g % 200)), 'Artist',
            150 + (g % 120), 'upload', 'ready', g % 101,
            case when g % 23 = 0 then false else true end,
            case when g % 31 = 0 then true else false end
-    from generate_series(1, ${SEEDED_TRACKS}) g`));
+    from generate_series(1, ${SEEDED_TRACKS}) g`),
+  );
 
   // Only one playlist in four carries cover art, so the `is not null` ordering
   // term has both sides to sort.
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into playlists (id, name, owner_oxy_user_id, owner_username, visibility, cover_art_id, followers)
     select '${MARKER}-p-' || g, 'Playlist ' || g, '${MARKER}-u-' || (1 + (g % ${SEEDED_USERS})),
            'user' || (1 + (g % ${SEEDED_USERS})),
            case when g % 3 = 0 then 'public' else 'private' end,
            case when g % 4 = 0 then '${MARKER}-img-' || (1 + (g % 500)) else null end,
            g % 97
-    from generate_series(1, ${SEEDED_PLAYLISTS}) g`));
+    from generate_series(1, ${SEEDED_PLAYLISTS}) g`),
+  );
 
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into playlist_tracks (id, playlist_id, track_id, added_at, added_by, position)
     select '${MARKER}-pt-' || g, '${MARKER}-p-' || (1 + (g % ${SEEDED_PLAYLISTS})),
            '${MARKER}-t-' || (1 + (g % ${SEEDED_TRACKS})), now(), '${MARKER}-u-1',
            g / ${SEEDED_PLAYLISTS}
-    from generate_series(0, 79999) g`));
+    from generate_series(0, 79999) g`),
+  );
 
   /**
    * The user index steps by a PRIME modulus (1999) rather than by
@@ -221,40 +236,56 @@ async function seed(tx: Tx): Promise<void> {
    * predicted; it is the same unique constraint the reorder path has to work
    * around.
    */
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into playlist_collaborators (id, playlist_id, oxy_user_id, username, role, added_at)
     select '${MARKER}-pc-' || g, '${MARKER}-p-' || (1 + (g % ${SEEDED_PLAYLISTS})),
            '${MARKER}-u-' || (1 + ((g * 3) % 1999)), 'user', 'editor', now()
-    from generate_series(1, 6000) g`));
+    from generate_series(1, 6000) g`),
+  );
 
   // Same prime-modulus reason as the collaborators above: `(g % 2000, g %
   // 20000)` repeats every 20,000 rows and violates
   // `user_liked_tracks_oxy_user_id_track_id_key`.
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into user_liked_tracks (id, oxy_user_id, track_id, created_at)
     select '${MARKER}-lt-' || g, '${MARKER}-u-' || (1 + ((g * 3) % 1999)),
            '${MARKER}-t-' || (1 + (g % ${SEEDED_TRACKS})), now() - (g || ' seconds')::interval
-    from generate_series(1, 40000) g`));
+    from generate_series(1, 40000) g`),
+  );
 
   // 250 plays for the probed user against 20 distinct tracks, so the collapse
   // has duplicates to collapse and the prune cutoff has a hundredth row.
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into recently_played (id, oxy_user_id, track_id, played_at)
     select '${MARKER}-rp-' || g, '${MARKER}-u-' || (1 + (g % ${SEEDED_USERS})),
            '${MARKER}-t-' || (1 + (g % 20)), now() - (g || ' seconds')::interval
-    from generate_series(1, 60000) g`));
+    from generate_series(1, 60000) g`),
+  );
 
-  await executeRows(tx, sql.raw(
-    'analyze image_assets, catalog_entities, tracks, playlists, playlist_tracks, ' +
-    'playlist_collaborators, user_liked_tracks, recently_played'
-  ));
+  await executeRows(
+    tx,
+    sql.raw(
+      'analyze image_assets, catalog_entities, tracks, playlists, playlist_tracks, ' +
+        'playlist_collaborators, user_liked_tracks, recently_played',
+    ),
+  );
 
   const [playlists] = await executeRows<{ total: number }>(
-    tx, sql.raw(`select count(*)::int as total from playlists where id like '${MARKER}-%'`));
+    tx,
+    sql.raw(`select count(*)::int as total from playlists where id like '${MARKER}-%'`),
+  );
   seededPlaylistCount = playlists?.total ?? 0;
 
   const [likes] = await executeRows<{ total: number }>(
-    tx, sql.raw(`select count(*)::int as total from user_liked_tracks where id like '${MARKER}-%'`));
+    tx,
+    sql.raw(`select count(*)::int as total from user_liked_tracks where id like '${MARKER}-%'`),
+  );
   seededLikeCount = likes?.total ?? 0;
 }
 
@@ -271,7 +302,9 @@ beforeAll(async () => {
 
       for (const probe of PROBES) {
         const rows = await executeRows<{ 'QUERY PLAN': string }>(
-          tx, sql.raw(`explain (analyze, buffers) ${probe.sql}`));
+          tx,
+          sql.raw(`explain (analyze, buffers) ${probe.sql}`),
+        );
         plans.set(probe.name, rows.map((row) => row['QUERY PLAN']).join('\n'));
       }
 
@@ -287,8 +320,9 @@ afterAll(closePostgres);
 /** Index names the planner actually used, in the order they appear. */
 function indexesIn(probe: string): string {
   const plan = plans.get(probe) ?? '';
-  const names = [...plan.matchAll(/Index (?:Only )?Scan using (\w+)|Bitmap Index Scan on (\w+)/g)]
-    .map((match) => match[1] ?? match[2]);
+  const names = [
+    ...plan.matchAll(/Index (?:Only )?Scan using (\w+)|Bitmap Index Scan on (\w+)/g),
+  ].map((match) => match[1] ?? match[2]);
   return [...new Set(names)].join(', ');
 }
 
@@ -307,17 +341,17 @@ describe('the seed is real', () => {
 });
 
 describe('the membership reads reach an index', () => {
-  it('a user\'s liked tracks are read through the unique index', () => {
+  it("a user's liked tracks are read through the unique index", () => {
     expect(plans.get('likedTracks')).not.toContain('Seq Scan on user_liked_tracks');
     expect(`liked tracks: ${indexesIn('likedTracks')}`).toBe(
-      'liked tracks: user_liked_tracks_oxy_user_id_track_id_key'
+      'liked tracks: user_liked_tracks_oxy_user_id_track_id_key',
     );
   });
 
-  it('unliking one track is a point lookup, not a scan of the user\'s likes', () => {
+  it("unliking one track is a point lookup, not a scan of the user's likes", () => {
     expect(plans.get('unlikeTrack')).not.toContain('Seq Scan on user_liked_tracks');
     expect(`unlike: ${indexesIn('unlikeTrack')}`).toBe(
-      'unlike: user_liked_tracks_oxy_user_id_track_id_key'
+      'unlike: user_liked_tracks_oxy_user_id_track_id_key',
     );
   });
 });
@@ -327,16 +361,16 @@ describe('the playlist reads reach an index', () => {
    * Both index names are asserted, so a regression says WHICH half stopped
    * being reachable rather than only that the plan changed.
    */
-  it('a user\'s own and collaborated playlists both come from an index', () => {
+  it("a user's own and collaborated playlists both come from an index", () => {
     expect(plans.get('userPlaylists')).not.toContain('Seq Scan on playlists');
     expect(plans.get('userPlaylists')).not.toContain('Seq Scan on playlist_collaborators');
     const used = indexesIn('userPlaylists');
     expect(`owner half: ${used.includes('playlists_owner_oxy_user_id_created_at_idx')}`).toBe(
-      'owner half: true'
+      'owner half: true',
     );
-    expect(
-      `collaborator half: ${used.includes('playlist_collaborators_oxy_user_id_idx')}`
-    ).toBe('collaborator half: true');
+    expect(`collaborator half: ${used.includes('playlist_collaborators_oxy_user_id_idx')}`).toBe(
+      'collaborator half: true',
+    );
   });
 
   /**
@@ -351,7 +385,7 @@ describe('the playlist reads reach an index', () => {
   it('the edit-permission check is a point lookup on the unique index', () => {
     expect(plans.get('collaboratorRole')).not.toContain('Seq Scan on playlist_collaborators');
     expect(`collaborator role: ${indexesIn('collaboratorRole')}`).toBe(
-      'collaborator role: playlist_collaborators_playlist_id_oxy_user_id_key'
+      'collaborator role: playlist_collaborators_playlist_id_oxy_user_id_key',
     );
   });
 
@@ -369,11 +403,11 @@ describe('the playlist reads reach an index', () => {
    * index plus an in-memory sort of a handful of rows; what matters is that
    * neither path scans the table.
    */
-  it('a playlist\'s tracks come from an index, then a sort of that playlist alone', () => {
+  it("a playlist's tracks come from an index, then a sort of that playlist alone", () => {
     const plan = plans.get('playlistTracks') ?? '';
     expect(plan).not.toContain('Seq Scan on playlist_tracks');
     expect(`playlist tracks: ${indexesIn('playlistTracks')}`).toBe(
-      'playlist tracks: playlist_tracks_playlist_id_track_id_idx'
+      'playlist tracks: playlist_tracks_playlist_id_track_id_idx',
     );
     // Named so a future plan that DOES read the ordered index reports here
     // rather than passing silently — the change would be an improvement, and
@@ -391,14 +425,14 @@ describe('the play log reads reach an index', () => {
   it('collapsing plays to distinct tracks does not scan the log', () => {
     expect(plans.get('recentlyPlayed')).not.toContain('Seq Scan on recently_played');
     expect(`recently played: ${indexesIn('recentlyPlayed')}`).toBe(
-      'recently played: recently_played_oxy_user_id_played_at_idx'
+      'recently played: recently_played_oxy_user_id_played_at_idx',
     );
   });
 
   it('the retention cutoff is read off the same ordered index', () => {
     expect(plans.get('prunePlayHistoryCutoff')).not.toContain('Seq Scan on recently_played');
     expect(`prune cutoff: ${indexesIn('prunePlayHistoryCutoff')}`).toBe(
-      'prune cutoff: recently_played_oxy_user_id_played_at_idx'
+      'prune cutoff: recently_played_oxy_user_id_played_at_idx',
     );
   });
 });

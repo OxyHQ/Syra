@@ -120,17 +120,22 @@ const EpisodeScreen: React.FC = () => {
         icon={{ name: 'mic-off-outline' }}
         title={t('episode.notFound')}
         subtitle={t('episode.notFoundMessage')}
-        action={{ label: t('podcasts.browse'), onPress: () => router.push('/podcasts'), icon: 'search-outline' }}
+        action={{
+          label: t('podcasts.browse'),
+          onPress: () => router.push('/podcasts'),
+          icon: 'search-outline',
+        }}
         className="bg-surface"
       />
     );
   }
 
-  const playLabel = isCurrent && isPlaying
-    ? t('episode.pause')
-    : (progress?.progressSec ?? 0) > 5 && !progress?.completed
-      ? t('episode.resume')
-      : t('common.play');
+  const playLabel =
+    isCurrent && isPlaying
+      ? t('episode.pause')
+      : (progress?.progressSec ?? 0) > 5 && !progress?.completed
+        ? t('episode.resume')
+        : t('common.play');
 
   // The whole app is themed from this episode's cover ON VIEW (see the ambient
   // effect above). No per-screen theme wrapper and no cover-hover theming —
@@ -147,7 +152,9 @@ const EpisodeScreen: React.FC = () => {
       playLabel={playLabel}
       onPlay={handlePlay}
       onChapterPress={handleChapterPress}
-      onOpenShow={() => router.push({ pathname: '/podcasts/[id]', params: { id: episode.podcastId } })}
+      onOpenShow={() =>
+        router.push({ pathname: '/podcasts/[id]', params: { id: episode.podcastId } })
+      }
     />
   );
 };
@@ -187,23 +194,24 @@ const EpisodeView: React.FC<EpisodeViewProps> = ({
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
-  const metaParts = [formatPubDate(episode.pubDate), formatEpisodeDuration(episode.duration)].filter(Boolean);
+  const metaParts = [
+    formatPubDate(episode.pubDate),
+    formatEpisodeDuration(episode.duration),
+  ].filter(Boolean);
 
   return (
     <>
       <SEO title={`${episode.title} - Syra`} description={description.slice(0, 160)} />
       <ScrollView
-        className="bg-surface" style={styles.container}
+        className="bg-surface"
+        style={styles.container}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
         <View style={styles.header}>
           {/* Episode artwork (the app is themed from it on view, not on hover) */}
-          <View
-            accessibilityRole="image"
-            accessibilityLabel={`${episode.title} artwork`}
-          >
+          <View accessibilityRole="image" accessibilityLabel={`${episode.title} artwork`}>
             {artwork ? (
               <Image source={{ uri: artwork }} style={styles.artwork} contentFit="cover" />
             ) : (
@@ -217,14 +225,19 @@ const EpisodeView: React.FC<EpisodeViewProps> = ({
               {episode.podcastTitle}
             </Text>
           </Pressable>
-          <Text className="text-foreground" style={styles.title}>{episode.title}</Text>
+          <Text className="text-foreground" style={styles.title}>
+            {episode.title}
+          </Text>
           {metaParts.length > 0 && (
-            <Text className="text-muted-foreground" style={styles.meta}>{metaParts.join(' • ')}</Text>
+            <Text className="text-muted-foreground" style={styles.meta}>
+              {metaParts.join(' • ')}
+            </Text>
           )}
 
           <Pressable
             onPress={onPlay}
-            className="bg-primary" style={styles.playButton}
+            className="bg-primary"
+            style={styles.playButton}
             accessibilityRole="button"
             accessibilityLabel={playLabel}
           >
@@ -233,7 +246,9 @@ const EpisodeView: React.FC<EpisodeViewProps> = ({
               size={20}
               color={theme.colors.primaryForeground}
             />
-            <Text className="text-primary-foreground" style={styles.playButtonText}>{playLabel}</Text>
+            <Text className="text-primary-foreground" style={styles.playButtonText}>
+              {playLabel}
+            </Text>
           </Pressable>
         </View>
 
@@ -243,7 +258,9 @@ const EpisodeView: React.FC<EpisodeViewProps> = ({
         {/* Chapters */}
         {chapters && chapters.length > 0 && (
           <View style={styles.section}>
-            <Text className="text-foreground" style={styles.sectionTitle}>{t('episode.chapters')}</Text>
+            <Text className="text-foreground" style={styles.sectionTitle}>
+              {t('episode.chapters')}
+            </Text>
             {chapters.map((chapter, index) => (
               <Pressable
                 key={`${chapter.startTime}-${index}`}
@@ -264,7 +281,9 @@ const EpisodeView: React.FC<EpisodeViewProps> = ({
         {/* Transcripts */}
         {episode.transcripts && episode.transcripts.length > 0 && (
           <View style={styles.section}>
-            <Text className="text-foreground" style={styles.sectionTitle}>{t('episode.transcript')}</Text>
+            <Text className="text-foreground" style={styles.sectionTitle}>
+              {t('episode.transcript')}
+            </Text>
             {episode.transcripts.map((transcript, index) => (
               <Pressable
                 key={`${transcript.url}-${index}`}
@@ -273,7 +292,9 @@ const EpisodeView: React.FC<EpisodeViewProps> = ({
               >
                 <Ionicons name="document-text-outline" size={18} color={theme.colors.primary} />
                 <Text className="text-primary" style={styles.linkText} numberOfLines={1}>
-                  {transcript.language ? `Transcript (${transcript.language})` : t('episode.viewTranscript')}
+                  {transcript.language
+                    ? `Transcript (${transcript.language})`
+                    : t('episode.viewTranscript')}
                 </Text>
               </Pressable>
             ))}
@@ -283,8 +304,12 @@ const EpisodeView: React.FC<EpisodeViewProps> = ({
         {/* Description */}
         {description ? (
           <View style={styles.section}>
-            <Text className="text-foreground" style={styles.sectionTitle}>{t('common.about')}</Text>
-            <Text className="text-muted-foreground" style={styles.description}>{description}</Text>
+            <Text className="text-foreground" style={styles.sectionTitle}>
+              {t('common.about')}
+            </Text>
+            <Text className="text-muted-foreground" style={styles.description}>
+              {description}
+            </Text>
           </View>
         ) : null}
       </ScrollView>

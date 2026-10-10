@@ -39,7 +39,9 @@ import { logger } from '../utils/logger';
  */
 export function assertRawBody(req: Request, res: Response, next: NextFunction): void {
   if (typeof req.body !== 'undefined') {
-    logger.error('[CrowdSource] webhook route is mounted AFTER a body parser; refusing to verify', { bodyType: typeof req.body });
+    logger.error('[CrowdSource] webhook route is mounted AFTER a body parser; refusing to verify', {
+      bodyType: typeof req.body,
+    });
     res.status(500).json({
       error: 'The CrowdSource webhook route is misconfigured on this deployment.',
     });

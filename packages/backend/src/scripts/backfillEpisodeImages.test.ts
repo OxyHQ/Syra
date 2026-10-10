@@ -66,7 +66,7 @@ async function makePodcast(overrides: Partial<typeof podcasts.$inferInsert> = {}
 
 async function makeEpisode(
   podcastId: string,
-  overrides: Partial<typeof episodes.$inferInsert> = {}
+  overrides: Partial<typeof episodes.$inferInsert> = {},
 ): Promise<string> {
   const [row] = await getDb()
     .insert(episodes)
@@ -118,7 +118,12 @@ describe('backfillEpisodeImages', () => {
     setCatalogImageMirrorImplementationForTests(async () => ({
       imageId: EPISODE_IMAGE_ID,
       imageSizes: {
-        large: { id: EPISODE_IMAGE_ID, url: `/api/images/${EPISODE_IMAGE_ID}`, width: 640, height: 640 },
+        large: {
+          id: EPISODE_IMAGE_ID,
+          url: `/api/images/${EPISODE_IMAGE_ID}`,
+          width: 640,
+          height: 640,
+        },
       },
       primaryColor: '#abcdef',
       secondaryColor: '#fedcba',
@@ -139,7 +144,7 @@ describe('backfillEpisodeImages', () => {
     expect(row?.imageSourceUrl).toBe(EPISODE_COVER);
   });
 
-  it("does not re-fetch the feed at all when every episode already has its own cover", async () => {
+  it('does not re-fetch the feed at all when every episode already has its own cover', async () => {
     await seedEpisodeMirroredAsset(); // the episode row below FKs to it
     let mirrorCalls = 0;
     setCatalogImageMirrorImplementationForTests(async () => {
@@ -191,7 +196,10 @@ describe('backfillEpisodeImages', () => {
     const podcastId = await makePodcast();
     const episodeId = await makeEpisode(podcastId, { imageId: null });
 
-    const stats = await backfillEpisodeImages({ dryRun: true, fetch: fakeFetchOf(feed(EPISODE_COVER)) });
+    const stats = await backfillEpisodeImages({
+      dryRun: true,
+      fetch: fakeFetchOf(feed(EPISODE_COVER)),
+    });
 
     expect(stats.episodesFixed).toBe(1);
     expect(mirrorCalls).toBe(0); // never even attempts the network fetch
@@ -235,7 +243,12 @@ describe('backfillEpisodeImages', () => {
     setCatalogImageMirrorImplementationForTests(async () => ({
       imageId: EPISODE_IMAGE_ID,
       imageSizes: {
-        large: { id: EPISODE_IMAGE_ID, url: `/api/images/${EPISODE_IMAGE_ID}`, width: 640, height: 640 },
+        large: {
+          id: EPISODE_IMAGE_ID,
+          url: `/api/images/${EPISODE_IMAGE_ID}`,
+          width: 640,
+          height: 640,
+        },
       },
       sourceUrlHash: 'u',
       sourceContentHash: 'c',

@@ -91,17 +91,19 @@ describe('toTrackDtos — credits', () => {
 
     // Inserted in the OPPOSITE order to the positions, so a load that returns
     // rows as they were written disagrees with the assertion below.
-    await getDb().insert(trackCredits).values([
-      { trackId, position: 1, name: 'Segunda', nameKey: 'segunda', role: 'artist' },
-      {
-        trackId,
-        position: 0,
-        name: 'Bb trickz',
-        nameKey: 'bb trickz',
-        role: 'artist',
-        catalogEntityId: guestId,
-      },
-    ]);
+    await getDb()
+      .insert(trackCredits)
+      .values([
+        { trackId, position: 1, name: 'Segunda', nameKey: 'segunda', role: 'artist' },
+        {
+          trackId,
+          position: 0,
+          name: 'Bb trickz',
+          nameKey: 'bb trickz',
+          role: 'artist',
+          catalogEntityId: guestId,
+        },
+      ]);
 
     const [dto] = await toTrackDtos([await readTrackRow(trackId)]);
 
@@ -133,10 +135,18 @@ describe('toTrackDtos — credits', () => {
     const first = await makeTrack('Primera', principalId, 'Compartido');
     const second = await makeTrack('Segunda', principalId, 'Compartido');
 
-    await getDb().insert(trackCredits).values([
-      { trackId: first, position: 0, name: 'Sólo en primera', nameKey: 'solo-1', role: 'artist' },
-      { trackId: second, position: 0, name: 'Sólo en segunda', nameKey: 'solo-2', role: 'artist' },
-    ]);
+    await getDb()
+      .insert(trackCredits)
+      .values([
+        { trackId: first, position: 0, name: 'Sólo en primera', nameKey: 'solo-1', role: 'artist' },
+        {
+          trackId: second,
+          position: 0,
+          name: 'Sólo en segunda',
+          nameKey: 'solo-2',
+          role: 'artist',
+        },
+      ]);
 
     const rows = await getDb()
       .select()

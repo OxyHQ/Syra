@@ -39,7 +39,15 @@ const VerifiedBadge: React.FC<{ size: number }> = ({ size }) => {
   );
 };
 
-const Avatar: React.FC<AvatarProps> = ({ source, variant, size = 40, verified = false, style, label, onPress }) => (
+const Avatar: React.FC<AvatarProps> = ({
+  source,
+  variant,
+  size = 40,
+  verified = false,
+  style,
+  label,
+  onPress,
+}) => (
   <BloomAvatar
     source={source}
     variant={variant}

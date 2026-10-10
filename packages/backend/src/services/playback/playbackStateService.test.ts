@@ -47,16 +47,18 @@ beforeEach(async () => {
     .values({ name: 'Playback Fixture Artist', type: 'artist', source: 'upload' })
     .returning({ id: catalogEntities.id });
 
-  await getDb().insert(tracks).values(
-    TRACK_IDS.map((id) => ({
-      id,
-      title: `Fixture ${id}`,
-      artistId: artist.id,
-      artistName: 'Playback Fixture Artist',
-      duration: 180,
-      source: 'upload' as const,
-    }))
-  );
+  await getDb()
+    .insert(tracks)
+    .values(
+      TRACK_IDS.map((id) => ({
+        id,
+        title: `Fixture ${id}`,
+        artistId: artist.id,
+        artistName: 'Playback Fixture Artist',
+        duration: 180,
+        source: 'upload' as const,
+      })),
+    );
 });
 
 /** The stored row, re-read — distinct from what a writer handed back. */

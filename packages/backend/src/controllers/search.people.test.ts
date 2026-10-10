@@ -20,14 +20,16 @@ afterAll(disconnectDb);
 
 /** A person row — `type: 'person'`, the discriminator written out. */
 async function seedPerson(values: { name: string; href?: string; img?: string }): Promise<void> {
-  await getDb().insert(catalogEntities).values({
-    id: uuidv7(),
-    type: 'person',
-    name: values.name,
-    nameKey: normalizeNameKey(values.name),
-    href: values.href,
-    img: values.img,
-  });
+  await getDb()
+    .insert(catalogEntities)
+    .values({
+      id: uuidv7(),
+      type: 'person',
+      name: values.name,
+      nameKey: normalizeNameKey(values.name),
+      href: values.href,
+      img: values.img,
+    });
 }
 
 interface SearchBody {
@@ -46,8 +48,14 @@ function makeRes(): CapturedRes {
   return {
     _status: 200,
     _body: undefined,
-    status(code) { this._status = code; return this; },
-    json(body) { this._body = body; return this; },
+    status(code) {
+      this._status = code;
+      return this;
+    },
+    json(body) {
+      this._body = body;
+      return this;
+    },
   };
 }
 
@@ -55,7 +63,9 @@ function makeReq(query: Record<string, string>): Request {
   return { query } as unknown as Request;
 }
 
-const failNext: NextFunction = (err) => { throw err; };
+const failNext: NextFunction = (err) => {
+  throw err;
+};
 
 describe('unified search — people category', () => {
   it('finds people by name and keeps the external img for RSS persons', async () => {

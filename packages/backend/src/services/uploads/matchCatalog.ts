@@ -246,8 +246,8 @@ async function findCatalogTrackByFingerprint(
       between(
         trackFingerprints.fingerprintDurationSec,
         candidate.durationSec - FINGERPRINT_DURATION_WINDOW_SEC,
-        candidate.durationSec + FINGERPRINT_DURATION_WINDOW_SEC
-      )
+        candidate.durationSec + FINGERPRINT_DURATION_WINDOW_SEC,
+      ),
     )
     .limit(MAX_FINGERPRINT_CANDIDATES);
 
@@ -329,10 +329,10 @@ async function findCatalogTrackByFuzzy(
         between(
           tracks.duration,
           durationSec - FUZZY_DURATION_WINDOW_SEC,
-          durationSec + FUZZY_DURATION_WINDOW_SEC
+          durationSec + FUZZY_DURATION_WINDOW_SEC,
         ),
-        playableTrackFilter()
-      )
+        playableTrackFilter(),
+      ),
     );
 
   for (const c of candidates) {
@@ -354,7 +354,7 @@ async function findCatalogTrackByFuzzy(
 function asTrackMatch(
   track: MatchedTrack,
   tier: MatchTier,
-  bitErrorRate?: number
+  bitErrorRate?: number,
 ): CatalogTrackMatch {
   return {
     kind: 'track',

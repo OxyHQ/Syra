@@ -15,7 +15,7 @@ import { episodeIngestTickets } from '../schema/podcasts';
 /** Record a freshly minted ticket, inside the caller's transaction. */
 export async function insertIngestTicket(
   db: DbOrTransaction,
-  values: { jti: string; episodeId: string; expiresAt: Date }
+  values: { jti: string; episodeId: string; expiresAt: Date },
 ): Promise<void> {
   await db.insert(episodeIngestTickets).values(values);
 }
@@ -40,7 +40,7 @@ export async function insertIngestTicket(
 export async function claimIngestTicket(
   db: DbOrTransaction,
   jti: string,
-  episodeId: string
+  episodeId: string,
 ): Promise<boolean> {
   const claimed = await db
     .update(episodeIngestTickets)
@@ -50,8 +50,8 @@ export async function claimIngestTicket(
         eq(episodeIngestTickets.jti, jti),
         eq(episodeIngestTickets.episodeId, episodeId),
         isNull(episodeIngestTickets.consumedAt),
-        sql`${episodeIngestTickets.expiresAt} > now()`
-      )
+        sql`${episodeIngestTickets.expiresAt} > now()`,
+      ),
     )
     .returning({ jti: episodeIngestTickets.jti });
 

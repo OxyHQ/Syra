@@ -96,7 +96,7 @@ export function playableTrackFilter(): SQL {
 export function notTerminatedArtist(): SQL {
   return and(
     eq(catalogEntities.type, 'artist'),
-    sql`${catalogEntities.terminated} is not true`
+    sql`${catalogEntities.terminated} is not true`,
   ) as SQL;
 }
 

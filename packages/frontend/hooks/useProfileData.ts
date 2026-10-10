@@ -54,17 +54,13 @@ type RemoteUserProfile = Omit<UserEntity, 'avatar' | 'privacySettings'> & {
 /**
  * Computes profile design values from Oxy profile + backend customization settings
  */
-function computeDesign(
-  oxyProfile: UserEntity,
-  appearance?: UserAppearance
-): ProfileDesign {
+function computeDesign(oxyProfile: UserEntity, appearance?: UserAppearance): ProfileDesign {
   const customization = appearance?.profileCustomization;
   // Canonical display name comes from the Oxy API user contract (`name.displayName`).
   // We do NOT recompose it from `name.full`/`first`/`last`. `customization.displayName`
   // is Syra's own user-set profile override and intentionally takes precedence.
-  const canonicalName = typeof oxyProfile?.name === 'string'
-    ? oxyProfile.name
-    : oxyProfile?.name?.displayName;
+  const canonicalName =
+    typeof oxyProfile?.name === 'string' ? oxyProfile.name : oxyProfile?.name?.displayName;
 
   return {
     displayName: customization?.displayName || canonicalName || oxyProfile?.username || '',
@@ -79,7 +75,7 @@ function computeDesign(
 function normalizeProfile(profile: RemoteUserProfile): UserEntity {
   const privacySettings =
     typeof profile.privacySettings === 'object' && profile.privacySettings !== null
-      ? profile.privacySettings as Record<string, unknown>
+      ? (profile.privacySettings as Record<string, unknown>)
       : undefined;
 
   return {
@@ -94,7 +90,7 @@ function normalizeProfile(profile: RemoteUserProfile): UserEntity {
  * - Oxy profile data (fetched via React Query)
  * - Appearance/customization settings (from appearanceStore)
  * - Privacy settings
- * 
+ *
  * Uses proper Zustand selectors to avoid unnecessary re-renders
  */
 export function useProfileData(username?: string): {

@@ -96,14 +96,26 @@ function makeRes(): CapturedRes {
   return {
     _status: 200,
     _body: undefined,
-    status(code) { this._status = code; return this; },
-    json(body) { this._body = body; return this; },
+    status(code) {
+      this._status = code;
+      return this;
+    },
+    json(body) {
+      this._body = body;
+      return this;
+    },
   };
 }
 
-const failNext: NextFunction = (err) => { throw err; };
+const failNext: NextFunction = (err) => {
+  throw err;
+};
 
-function makeReq(userId: string, body: unknown = {}, params: Record<string, string> = {}): AuthRequest {
+function makeReq(
+  userId: string,
+  body: unknown = {},
+  params: Record<string, string> = {},
+): AuthRequest {
   return { params, query: {}, body, user: { id: userId } } as unknown as AuthRequest;
 }
 
@@ -294,8 +306,7 @@ describe('POST /api/artists/me/image-suggestions/accept', () => {
       makeRes() as unknown as Response,
       failNext,
     );
-    expect((await readArtist(artistId))?.imageLicenceAttribution)
-      .toBe('Jane Photographer');
+    expect((await readArtist(artistId))?.imageLicenceAttribution).toBe('Jane Photographer');
 
     // A second suggestion arrives later and is accepted.
     await getDb()
@@ -336,7 +347,7 @@ describe('POST /api/artists/me/image-suggestions/accept', () => {
     expect(res._status).toBe(400);
   });
 
-  it('cannot accept a suggestion on somebody else\'s profile', async () => {
+  it("cannot accept a suggestion on somebody else's profile", async () => {
     const artistId = await makeArtistWithSuggestions();
 
     const res = makeRes();
@@ -384,7 +395,7 @@ describe('POST /api/artists/me/image-suggestions/discard', () => {
     expect(res._status).toBe(404);
   });
 
-  it('cannot discard from somebody else\'s profile', async () => {
+  it("cannot discard from somebody else's profile", async () => {
     const artistId = await makeArtistWithSuggestions();
 
     const res = makeRes();

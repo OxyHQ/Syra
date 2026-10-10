@@ -19,9 +19,7 @@ afterAll(async () => {
  * BullMQ and "the job never ran in-process" would be the correct outcome, so a
  * silent skip would turn this file into a check that cannot fail.
  */
-const REDIS_CONFIGURED = Boolean(
-  (process.env.REDIS_URL ?? process.env.REDIS_URI ?? '').trim(),
-);
+const REDIS_CONFIGURED = Boolean((process.env.REDIS_URL ?? process.env.REDIS_URI ?? '').trim());
 
 /**
  * A failed lookup on a live connection settles in single-digit milliseconds;
@@ -66,16 +64,19 @@ async function createProcessingTrack() {
     })
     .returning({ id: catalogEntities.id });
 
-  const [track] = await getDb().insert(tracks).values({
-    title: 'Fallback Track',
-    artistId: artist?.id ?? '',
-    artistName: 'Test Artist',
-    duration: 180,
-    source: 'upload',
-    status: 'processing',
-    isExplicit: false,
-    isAvailable: true,
-  }).returning({ id: tracks.id });
+  const [track] = await getDb()
+    .insert(tracks)
+    .values({
+      title: 'Fallback Track',
+      artistId: artist?.id ?? '',
+      artistName: 'Test Artist',
+      duration: 180,
+      source: 'upload',
+      status: 'processing',
+      isExplicit: false,
+      isAvailable: true,
+    })
+    .returning({ id: tracks.id });
 
   if (!track) throw new Error('createProcessingTrack: insert returned no row');
   return track;

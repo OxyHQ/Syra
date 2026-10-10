@@ -1,9 +1,5 @@
 import { api } from '@/utils/api';
-import {
-  playlistSchema,
-  type Playlist,
-  type UpdatePlaylistRequest,
-} from '@syra/shared-types';
+import { playlistSchema, type Playlist, type UpdatePlaylistRequest } from '@syra/shared-types';
 import { z } from 'zod';
 import { normalizePlaylistImages } from '@/utils/catalogImages';
 
@@ -21,20 +17,26 @@ import { normalizePlaylistImages } from '@/utils/catalogImages';
 const playlistResponseSchema = playlistSchema.passthrough();
 
 /** `POST /playlists/:id/tracks` → 201. `skipped` counts already-present tracks. */
-const addTracksResponseSchema = z.object({
-  added: z.number(),
-  skipped: z.number(),
-}).passthrough();
+const addTracksResponseSchema = z
+  .object({
+    added: z.number(),
+    skipped: z.number(),
+  })
+  .passthrough();
 
 /** `DELETE /playlists/:id/tracks` → 200. `removed` is the raw `deletedCount`. */
-const removeTracksResponseSchema = z.object({
-  removed: z.number(),
-}).passthrough();
+const removeTracksResponseSchema = z
+  .object({
+    removed: z.number(),
+  })
+  .passthrough();
 
 /** `PUT /playlists/:id/tracks/reorder` → 200. */
-const reorderTracksResponseSchema = z.object({
-  reordered: z.number(),
-}).passthrough();
+const reorderTracksResponseSchema = z
+  .object({
+    reordered: z.number(),
+  })
+  .passthrough();
 
 function parsePlaylistResponse<T>(schema: z.ZodType<T>, data: unknown, label: string): T {
   const parsed = schema.safeParse(data);
@@ -117,7 +119,11 @@ export const playlistService = {
     const response = await api.delete<unknown>(`/playlists/${playlistId}/tracks`, {
       data: { trackIds },
     });
-    return parsePlaylistResponse(removeTracksResponseSchema, response.data, 'remove playlist tracks');
+    return parsePlaylistResponse(
+      removeTracksResponseSchema,
+      response.data,
+      'remove playlist tracks',
+    );
   },
 
   /**
@@ -131,6 +137,10 @@ export const playlistService = {
     const response = await api.put<unknown>(`/playlists/${playlistId}/tracks/reorder`, {
       trackIds,
     });
-    return parsePlaylistResponse(reorderTracksResponseSchema, response.data, 'reorder playlist tracks');
+    return parsePlaylistResponse(
+      reorderTracksResponseSchema,
+      response.data,
+      'reorder playlist tracks',
+    );
   },
 };

@@ -19,7 +19,9 @@ describe('@oxy.so/services entry', () => {
     const files = sources(SRC);
     expect(files.length).toBeGreaterThan(20);
     const offenders = files.filter((file) =>
-      /from\s+['"]@oxy\.so\/services['"]/.test(readFileSync(file, 'utf8').replace(/^\s*import\s+type[^;]*;/gm, '')),
+      /from\s+['"]@oxy\.so\/services['"]/.test(
+        readFileSync(file, 'utf8').replace(/^\s*import\s+type[^;]*;/gm, ''),
+      ),
     );
     expect(offenders).toEqual([]);
   });

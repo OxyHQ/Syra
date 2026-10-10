@@ -42,7 +42,11 @@ import {
 import { getDb } from '../db/postgres';
 import { findPodcastForOwner } from '../db/podcasts/podcasts';
 import { findEpisodeById, insertEpisode, updateEpisode } from '../db/podcasts/episodes';
-import { claimIngestTicket, insertIngestTicket, releaseIngestTicket } from '../db/podcasts/ingestTickets';
+import {
+  claimIngestTicket,
+  insertIngestTicket,
+  releaseIngestTicket,
+} from '../db/podcasts/ingestTickets';
 import { loadShowContext, toEpisodeDtos } from '../db/podcasts/hydrate';
 import { viewerOwnsShow } from '../db/podcasts/visibility';
 import { mintIngestTicket, verifyIngestTicket } from '../services/podcasts/ingestToken';
@@ -154,7 +158,7 @@ export async function createEpisodeDraft(req: AuthRequest, res: Response): Promi
   if (input.hosts?.length || input.guests?.length) {
     const built = await buildCreatorPersons(
       { hosts: input.hosts, guests: input.guests },
-      makeOxyUsersFetcher(oxy)
+      makeOxyUsersFetcher(oxy),
     );
     if (built.invalidIds.length > 0) {
       res
@@ -204,7 +208,7 @@ export async function createEpisodeDraft(req: AuthRequest, res: Response): Promi
       },
       { persons },
       { recordOnShow: true },
-      tx
+      tx,
     );
 
     await insertIngestTicket(tx, {
@@ -249,11 +253,8 @@ type IngestRefusal =
  */
 async function authorizeTicket(
   req: AuthRequest,
-  episodeId: string
-): Promise<
-  | { ok: true; jti: string; podcastId: string }
-  | { ok: false; refusal: IngestRefusal }
-> {
+  episodeId: string,
+): Promise<{ ok: true; jti: string; podcastId: string } | { ok: false; refusal: IngestRefusal }> {
   const raw = req.headers[INGEST_TICKET_HEADER];
   const token = typeof raw === 'string' ? raw : undefined;
   if (!token) {
@@ -324,9 +325,15 @@ async function authorizeTicket(
  */
 async function authorizeIngest(
   req: AuthRequest,
-  episodeId: string
+  episodeId: string,
 ): Promise<
-  | { ok: true; jti: string; podcastId: string; format: AudioSource['format']; file: Express.Multer.File }
+  | {
+      ok: true;
+      jti: string;
+      podcastId: string;
+      format: AudioSource['format'];
+      file: Express.Multer.File;
+    }
   | { ok: false; refusal: IngestRefusal }
 > {
   const authorized = await authorizeTicket(req, episodeId);
@@ -395,7 +402,11 @@ export async function ingestEpisodeAudio(req: AuthRequest, res: Response): Promi
     }
 
     try {
-      const audioKey = getS3PodcastEpisodeAudioKey(episodeId, authorized.podcastId, authorized.format);
+      const audioKey = getS3PodcastEpisodeAudioKey(
+        episodeId,
+        authorized.podcastId,
+        authorized.format,
+      );
       await uploadToS3(audioKey, authorized.file.buffer, { contentType: authorized.file.mimetype });
 
       /**
@@ -461,7 +472,7 @@ export async function ingestEpisodeAudio(req: AuthRequest, res: Response): Promi
         logger.error('[podcasts] failed to release an ingest ticket', {
           episodeId,
           err: describeErrorSafely(releaseErr),
-        })
+        }),
       );
       logger.error('[podcasts] episode ingest redemption failed', {
         episodeId,
@@ -567,7 +578,7 @@ export async function abandonEpisodeIngest(req: AuthRequest, res: Response): Pro
       logger.error('[podcasts] failed to release an ingest ticket', {
         episodeId,
         err: describeErrorSafely(releaseErr),
-      })
+      }),
     );
     logger.error('[podcasts] episode ingest abandonment failed', {
       episodeId,

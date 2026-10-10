@@ -80,7 +80,8 @@ export const musicService = {
     if (metadata.genre?.length) {
       for (const g of metadata.genre) formData.append('genre', g);
     }
-    if (metadata.isExplicit !== undefined) formData.append('isExplicit', String(metadata.isExplicit));
+    if (metadata.isExplicit !== undefined)
+      formData.append('isExplicit', String(metadata.isExplicit));
 
     const response = await api.post<unknown>('/tracks/upload', formData);
     return parse(trackResponseSchema, response.data, 'track upload');

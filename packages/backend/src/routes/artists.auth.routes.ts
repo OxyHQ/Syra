@@ -45,7 +45,3 @@ router.post('/me/image-suggestions/discard', requireAuth, discardMyImageSuggesti
 router.post('/:id/claim', requireAuth, createArtistClaim);
 
 export default router;
-
-
-
-

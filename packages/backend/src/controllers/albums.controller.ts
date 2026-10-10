@@ -184,7 +184,7 @@ export const createAlbum = async (req: AuthRequest, res: Response, next: NextFun
     if (!data.title || !data.artistId || !data.releaseDate || !data.coverArt) {
       return res.status(400).json({
         error: 'Missing required fields',
-        message: 'Title, artistId, releaseDate, and coverArt are required'
+        message: 'Title, artistId, releaseDate, and coverArt are required',
       });
     }
 
@@ -194,7 +194,7 @@ export const createAlbum = async (req: AuthRequest, res: Response, next: NextFun
     if (!artist) {
       return res.status(403).json({
         error: 'Forbidden',
-        message: 'You do not own this artist profile'
+        message: 'You do not own this artist profile',
       });
     }
 
@@ -202,15 +202,22 @@ export const createAlbum = async (req: AuthRequest, res: Response, next: NextFun
     if (artist.uploadsDisabled) {
       return res.status(403).json({
         error: 'Uploads disabled',
-        message: 'Uploads are disabled due to copyright strikes. Please contact support for more information.'
+        message:
+          'Uploads are disabled due to copyright strikes. Please contact support for more information.',
       });
     }
 
     // Reject blob URLs, http/https URLs, or any other format
-    if (data.coverArt.startsWith('blob:') || data.coverArt.startsWith('http://') || data.coverArt.startsWith('https://') || data.coverArt.startsWith('/api/')) {
+    if (
+      data.coverArt.startsWith('blob:') ||
+      data.coverArt.startsWith('http://') ||
+      data.coverArt.startsWith('https://') ||
+      data.coverArt.startsWith('/api/')
+    ) {
       return res.status(400).json({
         error: 'Invalid coverArt',
-        message: 'coverArt must be a valid image ID. Images must be uploaded first using /api/images/upload.'
+        message:
+          'coverArt must be a valid image ID. Images must be uploaded first using /api/images/upload.',
       });
     }
 
@@ -220,7 +227,8 @@ export const createAlbum = async (req: AuthRequest, res: Response, next: NextFun
     if (!isLiveEntityId(data.coverArt)) {
       return res.status(400).json({
         error: 'Invalid coverArt',
-        message: 'coverArt must be a valid image ID. Images must be uploaded first using /api/images/upload.'
+        message:
+          'coverArt must be a valid image ID. Images must be uploaded first using /api/images/upload.',
       });
     }
 

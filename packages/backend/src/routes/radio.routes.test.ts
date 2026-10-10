@@ -8,7 +8,11 @@ import { userMusicPreferences } from '../db/schema/user';
 import { makeArtist, makeTrack } from '../services/radio/radioFixtures';
 import { readRadioStation } from '../services/radio/radioStationStore';
 import { PREVIEW_DURATION_SEC } from '../services/ingest/previewClip';
-import { getRadioPage, clearRadio, GUEST_PREVIEW_TRACK_LIMIT } from '../controllers/radio.controller';
+import {
+  getRadioPage,
+  clearRadio,
+  GUEST_PREVIEW_TRACK_LIMIT,
+} from '../controllers/radio.controller';
 
 /**
  * A stand-in for the shared Redis client, mirroring `radioStationStore.test.ts`.
@@ -71,10 +75,22 @@ function makeRes(): CapturedRes {
     statusCode: 200,
     body: undefined,
     headers: {},
-    status(code) { this.statusCode = code; return this; },
-    set(name, value) { this.headers[name] = value; return this; },
-    json(body) { this.body = body; return this; },
-    send(body) { this.body = body; return this; },
+    status(code) {
+      this.statusCode = code;
+      return this;
+    },
+    set(name, value) {
+      this.headers[name] = value;
+      return this;
+    },
+    json(body) {
+      this.body = body;
+      return this;
+    },
+    send(body) {
+      this.body = body;
+      return this;
+    },
   };
   return res;
 }
@@ -99,7 +115,10 @@ function makeReq(query: Record<string, string>, opts: CallOptions = {}): AuthReq
   } as unknown as AuthRequest;
 }
 
-async function callRadio(query: Record<string, string>, opts: CallOptions = {}): Promise<CapturedRes> {
+async function callRadio(
+  query: Record<string, string>,
+  opts: CallOptions = {},
+): Promise<CapturedRes> {
   const res = makeRes();
   await getRadioPage(makeReq(query, opts), res as unknown as Response, next);
   return res;
@@ -155,7 +174,10 @@ describe('GET /api/radio — catalog availability', () => {
       copyrightRemoved: true,
     });
 
-    const res = await callRadio({ seedType: 'genre', seedId: GENRE, limit: '20' }, { userId: 'user-1' });
+    const res = await callRadio(
+      { seedType: 'genre', seedId: GENRE, limit: '20' },
+      { userId: 'user-1' },
+    );
 
     expect(res.statusCode).toBe(200);
     expect(trackIdsOf(res)).not.toContain(struck.id);
@@ -165,7 +187,10 @@ describe('GET /api/radio — catalog availability', () => {
   it('404s a seed that does not exist', async () => {
     await seedCatalogue();
 
-    const res = await callRadio({ seedType: 'genre', seedId: 'no-such-genre' }, { userId: 'user-1' });
+    const res = await callRadio(
+      { seedType: 'genre', seedId: 'no-such-genre' },
+      { userId: 'user-1' },
+    );
 
     expect(res.statusCode).toBe(404);
   });
@@ -189,7 +214,7 @@ describe('GET /api/radio — explicit content preference', () => {
 
     const res = await callRadio(
       { seedType: 'genre', seedId: GENRE, limit: '20' },
-      { userId: 'user-clean' }
+      { userId: 'user-clean' },
     );
 
     expect(res.statusCode).toBe(200);
@@ -208,7 +233,7 @@ describe('GET /api/radio — explicit content preference', () => {
 
     const res = await callRadio(
       { seedType: 'genre', seedId: GENRE, limit: '20' },
-      { userId: 'user-explicit-ok' }
+      { userId: 'user-explicit-ok' },
     );
 
     expect(trackIdsOf(res)).toContain(explicit.id);
@@ -224,7 +249,7 @@ describe('GET /api/radio — guest preview wall', () => {
     // The guest asks for a full page; the allowance, not the limit, decides.
     const first = await callRadio(
       { seedType: 'genre', seedId: GENRE, limit: '20' },
-      { deviceId: 'device-a' }
+      { deviceId: 'device-a' },
     );
 
     expect(first.statusCode).toBe(200);
@@ -238,7 +263,7 @@ describe('GET /api/radio — guest preview wall', () => {
 
     const second = await callRadio(
       { seedType: 'genre', seedId: GENRE, limit: '20' },
-      { deviceId: 'device-a' }
+      { deviceId: 'device-a' },
     );
 
     expect(second.statusCode).toBe(200);
@@ -255,7 +280,7 @@ describe('GET /api/radio — guest preview wall', () => {
 
     const res = await callRadio(
       { seedType: 'genre', seedId: GENRE, limit: '10' },
-      { userId: 'user-1' }
+      { userId: 'user-1' },
     );
 
     expect(pageOf(res).gate).toBeNull();
@@ -269,7 +294,7 @@ describe('GET /api/radio — guest preview wall', () => {
     await callRadio({ seedType: 'genre', seedId: GENRE, limit: '20' }, { deviceId: 'device-a' });
     const other = await callRadio(
       { seedType: 'genre', seedId: GENRE, limit: '20' },
-      { deviceId: 'device-b' }
+      { deviceId: 'device-b' },
     );
 
     expect(pageOf(other).tracks).toHaveLength(GUEST_PREVIEW_TRACK_LIMIT);
@@ -298,7 +323,10 @@ describe('GET /api/radio — paging', () => {
   it('never repeats a track across two consecutive pages', async () => {
     await seedCatalogue();
 
-    const first = await callRadio({ seedType: 'genre', seedId: GENRE, limit: '5' }, { userId: 'pager' });
+    const first = await callRadio(
+      { seedType: 'genre', seedId: GENRE, limit: '5' },
+      { userId: 'pager' },
+    );
     const cursor = pageOf(first).cursor;
     expect(cursor).not.toBeNull();
 
@@ -315,8 +343,14 @@ describe('GET /api/radio — paging', () => {
   it('replays a page a client asks for twice instead of burning fresh catalog', async () => {
     await seedCatalogue();
 
-    const first = await callRadio({ seedType: 'genre', seedId: GENRE, limit: '5' }, { userId: 'retrier' });
-    const retry = await callRadio({ seedType: 'genre', seedId: GENRE, limit: '5' }, { userId: 'retrier' });
+    const first = await callRadio(
+      { seedType: 'genre', seedId: GENRE, limit: '5' },
+      { userId: 'retrier' },
+    );
+    const retry = await callRadio(
+      { seedType: 'genre', seedId: GENRE, limit: '5' },
+      { userId: 'retrier' },
+    );
 
     expect(trackIdsOf(retry)).toEqual(trackIdsOf(first));
   });
@@ -354,7 +388,10 @@ describe('GET /api/radio — owner isolation', () => {
   it('does not let a replayed cursor mutate the station of the listener who minted it', async () => {
     await seedCatalogue();
 
-    const mine = await callRadio({ seedType: 'genre', seedId: GENRE, limit: '5' }, { userId: 'owner-a' });
+    const mine = await callRadio(
+      { seedType: 'genre', seedId: GENRE, limit: '5' },
+      { userId: 'owner-a' },
+    );
     const stolenCursor = pageOf(mine).cursor;
     expect(stolenCursor).not.toBeNull();
 
@@ -363,7 +400,10 @@ describe('GET /api/radio — owner isolation', () => {
 
     // A different listener presents the cursor. It names a station, never an
     // owner — the owner key is always re-derived from the request.
-    const theirs = await callRadio({ cursor: stolenCursor ?? '', limit: '5' }, { userId: 'owner-b' });
+    const theirs = await callRadio(
+      { cursor: stolenCursor ?? '', limit: '5' },
+      { userId: 'owner-b' },
+    );
     expect(theirs.statusCode).toBe(200);
 
     const afterA = await readRadioStation({ ...identity, ownerKey: 'u:owner-a' });
@@ -405,14 +445,17 @@ describe('DELETE /api/radio', () => {
   it('clears the station so the next request starts over', async () => {
     await seedCatalogue();
 
-    const first = await callRadio({ seedType: 'genre', seedId: GENRE, limit: '5' }, { userId: 'resetter' });
+    const first = await callRadio(
+      { seedType: 'genre', seedId: GENRE, limit: '5' },
+      { userId: 'resetter' },
+    );
     expect(pageOf(first).tracks.length).toBeGreaterThan(0);
 
     const deleteRes = makeRes();
     await clearRadio(
       makeReq({ seedType: 'genre', seedId: GENRE }, { userId: 'resetter' }),
       deleteRes as unknown as Response,
-      next
+      next,
     );
     expect(deleteRes.statusCode).toBe(204);
 
@@ -434,12 +477,12 @@ describe('DELETE /api/radio', () => {
     await clearRadio(
       makeReq({ seedType: 'genre', seedId: GENRE }, { deviceId: 'device-c' }),
       deleteRes as unknown as Response,
-      next
+      next,
     );
 
     const again = await callRadio(
       { seedType: 'genre', seedId: GENRE, limit: '20' },
-      { deviceId: 'device-c' }
+      { deviceId: 'device-c' },
     );
     expect(pageOf(again).tracks).toHaveLength(GUEST_PREVIEW_TRACK_LIMIT);
   });

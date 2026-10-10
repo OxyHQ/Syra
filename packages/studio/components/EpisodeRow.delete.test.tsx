@@ -27,7 +27,9 @@ jest.mock('@oxy.so/bloom/alert-dialog', () => ({
 }));
 
 jest.mock('@oxy.so/bloom/theme', () => ({
-  useTheme: () => ({ colors: { error: '#ff0000', text: '#000', textSecondary: '#666', primary: '#00f' } }),
+  useTheme: () => ({
+    colors: { error: '#ff0000', text: '#000', textSecondary: '#666', primary: '#00f' },
+  }),
 }));
 
 jest.mock('@oxy.so/bloom/toast', () => ({
@@ -109,7 +111,8 @@ function renderRow(deletable: boolean): ReactTestRenderer {
  */
 function deleteTriggers(tree: ReactTestRenderer) {
   return tree.root.findAll(
-    (node) => node.props?.testID === 'delete-episode-ep-1' && typeof node.props?.onPress === 'function',
+    (node) =>
+      node.props?.testID === 'delete-episode-ep-1' && typeof node.props?.onPress === 'function',
   );
 }
 
@@ -147,7 +150,10 @@ beforeEach(() => {
   dialogProps.length = 0;
   jest.clearAllMocks();
   queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false, gcTime: Infinity }, mutations: { retry: false, gcTime: Infinity } },
+    defaultOptions: {
+      queries: { retry: false, gcTime: Infinity },
+      mutations: { retry: false, gcTime: Infinity },
+    },
   });
   invalidateQueries = jest.spyOn(queryClient, 'invalidateQueries');
   removeQueries = jest.spyOn(queryClient, 'removeQueries');

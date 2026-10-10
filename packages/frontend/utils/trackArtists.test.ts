@@ -29,7 +29,7 @@ describe('trackArtists', () => {
           { name: 'Bb trickz', role: 'artist', nameKey: 'bb trickz', catalogEntityId: 'ent-bb' },
           { name: 'Otro', role: 'artist', nameKey: 'otro', catalogEntityId: 'ent-otro' },
         ],
-      })
+      }),
     );
 
     expect(artists.map((artist) => artist.name)).toEqual(['benny blanco', 'Bb trickz', 'Otro']);
@@ -44,7 +44,7 @@ describe('trackArtists', () => {
           { name: 'Ana Gil', role: 'producer', nameKey: 'ana gil' },
           { name: 'Bb trickz', role: 'artist', nameKey: 'bb trickz', catalogEntityId: 'ent-bb' },
         ],
-      })
+      }),
     );
 
     expect(artists.map((artist) => artist.name)).toEqual(['benny blanco', 'Bb trickz']);
@@ -55,7 +55,7 @@ describe('trackArtists', () => {
       track({
         artistName: 'Zeta',
         credits: [{ name: 'Alpha', role: 'artist', nameKey: 'alpha', catalogEntityId: 'ent-a' }],
-      })
+      }),
     );
 
     expect(artists.map((artist) => artist.name)).toEqual(['Zeta', 'Alpha']);
@@ -65,7 +65,7 @@ describe('trackArtists', () => {
     // A name off a file tag: it was really on the record, but it is not a claim
     // about which catalogue row that person is — so it shows and does not link.
     const artists = trackArtists(
-      track({ credits: [{ name: 'Invitada', role: 'artist', nameKey: 'invitada' }] })
+      track({ credits: [{ name: 'Invitada', role: 'artist', nameKey: 'invitada' }] }),
     );
 
     expect(artists[1]).toEqual({ name: 'Invitada' });
@@ -78,7 +78,7 @@ describe('trackArtists', () => {
         credits: [
           { name: 'BENNY BLANCO', role: 'artist', nameKey: 'benny blanco', catalogEntityId: 'x' },
         ],
-      })
+      }),
     );
 
     expect(artists).toHaveLength(1);
@@ -88,8 +88,10 @@ describe('trackArtists', () => {
     const artists = trackArtists(
       track({
         artistName: '',
-        credits: [{ name: 'Bb trickz', role: 'artist', nameKey: 'bb trickz', catalogEntityId: 'b' }],
-      })
+        credits: [
+          { name: 'Bb trickz', role: 'artist', nameKey: 'bb trickz', catalogEntityId: 'b' },
+        ],
+      }),
     );
 
     expect(artists.map((artist) => artist.name)).toEqual(['Bb trickz']);
@@ -106,8 +108,8 @@ describe('trackArtistsText', () => {
             { name: 'Ana Gil', role: 'producer', nameKey: 'ana gil' },
           ],
         }),
-        'fallback'
-      )
+        'fallback',
+      ),
     ).toBe('benny blanco, Bb trickz');
   });
 

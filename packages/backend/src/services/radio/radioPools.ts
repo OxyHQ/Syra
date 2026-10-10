@@ -1,13 +1,4 @@
-import {
-  and,
-  arrayOverlaps,
-  eq,
-  inArray,
-  notInArray,
-  or,
-  sql,
-  type SQL,
-} from 'drizzle-orm';
+import { and, arrayOverlaps, eq, inArray, notInArray, or, sql, type SQL } from 'drizzle-orm';
 import { publicColumns } from '@oxy.so/db/assert';
 import { findRelatedEdges } from '../../db/user/relations';
 import { getDb } from '../../db/postgres';
@@ -116,7 +107,7 @@ interface PoolQueryContext {
 async function findPoolTracks(
   ctx: PoolQueryContext,
   condition: SQL | undefined,
-  limit: number
+  limit: number,
 ): Promise<PublicTrackRow[]> {
   if (limit <= 0) {
     return [];
@@ -135,8 +126,8 @@ async function findPoolTracks(
         // the two agree, but the spelling is the one that stays correct if the
         // column ever becomes nullable, and it matches Mongo's `{ $ne: true }`.
         ctx.allowExplicit ? undefined : sql`${tracks.isExplicit} is not true`,
-        condition
-      )
+        condition,
+      ),
     )
     .orderBy(...POPULARITY_ORDER)
     .limit(limit);
@@ -152,7 +143,7 @@ async function gatherCandidates(
   seed: SeedResolution,
   state: RadioStationState,
   target: number,
-  allowExplicit: boolean
+  allowExplicit: boolean,
 ): Promise<GatheredCandidates> {
   const rows = new Map<string, PublicTrackRow>();
   const cfScores = new Map<string, number>();
@@ -205,7 +196,7 @@ async function gatherCandidates(
     const relatedArtistIds = await topRelatedArtistIds(
       seed.seedArtistIds,
       new Set<string>(),
-      remaining()
+      remaining(),
     );
     if (relatedArtistIds.length > 0) {
       collect(await findPoolTracks(ctx, inArray(tracks.artistId, relatedArtistIds), remaining()));
@@ -223,8 +214,7 @@ async function gatherCandidates(
     if (seed.tags.length > 0) contentTerms.push(arrayOverlaps(tracks.tags, seed.tags));
 
     if (contentTerms.length > 0) {
-      const condition =
-        contentTerms.length === 1 ? contentTerms[0] : (or(...contentTerms) as SQL);
+      const condition = contentTerms.length === 1 ? contentTerms[0] : (or(...contentTerms) as SQL);
       collect(await findPoolTracks(ctx, condition, remaining()));
     }
   }
@@ -272,7 +262,7 @@ function toCandidate(row: PublicTrackRow, cfScore: number | undefined): RadioCan
 /** Gather, score and programme one page against a given station state. */
 async function programmePage(
   input: BuildRadioPageInput,
-  state: RadioStationState
+  state: RadioStationState,
 ): Promise<PublicTrackRow[]> {
   const { seed, page, limit, taste, allowExplicit } = input;
 
@@ -295,9 +285,7 @@ async function programmePage(
     }
   }
 
-  const candidates = Array.from(rows.values()).map((row) =>
-    toCandidate(row, cfScores.get(row.id))
-  );
+  const candidates = Array.from(rows.values()).map((row) => toCandidate(row, cfScores.get(row.id)));
 
   const ranked: RankedRadioCandidate[] = candidates
     .map((candidate) => ({

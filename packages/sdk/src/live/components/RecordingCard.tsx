@@ -9,7 +9,20 @@ import type { Recording } from '../validation';
 
 // --- Helpers ---
 
-const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTH_SHORT = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
 
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr);
@@ -48,7 +61,11 @@ export const RecordingCard: React.FC<RecordingCardProps> = ({ recording, onPress
 
   return (
     <TouchableOpacity
-      style={[styles.card, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }, style]}
+      style={[
+        styles.card,
+        { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
+        style,
+      ]}
       onPress={onPress}
       activeOpacity={onPress ? 0.7 : 1}
       disabled={!onPress}
@@ -66,9 +83,17 @@ export const RecordingCard: React.FC<RecordingCardProps> = ({ recording, onPress
           </Text>
           <View style={styles.meta}>
             {hostAvatarUri && (
-              <AvatarComponent size={16} source={hostAvatarUri} shape="squircle" style={{ marginRight: 4 }} />
+              <AvatarComponent
+                size={16}
+                source={hostAvatarUri}
+                shape="squircle"
+                style={{ marginRight: 4 }}
+              />
             )}
-            <Text style={[styles.metaText, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+            <Text
+              style={[styles.metaText, { color: theme.colors.textSecondary }]}
+              numberOfLines={1}
+            >
               {hostName}
             </Text>
             <Text style={[styles.dot, { color: theme.colors.textSecondary }]}>·</Text>
@@ -83,8 +108,14 @@ export const RecordingCard: React.FC<RecordingCardProps> = ({ recording, onPress
           )}
           {listeners > 0 && (
             <View style={styles.listenersRow}>
-              <MaterialCommunityIcons name="account-group" size={12} color={theme.colors.textSecondary} />
-              <Text style={[styles.listenersText, { color: theme.colors.textSecondary }]}>{listeners}</Text>
+              <MaterialCommunityIcons
+                name="account-group"
+                size={12}
+                color={theme.colors.textSecondary}
+              />
+              <Text style={[styles.listenersText, { color: theme.colors.textSecondary }]}>
+                {listeners}
+              </Text>
             </View>
           )}
         </View>

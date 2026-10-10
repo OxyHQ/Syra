@@ -114,7 +114,7 @@ function podcast(id: string): Podcast {
 }
 
 describe('each read parses the shape its own client delivers', () => {
-  it('reads the owner\'s shows from an UNWRAPPED payload', async () => {
+  it("reads the owner's shows from an UNWRAPPED payload", async () => {
     // The server sent `{ data: [...] }`; the linked client already removed it.
     mockApiGet.mockResolvedValueOnce({ data: [podcast('a'), podcast('b')] });
 
@@ -131,7 +131,7 @@ describe('each read parses the shape its own client delivers', () => {
     expect(show.persons).toEqual([]);
   });
 
-  it('reads a show\'s episodes from an UNWRAPPED payload', async () => {
+  it("reads a show's episodes from an UNWRAPPED payload", async () => {
     mockApiGet.mockResolvedValueOnce({ data: [] });
 
     await expect(podcastService.getPodcastEpisodes('a')).resolves.toEqual([]);

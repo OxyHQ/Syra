@@ -89,11 +89,14 @@ export async function probeAudio(inputPath: string): Promise<ProbedAudio> {
     const result = await execFile(
       'ffprobe',
       [
-        '-v', 'error',
-        '-print_format', 'json',
+        '-v',
+        'error',
+        '-print_format',
+        'json',
         '-show_format',
         '-show_streams',
-        '-select_streams', 'a:0',
+        '-select_streams',
+        'a:0',
         inputPath,
       ],
       EXEC_OPTS,
@@ -116,12 +119,14 @@ export async function probeAudio(inputPath: string): Promise<ProbedAudio> {
   // The container duration is the more reliable of the two (a stream may declare
   // none), but a stream duration is preferred when present because it excludes
   // container padding.
-  const durationSec = toPositiveNumber(stream?.duration) ?? toPositiveNumber(parsed.format?.duration);
+  const durationSec =
+    toPositiveNumber(stream?.duration) ?? toPositiveNumber(parsed.format?.duration);
   if (durationSec === undefined) {
     throw new Error(`ffprobe: no usable duration for ${inputPath}`);
   }
 
-  const bitsPerSecond = toPositiveNumber(stream?.bit_rate) ?? toPositiveNumber(parsed.format?.bit_rate);
+  const bitsPerSecond =
+    toPositiveNumber(stream?.bit_rate) ?? toPositiveNumber(parsed.format?.bit_rate);
   const sampleRate = toPositiveNumber(stream?.sample_rate);
   const channels =
     typeof stream?.channels === 'number' && Number.isFinite(stream.channels) && stream.channels > 0

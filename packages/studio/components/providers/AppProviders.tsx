@@ -75,9 +75,7 @@ export const AppProviders = memo(function AppProviders({
             >
               <ImageResolverProvider value={resolveImage}>
                 <BottomSheetModalProvider>
-                  <LiveRoomsProvider>
-                    {children}
-                  </LiveRoomsProvider>
+                  <LiveRoomsProvider>{children}</LiveRoomsProvider>
                   <StatusBar style="auto" />
                 </BottomSheetModalProvider>
               </ImageResolverProvider>

@@ -85,7 +85,7 @@ export async function setQueue(userId: string, queue: Queue): Promise<boolean> {
 export async function addTracks(
   userId: string,
   tracks: PlayableItem[],
-  position?: 'next' | 'last' | number
+  position?: 'next' | 'last' | number,
 ): Promise<Queue | null> {
   try {
     const redis = getRedisClient();
@@ -95,7 +95,7 @@ export async function addTracks(
     }
 
     let queue = await getQueue(userId);
-    
+
     // Initialize queue if it doesn't exist
     if (!queue) {
       queue = {
@@ -132,7 +132,9 @@ export async function addTracks(
     await setQueue(userId, queue);
     return queue;
   } catch (error) {
-    logger.error('[QueueService] Error adding tracks to queue:', { error: describeErrorSafely(error) });
+    logger.error('[QueueService] Error adding tracks to queue:', {
+      error: describeErrorSafely(error),
+    });
     return null;
   }
 }
@@ -140,10 +142,7 @@ export async function addTracks(
 /**
  * Remove tracks from queue
  */
-export async function removeTracks(
-  userId: string,
-  refs: PlayableRef[]
-): Promise<Queue | null> {
+export async function removeTracks(userId: string, refs: PlayableRef[]): Promise<Queue | null> {
   try {
     const redis = getRedisClient();
     if (!redis.isReady) {
@@ -172,9 +171,9 @@ export async function removeTracks(
     // Update current index
     if (queue.current >= 0) {
       // Count how many removed tracks were before current
-      const removedBeforeCurrent = indicesToRemove.filter(idx => idx < queue.current).length;
+      const removedBeforeCurrent = indicesToRemove.filter((idx) => idx < queue.current).length;
       queue.current = Math.max(-1, queue.current - removedBeforeCurrent);
-      
+
       // If current track was removed, adjust
       if (indicesToRemove.includes(queue.current)) {
         // Move to next track, or previous if at end
@@ -190,7 +189,9 @@ export async function removeTracks(
     await setQueue(userId, queue);
     return queue;
   } catch (error) {
-    logger.error('[QueueService] Error removing tracks from queue:', { error: describeErrorSafely(error) });
+    logger.error('[QueueService] Error removing tracks from queue:', {
+      error: describeErrorSafely(error),
+    });
     return null;
   }
 }
@@ -198,10 +199,7 @@ export async function removeTracks(
 /**
  * Reorder queue tracks
  */
-export async function reorderQueue(
-  userId: string,
-  newOrder: PlayableRef[]
-): Promise<Queue | null> {
+export async function reorderQueue(userId: string, newOrder: PlayableRef[]): Promise<Queue | null> {
   try {
     const redis = getRedisClient();
     if (!redis.isReady) {
@@ -215,7 +213,7 @@ export async function reorderQueue(
     }
 
     // Create map for fast lookup
-    const trackMap = new Map(queue.tracks.map(track => [refKey(track), track]));
+    const trackMap = new Map(queue.tracks.map((track) => [refKey(track), track]));
     const orderedKeys = newOrder.map(refKey);
     const orderedKeySet = new Set(orderedKeys);
 
@@ -242,7 +240,7 @@ export async function reorderQueue(
       const oldCurrentTrack = queue.tracks[queue.current];
       if (oldCurrentTrack) {
         const oldKey = refKey(oldCurrentTrack);
-        const newIndex = newTracks.findIndex(t => refKey(t) === oldKey);
+        const newIndex = newTracks.findIndex((t) => refKey(t) === oldKey);
         queue.current = newIndex >= 0 ? newIndex : 0;
       }
     }
@@ -294,7 +292,9 @@ export async function setCurrentIndex(userId: string, index: number): Promise<Qu
     await setQueue(userId, queue);
     return queue;
   } catch (error) {
-    logger.error('[QueueService] Error setting current index:', { error: describeErrorSafely(error) });
+    logger.error('[QueueService] Error setting current index:', {
+      error: describeErrorSafely(error),
+    });
     return null;
   }
 }
@@ -338,13 +338,9 @@ export async function getPreviousTrack(userId: string): Promise<PlayableItem | n
 
     return queue.tracks[prevIndex] || null;
   } catch (error) {
-    logger.error('[QueueService] Error getting previous track:', { error: describeErrorSafely(error) });
+    logger.error('[QueueService] Error getting previous track:', {
+      error: describeErrorSafely(error),
+    });
     return null;
   }
 }
-
-
-
-
-
-

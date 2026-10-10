@@ -64,7 +64,7 @@ async function play(
   oxyUserId: string,
   trackId: string,
   artistId: string,
-  options: PlayOptions = {}
+  options: PlayOptions = {},
 ): Promise<void> {
   await insertListeningEvent({
     oxyUserId,
@@ -83,9 +83,7 @@ describe('listening events', () => {
     const artistId = await makeArtist();
 
     // `track_id` is a real foreign key, where Mongo stored the string.
-    await expect(
-      play('oxy-1', 'no-such-track', artistId)
-    ).rejects.toThrow();
+    await expect(play('oxy-1', 'no-such-track', artistId)).rejects.toThrow();
   });
 
   it('reads one listener s most recent track ids, newest first', async () => {
@@ -139,7 +137,7 @@ describe('the miner walks the log', () => {
         maxEvents,
         pageSize,
       },
-      (event) => seen.push(event)
+      (event) => seen.push(event),
     );
     return seen;
   }

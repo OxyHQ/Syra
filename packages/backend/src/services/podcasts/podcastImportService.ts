@@ -60,7 +60,12 @@ import {
   type PublishedEpisode,
 } from '../notifications/triggers/episodePublished';
 import { logger } from '../../utils/logger';
-import { fetchAndParse, type ParsedEpisode, type ParsedShow, type SafeFetchFn } from './RssConnector';
+import {
+  fetchAndParse,
+  type ParsedEpisode,
+  type ParsedShow,
+  type SafeFetchFn,
+} from './RssConnector';
 import { rehostPodcastImage } from './podcastMedia';
 import type { PodcastDirectoryCandidate } from './PodcastDirectory';
 import { describeErrorSafely } from '../../utils/error';
@@ -144,7 +149,7 @@ export interface ImportFeedResult {
  */
 function buildPodcastSet(
   show: ParsedShow,
-  directory: PodcastDirectoryCandidate | undefined
+  directory: PodcastDirectoryCandidate | undefined,
 ): PodcastValues {
   return {
     title: show.title,
@@ -164,7 +169,7 @@ function buildPodcastSet(
 function buildEpisodeSet(
   podcastTitle: string,
   episode: ParsedEpisode,
-  artwork: ArtworkColumns | undefined
+  artwork: ArtworkColumns | undefined,
 ): EpisodeValues {
   return {
     podcastTitle,
@@ -199,7 +204,7 @@ function buildEpisodeSet(
 async function showCoverColumns(
   row: PodcastRow,
   feedUrl: string,
-  sourceImageUrl: string | undefined
+  sourceImageUrl: string | undefined,
 ): Promise<ArtworkColumns | undefined> {
   if (!sourceImageUrl) return undefined;
 
@@ -255,7 +260,7 @@ async function showCoverColumns(
  */
 export async function importFeed(
   feedUrl: string,
-  options: ImportFeedOptions = {}
+  options: ImportFeedOptions = {},
 ): Promise<ImportFeedResult> {
   const existing =
     (await findPodcastByFeedUrl(feedUrl)) ??
@@ -269,7 +274,7 @@ export async function importFeed(
       etag: options.force ? undefined : (existing?.etag ?? undefined),
       lastModified: options.force ? undefined : (existing?.lastModified ?? undefined),
     },
-    { fetch: options.fetch }
+    { fetch: options.fetch },
   );
 
   if (fetched.notModified && existing) {
@@ -291,7 +296,8 @@ export async function importFeed(
 
   const show = fetched.show;
   const set = buildPodcastSet(show, options.directory);
-  const categories = show.categories.length > 0 ? show.categories : (options.directory?.categories ?? []);
+  const categories =
+    show.categories.length > 0 ? show.categories : (options.directory?.categories ?? []);
 
   let podcast = await upsertPodcastFromFeed({
     existingId: existing?.id,
@@ -323,7 +329,7 @@ export async function importFeed(
     logger.warn('[podcasts] show cover re-host failed', { feedUrl, err: describeErrorSafely(err) });
     if (showImageUrl) {
       await updatePodcast(podcast.id, { imageSourceUrl: showImageUrl }).catch((saveErr) =>
-        logger.warn('[podcasts] persisting fallback image url failed', { feedUrl, err: saveErr })
+        logger.warn('[podcasts] persisting fallback image url failed', { feedUrl, err: saveErr }),
       );
     }
   }
@@ -404,7 +410,11 @@ export async function importFeed(
         });
       }
     } catch (err) {
-      logger.error('[podcasts] per-episode upsert failed', { feedUrl, guid: episode.guid, err: describeErrorSafely(err) });
+      logger.error('[podcasts] per-episode upsert failed', {
+        feedUrl,
+        guid: episode.guid,
+        err: describeErrorSafely(err),
+      });
       failedEpisodes += 1;
     }
   }

@@ -39,11 +39,20 @@ export interface LiveConfig {
   useUserById: (id: string | undefined) => UserEntity | undefined;
   ensureUserById: (
     id: string,
-    loader: (id: string) => Promise<UserEntity | null | undefined>
+    loader: (id: string) => Promise<UserEntity | null | undefined>,
   ) => Promise<UserEntity | undefined>;
-  getCachedFileDownloadUrl: (oxyServices: unknown, fileId: string, variant?: string) => Promise<string>;
+  getCachedFileDownloadUrl: (
+    oxyServices: unknown,
+    fileId: string,
+    variant?: string,
+  ) => Promise<string>;
   getCachedFileDownloadUrlSync: (oxyServices: unknown, fileId: string, variant?: string) => string;
-  AvatarComponent: React.ComponentType<{ size: number; source?: string; shape?: string; style?: ViewStyle }>;
+  AvatarComponent: React.ComponentType<{
+    size: number;
+    source?: string;
+    shape?: string;
+    style?: ViewStyle;
+  }>;
   toast: {
     (message: string, options?: Record<string, unknown>): void;
     success: (message: string) => void;
@@ -80,7 +89,13 @@ export function useLiveConfig(): LiveConfigInternal {
   return config;
 }
 
-export function LiveConfigProvider({ config, children }: { config: LiveConfig; children: React.ReactNode }) {
+export function LiveConfigProvider({
+  config,
+  children,
+}: {
+  config: LiveConfig;
+  children: React.ReactNode;
+}) {
   const fullConfig = useMemo<LiveConfigInternal>(() => {
     const roomsService = createRoomsService(config.httpClient);
     const roomSocketService = new RoomSocketService(config.socketUrl);
@@ -88,9 +103,5 @@ export function LiveConfigProvider({ config, children }: { config: LiveConfig; c
     return { ...config, roomsService, roomSocketService, getRoomToken };
   }, [config]);
 
-  return (
-    <LiveConfigContext.Provider value={fullConfig}>
-      {children}
-    </LiveConfigContext.Provider>
-  );
+  return <LiveConfigContext.Provider value={fullConfig}>{children}</LiveConfigContext.Provider>;
 }

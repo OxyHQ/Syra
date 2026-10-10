@@ -68,11 +68,7 @@ export async function insertArtistClaim(input: {
 }
 
 export async function findArtistClaimById(id: string): Promise<ArtistClaimRow | undefined> {
-  const [claim] = await getDb()
-    .select()
-    .from(artistClaims)
-    .where(eq(artistClaims.id, id))
-    .limit(1);
+  const [claim] = await getDb().select().from(artistClaims).where(eq(artistClaims.id, id)).limit(1);
 
   return claim;
 }
@@ -80,25 +76,27 @@ export async function findArtistClaimById(id: string): Promise<ArtistClaimRow | 
 /** One claimant's own claims, newest first. */
 export async function listArtistClaimsByClaimant(
   oxyUserId: string,
-  limit: number
+  limit: number,
 ): Promise<ArtistClaimRow[]> {
-  return getDb()
-    .select()
-    .from(artistClaims)
-    .where(eq(artistClaims.oxyUserId, oxyUserId))
-    // `descNullsLast`, matching `artist_claims_oxy_user_id_created_at_idx`'s own
-    // `created_at DESC NULLS LAST`. Plain `desc()` is semantically identical on
-    // a NOT NULL column and asks for a DIFFERENT pathkey, which costs the
-    // ordering its index scan — see `db/catalog/containers.ts`'s helper.
-    .orderBy(descNullsLast(artistClaims.createdAt))
-    .limit(limit);
+  return (
+    getDb()
+      .select()
+      .from(artistClaims)
+      .where(eq(artistClaims.oxyUserId, oxyUserId))
+      // `descNullsLast`, matching `artist_claims_oxy_user_id_created_at_idx`'s own
+      // `created_at DESC NULLS LAST`. Plain `desc()` is semantically identical on
+      // a NOT NULL column and asks for a DIFFERENT pathkey, which costs the
+      // ordering its index scan — see `db/catalog/containers.ts`'s helper.
+      .orderBy(descNullsLast(artistClaims.createdAt))
+      .limit(limit)
+  );
 }
 
 /** The review queue for one status, oldest first — a claim waiting is a person waiting. */
 export async function listArtistClaimsByStatus(
   status: ArtistClaimRow['status'],
   limit: number,
-  offset: number
+  offset: number,
 ): Promise<{ claims: ArtistClaimRow[]; total: number }> {
   const [claims, [counted]] = await Promise.all([
     getDb()
@@ -173,8 +171,8 @@ export async function rejectOtherPendingClaims(input: {
       and(
         eq(artistClaims.artistId, input.artistId),
         eq(artistClaims.status, 'pending'),
-        ne(artistClaims.id, input.exceptClaimId)
-      )
+        ne(artistClaims.id, input.exceptClaimId),
+      ),
     )
     .returning({ id: artistClaims.id });
 

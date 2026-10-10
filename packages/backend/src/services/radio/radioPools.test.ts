@@ -32,7 +32,10 @@ function stationFor(seedType: RadioStationState['seedType'], seedId: string): Ra
 }
 
 /** Resolve a seed and fail loudly rather than threading a nullable through a test. */
-async function seedFor(seedType: RadioStationState['seedType'], seedId: string): Promise<SeedResolution> {
+async function seedFor(
+  seedType: RadioStationState['seedType'],
+  seedId: string,
+): Promise<SeedResolution> {
   const seed = await resolveRadioSeed({ seedType, seedId }, undefined);
   if (!seed) {
     throw new Error(`seed ${seedType}:${seedId} did not resolve`);
@@ -93,8 +96,20 @@ describe('buildRadioPage — explicit content is a preference, not availability'
     // which would cap the page at a single track and hide the preference effect.
     const explicitArtist = await makeArtist({ name: 'Nova', genres: ['house'] });
     const cleanArtist = await makeArtist({ name: 'Vega', genres: ['house'] });
-    await makeTrack({ artistId: explicitArtist, genre: 'house', isExplicit: true, popularity: 90, title: 'Explicit' });
-    await makeTrack({ artistId: cleanArtist, genre: 'house', isExplicit: false, popularity: 10, title: 'Clean' });
+    await makeTrack({
+      artistId: explicitArtist,
+      genre: 'house',
+      isExplicit: true,
+      popularity: 90,
+      title: 'Explicit',
+    });
+    await makeTrack({
+      artistId: cleanArtist,
+      genre: 'house',
+      isExplicit: false,
+      popularity: 10,
+      title: 'Clean',
+    });
 
     const seed = await seedFor('genre', 'house');
 
@@ -169,7 +184,12 @@ describe('buildRadioPage — paging', () => {
     const seedTrack = await makeTrack({ artistId, genre: 'house', popularity: 1, title: 'Seed' });
     const otherArtistId = await makeArtist({ name: 'Other', genres: ['house'] });
     for (let i = 0; i < 6; i += 1) {
-      await makeTrack({ artistId: otherArtistId, genre: 'house', popularity: 90 - i, title: `Other ${i}` });
+      await makeTrack({
+        artistId: otherArtistId,
+        genre: 'house',
+        popularity: 90 - i,
+        title: `Other ${i}`,
+      });
     }
 
     const seedId = seedTrack.id;
@@ -207,7 +227,11 @@ describe('buildRadioPage — the pools drain in priority order', () => {
     const seedTrack = await makeTrack({ artistId, genre: 'house', title: 'Seed' });
 
     const neighbourArtist = await makeArtist({ name: 'Neighbour' });
-    const neighbour = await makeTrack({ artistId: neighbourArtist, popularity: 1, title: 'Neighbour' });
+    const neighbour = await makeTrack({
+      artistId: neighbourArtist,
+      popularity: 1,
+      title: 'Neighbour',
+    });
     await relate('track', seedTrack.id, neighbour.id, 0.95);
 
     const popularArtist = await makeArtist({ name: 'Popular' });
@@ -275,12 +299,14 @@ describe('buildRadioPage — wrap', () => {
     const artistB = await makeArtist({ name: 'B', genres: ['house'] });
     const tracks = [];
     for (let i = 0; i < 4; i += 1) {
-      tracks.push(await makeTrack({
-        artistId: i % 2 === 0 ? artistA : artistB,
-        genre: 'house',
-        popularity: 50 - i,
-        title: `Track ${i}`,
-      }));
+      tracks.push(
+        await makeTrack({
+          artistId: i % 2 === 0 ? artistA : artistB,
+          genre: 'house',
+          popularity: 50 - i,
+          title: `Track ${i}`,
+        }),
+      );
     }
     const allIds = tracks.map((track) => track.id);
 

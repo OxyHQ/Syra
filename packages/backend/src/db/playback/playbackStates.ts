@@ -35,7 +35,9 @@ export type PlaybackStateRow = typeof playbackStates.$inferSelect;
  * Derived from the insert type rather than hand-listed, so a column added to
  * the table cannot be silently un-writable here.
  */
-export type PlaybackStatePatch = Partial<Omit<typeof playbackStates.$inferInsert, 'id' | 'oxyUserId'>>;
+export type PlaybackStatePatch = Partial<
+  Omit<typeof playbackStates.$inferInsert, 'id' | 'oxyUserId'>
+>;
 
 /**
  * This account's playback state, created with column defaults if absent.
@@ -74,7 +76,7 @@ export async function findOrCreatePlaybackState(oxyUserId: string): Promise<Play
  */
 export async function updatePlaybackState(
   oxyUserId: string,
-  patch: PlaybackStatePatch
+  patch: PlaybackStatePatch,
 ): Promise<PlaybackStateRow> {
   const [row] = await getDb()
     .update(playbackStates)

@@ -105,7 +105,9 @@ async function seedOwner(): Promise<void> {
     !stored.privacy.hiddenWords?.includes(MUTED_WORD) ||
     !stored.privacy.restrictedUsers?.includes(RESTRICTED_ACCOUNT)
   ) {
-    throw new Error('fixture failed to store the mute/block lists; the tests below would be vacuous');
+    throw new Error(
+      'fixture failed to store the mute/block lists; the tests below would be vacuous',
+    );
   }
 }
 

@@ -50,7 +50,12 @@ const RESOLVING_GATE: AuthGate = {
   retry: () => undefined,
 };
 
-const GUEST_GATE: AuthGate = { ...RESOLVING_GATE, status: 'guest', isResolving: false, isResolved: true };
+const GUEST_GATE: AuthGate = {
+  ...RESOLVING_GATE,
+  status: 'guest',
+  isResolving: false,
+  isResolved: true,
+};
 
 const AUTH_GATE: AuthGate = {
   ...GUEST_GATE,
@@ -71,9 +76,21 @@ beforeEach(() => {
 });
 
 describe.each([
-  ['usePodcast', () => usePodcast('show-1'), (identity: string) => PODCAST_QUERY_KEYS.show(identity, 'show-1')],
-  ['useEpisodes', () => useEpisodes('show-1'), (identity: string) => PODCAST_QUERY_KEYS.episodes(identity, 'show-1', 50)],
-  ['useEpisode', () => useEpisode('episode-1'), (identity: string) => PODCAST_QUERY_KEYS.episode(identity, 'episode-1')],
+  [
+    'usePodcast',
+    () => usePodcast('show-1'),
+    (identity: string) => PODCAST_QUERY_KEYS.show(identity, 'show-1'),
+  ],
+  [
+    'useEpisodes',
+    () => useEpisodes('show-1'),
+    (identity: string) => PODCAST_QUERY_KEYS.episodes(identity, 'show-1', 50),
+  ],
+  [
+    'useEpisode',
+    () => useEpisode('episode-1'),
+    (identity: string) => PODCAST_QUERY_KEYS.episode(identity, 'episode-1'),
+  ],
 ])('%s', (_name, run, keyFor) => {
   it('caches a guest answer under a different key than the signed-in one', () => {
     mockUseAuthGate.mockReturnValue(GUEST_GATE);

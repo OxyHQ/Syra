@@ -77,7 +77,8 @@ export const episodeService = {
     if (metadata.description) formData.append('description', metadata.description);
     if (metadata.summary) formData.append('summary', metadata.summary);
     if (metadata.season !== undefined) formData.append('season', String(metadata.season));
-    if (metadata.episodeNumber !== undefined) formData.append('episodeNumber', String(metadata.episodeNumber));
+    if (metadata.episodeNumber !== undefined)
+      formData.append('episodeNumber', String(metadata.episodeNumber));
     if (metadata.episodeType) formData.append('episodeType', metadata.episodeType);
     if (metadata.explicit !== undefined) formData.append('explicit', String(metadata.explicit));
     if (metadata.duration !== undefined) formData.append('duration', String(metadata.duration));

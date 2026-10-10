@@ -17,7 +17,7 @@ export function useRoomUsers(userIds: string[]) {
         return null;
       }
     },
-    [oxyServices]
+    [oxyServices],
   );
 
   useEffect(() => {
@@ -30,7 +30,11 @@ export function useRoomUsers(userIds: string[]) {
   }, [userIds.join(','), oxyServices, ensureUserById, loader]);
 }
 
-export function getDisplayName(userProfile: UserEntity | undefined, userId: string, isCurrentUser?: boolean): string {
+export function getDisplayName(
+  userProfile: UserEntity | undefined,
+  userId: string,
+  isCurrentUser?: boolean,
+): string {
   if (isCurrentUser) return 'You';
   // The user source is always an Oxy user DTO (resolved via `oxyServices.users.get`
   // in `useRoomUsers` → `ensureUserById`), so `name.displayName` is the canonical,
@@ -45,7 +49,7 @@ export function getDisplayName(userProfile: UserEntity | undefined, userId: stri
 export function getAvatarUrl(
   userProfile: UserEntity | undefined,
   oxyServices: unknown,
-  getCachedFileDownloadUrlSync: (oxyServices: unknown, fileId: string, variant?: string) => string
+  getCachedFileDownloadUrlSync: (oxyServices: unknown, fileId: string, variant?: string) => string,
 ): string | undefined {
   if (!userProfile?.avatar || !oxyServices) return undefined;
   return getCachedFileDownloadUrlSync(oxyServices, userProfile.avatar, 'thumb');

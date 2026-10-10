@@ -62,6 +62,8 @@ describe('livekitErrors', () => {
 
   it('detects ingress conflicts that should retry after deleting the existing ingress', () => {
     expect(isLiveKitAlreadyExistsError({ status: 409, message: 'already exists' })).toBe(true);
-    expect(shouldRetryIngressAfterDeletingExisting({ message: 'participant identity already in use' })).toBe(true);
+    expect(
+      shouldRetryIngressAfterDeletingExisting({ message: 'participant identity already in use' }),
+    ).toBe(true);
   });
 });

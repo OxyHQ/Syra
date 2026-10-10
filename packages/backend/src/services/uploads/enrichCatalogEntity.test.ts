@@ -62,16 +62,18 @@ afterAll(disconnectDb);
 /** A real `image_assets` row — the six variant columns are foreign keys. */
 async function makeImageAsset(): Promise<string> {
   const id = uuidv7();
-  await getDb().insert(imageAssets).values({
-    id,
-    s3Key: `fixtures/${id}.jpg`,
-    filename: `${id}.jpg`,
-    contentType: 'image/jpeg',
-    byteSize: 1,
-    width: 640,
-    height: 640,
-    ownerType: 'artist',
-  });
+  await getDb()
+    .insert(imageAssets)
+    .values({
+      id,
+      s3Key: `fixtures/${id}.jpg`,
+      filename: `${id}.jpg`,
+      contentType: 'image/jpeg',
+      byteSize: 1,
+      width: 640,
+      height: 640,
+      ownerType: 'artist',
+    });
   return id;
 }
 
@@ -114,7 +116,7 @@ async function albumCount(): Promise<number> {
 }
 
 async function seedArtist(
-  overrides: Partial<typeof catalogEntities.$inferInsert> = {}
+  overrides: Partial<typeof catalogEntities.$inferInsert> = {},
 ): Promise<{ id: string }> {
   const suffix = uuidv7();
   const [artist] = await getDb()
@@ -308,7 +310,7 @@ describe('enrichArtistProfile — filling gaps', () => {
     });
 
     expect(`recorded but not stored: ${unresolved.join(', ') || 'none'}`).toBe(
-      'recorded but not stored: none'
+      'recorded but not stored: none',
     );
     // Vacuity floor: an empty provenance entry satisfies the above trivially.
     expect(entry.fields.length).toBeGreaterThan(0);
@@ -441,12 +443,15 @@ describe('artist photo suggestions from an uploaded file', () => {
 
   it('stores an artist-type picture as a SUGGESTION, never as the profile photo', async () => {
     const artist = await seedArtist();
-    const stored = await suggestArtistPhotosFromUpload({
-      artistId: artist.id,
-      pictures: [await fixturePicture('Artist/performer')],
-      proposedByOxyUserId: 'oxy-uploader',
-      sourceUploadId: uuidv7(),
-    }, fakeStore);
+    const stored = await suggestArtistPhotosFromUpload(
+      {
+        artistId: artist.id,
+        pictures: [await fixturePicture('Artist/performer')],
+        proposedByOxyUserId: 'oxy-uploader',
+        sourceUploadId: uuidv7(),
+      },
+      fakeStore,
+    );
 
     expect(stored).toBe(1);
     /**
@@ -470,14 +475,17 @@ describe('artist photo suggestions from an uploaded file', () => {
 
   it('ignores cover art — that is the release, not the artist', async () => {
     const artist = await seedArtist();
-    const stored = await suggestArtistPhotosFromUpload({
-      artistId: artist.id,
-      pictures: [
-        await fixturePicture('Cover (front)'),
-        await fixturePicture('Cover (back)'),
-        await fixturePicture('Media (e.g. label side of CD)'),
-      ],
-    }, fakeStore);
+    const stored = await suggestArtistPhotosFromUpload(
+      {
+        artistId: artist.id,
+        pictures: [
+          await fixturePicture('Cover (front)'),
+          await fixturePicture('Cover (back)'),
+          await fixturePicture('Media (e.g. label side of CD)'),
+        ],
+      },
+      fakeStore,
+    );
 
     expect(stored).toBe(0);
     const after = await readArtist(artist.id);
@@ -487,21 +495,21 @@ describe('artist photo suggestions from an uploaded file', () => {
   it('stores nothing for a file with no pictures at all', async () => {
     const artist = await seedArtist();
     expect(
-      await suggestArtistPhotosFromUpload(
-        { artistId: artist.id, pictures: [] },
-        fakeStore,
-      ),
+      await suggestArtistPhotosFromUpload({ artistId: artist.id, pictures: [] }, fakeStore),
     ).toBe(0);
   });
 
   it('survives a malformed picture frame rather than failing the upload', async () => {
     const artist = await seedArtist();
-    const stored = await suggestArtistPhotosFromUpload({
-      artistId: artist.id,
-      pictures: [
-        { type: 'Artist/performer', mimeType: 'image/jpeg', data: Buffer.from('not an image') },
-      ],
-    }, fakeStore);
+    const stored = await suggestArtistPhotosFromUpload(
+      {
+        artistId: artist.id,
+        pictures: [
+          { type: 'Artist/performer', mimeType: 'image/jpeg', data: Buffer.from('not an image') },
+        ],
+      },
+      fakeStore,
+    );
     // The audio is what the listener uploaded; a broken APIC frame must not cost
     // them the upload.
     expect(stored).toBe(0);
@@ -510,7 +518,10 @@ describe('artist photo suggestions from an uploaded file', () => {
 
 describe('cover art recovery — the blocker it clears', () => {
   it('recovers a front cover for a release', async () => {
-    const recovered = await recoverCoverArt({ releaseMbid: RELEASE_MBID, externalId: RELEASE_MBID });
+    const recovered = await recoverCoverArt({
+      releaseMbid: RELEASE_MBID,
+      externalId: RELEASE_MBID,
+    });
     if (!recovered) throw new Error('expected cover art');
 
     // An `image_assets` id — a uuid v7 for anything minted since the cutover,

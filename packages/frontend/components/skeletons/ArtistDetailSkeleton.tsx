@@ -20,8 +20,8 @@ interface ArtistDetailSkeletonProps {
  * hero, a "Popular" track list, and an "Albums" grid. Mirrors `artist/[id]`
  * layout.
  */
-export const ArtistDetailSkeleton: React.FC<ArtistDetailSkeletonProps> =
-  React.memo(({ trackCount = 6, albumCount = 5 }) => {
+export const ArtistDetailSkeleton: React.FC<ArtistDetailSkeletonProps> = React.memo(
+  ({ trackCount = 6, albumCount = 5 }) => {
     const theme = useTheme();
     const contentGradient: readonly [string, string, string] = [
       theme.colors.backgroundSecondary,
@@ -40,12 +40,18 @@ export const ArtistDetailSkeleton: React.FC<ArtistDetailSkeletonProps> =
             style={styles.heroOverlay}
           />
           <View className="gap-2" style={styles.titleContainer}>
-            <View className="h-10 sm:h-16 lg:h-24"><Skeleton.Box width="55%" height="100%" borderRadius={8} /></View>
+            <View className="h-10 sm:h-16 lg:h-24">
+              <Skeleton.Box width="55%" height="100%" borderRadius={8} />
+            </View>
             <Skeleton.Box width={190} height={24} borderRadius={4} />
           </View>
         </View>
 
-        <LinearGradient colors={contentGradient} locations={[0, 0.35, 1]} style={styles.contentSection}>
+        <LinearGradient
+          colors={contentGradient}
+          locations={[0, 0.35, 1]}
+          style={styles.contentSection}
+        >
           <View style={styles.infoContainer}>
             <View style={styles.infoHeader}>
               <Skeleton.Circle size={64} />
@@ -80,7 +86,8 @@ export const ArtistDetailSkeleton: React.FC<ArtistDetailSkeletonProps> =
         </LinearGradient>
       </View>
     );
-  });
+  },
+);
 ArtistDetailSkeleton.displayName = 'ArtistDetailSkeleton';
 
 const styles = StyleSheet.create({

@@ -18,15 +18,9 @@ export const formatTotalDuration = (seconds: number): string => {
   const hours = Math.floor(seconds / 3600);
   const mins = Math.floor((seconds % 3600) / 60);
   const secs = Math.floor(seconds % 60);
-  
+
   if (hours > 0) {
     return `${hours} hr ${mins} min ${secs} sec`;
   }
   return `${mins} min ${secs} sec`;
 };
-
-
-
-
-
-

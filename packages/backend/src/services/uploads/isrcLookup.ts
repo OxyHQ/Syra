@@ -788,7 +788,9 @@ export async function discoverIsrc(evidence: IsrcClaimEvidence): Promise<IsrcDis
 
   let candidates: DeezerSearchCandidate[];
   try {
-    candidates = parseDeezerSearchCandidates(await requestDeezer(DEEZER_SEARCH_URL + encodeURIComponent(query)));
+    candidates = parseDeezerSearchCandidates(
+      await requestDeezer(DEEZER_SEARCH_URL + encodeURIComponent(query)),
+    );
   } catch (error: unknown) {
     return {
       status: 'unavailable',
@@ -822,7 +824,9 @@ export async function discoverIsrc(evidence: IsrcClaimEvidence): Promise<IsrcDis
   // so identifying the recording and reading its identifier are two calls.
   let recording: IsrcRecording | undefined;
   try {
-    const payload = asRecord(await requestDeezer(DEEZER_TRACK_BY_ID_URL + encodeURIComponent(match.id)));
+    const payload = asRecord(
+      await requestDeezer(DEEZER_TRACK_BY_ID_URL + encodeURIComponent(match.id)),
+    );
     const isrc = payload && !asRecord(payload.error) ? asString(payload.isrc) : undefined;
     recording = isrc ? parseDeezerTrack(payload, normalizeIsrc(isrc)) : undefined;
   } catch (error: unknown) {

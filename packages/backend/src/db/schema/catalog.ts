@@ -136,14 +136,7 @@ import {
   unique,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
-import {
-  createdAt,
-  generatedId,
-  inList,
-  timestamptz,
-  tsvector,
-  updatedAt,
-} from '@oxy.so/db';
+import { createdAt, generatedId, inList, timestamptz, tsvector, updatedAt } from '@oxy.so/db';
 import type {
   ArtistImageSuggestion,
   ArtistMember,
@@ -292,22 +285,22 @@ export const imageAssets = pgTable(
     unique('image_assets_s3_key_key').on(t.s3Key),
     check(
       'image_assets_owner_type_check',
-      sql`${t.ownerType} in (${sql.raw(inList(IMAGE_ASSET_OWNER_TYPES))})`
+      sql`${t.ownerType} in (${sql.raw(inList(IMAGE_ASSET_OWNER_TYPES))})`,
     ),
     check(
       'image_assets_catalog_provider_check',
-      sql`${t.catalogProvider} is null or ${t.catalogProvider} in (${sql.raw(inList(CATALOG_IMAGE_PROVIDERS))})`
+      sql`${t.catalogProvider} is null or ${t.catalogProvider} in (${sql.raw(inList(CATALOG_IMAGE_PROVIDERS))})`,
     ),
     check(
       'image_assets_catalog_entity_type_check',
-      sql`${t.catalogEntityType} is null or ${t.catalogEntityType} in (${sql.raw(inList(CATALOG_IMAGE_ENTITY_TYPES))})`
+      sql`${t.catalogEntityType} is null or ${t.catalogEntityType} in (${sql.raw(inList(CATALOG_IMAGE_ENTITY_TYPES))})`,
     ),
     index('image_assets_uploaded_by_idx').on(t.uploadedBy),
     index('image_assets_catalog_lookup_idx').on(
       t.catalogProvider,
       t.catalogEntityType,
       t.catalogExternalId,
-      t.catalogSize
+      t.catalogSize,
     ),
     index('image_assets_catalog_source_content_hash_idx').on(t.catalogSourceContentHash),
     // `findExistingCatalogImageSet` (`imageAssetService.ts`) queries this
@@ -315,7 +308,7 @@ export const imageAssets = pgTable(
     // unindexed scan here would be a full table scan of image_assets on
     // every single catalog image mirror across the whole app.
     index('image_assets_catalog_source_url_hash_idx').on(t.catalogSourceUrlHash),
-  ]
+  ],
 );
 
 // ── catalog_entities ─────────────────────────────────────────────────────
@@ -466,18 +459,21 @@ export const catalogEntities = pgTable(
     updatedAt: updatedAt(),
   },
   (t) => [
-    check('catalog_entities_type_check', sql`${t.type} in (${sql.raw(inList(CATALOG_ENTITY_TYPES))})`),
+    check(
+      'catalog_entities_type_check',
+      sql`${t.type} in (${sql.raw(inList(CATALOG_ENTITY_TYPES))})`,
+    ),
     /**
      * The discriminator CHECK the brief names explicitly: `linked_artist_id`
      * is meaningless — and forbidden — on anything but a `person` row.
      */
     check(
       'catalog_entities_linked_artist_id_check',
-      sql`${t.linkedArtistId} is null or ${t.type} = 'person'`
+      sql`${t.linkedArtistId} is null or ${t.type} = 'person'`,
     ),
     check(
       'catalog_entities_source_check',
-      sql`${t.source} is null or ${t.source} in (${sql.raw(inList(CATALOG_SOURCES))})`
+      sql`${t.source} is null or ${t.source} in (${sql.raw(inList(CATALOG_SOURCES))})`,
     ),
     /**
      * The SECOND discriminator CHECK, missed in the first pass: `source` is
@@ -490,17 +486,20 @@ export const catalogEntities = pgTable(
      */
     check(
       'catalog_entities_source_required_for_artist_check',
-      sql`${t.type} != 'artist' or ${t.source} is not null`
+      sql`${t.type} != 'artist' or ${t.source} is not null`,
     ),
     check(
       'catalog_entities_artist_type_check',
-      sql`${t.artistType} is null or ${t.artistType} in (${sql.raw(inList(ARTIST_TYPES))})`
+      sql`${t.artistType} is null or ${t.artistType} in (${sql.raw(inList(ARTIST_TYPES))})`,
     ),
     check(
       'catalog_entities_origin_check',
-      sql`${t.origin} is null or ${t.origin} in (${sql.raw(inList(ARTIST_ORIGINS))})`
+      sql`${t.origin} is null or ${t.origin} in (${sql.raw(inList(ARTIST_ORIGINS))})`,
     ),
-    check('catalog_entities_strike_count_check', sql`${t.strikeCount} is null or ${t.strikeCount} >= 0`),
+    check(
+      'catalog_entities_strike_count_check',
+      sql`${t.strikeCount} is null or ${t.strikeCount} >= 0`,
+    ),
     unique('catalog_entities_linked_oxy_user_id_key').on(t.linkedOxyUserId),
     unique('catalog_entities_href_key').on(t.href),
     unique('catalog_entities_external_musicbrainz_artist_id_key').on(t.externalMusicbrainzArtistId),
@@ -536,7 +535,7 @@ export const catalogEntities = pgTable(
     index('catalog_entities_image_sizes_xlarge_id_idx').on(t.imageSizesXlargeId),
     index('catalog_entities_image_sizes_xxlarge_id_idx').on(t.imageSizesXxlargeId),
     index('catalog_entities_image_sizes_original_id_idx').on(t.imageSizesOriginalId),
-  ]
+  ],
 );
 
 // ── albums ────────────────────────────────────────────────────────────────
@@ -594,7 +593,7 @@ export const albums = pgTable(
     externalIsrc: text(),
     externalMusicbrainzReleaseId: text(),
     searchVector: tsvector().generatedAlwaysAs(
-      sql`to_tsvector('english', title || ' ' || artist_name)`
+      sql`to_tsvector('english', title || ' ' || artist_name)`,
     ),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -603,7 +602,7 @@ export const albums = pgTable(
     check('albums_type_check', sql`${t.type} in (${sql.raw(inList(ALBUM_TYPES))})`),
     check(
       'albums_source_check',
-      sql`${t.source} is null or ${t.source} in (${sql.raw(inList(CATALOG_SOURCES))})`
+      sql`${t.source} is null or ${t.source} in (${sql.raw(inList(CATALOG_SOURCES))})`,
     ),
     check('albums_popularity_check', sql`${t.popularity} between 0 and 100`),
     unique('albums_upc_key').on(t.upc),
@@ -621,7 +620,7 @@ export const albums = pgTable(
     index('albums_cover_art_sizes_xlarge_id_idx').on(t.coverArtSizesXlargeId),
     index('albums_cover_art_sizes_xxlarge_id_idx').on(t.coverArtSizesXxlargeId),
     index('albums_cover_art_sizes_original_id_idx').on(t.coverArtSizesOriginalId),
-  ]
+  ],
 );
 
 // ── tracks ────────────────────────────────────────────────────────────────
@@ -755,7 +754,7 @@ export const tracks = pgTable(
      */
     sha256: text(),
     searchVector: tsvector().generatedAlwaysAs(
-      sql`to_tsvector('english', title || ' ' || artist_name)`
+      sql`to_tsvector('english', title || ' ' || artist_name)`,
     ),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -765,7 +764,7 @@ export const tracks = pgTable(
     check('tracks_status_check', sql`${t.status} in (${sql.raw(inList(TRACK_STATUSES))})`),
     check(
       'tracks_audio_source_format_check',
-      sql`${t.audioSourceFormat} is null or ${t.audioSourceFormat} in (${sql.raw(inList(AUDIO_FORMATS))})`
+      sql`${t.audioSourceFormat} is null or ${t.audioSourceFormat} in (${sql.raw(inList(AUDIO_FORMATS))})`,
     ),
     check('tracks_popularity_check', sql`${t.popularity} between 0 and 100`),
     unique('tracks_external_isrc_key').on(t.externalIsrc),
@@ -874,7 +873,7 @@ export const tracks = pgTable(
     index('tracks_cover_art_sizes_xlarge_id_idx').on(t.coverArtSizesXlargeId),
     index('tracks_cover_art_sizes_xxlarge_id_idx').on(t.coverArtSizesXxlargeId),
     index('tracks_cover_art_sizes_original_id_idx').on(t.coverArtSizesOriginalId),
-  ]
+  ],
 );
 
 // ── track_credits (child of tracks — see the file-level doc comment) ───────
@@ -909,7 +908,7 @@ export const trackCredits = pgTable(
      * must not delete the credit — the person was still on the record; only our
      * claim about which catalogue row they are goes away.
      */
-    catalogEntityId: text().references(() => catalogEntities.id, { onDelete: 'set null' })
+    catalogEntityId: text().references(() => catalogEntities.id, { onDelete: 'set null' }),
   },
   (t) => [
     check('track_credits_position_check', sql`${t.position} >= 0`),
@@ -928,7 +927,7 @@ export const trackCredits = pgTable(
     index('track_credits_catalog_entity_id_idx')
       .on(t.catalogEntityId)
       .where(sql`${t.catalogEntityId} is not null`),
-  ]
+  ],
 );
 
 // ── track_hls_renditions (child of tracks) ──────────────────────────────────
@@ -966,7 +965,7 @@ export const trackHlsRenditions = pgTable(
   (t) => [
     check('track_hls_renditions_position_check', sql`${t.position} >= 0`),
     unique('track_hls_renditions_track_id_position_key').on(t.trackId, t.position),
-  ]
+  ],
 );
 
 // ── catalog_entity_strikes (child of catalog_entities) ──────────────────────
@@ -987,7 +986,9 @@ export const catalogEntityStrikes = pgTable(
      */
     trackId: text().references(() => tracks.id, { onDelete: 'set null' }),
   },
-  (t) => [index('catalog_entity_strikes_catalog_entity_id_idx').on(t.catalogEntityId, t.createdAt.desc())]
+  (t) => [
+    index('catalog_entity_strikes_catalog_entity_id_idx').on(t.catalogEntityId, t.createdAt.desc()),
+  ],
 );
 
 // ── album_genres (junction, Album ↔ genres) ─────────────────────────────────
@@ -1019,7 +1020,7 @@ export const albumGenres = pgTable(
       columns: [t.genreId, t.kind],
       foreignColumns: [genres.id, genres.kind],
     }).onDelete('restrict'),
-  ]
+  ],
 );
 
 // ── track_sources / album_sources / catalog_entity_sources (SourceProvenance child tables) ──
@@ -1038,10 +1039,13 @@ export const trackSources = pgTable(
     fields: text().array().notNull().default(sql`array[]::text[]`),
   },
   (t) => [
-    check('track_sources_provider_check', sql`${t.provider} in (${sql.raw(inList(PROVENANCE_PROVIDERS))})`),
+    check(
+      'track_sources_provider_check',
+      sql`${t.provider} in (${sql.raw(inList(PROVENANCE_PROVIDERS))})`,
+    ),
     check('track_sources_position_check', sql`${t.position} >= 0`),
     unique('track_sources_track_id_position_key').on(t.trackId, t.position),
-  ]
+  ],
 );
 
 export const albumSources = pgTable(
@@ -1064,10 +1068,13 @@ export const albumSources = pgTable(
     fields: text().array().notNull().default(sql`array[]::text[]`),
   },
   (t) => [
-    check('album_sources_provider_check', sql`${t.provider} in (${sql.raw(inList(PROVENANCE_PROVIDERS))})`),
+    check(
+      'album_sources_provider_check',
+      sql`${t.provider} in (${sql.raw(inList(PROVENANCE_PROVIDERS))})`,
+    ),
     check('album_sources_position_check', sql`${t.position} >= 0`),
     unique('album_sources_album_id_position_key').on(t.albumId, t.position),
-  ]
+  ],
 );
 
 export const catalogEntitySources = pgTable(
@@ -1086,11 +1093,14 @@ export const catalogEntitySources = pgTable(
   (t) => [
     check(
       'catalog_entity_sources_provider_check',
-      sql`${t.provider} in (${sql.raw(inList(PROVENANCE_PROVIDERS))})`
+      sql`${t.provider} in (${sql.raw(inList(PROVENANCE_PROVIDERS))})`,
     ),
     check('catalog_entity_sources_position_check', sql`${t.position} >= 0`),
-    unique('catalog_entity_sources_catalog_entity_id_position_key').on(t.catalogEntityId, t.position),
-  ]
+    unique('catalog_entity_sources_catalog_entity_id_position_key').on(
+      t.catalogEntityId,
+      t.position,
+    ),
+  ],
 );
 
 // `track_keys` is declared in `trackKeys.ts`, not here: it references
@@ -1117,7 +1127,7 @@ export const isrcRegistry = pgTable(
     unique('isrc_registry_isrc_key').on(t.isrc),
     index('isrc_registry_recording_mbid_idx').on(t.recordingMbid),
     index('isrc_registry_artist_credit_name_key_idx').on(t.artistCreditNameKey),
-  ]
+  ],
 );
 
 // ── track_fingerprints ───────────────────────────────────────────────────
@@ -1139,7 +1149,7 @@ export const trackFingerprints = pgTable(
     unique('track_fingerprints_track_id_key').on(t.trackId),
     // The candidate bucket every match range-scans first (`duration ±3s`).
     index('track_fingerprints_duration_idx').on(t.fingerprintDurationSec),
-  ]
+  ],
 );
 
 // ── lyrics / lyrics_lines ─────────────────────────────────────────────────
@@ -1157,7 +1167,7 @@ export const lyrics = pgTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [unique('lyrics_track_id_key').on(t.trackId)]
+  (t) => [unique('lyrics_track_id_key').on(t.trackId)],
 );
 
 export const lyricsLines = pgTable(
@@ -1174,7 +1184,7 @@ export const lyricsLines = pgTable(
   (t) => [
     check('lyrics_lines_position_check', sql`${t.position} >= 0`),
     unique('lyrics_lines_lyrics_id_position_key').on(t.lyricsId, t.position),
-  ]
+  ],
 );
 
 // ── musicbrainz_artists / musicbrainz_artist_urls (read-only importer mirror) ──
@@ -1206,10 +1216,10 @@ export const musicbrainzArtists = pgTable(
     unique('musicbrainz_artists_mbid_key').on(t.mbid),
     check(
       'musicbrainz_artists_artist_type_check',
-      sql`${t.artistType} is null or ${t.artistType} in (${sql.raw(inList(ARTIST_TYPES))})`
+      sql`${t.artistType} is null or ${t.artistType} in (${sql.raw(inList(ARTIST_TYPES))})`,
     ),
     index('musicbrainz_artists_name_key_idx').on(t.nameKey),
-  ]
+  ],
 );
 
 export const musicbrainzArtistUrls = pgTable(
@@ -1228,9 +1238,9 @@ export const musicbrainzArtistUrls = pgTable(
     check('musicbrainz_artist_urls_position_check', sql`${t.position} >= 0`),
     unique('musicbrainz_artist_urls_musicbrainz_artist_id_position_key').on(
       t.musicbrainzArtistId,
-      t.position
+      t.position,
     ),
-  ]
+  ],
 );
 
 // ── discogs_releases (read-only importer mirror) ────────────────────────────
@@ -1266,5 +1276,5 @@ export const discogsReleases = pgTable(
   (t) => [
     unique('discogs_releases_discogs_release_id_key').on(t.discogsReleaseId),
     index('discogs_releases_barcodes_gin').using('gin', t.barcodes),
-  ]
+  ],
 );

@@ -67,11 +67,7 @@ import { eq } from 'drizzle-orm';
 import { publicColumns } from '@oxy.so/db/assert';
 import { getDb, type DbOrTransaction } from '../postgres';
 import { PROTECTED_COLUMNS_BY_TABLE } from '../schema/protectedColumns';
-import {
-  PROFILE_VISIBILITIES,
-  THEME_MODES,
-  userSettings,
-} from '../schema/user';
+import { PROFILE_VISIBILITIES, THEME_MODES, userSettings } from '../schema/user';
 
 export type ThemeMode = (typeof THEME_MODES)[number];
 export type ProfileVisibility = (typeof PROFILE_VISIBILITIES)[number];
@@ -339,9 +335,7 @@ const VIEWER_PRIVACY_DEFAULTS: ViewerVisiblePrivacy = {
  * would have produced, without the write. `/settings/me` still creates, because
  * there the caller IS the subject and the row is theirs to have.
  */
-export async function ensureViewerVisiblePrivacy(
-  oxyUserId: string,
-): Promise<ViewerVisiblePrivacy> {
+export async function ensureViewerVisiblePrivacy(oxyUserId: string): Promise<ViewerVisiblePrivacy> {
   return (await selectViewerPrivacy(oxyUserId)) ?? { ...VIEWER_PRIVACY_DEFAULTS };
 }
 

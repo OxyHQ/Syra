@@ -21,7 +21,13 @@ function formatCount(value: number): string {
   return value.toLocaleString();
 }
 
-function PeriodSelector({ value, onChange }: { value: InsightsPeriod; onChange: (value: InsightsPeriod) => void }) {
+function PeriodSelector({
+  value,
+  onChange,
+}: {
+  value: InsightsPeriod;
+  onChange: (value: InsightsPeriod) => void;
+}) {
   return (
     <View className="flex-row gap-2 mb-6">
       {PERIODS.map((option) => {
@@ -35,7 +41,9 @@ function PeriodSelector({ value, onChange }: { value: InsightsPeriod; onChange: 
               active ? 'border-primary bg-primary/10' : 'border-border bg-surface',
             )}
           >
-            <Text className={cn('text-sm font-semibold', active ? 'text-primary' : 'text-foreground')}>
+            <Text
+              className={cn('text-sm font-semibold', active ? 'text-primary' : 'text-foreground')}
+            >
               {option.label}
             </Text>
           </Pressable>
@@ -45,7 +53,15 @@ function PeriodSelector({ value, onChange }: { value: InsightsPeriod; onChange: 
   );
 }
 
-function StatCard({ icon, label, value }: { icon: keyof typeof MaterialCommunityIcons.glyphMap; label: string; value: string }) {
+function StatCard({
+  icon,
+  label,
+  value,
+}: {
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  label: string;
+  value: string;
+}) {
   const theme = useTheme();
   return (
     <View className="flex-1 rounded-2xl border border-border bg-surface px-4 py-4">
@@ -62,7 +78,11 @@ function Insights() {
   const { data: insights, isLoading, isError, refetch } = useArtistInsights(period);
 
   return (
-    <ScreenContainer title="Insights" subtitle="How listeners are finding your music" onBack={() => router.back()}>
+    <ScreenContainer
+      title="Insights"
+      subtitle="How listeners are finding your music"
+      onBack={() => router.back()}
+    >
       <PeriodSelector value={period} onChange={setPeriod} />
 
       {isLoading ? (
@@ -72,16 +92,30 @@ function Insights() {
       ) : isError || !insights ? (
         <View className="py-16 items-center px-6">
           <Text className="text-base text-foreground mb-3">Couldn&apos;t load your insights.</Text>
-          <Button onPress={() => refetch()} tone="neutral" appearance="outline">Retry</Button>
+          <Button onPress={() => refetch()} tone="neutral" appearance="outline">
+            Retry
+          </Button>
         </View>
       ) : (
         <>
           <View className="flex-row gap-3 mb-3">
-            <StatCard icon="play-circle-outline" label="Total plays" value={formatCount(insights.totalPlays)} />
-            <StatCard icon="account-outline" label="Monthly listeners" value={formatCount(insights.monthlyListeners)} />
+            <StatCard
+              icon="play-circle-outline"
+              label="Total plays"
+              value={formatCount(insights.totalPlays)}
+            />
+            <StatCard
+              icon="account-outline"
+              label="Monthly listeners"
+              value={formatCount(insights.monthlyListeners)}
+            />
           </View>
           <View className="flex-row gap-3 mb-6">
-            <StatCard icon="heart-outline" label="Followers" value={formatCount(insights.followers)} />
+            <StatCard
+              icon="heart-outline"
+              label="Followers"
+              value={formatCount(insights.followers)}
+            />
             <View className="flex-1" />
           </View>
 
@@ -101,7 +135,9 @@ function Insights() {
                   <Text numberOfLines={1} className="text-sm font-medium text-foreground flex-1">
                     {track.title}
                   </Text>
-                  <Text className="text-sm text-muted-foreground">{formatCount(track.playCount)} plays</Text>
+                  <Text className="text-sm text-muted-foreground">
+                    {formatCount(track.playCount)} plays
+                  </Text>
                 </View>
               ))}
             </View>

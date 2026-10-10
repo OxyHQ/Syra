@@ -5,6 +5,8 @@ export interface StoredImageColors {
   secondaryColor?: string;
 }
 
-export async function getStoredImageColors(imageId: string): Promise<StoredImageColors | undefined> {
+export async function getStoredImageColors(
+  imageId: string,
+): Promise<StoredImageColors | undefined> {
   return getImageAssetColors(imageId);
 }

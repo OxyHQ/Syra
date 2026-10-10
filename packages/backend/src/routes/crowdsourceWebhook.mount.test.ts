@@ -262,13 +262,9 @@ describe('assertRawBody in isolation', () => {
         return this;
       },
     };
-    assertRawBody(
-      { body } as express.Request,
-      res as unknown as express.Response,
-      () => {
-        passedThrough = true;
-      },
-    );
+    assertRawBody({ body } as express.Request, res as unknown as express.Response, () => {
+      passedThrough = true;
+    });
     return { statusCode, passedThrough };
   }
 

@@ -2,60 +2,69 @@
 
 /** Mutation tests for the real AI architecture gate. */
 
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const validator = resolve(repositoryRoot, "scripts/validate-ai-architecture.mjs");
+const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const validator = resolve(repositoryRoot, 'scripts/validate-ai-architecture.mjs');
 
 function cleanTree(extra = {}) {
   return {
-    "package.json": `${JSON.stringify({
-      name: "fixture",
-      dependencies: { "@oxy.so/core": "^23.0.0" },
-    }, null, 2)}\n`,
-    "packages/backend/package.json": `${JSON.stringify({
-      name: "backend",
-      dependencies: { postgres: "3.4.9" },
-    }, null, 2)}\n`,
-    "packages/backend/src/catalog.ts": [
+    'package.json': `${JSON.stringify(
+      {
+        name: 'fixture',
+        dependencies: { '@oxy.so/core': '^23.0.0' },
+      },
+      null,
+      2,
+    )}\n`,
+    'packages/backend/package.json': `${JSON.stringify(
+      {
+        name: 'backend',
+        dependencies: { postgres: '3.4.9' },
+      },
+      null,
+      2,
+    )}\n`,
+    'packages/backend/src/catalog.ts': [
       "const metadataKeys = ['ACOUSTID_API_KEY', 'PODCAST_INDEX_KEY'];",
       "const metadataHosts = ['musicbrainz.org', 'lrclib.net'];",
-      "export { metadataKeys, metadataHosts };",
-      "",
-    ].join("\n"),
-    "packages/backend/src/podcast.ts": [
+      'export { metadataKeys, metadataHosts };',
+      '',
+    ].join('\n'),
+    'packages/backend/src/podcast.ts': [
       "export const provenance = { provider: 'alia', aiGenerated: true };",
-      "",
-    ].join("\n"),
-    "packages/frontend/src/alia.ts": "import { OxyServices } from '@oxy.so/core';\nexport { OxyServices };\n",
+      '',
+    ].join('\n'),
+    'packages/frontend/src/alia.ts':
+      "import { OxyServices } from '@oxy.so/core';\nexport { OxyServices };\n",
     ...extra,
   };
 }
 
 async function runAgainst(files) {
-  const root = await mkdtemp(join(tmpdir(), "syra-ai-architecture-"));
+  const root = await mkdtemp(join(tmpdir(), 'syra-ai-architecture-'));
   try {
     for (const [path, contents] of Object.entries(files)) {
       const fullPath = join(root, path);
       await mkdir(dirname(fullPath), { recursive: true });
       await writeFile(fullPath, contents);
     }
-    Bun.spawnSync({ cmd: ["git", "-c", "init.defaultBranch=main", "init", "-q"], cwd: root });
-    Bun.spawnSync({ cmd: ["git", "add", "-A", "-f"], cwd: root });
+    Bun.spawnSync({ cmd: ['git', '-c', 'init.defaultBranch=main', 'init', '-q'], cwd: root });
+    Bun.spawnSync({ cmd: ['git', 'add', '-A', '-f'], cwd: root });
 
     const process = Bun.spawnSync({
-      cmd: ["bun", validator],
+      cmd: ['bun', validator],
       cwd: repositoryRoot,
       env: {
         ...globalThis.process.env,
         AI_ARCHITECTURE_VALIDATOR_ROOT: root,
-        AI_ARCHITECTURE_VALIDATOR_FIXTURE_FLOORS: "1",
+        AI_ARCHITECTURE_VALIDATOR_FIXTURE_FLOORS: '1',
       },
-      stdout: "pipe",
-      stderr: "pipe",
+      stdout: 'pipe',
+      stderr: 'pipe',
     });
     return {
       exitCode: process.exitCode,
@@ -68,73 +77,82 @@ async function runAgainst(files) {
 
 const cases = [
   {
-    name: "legitimate metadata, Alia provenance and Oxy imports pass",
+    name: 'legitimate metadata, Alia provenance and Oxy imports pass',
     files: cleanTree(),
     fails: false,
   },
   {
-    name: "a provider credential is rejected",
-    files: cleanTree({ "packages/backend/.env.example": "OPENAI_API_KEY=\n" }),
+    name: 'a provider credential is rejected',
+    files: cleanTree({ 'packages/backend/.env.example': 'OPENAI_API_KEY=\n' }),
     fails: true,
-    output: "inference-provider credential OPENAI_API_KEY",
+    output: 'inference-provider credential OPENAI_API_KEY',
   },
   {
-    name: "a direct provider dependency is rejected",
+    name: 'a direct provider dependency is rejected',
     files: cleanTree({
-      "packages/backend/package.json": `${JSON.stringify({ name: "backend", dependencies: { openai: "^6.0.0" } }, null, 2)}\n`,
+      'packages/backend/package.json': `${JSON.stringify({ name: 'backend', dependencies: { openai: '^6.0.0' } }, null, 2)}\n`,
     }),
     fails: true,
-    output: "dependencies declares direct inference package openai",
+    output: 'dependencies declares direct inference package openai',
   },
   {
-    name: "a generic AI SDK provider adapter is rejected",
+    name: 'a generic AI SDK provider adapter is rejected',
     files: cleanTree({
-      "packages/backend/package.json": `${JSON.stringify({ name: "backend", dependencies: { "@ai-sdk/openai": "^2.0.0" } }, null, 2)}\n`,
+      'packages/backend/package.json': `${JSON.stringify({ name: 'backend', dependencies: { '@ai-sdk/openai': '^2.0.0' } }, null, 2)}\n`,
     }),
     fails: true,
-    output: "dependencies declares direct inference package @ai-sdk/openai",
+    output: 'dependencies declares direct inference package @ai-sdk/openai',
   },
   {
-    name: "a direct provider import is rejected",
-    files: cleanTree({ "packages/backend/src/inference.ts": "import messages from '@anthropic-ai/sdk/resources/messages';\n" }),
+    name: 'a direct provider import is rejected',
+    files: cleanTree({
+      'packages/backend/src/inference.ts':
+        "import messages from '@anthropic-ai/sdk/resources/messages';\n",
+    }),
     fails: true,
-    output: "imports direct inference package @anthropic-ai/sdk/resources/messages",
+    output: 'imports direct inference package @anthropic-ai/sdk/resources/messages',
   },
   {
-    name: "a side-effect provider import is rejected",
-    files: cleanTree({ "packages/backend/src/inference.ts": "import 'ollama';\n" }),
+    name: 'a side-effect provider import is rejected',
+    files: cleanTree({ 'packages/backend/src/inference.ts': "import 'ollama';\n" }),
     fails: true,
-    output: "imports direct inference package ollama",
+    output: 'imports direct inference package ollama',
   },
   {
-    name: "a stale provider lock resolution is rejected",
-    files: cleanTree({ "bun.lock": '{\n  "openai": ["openai@6.0.0", "", {}]\n}\n' }),
+    name: 'a stale provider lock resolution is rejected',
+    files: cleanTree({ 'bun.lock': '{\n  "openai": ["openai@6.0.0", "", {}]\n}\n' }),
     fails: true,
-    output: "resolves direct inference package openai",
+    output: 'resolves direct inference package openai',
   },
   {
-    name: "a direct provider endpoint is rejected",
-    files: cleanTree({ "packages/backend/src/inference.ts": "fetch('https://api.openai.com/v1/responses');\n" }),
+    name: 'a direct provider endpoint is rejected',
+    files: cleanTree({
+      'packages/backend/src/inference.ts': "fetch('https://api.openai.com/v1/responses');\n",
+    }),
     fails: true,
-    output: "calls direct inference-provider endpoint api.openai.com",
+    output: 'calls direct inference-provider endpoint api.openai.com',
   },
   {
-    name: "a direct Kaana endpoint is rejected",
-    files: cleanTree({ "packages/backend/src/inference.ts": "fetch('https://kaana.ai/v1/responses');\n" }),
+    name: 'a direct Kaana endpoint is rejected',
+    files: cleanTree({
+      'packages/backend/src/inference.ts': "fetch('https://kaana.ai/v1/responses');\n",
+    }),
     fails: true,
-    output: "names direct inference data-plane endpoint kaana.ai",
+    output: 'names direct inference data-plane endpoint kaana.ai',
   },
   {
-    name: "a retired Relay endpoint in documentation is rejected",
-    files: cleanTree({ "README.md": "Send inference requests to https://relay.oxy.so/v1/responses.\n" }),
+    name: 'a retired Relay endpoint in documentation is rejected',
+    files: cleanTree({
+      'README.md': 'Send inference requests to https://relay.oxy.so/v1/responses.\n',
+    }),
     fails: true,
-    output: "names direct inference data-plane endpoint relay.oxy.so",
+    output: 'names direct inference data-plane endpoint relay.oxy.so',
   },
   {
-    name: "credential advice in documentation is rejected",
-    files: cleanTree({ "README.md": "Set GEMINI_API_KEY before starting the API.\n" }),
+    name: 'credential advice in documentation is rejected',
+    files: cleanTree({ 'README.md': 'Set GEMINI_API_KEY before starting the API.\n' }),
     fails: true,
-    output: "names inference-provider credential GEMINI_API_KEY",
+    output: 'names inference-provider credential GEMINI_API_KEY',
   },
 ];
 

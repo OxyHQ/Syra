@@ -31,7 +31,10 @@ router.get('/', async (req: AuthRequest, res: Response) => {
 
     res.json({ recordings });
   } catch (error) {
-    logger.error('Error listing recordings:', { userId: req.user?.id, error: describeErrorSafely(error) });
+    logger.error('Error listing recordings:', {
+      userId: req.user?.id,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error listing recordings',
       error: describeErrorSafely(error),
@@ -56,14 +59,18 @@ router.get('/:recordingId', async (req: AuthRequest, res: Response) => {
     }
 
     if (recording.status !== RecordingStatus.READY) {
-      return res.status(400).json({ message: `Recording is not ready (status: ${recording.status})` });
+      return res
+        .status(400)
+        .json({ message: `Recording is not ready (status: ${recording.status})` });
     }
 
     // Access check
     const isHost = userId === recording.host;
     if (!isHost && recording.access === RecordingAccess.PARTICIPANTS) {
       if (!userId || !recording.participantIds.includes(userId)) {
-        return res.status(403).json({ message: 'This recording is only available to participants' });
+        return res
+          .status(403)
+          .json({ message: 'This recording is only available to participants' });
       }
     }
 
@@ -74,7 +81,11 @@ router.get('/:recordingId', async (req: AuthRequest, res: Response) => {
       playbackUrl,
     });
   } catch (error) {
-    logger.error('Error fetching recording:', { userId: req.user?.id, recordingId: req.params.recordingId, error: describeErrorSafely(error) });
+    logger.error('Error fetching recording:', {
+      userId: req.user?.id,
+      recordingId: req.params.recordingId,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error fetching recording',
       error: describeErrorSafely(error),
@@ -106,7 +117,9 @@ router.patch('/:recordingId', async (req: AuthRequest, res: Response) => {
     }
 
     if (!access || !Object.values(RecordingAccess).includes(access)) {
-      return res.status(400).json({ message: 'Invalid access value. Must be "public" or "participants".' });
+      return res
+        .status(400)
+        .json({ message: 'Invalid access value. Must be "public" or "participants".' });
     }
 
     const recording = await updateRecording(existing.id, { access });
@@ -115,7 +128,11 @@ router.patch('/:recordingId', async (req: AuthRequest, res: Response) => {
 
     res.json({ recording });
   } catch (error) {
-    logger.error('Error updating recording:', { userId: req.user?.id, recordingId: req.params.recordingId, error: describeErrorSafely(error) });
+    logger.error('Error updating recording:', {
+      userId: req.user?.id,
+      recordingId: req.params.recordingId,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error updating recording',
       error: describeErrorSafely(error),
@@ -156,7 +173,9 @@ router.delete('/:recordingId', async (req: AuthRequest, res: Response) => {
     try {
       await deleteRecordingFromSpaces(recording.objectKey);
     } catch (err) {
-      logger.warn(`Failed to delete recording file from Spaces (may already be gone):`, { err: describeErrorSafely(err) });
+      logger.warn(`Failed to delete recording file from Spaces (may already be gone):`, {
+        err: describeErrorSafely(err),
+      });
     }
 
     await updateRecording(recording.id, { status: RecordingStatus.DELETED });
@@ -165,7 +184,11 @@ router.delete('/:recordingId', async (req: AuthRequest, res: Response) => {
 
     res.json({ success: true });
   } catch (error) {
-    logger.error('Error deleting recording:', { userId: req.user?.id, recordingId: req.params.recordingId, error: describeErrorSafely(error) });
+    logger.error('Error deleting recording:', {
+      userId: req.user?.id,
+      recordingId: req.params.recordingId,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error deleting recording',
       error: describeErrorSafely(error),

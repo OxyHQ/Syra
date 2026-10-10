@@ -30,25 +30,33 @@ const episodeResponseSchema = episodeSchema.passthrough();
  * See the same note in `podcastService` — a schema that demanded the envelope
  * here rejected every response the server actually sent.
  */
-const episodeDetailPayloadSchema = z.object({
-  episode: episodeResponseSchema,
-  persons: z.array(resolvedPersonSchema.passthrough()),
-  progressSec: z.number().optional(),
-  completed: z.boolean().optional(),
-}).passthrough();
+const episodeDetailPayloadSchema = z
+  .object({
+    episode: episodeResponseSchema,
+    persons: z.array(resolvedPersonSchema.passthrough()),
+    progressSec: z.number().optional(),
+    completed: z.boolean().optional(),
+  })
+  .passthrough();
 
-const continueListeningPayloadSchema = z.array(z.object({
-  episode: episodeResponseSchema,
-  progressSec: z.number(),
-  durationSec: z.number(),
-  completed: z.boolean(),
-}).passthrough());
+const continueListeningPayloadSchema = z.array(
+  z
+    .object({
+      episode: episodeResponseSchema,
+      progressSec: z.number(),
+      durationSec: z.number(),
+      completed: z.boolean(),
+    })
+    .passthrough(),
+);
 
-const progressWriteResponseSchema = z.object({
-  ok: z.boolean(),
-  positionSec: z.number().optional(),
-  completed: z.boolean().optional(),
-}).passthrough();
+const progressWriteResponseSchema = z
+  .object({
+    ok: z.boolean(),
+    positionSec: z.number().optional(),
+    completed: z.boolean().optional(),
+  })
+  .passthrough();
 
 export interface EpisodeDetail {
   episode: Episode;
@@ -108,6 +116,10 @@ export const episodeService = {
   /** The caller's in-progress (not completed) episodes, most recent first. */
   async getContinueListening(params?: { limit?: number }): Promise<ContinueListeningEntry[]> {
     const response = await api.get<unknown>('/episodes/continue', params);
-    return parseEpisodeResponse(continueListeningPayloadSchema, response.data, 'continue listening');
+    return parseEpisodeResponse(
+      continueListeningPayloadSchema,
+      response.data,
+      'continue listening',
+    );
   },
 };

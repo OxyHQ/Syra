@@ -66,7 +66,7 @@ export interface EpisodeChildValues {
 async function writeChildren(
   tx: DbOrTransaction,
   episodeId: string,
-  children: EpisodeChildValues
+  children: EpisodeChildValues,
 ): Promise<void> {
   if (children.transcripts !== undefined) {
     await setEpisodeTranscripts(tx, episodeId, children.transcripts);
@@ -77,7 +77,7 @@ async function writeChildren(
 
 function definedOnly<T extends object>(values: T): Partial<T> {
   return Object.fromEntries(
-    Object.entries(values).filter(([, value]) => value !== undefined)
+    Object.entries(values).filter(([, value]) => value !== undefined),
   ) as Partial<T>;
 }
 
@@ -135,7 +135,7 @@ export async function findEpisodeById(id: string): Promise<EpisodeWithShow | und
  */
 export async function findEpisodesByIds(
   ids: readonly string[],
-  viewerId: string | null | undefined
+  viewerId: string | null | undefined,
 ): Promise<EpisodeRow[]> {
   if (ids.length === 0) return [];
   return getDb()
@@ -145,8 +145,8 @@ export async function findEpisodesByIds(
       and(
         inArray(episodes.id, [...ids]),
         ne(episodes.status, 'unavailable'),
-        showIsReadableByViewer(viewerId)
-      )
+        showIsReadableByViewer(viewerId),
+      ),
     );
 }
 
@@ -176,7 +176,7 @@ export async function findEpisodesByIds(
  */
 export function episodesByShowQuery(
   podcastId: string,
-  options: { visibility: SQL | undefined; offset?: number; limit: number }
+  options: { visibility: SQL | undefined; offset?: number; limit: number },
 ) {
   return getDb()
     .select()
@@ -205,14 +205,14 @@ export function episodesByShowQuery(
  */
 export async function findEpisodesByShow(
   podcastId: string,
-  options: { visibility: SQL | undefined; offset?: number; limit: number }
+  options: { visibility: SQL | undefined; offset?: number; limit: number },
 ): Promise<EpisodeRow[]> {
   return episodesByShowQuery(podcastId, options);
 }
 
 export async function countEpisodesByShow(
   podcastId: string,
-  visibility: SQL | undefined
+  visibility: SQL | undefined,
 ): Promise<number> {
   const [row] = await getDb()
     .select({ total: count() })
@@ -251,7 +251,7 @@ export async function findFeedEpisodes(podcastId: string, limit: number): Promis
  * `podcast_id`, never one per show.
  */
 export async function countReadyEpisodesByShows(
-  podcastIds: readonly string[]
+  podcastIds: readonly string[],
 ): Promise<Map<string, number>> {
   if (podcastIds.length === 0) return new Map();
 
@@ -290,7 +290,7 @@ export async function countReadyEpisodesByShows(
  * two-query shape is the port rather than a concession.
  */
 export async function episodeStats(
-  podcastId: string
+  podcastId: string,
 ): Promise<{ total: number; latestPubDate: Date | undefined }> {
   const [totals] = await getDb()
     .select({ total: count() })
@@ -332,8 +332,8 @@ export async function findEpisodeIdsAwaitingHls(podcastId: string): Promise<stri
         eq(episodes.source, 'syra'),
         isNull(episodes.hlsMasterKey),
         isNotNull(episodes.audioSourceUrl),
-        ne(episodes.status, 'unavailable')
-      )
+        ne(episodes.status, 'unavailable'),
+      ),
     );
   return rows.map((row) => row.id);
 }
@@ -351,7 +351,7 @@ export async function findEpisodeIdsAwaitingHls(podcastId: string): Promise<stri
  */
 export async function findEpisodeArtworkState(
   podcastId: string,
-  guid: string
+  guid: string,
 ): Promise<{ id: string; imageId: string | null } | undefined> {
   const [row] = await getDb()
     .select({ id: episodes.id, imageId: episodes.imageId })
@@ -371,7 +371,7 @@ export async function findEpisodeArtworkState(
 export async function searchEpisodeRows(
   query: string,
   offset: number,
-  limit: number
+  limit: number,
 ): Promise<EpisodeRow[]> {
   return getDb()
     .select()
@@ -393,7 +393,7 @@ export async function countSearchEpisodes(query: string): Promise<number> {
 /** Episodes crediting a person — the `appearsIn` shelf's episode half. */
 export async function findEpisodesCreditingPerson(
   person: CreditIdentity,
-  limit: number
+  limit: number,
 ): Promise<EpisodeRow[]> {
   return getDb()
     .select()
@@ -432,7 +432,7 @@ export async function insertEpisode(
    * alone, so neither may land alone — and that is not expressible while this
    * function insists on being the outermost transaction.
    */
-  tx?: DbOrTransaction
+  tx?: DbOrTransaction,
 ): Promise<EpisodeRow> {
   const run = async (db: DbOrTransaction): Promise<EpisodeRow> => {
     const [row] = await db.insert(episodes).values(values).returning();
@@ -458,7 +458,7 @@ export async function insertEpisode(
 export async function updateEpisode(
   id: string,
   values: EpisodeValues,
-  children: EpisodeChildValues = {}
+  children: EpisodeChildValues = {},
 ): Promise<EpisodeRow | undefined> {
   return getDb().transaction(async (tx) => {
     const set = definedOnly(values);
@@ -522,7 +522,7 @@ export async function upsertEpisodeFromFeed(input: {
 /** `processing` → `ready` | `failed`, the ingest job's only status writes. */
 export async function setEpisodeStatus(
   id: string,
-  status: 'ready' | 'processing' | 'failed' | 'unavailable'
+  status: 'ready' | 'processing' | 'failed' | 'unavailable',
 ): Promise<void> {
   await getDb().update(episodes).set({ status }).where(eq(episodes.id, id));
 }
@@ -531,7 +531,7 @@ export async function setEpisodeStatus(
 export async function setEpisodeHls(
   id: string,
   hlsMasterKey: string,
-  renditions: readonly HlsRendition[]
+  renditions: readonly HlsRendition[],
 ): Promise<void> {
   await getDb().transaction(async (tx) => {
     await tx.update(episodes).set({ hlsMasterKey, status: 'ready' }).where(eq(episodes.id, id));
@@ -542,7 +542,7 @@ export async function setEpisodeHls(
 /** The hybrid-audio cache subdocument, flattened onto four columns. */
 export async function setEpisodeCache(
   id: string,
-  cache: { status: 'none' | 'cached' | 'hls'; objectKey?: string; cachedAt?: Date }
+  cache: { status: 'none' | 'cached' | 'hls'; objectKey?: string; cachedAt?: Date },
 ): Promise<void> {
   await getDb()
     .update(episodes)
@@ -565,7 +565,7 @@ export interface EpisodeProgressRow {
 
 export async function findEpisodeProgress(
   oxyUserId: string,
-  episodeId: string
+  episodeId: string,
 ): Promise<{ positionSec: number; completed: boolean } | undefined> {
   const [row] = await getDb()
     .select({ positionSec: episodeProgress.positionSec, completed: episodeProgress.completed })
@@ -585,7 +585,7 @@ export async function findEpisodeProgress(
 export async function upsertEpisodeProgress(
   oxyUserId: string,
   episodeId: string,
-  values: { positionSec: number; durationSec?: number; completed: boolean }
+  values: { positionSec: number; durationSec?: number; completed: boolean },
 ): Promise<{ positionSec: number; completed: boolean }> {
   const set = {
     positionSec: values.positionSec,
@@ -621,7 +621,7 @@ export async function upsertEpisodeProgress(
  */
 export async function listContinueListening(
   oxyUserId: string,
-  limit: number
+  limit: number,
 ): Promise<EpisodeProgressRow[]> {
   return getDb()
     .select({

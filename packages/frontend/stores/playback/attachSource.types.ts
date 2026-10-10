@@ -21,7 +21,4 @@ export interface AttachResult {
  *    selects the engine (expo-audio vs WebHlsPlayer) before calling attachSource,
  *    so the engine internalises any hls.js wiring.
  */
-export type AttachSourceFn = (
-  player: PlayerEngine,
-  resolution: StreamResolution,
-) => AttachResult;
+export type AttachSourceFn = (player: PlayerEngine, resolution: StreamResolution) => AttachResult;

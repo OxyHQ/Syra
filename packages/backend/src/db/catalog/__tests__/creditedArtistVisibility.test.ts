@@ -81,9 +81,14 @@ async function makeTrack(ownerId: string, playable: boolean): Promise<string> {
 }
 
 async function credit(trackId: string, name: string, catalogEntityId?: string): Promise<void> {
-  await getDb()
-    .insert(trackCredits)
-    .values({ trackId, position: 0, name, nameKey: name.toLowerCase(), role: 'artist', catalogEntityId });
+  await getDb().insert(trackCredits).values({
+    trackId,
+    position: 0,
+    name,
+    nameKey: name.toLowerCase(),
+    role: 'artist',
+    catalogEntityId,
+  });
 }
 
 describe('playableArtistsWhere — credited artists', () => {

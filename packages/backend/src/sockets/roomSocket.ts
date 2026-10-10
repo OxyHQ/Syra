@@ -40,7 +40,10 @@ interface RedisParticipant {
 async function redisSetRoom(roomId: string, hostId: string): Promise<void> {
   const redis = getRedisClient();
   if (!redis?.isReady) return;
-  await redis.set(ROOM_KEY(roomId), JSON.stringify({ hostId, createdAt: new Date().toISOString() }));
+  await redis.set(
+    ROOM_KEY(roomId),
+    JSON.stringify({ hostId, createdAt: new Date().toISOString() }),
+  );
 }
 
 async function redisGetRoom(roomId: string): Promise<{ hostId: string } | null> {
@@ -62,14 +65,21 @@ async function redisRemoveParticipant(roomId: string, userId: string): Promise<v
   await redis.hDel(PARTICIPANTS_KEY(roomId), userId);
 }
 
-async function redisGetParticipant(roomId: string, userId: string): Promise<RedisParticipant | null> {
+async function redisGetParticipant(
+  roomId: string,
+  userId: string,
+): Promise<RedisParticipant | null> {
   const redis = getRedisClient();
   if (!redis?.isReady) return null;
   const data = await redis.hGet(PARTICIPANTS_KEY(roomId), userId);
   return typeof data === 'string' ? JSON.parse(data) : null;
 }
 
-async function redisUpdateParticipant(roomId: string, userId: string, updates: Partial<RedisParticipant>): Promise<void> {
+async function redisUpdateParticipant(
+  roomId: string,
+  userId: string,
+  updates: Partial<RedisParticipant>,
+): Promise<void> {
   const existing = await redisGetParticipant(roomId, userId);
   if (!existing) return;
   const updated = { ...existing, ...updates };
@@ -92,7 +102,11 @@ async function redisGetAllParticipants(roomId: string): Promise<Map<string, Redi
 async function redisAddSpeakerRequest(roomId: string, userId: string): Promise<void> {
   const redis = getRedisClient();
   if (!redis?.isReady) return;
-  await redis.hSet(REQUESTS_KEY(roomId), userId, JSON.stringify({ userId, requestedAt: new Date().toISOString() }));
+  await redis.hSet(
+    REQUESTS_KEY(roomId),
+    userId,
+    JSON.stringify({ userId, requestedAt: new Date().toISOString() }),
+  );
 }
 
 async function redisRemoveSpeakerRequest(roomId: string, userId: string): Promise<void> {
@@ -118,7 +132,7 @@ async function redisCleanupRoom(roomId: string): Promise<void> {
 // --- Utility functions ---
 
 function getParticipantListFromMap(participants: Map<string, RedisParticipant>) {
-  return Array.from(participants.values()).map(p => ({
+  return Array.from(participants.values()).map((p) => ({
     userId: p.userId,
     role: p.role,
     isMuted: p.isMuted,
@@ -152,7 +166,7 @@ async function cleanupRoomIfEmpty(roomId: string) {
  */
 async function determineJoinRole(
   room: { host: string; speakers: string[]; speakerPermission?: string; type: string },
-  userId: string
+  userId: string,
 ): Promise<'host' | 'speaker' | 'listener'> {
   // Host is always host
   if (room.host === userId) {
@@ -365,7 +379,9 @@ export function initializeRoomSocket(io: Server): Namespace {
         if (!participant) return;
 
         await redisUpdateParticipant(roomId, userId, { isMuted });
-        logger.debug(`[audio:mute] User ${userId} ${isMuted ? 'muted' : 'unmuted'} in room ${roomId} (role: ${participant.role})`);
+        logger.debug(
+          `[audio:mute] User ${userId} ${isMuted ? 'muted' : 'unmuted'} in room ${roomId} (role: ${participant.role})`,
+        );
 
         // Broadcast mute state change
         roomsNamespace.to(`room:${roomId}`).emit('room:participant:mute', {
@@ -398,7 +414,10 @@ export function initializeRoomSocket(io: Server): Namespace {
         }
 
         if (room.type === RoomType.BROADCAST) {
-          callback?.({ success: false, error: 'Speaker requests are not allowed in broadcast rooms' });
+          callback?.({
+            success: false,
+            error: 'Speaker requests are not allowed in broadcast rooms',
+          });
           return;
         }
 
@@ -449,59 +468,62 @@ export function initializeRoomSocket(io: Server): Namespace {
      * Approve speaker request (host only)
      * Rejected for BROADCAST rooms.
      */
-    socket.on('speaker:approve', async (data: { roomId: string; targetUserId: string }, callback?: RoomAck) => {
-      try {
-        const { roomId, targetUserId } = data || {};
-        if (!roomId || !targetUserId) {
-          callback?.({ success: false, error: 'roomId and targetUserId are required' });
-          return;
+    socket.on(
+      'speaker:approve',
+      async (data: { roomId: string; targetUserId: string }, callback?: RoomAck) => {
+        try {
+          const { roomId, targetUserId } = data || {};
+          if (!roomId || !targetUserId) {
+            callback?.({ success: false, error: 'roomId and targetUserId are required' });
+            return;
+          }
+
+          // Enforce broadcast restriction
+          const room = await findPublicRoomById(roomId);
+          if (room && room.type === RoomType.BROADCAST) {
+            callback?.({ success: false, error: 'Cannot approve speakers in broadcast rooms' });
+            return;
+          }
+
+          const redisRoom = await redisGetRoom(roomId);
+          if (!redisRoom || redisRoom.hostId !== userId) {
+            callback?.({ success: false, error: 'Only the host can approve speakers' });
+            return;
+          }
+
+          const target = await redisGetParticipant(roomId, targetUserId);
+          if (!target) {
+            callback?.({ success: false, error: 'Target user is not in the room' });
+            return;
+          }
+
+          // Promote to speaker
+          await redisUpdateParticipant(roomId, targetUserId, { role: 'speaker' });
+          await redisRemoveSpeakerRequest(roomId, targetUserId);
+
+          // Grant LiveKit publish permission
+          updateRoomParticipantPermissions(roomId, targetUserId, true).catch(() => {});
+
+          // Notify the approved user
+          roomsNamespace.to(`user:${targetUserId}`).emit('speaker:approved', {
+            roomId,
+            timestamp: new Date().toISOString(),
+          });
+
+          // Broadcast updated participant list
+          await broadcastParticipants(roomsNamespace, roomId);
+
+          // Update DB
+          await addSpeaker(roomId, targetUserId);
+
+          logger.info(`User ${targetUserId} approved as speaker in room ${roomId}`);
+          callback?.({ success: true });
+        } catch (error) {
+          logger.error('Error handling speaker:approve:', { error: describeErrorSafely(error) });
+          callback?.({ success: false, error: 'Internal error' });
         }
-
-        // Enforce broadcast restriction
-        const room = await findPublicRoomById(roomId);
-        if (room && room.type === RoomType.BROADCAST) {
-          callback?.({ success: false, error: 'Cannot approve speakers in broadcast rooms' });
-          return;
-        }
-
-        const redisRoom = await redisGetRoom(roomId);
-        if (!redisRoom || redisRoom.hostId !== userId) {
-          callback?.({ success: false, error: 'Only the host can approve speakers' });
-          return;
-        }
-
-        const target = await redisGetParticipant(roomId, targetUserId);
-        if (!target) {
-          callback?.({ success: false, error: 'Target user is not in the room' });
-          return;
-        }
-
-        // Promote to speaker
-        await redisUpdateParticipant(roomId, targetUserId, { role: 'speaker' });
-        await redisRemoveSpeakerRequest(roomId, targetUserId);
-
-        // Grant LiveKit publish permission
-        updateRoomParticipantPermissions(roomId, targetUserId, true).catch(() => {});
-
-        // Notify the approved user
-        roomsNamespace.to(`user:${targetUserId}`).emit('speaker:approved', {
-          roomId,
-          timestamp: new Date().toISOString(),
-        });
-
-        // Broadcast updated participant list
-        await broadcastParticipants(roomsNamespace, roomId);
-
-        // Update DB
-        await addSpeaker(roomId, targetUserId);
-
-        logger.info(`User ${targetUserId} approved as speaker in room ${roomId}`);
-        callback?.({ success: true });
-      } catch (error) {
-        logger.error('Error handling speaker:approve:', { error: describeErrorSafely(error) });
-        callback?.({ success: false, error: 'Internal error' });
-      }
-    });
+      },
+    );
 
     /**
      * Deny speaker request (host only)
@@ -529,58 +551,61 @@ export function initializeRoomSocket(io: Server): Namespace {
      * Remove speaker (host only, demote back to listener)
      * Rejected for BROADCAST rooms.
      */
-    socket.on('speaker:remove', async (data: { roomId: string; targetUserId: string }, callback?: RoomAck) => {
-      try {
-        const { roomId, targetUserId } = data || {};
-        if (!roomId || !targetUserId) {
-          callback?.({ success: false, error: 'roomId and targetUserId are required' });
-          return;
+    socket.on(
+      'speaker:remove',
+      async (data: { roomId: string; targetUserId: string }, callback?: RoomAck) => {
+        try {
+          const { roomId, targetUserId } = data || {};
+          if (!roomId || !targetUserId) {
+            callback?.({ success: false, error: 'roomId and targetUserId are required' });
+            return;
+          }
+
+          // Enforce broadcast restriction
+          const room = await findPublicRoomById(roomId);
+          if (room && room.type === RoomType.BROADCAST) {
+            callback?.({ success: false, error: 'Cannot remove speakers in broadcast rooms' });
+            return;
+          }
+
+          const redisRoom = await redisGetRoom(roomId);
+          if (!redisRoom || redisRoom.hostId !== userId) {
+            callback?.({ success: false, error: 'Only the host can remove speakers' });
+            return;
+          }
+
+          const target = await redisGetParticipant(roomId, targetUserId);
+          if (!target) {
+            callback?.({ success: false, error: 'Target user is not in the room' });
+            return;
+          }
+          if (target.role === 'host') {
+            callback?.({ success: false, error: 'Cannot remove the host' });
+            return;
+          }
+
+          await redisUpdateParticipant(roomId, targetUserId, { role: 'listener', isMuted: true });
+
+          // Revoke LiveKit publish permission
+          updateRoomParticipantPermissions(roomId, targetUserId, false).catch(() => {});
+
+          roomsNamespace.to(`user:${targetUserId}`).emit('speaker:removed', {
+            roomId,
+            timestamp: new Date().toISOString(),
+          });
+
+          await broadcastParticipants(roomsNamespace, roomId);
+
+          await removeSpeaker(roomId, targetUserId);
+
+          logger.info(`User ${targetUserId} removed as speaker from room ${roomId}`);
+          callback?.({ success: true });
+        } catch (error) {
+          logger.error('Error handling speaker:remove:', { error: describeErrorSafely(error) });
+          callback?.({ success: false, error: 'Internal error' });
         }
-
-        // Enforce broadcast restriction
-        const room = await findPublicRoomById(roomId);
-        if (room && room.type === RoomType.BROADCAST) {
-          callback?.({ success: false, error: 'Cannot remove speakers in broadcast rooms' });
-          return;
-        }
-
-        const redisRoom = await redisGetRoom(roomId);
-        if (!redisRoom || redisRoom.hostId !== userId) {
-          callback?.({ success: false, error: 'Only the host can remove speakers' });
-          return;
-        }
-
-        const target = await redisGetParticipant(roomId, targetUserId);
-        if (!target) {
-          callback?.({ success: false, error: 'Target user is not in the room' });
-          return;
-        }
-        if (target.role === 'host') {
-          callback?.({ success: false, error: 'Cannot remove the host' });
-          return;
-        }
-
-        await redisUpdateParticipant(roomId, targetUserId, { role: 'listener', isMuted: true });
-
-        // Revoke LiveKit publish permission
-        updateRoomParticipantPermissions(roomId, targetUserId, false).catch(() => {});
-
-        roomsNamespace.to(`user:${targetUserId}`).emit('speaker:removed', {
-          roomId,
-          timestamp: new Date().toISOString(),
-        });
-
-        await broadcastParticipants(roomsNamespace, roomId);
-
-        await removeSpeaker(roomId, targetUserId);
-
-        logger.info(`User ${targetUserId} removed as speaker from room ${roomId}`);
-        callback?.({ success: true });
-      } catch (error) {
-        logger.error('Error handling speaker:remove:', { error: describeErrorSafely(error) });
-        callback?.({ success: false, error: 'Internal error' });
-      }
-    });
+      },
+    );
 
     /**
      * Handle disconnect - clean up all rooms this user is in
@@ -623,7 +648,9 @@ export function initializeRoomSocket(io: Server): Namespace {
         try {
           await removeParticipant(roomId, userId);
         } catch (err) {
-          logger.error(`Failed to update DB on disconnect for room ${roomId}:`, { error: describeErrorSafely(err) });
+          logger.error(`Failed to update DB on disconnect for room ${roomId}:`, {
+            error: describeErrorSafely(err),
+          });
         }
       }
     });

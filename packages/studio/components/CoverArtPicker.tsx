@@ -26,7 +26,13 @@ interface CoverArtPickerProps {
  * uses `expo-image` — the freshly-picked local URI while uploading, then the
  * resolved catalog URL for the stored id.
  */
-export function CoverArtPicker({ value, onChange, size = 160, disabled = false, error }: CoverArtPickerProps) {
+export function CoverArtPicker({
+  value,
+  onChange,
+  size = 160,
+  disabled = false,
+  error,
+}: CoverArtPickerProps) {
   const theme = useTheme();
   const [isUploading, setIsUploading] = useState(false);
   const [localPreview, setLocalPreview] = useState<string | null>(null);
@@ -77,7 +83,9 @@ export function CoverArtPicker({ value, onChange, size = 160, disabled = false, 
     } catch (uploadError) {
       setLocalPreview(null);
       toast.error(
-        uploadError instanceof Error ? uploadError.message : 'Could not upload the image. Please try again.',
+        uploadError instanceof Error
+          ? uploadError.message
+          : 'Could not upload the image. Please try again.',
       );
     } finally {
       setIsUploading(false);
@@ -105,8 +113,14 @@ export function CoverArtPicker({ value, onChange, size = 160, disabled = false, 
           />
         ) : (
           <View className="items-center justify-center gap-1.5 px-3">
-            <MaterialCommunityIcons name="image-plus" size={size * 0.26} color={theme.colors.textSecondary} />
-            <Text className="text-xs font-medium text-muted-foreground text-center">Add cover art</Text>
+            <MaterialCommunityIcons
+              name="image-plus"
+              size={size * 0.26}
+              color={theme.colors.textSecondary}
+            />
+            <Text className="text-xs font-medium text-muted-foreground text-center">
+              Add cover art
+            </Text>
           </View>
         )}
 

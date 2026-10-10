@@ -79,12 +79,20 @@ function makeRes(): CapturedRes {
   return {
     _status: 200,
     _body: undefined,
-    status(code) { this._status = code; return this; },
-    json(body) { this._body = body; return this; },
+    status(code) {
+      this._status = code;
+      return this;
+    },
+    json(body) {
+      this._body = body;
+      return this;
+    },
   };
 }
 
-const failNext: NextFunction = (err) => { throw err; };
+const failNext: NextFunction = (err) => {
+  throw err;
+};
 
 function makeReq(
   params: Record<string, string>,
@@ -119,7 +127,12 @@ async function makeTrack(artistId: string, title = 'Song'): Promise<string> {
   const [track] = await getDb()
     .insert(tracks)
     .values({
-      title, artistId, artistName: 'Creator', duration: 200, source: 'upload', status: 'ready',
+      title,
+      artistId,
+      artistName: 'Creator',
+      duration: 200,
+      source: 'upload',
+      status: 'ready',
     })
     .returning({ id: tracks.id });
   if (!track) throw new Error('makeTrack: insert returned no row');
@@ -173,21 +186,17 @@ describe('compliance reviewer allowlist', () => {
     withReviewers('reviewer-1', () => {
       const denied = makeRes();
       let deniedCalledNext = false;
-      requireComplianceReviewer(
-        makeReq({}, 'ordinary-user'),
-        denied as unknown as Response,
-        () => { deniedCalledNext = true; },
-      );
+      requireComplianceReviewer(makeReq({}, 'ordinary-user'), denied as unknown as Response, () => {
+        deniedCalledNext = true;
+      });
       expect(denied._status).toBe(403);
       expect(deniedCalledNext).toBe(false);
 
       const allowed = makeRes();
       let allowedCalledNext = false;
-      requireComplianceReviewer(
-        makeReq({}, 'reviewer-1'),
-        allowed as unknown as Response,
-        () => { allowedCalledNext = true; },
-      );
+      requireComplianceReviewer(makeReq({}, 'reviewer-1'), allowed as unknown as Response, () => {
+        allowedCalledNext = true;
+      });
       expect(allowedCalledNext).toBe(true);
       expect(allowed._status).toBe(200);
     });
@@ -229,7 +238,10 @@ describe('POST /api/copyright/reports/:id/resolve', () => {
 
     const res = makeRes();
     await resolveCopyrightReport(
-      makeReq({ id: reportId }, 'reviewer-1', { status: 'rejected', resolutionNote: 'not infringing' }),
+      makeReq({ id: reportId }, 'reviewer-1', {
+        status: 'rejected',
+        resolutionNote: 'not infringing',
+      }),
       res as unknown as Response,
       failNext,
     );
@@ -411,7 +423,11 @@ describe('GET /api/copyright/reports', () => {
   it('rejects a status filter that is not a status', async () => {
     const res = makeRes();
     await listCopyrightReports(
-      { params: {}, query: { status: 'whatever' }, user: { id: 'reviewer-1' } } as unknown as AuthRequest,
+      {
+        params: {},
+        query: { status: 'whatever' },
+        user: { id: 'reviewer-1' },
+      } as unknown as AuthRequest,
       res as unknown as Response,
       failNext,
     );

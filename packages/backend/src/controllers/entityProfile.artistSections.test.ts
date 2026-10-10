@@ -65,12 +65,20 @@ function makeRes(): CapturedRes {
   return {
     _status: 200,
     _body: undefined,
-    status(code) { this._status = code; return this; },
-    json(body) { this._body = body; return this; },
+    status(code) {
+      this._status = code;
+      return this;
+    },
+    json(body) {
+      this._body = body;
+      return this;
+    },
   };
 }
 
-const failNext: NextFunction = (err) => { throw err; };
+const failNext: NextFunction = (err) => {
+  throw err;
+};
 
 function makeReq(id: string, userId?: string): Request {
   return {
@@ -133,14 +141,16 @@ async function seedRichArtist() {
   const artistId = artist.id;
 
   // `sources[]` is a child table now, not an embedded array.
-  await getDb().insert(catalogEntitySources).values({
-    catalogEntityId: artistId,
-    position: 0,
-    provider: 'cc',
-    externalId: 'mb-1',
-    importedAt: new Date('2026-01-01T00:00:00Z'),
-    fields: ['bio', 'country'],
-  });
+  await getDb()
+    .insert(catalogEntitySources)
+    .values({
+      catalogEntityId: artistId,
+      position: 0,
+      provider: 'cc',
+      externalId: 'mb-1',
+      importedAt: new Date('2026-01-01T00:00:00Z'),
+      fields: ['bio', 'country'],
+    });
 
   const [ep] = await getDb()
     .insert(albums)
@@ -158,8 +168,13 @@ async function seedRichArtist() {
   const [ownTrack] = await getDb()
     .insert(tracks)
     .values({
-      title: 'Own Song', artistId, artistName: 'Rich Artist', duration: 200,
-      source: 'upload', status: 'ready', albumId: ep.id,
+      title: 'Own Song',
+      artistId,
+      artistName: 'Rich Artist',
+      duration: 200,
+      source: 'upload',
+      status: 'ready',
+      albumId: ep.id,
     })
     .returning({ id: tracks.id });
   if (!ownTrack) throw new Error('seedRichArtist: own track insert returned no row');
@@ -168,8 +183,12 @@ async function seedRichArtist() {
   const [contributed] = await getDb()
     .insert(tracks)
     .values({
-      title: 'Contributed Song', artistId, artistName: 'Rich Artist', duration: 190,
-      source: 'upload', status: 'ready',
+      title: 'Contributed Song',
+      artistId,
+      artistName: 'Rich Artist',
+      duration: 190,
+      source: 'upload',
+      status: 'ready',
     })
     .returning({ id: tracks.id });
   if (!contributed) throw new Error('seedRichArtist: contributed track insert returned no row');
@@ -185,7 +204,9 @@ async function seedRichArtist() {
   const [host] = await getDb()
     .insert(catalogEntities)
     .values({
-      type: 'artist', name: 'Another Band', nameKey: normalizeNameKey('Another Band'),
+      type: 'artist',
+      name: 'Another Band',
+      nameKey: normalizeNameKey('Another Band'),
       source: 'upload',
     })
     .returning({ id: catalogEntities.id });
@@ -194,30 +215,44 @@ async function seedRichArtist() {
   const [creditedTrack] = await getDb()
     .insert(tracks)
     .values({
-      title: 'Produced By Them', artistId: host.id, artistName: 'Another Band',
-      duration: 210, source: 'upload', status: 'ready',
+      title: 'Produced By Them',
+      artistId: host.id,
+      artistName: 'Another Band',
+      duration: 210,
+      source: 'upload',
+      status: 'ready',
     })
     .returning({ id: tracks.id });
   if (!creditedTrack) throw new Error('seedRichArtist: credited track insert returned no row');
 
   // `credits[]` is `track_credits` now — the one subdocument array that DID
   // become a child table, because `loadCreditedOn` queries it by element.
-  await getDb().insert(trackCredits).values({
-    trackId: creditedTrack.id, position: 0, name: 'Rich Artist', role: 'producer',
-    nameKey: normalizeNameKey('Rich Artist'),
-  });
+  await getDb()
+    .insert(trackCredits)
+    .values({
+      trackId: creditedTrack.id,
+      position: 0,
+      name: 'Rich Artist',
+      role: 'producer',
+      nameKey: normalizeNameKey('Rich Artist'),
+    });
 
   const [playlist] = await getDb()
     .insert(playlists)
     .values({
-      name: 'A Public Mix', ownerOxyUserId: 'curator-1', ownerUsername: 'curator',
+      name: 'A Public Mix',
+      ownerOxyUserId: 'curator-1',
+      ownerUsername: 'curator',
       visibility: PlaylistVisibility.PUBLIC,
     })
     .returning({ id: playlists.id });
   if (!playlist) throw new Error('seedRichArtist: playlist insert returned no row');
 
   await getDb().insert(playlistTracks).values({
-    playlistId: playlist.id, trackId: ownTrack.id, addedAt: new Date(), position: 0,
+    playlistId: playlist.id,
+    trackId: ownTrack.id,
+    addedAt: new Date(),
+    position: 0,
   });
 
   return {
@@ -304,7 +339,11 @@ describe('GET /api/p/:id — artist sections on the artist branch', () => {
     expect(profileOf(guest).playlists).toEqual([]);
 
     const owner = makeRes();
-    await getEntityProfile(makeReq(seed.artistId, 'curator-1'), owner as unknown as Response, failNext);
+    await getEntityProfile(
+      makeReq(seed.artistId, 'curator-1'),
+      owner as unknown as Response,
+      failNext,
+    );
     expect(ids(profileOf(owner).playlists)).toEqual([seed.playlistId]);
   });
 });
@@ -414,7 +453,7 @@ describe('GET /api/p/:id — attribution reaches the client', () => {
 });
 
 describe('GET /api/p/:id — the same sections on the PERSON branch', () => {
-  it('serves the linked artist\'s sections when addressed by person id', async () => {
+  it("serves the linked artist's sections when addressed by person id", async () => {
     const seed = await seedRichArtist();
     const personId = await makePerson('Rich Artist', seed.artistId);
 
@@ -451,7 +490,10 @@ describe('GET /api/p/:id — empty sections stay empty', () => {
     const [artist] = await getDb()
       .insert(catalogEntities)
       .values({
-        type: 'artist', name: 'Silent', nameKey: normalizeNameKey('Silent'), source: 'upload',
+        type: 'artist',
+        name: 'Silent',
+        nameKey: normalizeNameKey('Silent'),
+        source: 'upload',
       })
       .returning({ id: catalogEntities.id });
     if (!artist) throw new Error('insert returned no row');
@@ -467,19 +509,37 @@ describe('GET /api/p/:id — empty sections stay empty', () => {
   });
 });
 
-
 it('ranks popular tracks by their score, not whether they have artwork, with stable ties', async () => {
   const seed = await seedRichArtist();
   const coverArtId = await makeImageAsset('album');
-  const common = { artistId: seed.artistId, artistName: 'Rich Artist', duration: 100, source: 'upload' as const, status: 'ready' as const, createdAt: new Date('2026-09-15T00:00:00Z') };
-  const inserted = await getDb().insert(tracks).values([
-    { ...common, title: 'Most popular without cover', popularity: 100 },
-    { ...common, title: 'Less popular with cover', popularity: 1, coverArtId },
-    { ...common, title: 'Tied first', popularity: 50 },
-    { ...common, title: 'Tied second', popularity: 50 },
-  ]).returning({ id: tracks.id, popularity: tracks.popularity });
-  const expected = [...inserted].sort((first, second) => (second.popularity ?? 0) - (first.popularity ?? 0) || first.id.localeCompare(second.id)).map((track) => track.id);
+  const common = {
+    artistId: seed.artistId,
+    artistName: 'Rich Artist',
+    duration: 100,
+    source: 'upload' as const,
+    status: 'ready' as const,
+    createdAt: new Date('2026-09-15T00:00:00Z'),
+  };
+  const inserted = await getDb()
+    .insert(tracks)
+    .values([
+      { ...common, title: 'Most popular without cover', popularity: 100 },
+      { ...common, title: 'Less popular with cover', popularity: 1, coverArtId },
+      { ...common, title: 'Tied first', popularity: 50 },
+      { ...common, title: 'Tied second', popularity: 50 },
+    ])
+    .returning({ id: tracks.id, popularity: tracks.popularity });
+  const expected = [...inserted]
+    .sort(
+      (first, second) =>
+        (second.popularity ?? 0) - (first.popularity ?? 0) || first.id.localeCompare(second.id),
+    )
+    .map((track) => track.id);
   const res = makeRes();
   await getEntityProfile(makeReq(seed.artistId), res as unknown as Response, failNext);
-  expect(profileOf(res).music?.tracks.filter((track) => expected.includes(track.id)).map((track) => track.id)).toEqual(expected);
+  expect(
+    profileOf(res)
+      .music?.tracks.filter((track) => expected.includes(track.id))
+      .map((track) => track.id),
+  ).toEqual(expected);
 });

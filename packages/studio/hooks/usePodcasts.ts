@@ -2,7 +2,11 @@ import { useOxy } from '@oxy.so/services';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CreatePodcastRequest } from '@syra/shared-types';
 import { podcastService } from '@/services/podcastService';
-import { episodeService, type EpisodeAudioFile, type UploadEpisodeMetadata } from '@/services/episodeService';
+import {
+  episodeService,
+  type EpisodeAudioFile,
+  type UploadEpisodeMetadata,
+} from '@/services/episodeService';
 
 export const PODCAST_QUERY_KEYS = {
   mine: ['studio', 'podcasts', 'mine'] as const,
@@ -36,10 +40,17 @@ export function usePodcast(id: string | undefined) {
 }
 
 /** A reverse-chronological page of a show's episodes. */
-export function usePodcastEpisodes(id: string | undefined, params?: { page?: number; limit?: number }) {
+export function usePodcastEpisodes(
+  id: string | undefined,
+  params?: { page?: number; limit?: number },
+) {
   const { canUsePrivateApi } = useOxy();
   return useQuery({
-    queryKey: [...PODCAST_QUERY_KEYS.episodes(id ?? ''), params?.page ?? 1, params?.limit ?? 50] as const,
+    queryKey: [
+      ...PODCAST_QUERY_KEYS.episodes(id ?? ''),
+      params?.page ?? 1,
+      params?.limit ?? 50,
+    ] as const,
     queryFn: () => podcastService.getEpisodes(id as string, params),
     enabled: Boolean(id) && canUsePrivateApi,
     staleTime: 1000 * 30,

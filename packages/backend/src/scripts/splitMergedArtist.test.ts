@@ -49,7 +49,14 @@ async function makeArtist(name: string, nameKey: string): Promise<string> {
 async function makeTrack(title: string, artistId: string): Promise<string> {
   const [track] = await getDb()
     .insert(tracks)
-    .values({ title, artistId, artistName: 'principal', duration: 100, source: 'upload', status: 'ready' })
+    .values({
+      title,
+      artistId,
+      artistName: 'principal',
+      duration: 100,
+      source: 'upload',
+      status: 'ready',
+    })
     .returning({ id: tracks.id });
   if (!track) throw new Error('makeTrack: insert returned no row');
   return track.id;
@@ -65,7 +72,7 @@ async function makeCredit(
   trackId: string,
   name: string,
   nameKey: string,
-  catalogEntityId?: string
+  catalogEntityId?: string,
 ): Promise<string> {
   const [credit] = await getDb()
     .insert(trackCredits)

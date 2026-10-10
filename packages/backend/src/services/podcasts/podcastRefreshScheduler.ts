@@ -45,7 +45,10 @@ async function refreshBatch(): Promise<void> {
     try {
       await importFeed(candidate.feedUrl);
     } catch (err) {
-      logger.warn('[podcasts] refresh failed for feed', { feedUrl: candidate.feedUrl, err: describeErrorSafely(err) });
+      logger.warn('[podcasts] refresh failed for feed', {
+        feedUrl: candidate.feedUrl,
+        err: describeErrorSafely(err),
+      });
     }
   }
 }
@@ -80,7 +83,9 @@ export function startPodcastRefreshScheduler(): void {
     if (typeof timer.unref === 'function') timer.unref();
   }, INITIAL_DELAY_MS).unref?.();
 
-  logger.info('[podcasts] refresh scheduler started', { intervalMinutes: TICK_INTERVAL_MS / 60000 });
+  logger.info('[podcasts] refresh scheduler started', {
+    intervalMinutes: TICK_INTERVAL_MS / 60000,
+  });
 }
 
 /** Stop the scheduler (used in tests / graceful shutdown). */

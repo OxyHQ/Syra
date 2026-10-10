@@ -103,8 +103,14 @@ export function useLibrary() {
 
   const likedTrackIds = useMemo(() => new Set(membership.likedTracks), [membership.likedTracks]);
   const savedAlbumIds = useMemo(() => new Set(membership.savedAlbums), [membership.savedAlbums]);
-  const followedArtistIds = useMemo(() => new Set(membership.followedArtists), [membership.followedArtists]);
-  const savedPlaylistIds = useMemo(() => new Set(membership.savedPlaylists), [membership.savedPlaylists]);
+  const followedArtistIds = useMemo(
+    () => new Set(membership.followedArtists),
+    [membership.followedArtists],
+  );
+  const savedPlaylistIds = useMemo(
+    () => new Set(membership.savedPlaylists),
+    [membership.savedPlaylists],
+  );
   const subscribedPodcastIds = useMemo(
     () => new Set(membership.subscribedPodcasts),
     [membership.subscribedPodcasts],
@@ -112,7 +118,10 @@ export function useLibrary() {
 
   const isTrackLiked = useCallback((id: string) => likedTrackIds.has(id), [likedTrackIds]);
   const isAlbumSaved = useCallback((id: string) => savedAlbumIds.has(id), [savedAlbumIds]);
-  const isArtistFollowed = useCallback((id: string) => followedArtistIds.has(id), [followedArtistIds]);
+  const isArtistFollowed = useCallback(
+    (id: string) => followedArtistIds.has(id),
+    [followedArtistIds],
+  );
   const isPlaylistSaved = useCallback((id: string) => savedPlaylistIds.has(id), [savedPlaylistIds]);
   const isPodcastSubscribed = useCallback(
     (id: string) => subscribedPodcastIds.has(id),
@@ -235,7 +244,8 @@ function useToggleMembership(
           : Promise.resolve(),
       ]);
       const previous = queryClient.getQueryData<LibraryMembership>(LIBRARY_QUERY_KEY);
-      const previousLikedTracks = queryClient.getQueryData<LikedTracksData>(LIBRARY_TRACKS_QUERY_KEY);
+      const previousLikedTracks =
+        queryClient.getQueryData<LikedTracksData>(LIBRARY_TRACKS_QUERY_KEY);
       queryClient.setQueryData<LibraryMembership>(LIBRARY_QUERY_KEY, (current) =>
         withMembership(current ?? EMPTY_MEMBERSHIP, field, id, next),
       );
@@ -283,13 +293,22 @@ export function useToggleSaveAlbum() {
 }
 
 export function useToggleFollowArtist() {
-  return useToggleMembership('followedArtists', libraryService.followArtist, libraryService.unfollowArtist);
+  return useToggleMembership(
+    'followedArtists',
+    libraryService.followArtist,
+    libraryService.unfollowArtist,
+  );
 }
 
 export function useToggleSavePlaylist() {
-  return useToggleMembership('savedPlaylists', libraryService.savePlaylist, libraryService.unsavePlaylist, {
-    invalidatePlaylists: true,
-  });
+  return useToggleMembership(
+    'savedPlaylists',
+    libraryService.savePlaylist,
+    libraryService.unsavePlaylist,
+    {
+      invalidatePlaylists: true,
+    },
+  );
 }
 
 /**

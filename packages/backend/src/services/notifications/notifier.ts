@@ -82,10 +82,7 @@ export interface NotifierDeps {
  *
  * Order matters: the cheapest local checks run before anything touches the network.
  */
-export async function notifyUser(
-  input: NotifyInput,
-  deps?: NotifierDeps,
-): Promise<NotifyResult> {
+export async function notifyUser(input: NotifyInput, deps?: NotifierDeps): Promise<NotifyResult> {
   const resolvedDeps: NotifierDeps = deps ?? { getToken: getOxyServiceToken };
   try {
     if (await isEventDisabled(input.recipientId, input.event)) {

@@ -62,10 +62,7 @@ describe('resolveStream', () => {
     };
     mockGet.mockResolvedValueOnce({ data: resolution });
 
-    const [first, second] = await Promise.all([
-      resolveStream('t1'),
-      resolveStream('t1'),
-    ]);
+    const [first, second] = await Promise.all([resolveStream('t1'), resolveStream('t1')]);
 
     expect(first).toEqual(resolution);
     expect(second).toEqual(resolution);
@@ -107,9 +104,7 @@ describe('resolveStream', () => {
   it('throws a descriptive error for string rejections', async () => {
     mockGet.mockRejectedValueOnce('timeout');
 
-    await expect(resolveStream('t4')).rejects.toThrow(
-      'Failed to resolve stream for t4: timeout',
-    );
+    await expect(resolveStream('t4')).rejects.toThrow('Failed to resolve stream for t4: timeout');
   });
 
   it('throws the backend error message for HTTP-style rejections', async () => {

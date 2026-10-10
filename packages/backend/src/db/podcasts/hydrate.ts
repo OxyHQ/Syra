@@ -94,7 +94,7 @@ export interface EpisodeChildren {
 function groupByParent<TRow, TValue>(
   rows: readonly TRow[],
   parentId: (row: TRow) => string,
-  value: (row: TRow) => TValue
+  value: (row: TRow) => TValue,
 ): Map<string, TValue[]> {
   const byParent = new Map<string, TValue[]>();
   for (const row of rows) {
@@ -129,7 +129,7 @@ function toPersonDto(row: {
 
 /** Category NAMES per show, in the feed's own order — see the file-level doc comment. */
 export async function loadPodcastCategories(
-  podcastIds: readonly string[]
+  podcastIds: readonly string[],
 ): Promise<Map<string, string[]>> {
   if (podcastIds.length === 0) return new Map();
 
@@ -144,11 +144,15 @@ export async function loadPodcastCategories(
     .where(inArray(podcastCategories.podcastId, [...podcastIds]))
     .orderBy(asc(podcastCategories.position));
 
-  return groupByParent(rows, (row) => row.podcastId, (row) => row.name);
+  return groupByParent(
+    rows,
+    (row) => row.podcastId,
+    (row) => row.name,
+  );
 }
 
 export async function loadPodcastFunding(
-  podcastIds: readonly string[]
+  podcastIds: readonly string[],
 ): Promise<Map<string, PodcastFunding[]>> {
   if (podcastIds.length === 0) return new Map();
 
@@ -165,12 +169,12 @@ export async function loadPodcastFunding(
   return groupByParent(
     rows,
     (row) => row.podcastId,
-    (row) => ({ url: row.url, ...(row.message === null ? {} : { message: row.message }) })
+    (row) => ({ url: row.url, ...(row.message === null ? {} : { message: row.message }) }),
   );
 }
 
 export async function loadPodcastPersons(
-  podcastIds: readonly string[]
+  podcastIds: readonly string[],
 ): Promise<Map<string, PodcastPerson[]>> {
   if (podcastIds.length === 0) return new Map();
 
@@ -184,7 +188,7 @@ export async function loadPodcastPersons(
 }
 
 export async function loadPodcastSources(
-  podcastIds: readonly string[]
+  podcastIds: readonly string[],
 ): Promise<Map<string, PodcastSourceProvenance[]>> {
   if (podcastIds.length === 0) return new Map();
 
@@ -202,14 +206,14 @@ export async function loadPodcastSources(
       externalId: row.externalId,
       importedAt: row.importedAt,
       fields: row.fields,
-    })
+    }),
   );
 }
 
 // ── Episode child collections ─────────────────────────────────────────────
 
 export async function loadEpisodeTranscripts(
-  episodeIds: readonly string[]
+  episodeIds: readonly string[],
 ): Promise<Map<string, EpisodeTranscript[]>> {
   if (episodeIds.length === 0) return new Map();
 
@@ -226,12 +230,12 @@ export async function loadEpisodeTranscripts(
       url: row.url,
       type: row.type,
       ...(row.language === null ? {} : { language: row.language }),
-    })
+    }),
   );
 }
 
 export async function loadEpisodePersons(
-  episodeIds: readonly string[]
+  episodeIds: readonly string[],
 ): Promise<Map<string, EpisodePerson[]>> {
   if (episodeIds.length === 0) return new Map();
 
@@ -245,7 +249,7 @@ export async function loadEpisodePersons(
 }
 
 export async function loadEpisodeHls(
-  episodeIds: readonly string[]
+  episodeIds: readonly string[],
 ): Promise<Map<string, HlsRendition[]>> {
   if (episodeIds.length === 0) return new Map();
 
@@ -262,7 +266,7 @@ export async function loadEpisodeHls(
       manifestKey: row.manifestKey,
       bitrateKbps: row.bitrateKbps,
       encrypted: row.encrypted,
-    })
+    }),
   );
 }
 
@@ -296,7 +300,7 @@ export interface ShowContext {
  * them treated as NOT owned, which is the safe direction.
  */
 export async function loadShowContext(
-  episodeRows: readonly { podcastId: string }[]
+  episodeRows: readonly { podcastId: string }[],
 ): Promise<Map<string, ShowContext>> {
   const podcastIds = [...new Set(episodeRows.map((row) => row.podcastId))];
   if (podcastIds.length === 0) return new Map();
@@ -308,7 +312,7 @@ export async function loadShowContext(
     rows.map((row) => [
       row.id,
       { artwork: podcastArtwork(row, lookup), ownerOxyUserId: row.ownerOxyUserId },
-    ])
+    ]),
   );
 }
 
@@ -328,7 +332,7 @@ export async function loadShowContext(
 export async function toPodcastDtos(
   rows: readonly PodcastRow[],
   viewerId: string | null | undefined,
-  children: PodcastChildren = {}
+  children: PodcastChildren = {},
 ): Promise<Podcast[]> {
   if (rows.length === 0) return [];
 
@@ -340,7 +344,9 @@ export async function toPodcastDtos(
   const [lookup, categories, funding, persons, sources, readyCounts] = await Promise.all([
     loadImageVariants(rows.flatMap(podcastImageIds)),
     want('categories') ? loadPodcastCategories(ids) : Promise.resolve(new Map<string, string[]>()),
-    want('funding') ? loadPodcastFunding(ids) : Promise.resolve(new Map<string, PodcastFunding[]>()),
+    want('funding')
+      ? loadPodcastFunding(ids)
+      : Promise.resolve(new Map<string, PodcastFunding[]>()),
     want('persons') ? loadPodcastPersons(ids) : Promise.resolve(new Map<string, PodcastPerson[]>()),
     want('sources')
       ? loadPodcastSources(ids)
@@ -369,7 +375,7 @@ export async function toPodcastDtos(
       funding: want('funding') ? (funding.get(row.id) ?? []) : undefined,
       persons: want('persons') ? (persons.get(row.id) ?? []) : undefined,
       sources: want('sources') ? (sources.get(row.id) ?? []) : undefined,
-    })
+    }),
   );
 }
 
@@ -386,7 +392,7 @@ export async function toEpisodeDtos(
   rows: readonly EpisodeRow[],
   viewerId: string | null | undefined,
   showContext?: ReadonlyMap<string, ShowContext>,
-  children: EpisodeChildren = {}
+  children: EpisodeChildren = {},
 ): Promise<Episode[]> {
   if (rows.length === 0) return [];
 

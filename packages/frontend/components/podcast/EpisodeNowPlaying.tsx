@@ -44,7 +44,11 @@ export const EpisodeNowPlaying: React.FC = () => {
   );
 
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      style={styles.scroll}
+      contentContainerStyle={styles.content}
+      showsVerticalScrollIndicator={false}
+    >
       <View style={styles.artworkWrap}>
         {artwork ? (
           <ExpoImage source={{ uri: artwork }} style={styles.artwork} contentFit="cover" />
@@ -53,11 +57,16 @@ export const EpisodeNowPlaying: React.FC = () => {
             <Ionicons name="mic" size={64} color={theme.colors.textSecondary} />
           </View>
         )}
-        <LinearGradient colors={['transparent', 'rgba(0,0,0,0.55)']} style={styles.artworkGradient} />
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.55)']}
+          style={styles.artworkGradient}
+        />
       </View>
 
       <Pressable
-        onPress={() => router.push({ pathname: '/podcasts/[id]', params: { id: episode.podcastId } })}
+        onPress={() =>
+          router.push({ pathname: '/podcasts/[id]', params: { id: episode.podcastId } })
+        }
         accessibilityRole="link"
       >
         <Text className="text-primary" style={styles.show} numberOfLines={1}>
@@ -73,7 +82,8 @@ export const EpisodeNowPlaying: React.FC = () => {
         <SkipButton direction="back" seconds={15} size={26} />
         <Pressable
           onPress={() => (isPlaying ? pause() : resume())}
-          className="bg-primary" style={styles.playButton}
+          className="bg-primary"
+          style={styles.playButton}
           accessibilityRole="button"
           accessibilityLabel={isPlaying ? 'Pause' : 'Play'}
         >
@@ -92,7 +102,9 @@ export const EpisodeNowPlaying: React.FC = () => {
       {/* Chapters */}
       {chapters.length > 0 && (
         <View className="bg-popover" style={styles.card}>
-          <Text className="text-foreground" style={styles.cardTitle}>{t('episode.chapters')}</Text>
+          <Text className="text-foreground" style={styles.cardTitle}>
+            {t('episode.chapters')}
+          </Text>
           {chapters.map((chapter, index) => {
             const isActive = index === activeChapterIndex;
             return (
@@ -101,11 +113,19 @@ export const EpisodeNowPlaying: React.FC = () => {
                 onPress={() => seek(chapter.startTime)}
                 style={styles.chapterRow}
               >
-                <Text style={[styles.chapterTime, { color: isActive ? theme.colors.primary : theme.colors.textSecondary }]}>
+                <Text
+                  style={[
+                    styles.chapterTime,
+                    { color: isActive ? theme.colors.primary : theme.colors.textSecondary },
+                  ]}
+                >
                   {formatDuration(chapter.startTime)}
                 </Text>
                 <Text
-                  style={[styles.chapterTitle, { color: isActive ? theme.colors.primary : theme.colors.text }]}
+                  style={[
+                    styles.chapterTitle,
+                    { color: isActive ? theme.colors.primary : theme.colors.text },
+                  ]}
                   numberOfLines={1}
                 >
                   {chapter.title ?? 'Untitled chapter'}

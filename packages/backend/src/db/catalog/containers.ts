@@ -137,7 +137,7 @@ function hasPlayableTrack(containerColumn: PgColumn, containerId: PgColumn): SQL
     getDb()
       .select({ present: sql`1` })
       .from(tracks)
-      .where(and(eq(containerColumn, containerId), playableTrackFilter()))
+      .where(and(eq(containerColumn, containerId), playableTrackFilter())),
   );
 }
 
@@ -270,7 +270,7 @@ export function playablePlaylistsWhere(): SQL {
       .select({ present: sql`1` })
       .from(playlistTracks)
       .innerJoin(tracks, eq(tracks.id, playlistTracks.trackId))
-      .where(and(eq(playlistTracks.playlistId, playlists.id), playableTrackFilter()))
+      .where(and(eq(playlistTracks.playlistId, playlists.id), playableTrackFilter())),
   );
 }
 
@@ -283,7 +283,7 @@ function narrowed(base: SQL, extra?: SQL): SQL {
 
 export async function findAlbumsWithPlayableTracks(
   where: SQL | undefined,
-  page: CatalogPage
+  page: CatalogPage,
 ): Promise<AlbumRow[]> {
   const query = getDb()
     .select(publicColumns(albums, PROTECTED_COLUMNS_BY_TABLE))
@@ -308,9 +308,7 @@ export async function findOneAlbumWithPlayableTracks(id: string): Promise<AlbumR
   const [row] = await getDb()
     .select(publicColumns(albums, PROTECTED_COLUMNS_BY_TABLE))
     .from(albums)
-    .where(
-      and(eq(albums.id, id), playableAlbumsWhere())
-    )
+    .where(and(eq(albums.id, id), playableAlbumsWhere()))
     .limit(1);
 
   return row ?? null;
@@ -320,7 +318,7 @@ export async function findOneAlbumWithPlayableTracks(id: string): Promise<AlbumR
 
 export async function findArtistsWithPlayableTracks(
   where: SQL | undefined,
-  page: CatalogPage
+  page: CatalogPage,
 ): Promise<PublicCatalogEntityRow[]> {
   const query = getDb()
     .select(publicColumns(catalogEntities, PROTECTED_COLUMNS_BY_TABLE))
@@ -342,14 +340,12 @@ export async function countArtistsWithPlayableTracks(where?: SQL): Promise<numbe
 }
 
 export async function findOneArtistWithPlayableTracks(
-  id: string
+  id: string,
 ): Promise<PublicCatalogEntityRow | null> {
   const [row] = await getDb()
     .select(publicColumns(catalogEntities, PROTECTED_COLUMNS_BY_TABLE))
     .from(catalogEntities)
-    .where(
-      and(eq(catalogEntities.id, id), playableArtistsWhere())
-    )
+    .where(and(eq(catalogEntities.id, id), playableArtistsWhere()))
     .limit(1);
 
   return row ?? null;
@@ -359,7 +355,7 @@ export async function findOneArtistWithPlayableTracks(
 
 export async function findPlaylistsWithPlayableTracks(
   where: SQL | undefined,
-  page: CatalogPage
+  page: CatalogPage,
 ): Promise<PlaylistRow[]> {
   const query = getDb()
     .select(publicColumns(playlists, PROTECTED_COLUMNS_BY_TABLE))

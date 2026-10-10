@@ -29,21 +29,28 @@ export const setupPlaylistSocket = (io: SocketIOServer) => {
       socket.leave(`playlist:${playlistId}`);
     });
 
-    socket.on('playlist:track:added', (data: { playlistId: string; tracks: Track[]; playlistTracks: PlaylistTrack[] }) => {
-      try {
-        const { playlistId, tracks, playlistTracks } = data;
-        if (!playlistId) return;
-        socket.to(`playlist:${playlistId}`).emit('playlist:track:added', { playlistId, tracks, playlistTracks });
-      } catch (error) {
-        logger.error('Error handling playlist:track:added', { err: describeErrorSafely(error) });
-      }
-    });
+    socket.on(
+      'playlist:track:added',
+      (data: { playlistId: string; tracks: Track[]; playlistTracks: PlaylistTrack[] }) => {
+        try {
+          const { playlistId, tracks, playlistTracks } = data;
+          if (!playlistId) return;
+          socket
+            .to(`playlist:${playlistId}`)
+            .emit('playlist:track:added', { playlistId, tracks, playlistTracks });
+        } catch (error) {
+          logger.error('Error handling playlist:track:added', { err: describeErrorSafely(error) });
+        }
+      },
+    );
 
     socket.on('playlist:track:removed', (data: { playlistId: string; trackIds: string[] }) => {
       try {
         const { playlistId, trackIds } = data;
         if (!playlistId) return;
-        socket.to(`playlist:${playlistId}`).emit('playlist:track:removed', { playlistId, trackIds });
+        socket
+          .to(`playlist:${playlistId}`)
+          .emit('playlist:track:removed', { playlistId, trackIds });
       } catch (error) {
         logger.error('Error handling playlist:track:removed', { err: describeErrorSafely(error) });
       }
@@ -53,28 +60,39 @@ export const setupPlaylistSocket = (io: SocketIOServer) => {
       try {
         const { playlistId, trackIds } = data;
         if (!playlistId) return;
-        socket.to(`playlist:${playlistId}`).emit('playlist:track:reordered', { playlistId, trackIds });
+        socket
+          .to(`playlist:${playlistId}`)
+          .emit('playlist:track:reordered', { playlistId, trackIds });
       } catch (error) {
-        logger.error('Error handling playlist:track:reordered', { err: describeErrorSafely(error) });
+        logger.error('Error handling playlist:track:reordered', {
+          err: describeErrorSafely(error),
+        });
       }
     });
 
-    socket.on('playlist:updated', (data: { playlistId: string; updates: Record<string, unknown> }) => {
-      try {
-        const { playlistId, updates } = data;
-        if (!playlistId) return;
-        socket.to(`playlist:${playlistId}`).emit('playlist:updated', { playlistId, updates });
-      } catch (error) {
-        logger.error('Error handling playlist:updated', { err: describeErrorSafely(error) });
-      }
-    });
+    socket.on(
+      'playlist:updated',
+      (data: { playlistId: string; updates: Record<string, unknown> }) => {
+        try {
+          const { playlistId, updates } = data;
+          if (!playlistId) return;
+          socket.to(`playlist:${playlistId}`).emit('playlist:updated', { playlistId, updates });
+        } catch (error) {
+          logger.error('Error handling playlist:updated', { err: describeErrorSafely(error) });
+        }
+      },
+    );
 
     socket.on('error', (error: Error) => {
       logger.error('Playlist socket error', { err: describeErrorSafely(error), userId });
     });
 
     socket.on('disconnect', (reason: string) => {
-      logger.info('Client disconnected from playlist namespace', { socketId: socket.id, userId, reason });
+      logger.info('Client disconnected from playlist namespace', {
+        socketId: socket.id,
+        userId,
+        reason,
+      });
     });
   });
 

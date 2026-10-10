@@ -167,9 +167,7 @@ interface ShowFixture {
  * unchanged against the pre-change source as its own vacuity floor.
  */
 async function setVisibility(showId: string, visibility: string): Promise<void> {
-  await getDb().execute(
-    sql`update podcasts set visibility = ${visibility} where id = ${showId}`
-  );
+  await getDb().execute(sql`update podcasts set visibility = ${visibility} where id = ${showId}`);
 }
 
 /**
@@ -185,16 +183,18 @@ async function seedShow(visibility: string): Promise<ShowFixture> {
   const episodeId = uuidv7();
   const bitrateKbps = 96;
 
-  await getDb().insert(podcasts).values({
-    id: showId,
-    title: `${RARE_TERM} Show (${visibility})`,
-    author: 'A Host',
-    source: 'syra',
-    status: 'active',
-    ownerOxyUserId: OWNER,
-    claimable: false,
-    feedUrl: `https://feeds.example.invalid/${showId}.xml`,
-  });
+  await getDb()
+    .insert(podcasts)
+    .values({
+      id: showId,
+      title: `${RARE_TERM} Show (${visibility})`,
+      author: 'A Host',
+      source: 'syra',
+      status: 'active',
+      ownerOxyUserId: OWNER,
+      claimable: false,
+      feedUrl: `https://feeds.example.invalid/${showId}.xml`,
+    });
   await setVisibility(showId, visibility);
 
   // The real key builders, not a guess: `getS3HlsKey(podcastId, episodeId, rel)`
@@ -205,20 +205,22 @@ async function seedShow(visibility: string): Promise<ShowFixture> {
   const manifestKey = getS3HlsKey(showId, episodeId, `${bitrateKbps}/index.m3u8`);
   const audioKey = getS3PodcastEpisodeAudioKey(episodeId, showId, 'mp3');
 
-  await getDb().insert(episodesTable).values({
-    id: episodeId,
-    podcastId: showId,
-    podcastTitle: `${RARE_TERM} Show`,
-    title: `${RARE_TERM} Episode`,
-    guid: `guid-${episodeId}`,
-    pubDate: new Date('2026-01-01T00:00:00.000Z'),
-    source: 'syra',
-    status: 'ready',
-    duration: 60,
-    audioSourceUrl: `/api/podcasts/episodes/${episodeId}/audio`,
-    audioSourceFormat: 'mp3',
-    hlsMasterKey: `hls/${showId}/${episodeId}/master.m3u8`,
-  });
+  await getDb()
+    .insert(episodesTable)
+    .values({
+      id: episodeId,
+      podcastId: showId,
+      podcastTitle: `${RARE_TERM} Show`,
+      title: `${RARE_TERM} Episode`,
+      guid: `guid-${episodeId}`,
+      pubDate: new Date('2026-01-01T00:00:00.000Z'),
+      source: 'syra',
+      status: 'ready',
+      duration: 60,
+      audioSourceUrl: `/api/podcasts/episodes/${episodeId}/audio`,
+      audioSourceFormat: 'mp3',
+      hlsMasterKey: `hls/${showId}/${episodeId}/master.m3u8`,
+    });
 
   await getDb().insert(episodeHlsRenditions).values({
     episodeId,
@@ -246,7 +248,13 @@ async function seedShow(visibility: string): Promise<ShowFixture> {
   fakeObjects.set(audioKey, AUDIO_BYTES);
   fakeObjects.set(
     manifestKey,
-    ['#EXTM3U', '#EXT-X-KEY:METHOD=AES-128,URI="placeholder"', '#EXTINF:6.0,', 'segment-0.ts', '#EXT-X-ENDLIST'].join('\n')
+    [
+      '#EXTM3U',
+      '#EXT-X-KEY:METHOD=AES-128,URI="placeholder"',
+      '#EXTINF:6.0,',
+      'segment-0.ts',
+      '#EXT-X-ENDLIST',
+    ].join('\n'),
   );
 
   return { showId, episodeId, bitrateKbps };
@@ -494,12 +502,12 @@ describe('the visibility matrix — every read surface, every viewer', () => {
       for (const viewer of ALL_VIEWERS) {
         const onPublic = await surface.request(pub, viewer);
         expect(`${surface.name} public/${viewer}: ${onPublic.status}`).toBe(
-          `${surface.name} public/${viewer}: ${surface.onPublic[viewer]}`
+          `${surface.name} public/${viewer}: ${surface.onPublic[viewer]}`,
         );
 
         const onPrivate = await surface.request(priv, viewer);
         expect(`${surface.name} private/${viewer}: ${onPrivate.status}`).toBe(
-          `${surface.name} private/${viewer}: ${surface.onPrivate[viewer]}`
+          `${surface.name} private/${viewer}: ${surface.onPrivate[viewer]}`,
         );
       }
     });
@@ -513,12 +521,16 @@ interface Listing {
   readonly status: number;
 }
 
-async function listedShowIds(path: string, viewer: ViewerName, pick: (body: unknown) => unknown[]): Promise<Listing> {
+async function listedShowIds(
+  path: string,
+  viewer: ViewerName,
+  pick: (body: unknown) => unknown[],
+): Promise<Listing> {
   const response = await get(path, viewer);
   const body: unknown = await response.json();
   const rows = pick(body);
   const ids = rows.flatMap((row) =>
-    row && typeof row === 'object' && 'id' in row && typeof row.id === 'string' ? [row.id] : []
+    row && typeof row === 'object' && 'id' in row && typeof row.id === 'string' ? [row.id] : [],
   );
   return { ids, status: response.status };
 }
@@ -557,10 +569,10 @@ describe('discovery surfaces list the public show and never the private one', ()
       const listing = await listedShowIds('/api/podcasts', viewer, dataArray);
       expect(`browse/${viewer}: ${listing.status}`).toBe(`browse/${viewer}: 200`);
       expect(`browse/${viewer} public listed: ${listing.ids.includes(pub.showId)}`).toBe(
-        `browse/${viewer} public listed: true`
+        `browse/${viewer} public listed: true`,
       );
       expect(`browse/${viewer} private listed: ${listing.ids.includes(priv.showId)}`).toBe(
-        `browse/${viewer} private listed: false`
+        `browse/${viewer} private listed: false`,
       );
     }
   });
@@ -569,17 +581,13 @@ describe('discovery surfaces list the public show and never the private one', ()
     const { pub, priv } = await seedBoth();
 
     for (const viewer of ALL_VIEWERS) {
-      const listing = await listedShowIds(
-        `/api/podcasts/search?q=${RARE_TERM}`,
-        viewer,
-        dataArray
-      );
+      const listing = await listedShowIds(`/api/podcasts/search?q=${RARE_TERM}`, viewer, dataArray);
       expect(`podcast search/${viewer}: ${listing.status}`).toBe(`podcast search/${viewer}: 200`);
       expect(`podcast search/${viewer} public: ${listing.ids.includes(pub.showId)}`).toBe(
-        `podcast search/${viewer} public: true`
+        `podcast search/${viewer} public: true`,
       );
       expect(`podcast search/${viewer} private: ${listing.ids.includes(priv.showId)}`).toBe(
-        `podcast search/${viewer} private: false`
+        `podcast search/${viewer} private: false`,
       );
     }
   });
@@ -591,13 +599,13 @@ describe('discovery surfaces list the public show and never the private one', ()
       const listing = await listedShowIds(
         `/api/search?q=${RARE_TERM}&category=podcasts`,
         viewer,
-        (body) => searchCategory(body, 'podcasts')
+        (body) => searchCategory(body, 'podcasts'),
       );
       expect(`search podcasts/${viewer} public: ${listing.ids.includes(pub.showId)}`).toBe(
-        `search podcasts/${viewer} public: true`
+        `search podcasts/${viewer} public: true`,
       );
       expect(`search podcasts/${viewer} private: ${listing.ids.includes(priv.showId)}`).toBe(
-        `search podcasts/${viewer} private: false`
+        `search podcasts/${viewer} private: false`,
       );
     }
   });
@@ -609,13 +617,13 @@ describe('discovery surfaces list the public show and never the private one', ()
       const listing = await listedShowIds(
         `/api/search?q=${RARE_TERM}&category=episodes`,
         viewer,
-        (body) => searchCategory(body, 'episodes')
+        (body) => searchCategory(body, 'episodes'),
       );
       expect(`search episodes/${viewer} public: ${listing.ids.includes(pub.episodeId)}`).toBe(
-        `search episodes/${viewer} public: true`
+        `search episodes/${viewer} public: true`,
       );
       expect(`search episodes/${viewer} private: ${listing.ids.includes(priv.episodeId)}`).toBe(
-        `search episodes/${viewer} private: false`
+        `search episodes/${viewer} private: false`,
       );
     }
   });
@@ -630,36 +638,42 @@ describe('discovery surfaces list the public show and never the private one', ()
 
       const body: unknown = await response.json();
       const appearsIn =
-        body && typeof body === 'object' && 'data' in body &&
-        body.data && typeof body.data === 'object' && 'appearsIn' in body.data
+        body &&
+        typeof body === 'object' &&
+        'data' in body &&
+        body.data &&
+        typeof body.data === 'object' &&
+        'appearsIn' in body.data
           ? body.data.appearsIn
           : undefined;
 
-      const shows = appearsIn && typeof appearsIn === 'object' && 'podcasts' in appearsIn
-        ? asArray(appearsIn.podcasts)
-        : [];
-      const eps = appearsIn && typeof appearsIn === 'object' && 'episodes' in appearsIn
-        ? asArray(appearsIn.episodes)
-        : [];
+      const shows =
+        appearsIn && typeof appearsIn === 'object' && 'podcasts' in appearsIn
+          ? asArray(appearsIn.podcasts)
+          : [];
+      const eps =
+        appearsIn && typeof appearsIn === 'object' && 'episodes' in appearsIn
+          ? asArray(appearsIn.episodes)
+          : [];
 
       const showIds = shows.flatMap((row) =>
-        row && typeof row === 'object' && 'id' in row && typeof row.id === 'string' ? [row.id] : []
+        row && typeof row === 'object' && 'id' in row && typeof row.id === 'string' ? [row.id] : [],
       );
       const episodeIds = eps.flatMap((row) =>
-        row && typeof row === 'object' && 'id' in row && typeof row.id === 'string' ? [row.id] : []
+        row && typeof row === 'object' && 'id' in row && typeof row.id === 'string' ? [row.id] : [],
       );
 
       expect(`appears-in shows/${viewer} public: ${showIds.includes(pub.showId)}`).toBe(
-        `appears-in shows/${viewer} public: true`
+        `appears-in shows/${viewer} public: true`,
       );
       expect(`appears-in shows/${viewer} private: ${showIds.includes(priv.showId)}`).toBe(
-        `appears-in shows/${viewer} private: false`
+        `appears-in shows/${viewer} private: false`,
       );
       expect(`appears-in episodes/${viewer} public: ${episodeIds.includes(pub.episodeId)}`).toBe(
-        `appears-in episodes/${viewer} public: true`
+        `appears-in episodes/${viewer} public: true`,
       );
       expect(`appears-in episodes/${viewer} private: ${episodeIds.includes(priv.episodeId)}`).toBe(
-        `appears-in episodes/${viewer} private: false`
+        `appears-in episodes/${viewer} private: false`,
       );
     }
   });
@@ -696,15 +710,15 @@ describe("a private show's media through a ?t= stream token", () => {
 
     const ownerToken = mintStreamToken(
       { trackId: priv.episodeId, userId: OWNER, maxBitrateKbps: 160 },
-      3600
+      3600,
     );
     const strangerToken = mintStreamToken(
       { trackId: priv.episodeId, userId: STRANGER, maxBitrateKbps: 160 },
-      3600
+      3600,
     );
     const wrongEpisodeToken = mintStreamToken(
       { trackId: otherEpisode, userId: OWNER, maxBitrateKbps: 160 },
-      3600
+      3600,
     );
 
     const key = `/api/podcasts/episodes/${priv.episodeId}/key`;
@@ -725,7 +739,10 @@ describe("a private show's media through a ?t= stream token", () => {
 // ── The DTO withholds owner-only fields ──────────────────────────────────────
 
 describe('the show and episode DTOs are built for the viewer', () => {
-  async function readShowDto(fixture: ShowFixture, viewer: ViewerName): Promise<Record<string, unknown>> {
+  async function readShowDto(
+    fixture: ShowFixture,
+    viewer: ViewerName,
+  ): Promise<Record<string, unknown>> {
     const response = await get(`/api/podcasts/${fixture.showId}`, viewer);
     expect(`show dto/${viewer}: ${response.status}`).toBe(`show dto/${viewer}: 200`);
     const body: unknown = await response.json();
@@ -753,7 +770,9 @@ describe('the show and episode DTOs are built for the viewer', () => {
     for (const viewer of ['anonymous', 'stranger'] as const) {
       const dto = await readShowDto(pub, viewer);
       expect(`${viewer} etag: ${dto.etag}`).toBe(`${viewer} etag: undefined`);
-      expect(`${viewer} lastModified: ${dto.lastModified}`).toBe(`${viewer} lastModified: undefined`);
+      expect(`${viewer} lastModified: ${dto.lastModified}`).toBe(
+        `${viewer} lastModified: undefined`,
+      );
       // ONE ready episode exists; the stored counter says seven.
       expect(`${viewer} episodeCount: ${dto.episodeCount}`).toBe(`${viewer} episodeCount: 1`);
     }
@@ -767,12 +786,12 @@ describe('the show and episode DTOs are built for the viewer', () => {
     // rather than the field having been dropped outright.
     const publicStranger = await readShowDto(pub, 'stranger');
     expect(`public feedUrl present: ${typeof publicStranger.feedUrl}`).toBe(
-      'public feedUrl present: string'
+      'public feedUrl present: string',
     );
 
     const privateOwner = await readShowDto(priv, 'owner');
     expect(`private owner feedUrl: ${typeof privateOwner.feedUrl}`).toBe(
-      'private owner feedUrl: string'
+      'private owner feedUrl: string',
     );
 
     // An unlisted show is reachable by a stranger, and its feed URL is not.
@@ -802,12 +821,14 @@ describe('the show and episode DTOs are built for the viewer', () => {
     expect(`owner hlsMasterKey: ${typeof owner.hlsMasterKey}`).toBe('owner hlsMasterKey: string');
     const ownerCache = owner.cache as Record<string, unknown>;
     expect(`owner cache.s3Key: ${ownerCache.s3Key}`).toBe(
-      'owner cache.s3Key: cache/secret-object-key.mp3'
+      'owner cache.s3Key: cache/secret-object-key.mp3',
     );
 
     for (const viewer of ['anonymous', 'stranger'] as const) {
       const dto = await readEpisodeDto(viewer);
-      expect(`${viewer} hlsMasterKey: ${dto.hlsMasterKey}`).toBe(`${viewer} hlsMasterKey: undefined`);
+      expect(`${viewer} hlsMasterKey: ${dto.hlsMasterKey}`).toBe(
+        `${viewer} hlsMasterKey: undefined`,
+      );
       const cache = dto.cache as Record<string, unknown>;
       // `cache.status` survives — it is not storage layout — so an absent
       // `s3Key` here is the withholding rather than an absent `cache` object.
@@ -848,30 +869,30 @@ describe('unlisted is reachable by id and absent from every listing', () => {
 
     const browse = await listedShowIds('/api/podcasts', 'stranger', dataArray);
     expect(`unlisted in browse: ${browse.ids.includes(priv.showId)}`).toBe(
-      'unlisted in browse: false'
+      'unlisted in browse: false',
     );
     expect(`public in browse: ${browse.ids.includes(pub.showId)}`).toBe('public in browse: true');
 
     const search = await listedShowIds(
       `/api/podcasts/search?q=${RARE_TERM}`,
       'stranger',
-      dataArray
+      dataArray,
     );
     expect(`unlisted in search: ${search.ids.includes(priv.showId)}`).toBe(
-      'unlisted in search: false'
+      'unlisted in search: false',
     );
     expect(`public in search: ${search.ids.includes(pub.showId)}`).toBe('public in search: true');
 
     const episodes = await listedShowIds(
       `/api/search?q=${RARE_TERM}&category=episodes`,
       'stranger',
-      (body) => searchCategory(body, 'episodes')
+      (body) => searchCategory(body, 'episodes'),
     );
     expect(`unlisted episode in search: ${episodes.ids.includes(priv.episodeId)}`).toBe(
-      'unlisted episode in search: false'
+      'unlisted episode in search: false',
     );
     expect(`public episode in search: ${episodes.ids.includes(pub.episodeId)}`).toBe(
-      'public episode in search: true'
+      'public episode in search: true',
     );
   });
 });
@@ -932,28 +953,30 @@ describe('the generated RSS feed', () => {
 
     const processingId = uuidv7();
     const failedId = uuidv7();
-    await getDb().insert(episodesTable).values([
-      {
-        id: processingId,
-        podcastId: pub.showId,
-        podcastTitle: 'Show',
-        title: 'Still transcoding',
-        guid: `guid-${processingId}`,
-        pubDate: new Date('2026-01-02T00:00:00.000Z'),
-        source: 'syra',
-        status: 'processing',
-      },
-      {
-        id: failedId,
-        podcastId: pub.showId,
-        podcastTitle: 'Show',
-        title: 'Ingest failed',
-        guid: `guid-${failedId}`,
-        pubDate: new Date('2026-01-03T00:00:00.000Z'),
-        source: 'syra',
-        status: 'failed',
-      },
-    ]);
+    await getDb()
+      .insert(episodesTable)
+      .values([
+        {
+          id: processingId,
+          podcastId: pub.showId,
+          podcastTitle: 'Show',
+          title: 'Still transcoding',
+          guid: `guid-${processingId}`,
+          pubDate: new Date('2026-01-02T00:00:00.000Z'),
+          source: 'syra',
+          status: 'processing',
+        },
+        {
+          id: failedId,
+          podcastId: pub.showId,
+          podcastTitle: 'Show',
+          title: 'Ingest failed',
+          guid: `guid-${failedId}`,
+          pubDate: new Date('2026-01-03T00:00:00.000Z'),
+          source: 'syra',
+          status: 'failed',
+        },
+      ]);
 
     const response = await get(`/api/podcasts/${pub.showId}/rss`, 'anonymous');
     expect(`rss: ${response.status}`).toBe('rss: 200');
@@ -963,7 +986,7 @@ describe('the generated RSS feed', () => {
     // absences below are the status filter rather than an empty feed.
     expect(`ready in feed: ${xml.includes(`${RARE_TERM} Episode`)}`).toBe('ready in feed: true');
     expect(`processing in feed: ${xml.includes('Still transcoding')}`).toBe(
-      'processing in feed: false'
+      'processing in feed: false',
     );
     expect(`failed in feed: ${xml.includes('Ingest failed')}`).toBe('failed in feed: false');
   });
@@ -1033,7 +1056,9 @@ describe('the resolver hands back the transport the episode actually has', () =>
       .update(episodesTable)
       .set({ hlsMasterKey: null })
       .where(eq(episodesTable.id, fixture.episodeId));
-    await getDb().delete(episodeHlsRenditions).where(eq(episodeHlsRenditions.episodeId, fixture.episodeId));
+    await getDb()
+      .delete(episodeHlsRenditions)
+      .where(eq(episodeHlsRenditions.episodeId, fixture.episodeId));
   }
 
   it('gives a private episode with no ladder a TOKENIZED progressive url', async () => {
@@ -1047,8 +1072,9 @@ describe('the resolver hands back the transport the episode actually has', () =>
     expect(`type: ${body.type}`).toBe('type: progressive');
     // The token is the whole point: `<audio>` cannot send a header, so the
     // capability has to travel in the URL.
-    expect(`audio path: ${body.url.includes(`/api/podcasts/episodes/${priv.episodeId}/audio`)}`)
-      .toBe('audio path: true');
+    expect(
+      `audio path: ${body.url.includes(`/api/podcasts/episodes/${priv.episodeId}/audio`)}`,
+    ).toBe('audio path: true');
     expect(`carries a token: ${/[?&]t=[^&]+/.test(body.url)}`).toBe('carries a token: true');
   });
 
@@ -1066,7 +1092,10 @@ describe('the resolver hands back the transport the episode actually has', () =>
   it('refuses only when there is nothing at all to play', async () => {
     const priv = await seedShow('private');
     await stripHls(priv);
-    await getDb().update(episodesTable).set({ audioSourceUrl: null }).where(eq(episodesTable.id, priv.episodeId));
+    await getDb()
+      .update(episodesTable)
+      .set({ audioSourceUrl: null })
+      .where(eq(episodesTable.id, priv.episodeId));
 
     const response = await get(`/api/podcasts/episodes/${priv.episodeId}/stream`, 'owner');
 

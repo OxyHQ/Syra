@@ -15,11 +15,7 @@ import {
   type EpisodeDetail,
   type ContinueListeningEntry,
 } from '@/services/episodeService';
-import {
-  LIBRARY_QUERY_KEY,
-  useLibrary,
-  withMembership,
-} from '@/hooks/useLibrary';
+import { LIBRARY_QUERY_KEY, useLibrary, withMembership } from '@/hooks/useLibrary';
 import type { LibraryMembership } from '@/services/libraryService';
 import { toast } from '@oxy.so/bloom/toast';
 
@@ -201,7 +197,12 @@ const EMPTY_SUBSCRIPTIONS: PodcastSubscriptions = { subscriptions: [], total: 0,
  * button and leave the list stale. Both are invalidated on settle, so the server
  * is what they converge on.
  */
-export function useToggleSubscription(): UseMutationResult<void, Error, ToggleSubscriptionVariables, ToggleSubscriptionContext> {
+export function useToggleSubscription(): UseMutationResult<
+  void,
+  Error,
+  ToggleSubscriptionVariables,
+  ToggleSubscriptionContext
+> {
   const queryClient = useQueryClient();
   const { canUsePrivateApi, openAccountDialog } = useOxy();
 
@@ -230,18 +231,22 @@ export function useToggleSubscription(): UseMutationResult<void, Error, ToggleSu
       queryClient.setQueryData<LibraryMembership>(LIBRARY_QUERY_KEY, (current) =>
         current ? withMembership(current, 'subscribedPodcasts', podcastId, next) : current,
       );
-      queryClient.setQueryData<PodcastSubscriptions>(PODCAST_QUERY_KEYS.subscriptions, (current) => {
-        const base = current ?? EMPTY_SUBSCRIPTIONS;
-        const without = base.subscriptions.filter((entry) => entry.podcast.id !== podcastId);
-        if (!next) {
-          return { ...base, subscriptions: without, total: without.length };
-        }
-        const show = podcast ?? base.subscriptions.find((entry) => entry.podcast.id === podcastId)?.podcast;
-        const nextSubscriptions = show
-          ? [{ podcast: show, subscribedAt: new Date().toISOString() }, ...without]
-          : without;
-        return { ...base, subscriptions: nextSubscriptions, total: nextSubscriptions.length };
-      });
+      queryClient.setQueryData<PodcastSubscriptions>(
+        PODCAST_QUERY_KEYS.subscriptions,
+        (current) => {
+          const base = current ?? EMPTY_SUBSCRIPTIONS;
+          const without = base.subscriptions.filter((entry) => entry.podcast.id !== podcastId);
+          if (!next) {
+            return { ...base, subscriptions: without, total: without.length };
+          }
+          const show =
+            podcast ?? base.subscriptions.find((entry) => entry.podcast.id === podcastId)?.podcast;
+          const nextSubscriptions = show
+            ? [{ podcast: show, subscribedAt: new Date().toISOString() }, ...without]
+            : without;
+          return { ...base, subscriptions: nextSubscriptions, total: nextSubscriptions.length };
+        },
+      );
       return context;
     },
     onError: (error, _variables, context) => {
@@ -295,7 +300,9 @@ export function useEpisodeProgressMap(): Map<string, EpisodeProgressSnapshot> {
 }
 
 /** Saved progress for a single episode (resume position / played dot source). */
-export function useEpisodeProgress(episodeId: string | undefined): EpisodeProgressSnapshot | undefined {
+export function useEpisodeProgress(
+  episodeId: string | undefined,
+): EpisodeProgressSnapshot | undefined {
   const map = useEpisodeProgressMap();
   return episodeId ? map.get(episodeId) : undefined;
 }
@@ -309,14 +316,20 @@ export interface EpisodeChapter {
   url?: string;
 }
 
-const chaptersDocumentSchema = z.object({
-  chapters: z.array(z.object({
-    startTime: z.number(),
-    title: z.string().optional(),
-    img: z.string().optional(),
-    url: z.string().optional(),
-  }).passthrough()),
-}).passthrough();
+const chaptersDocumentSchema = z
+  .object({
+    chapters: z.array(
+      z
+        .object({
+          startTime: z.number(),
+          title: z.string().optional(),
+          img: z.string().optional(),
+          url: z.string().optional(),
+        })
+        .passthrough(),
+    ),
+  })
+  .passthrough();
 
 /**
  * Fetch + parse a Podcasting 2.0 chapters file (`episode.chapters.url`).

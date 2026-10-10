@@ -32,7 +32,7 @@ export const externalTrackSchema: z.ZodType<ExternalTrack> = z.lazy(() =>
     popularity: externalPopularitySchema.optional(),
     downloadUrl: z.string().optional(),
     license: z.string().optional(),
-  })
+  }),
 );
 
 export type ExternalTrack = {
@@ -63,7 +63,7 @@ export const externalAlbumSchema: z.ZodType<ExternalAlbum> = z.lazy(() =>
     popularity: externalPopularitySchema.optional(),
     trackExternalIds: z.array(z.string()).optional(),
     tracks: z.array(externalTrackSchema).optional(),
-  })
+  }),
 );
 
 export type ExternalAlbum = {

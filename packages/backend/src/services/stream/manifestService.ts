@@ -77,12 +77,15 @@ function rememberManifestText(s3Key: string, entry: ManifestTextCacheEntry): voi
 }
 
 function readS3Text(s3Key: string): Promise<string> {
-  return streamFromS3(s3Key).then(({ stream }) => new Promise<string>((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    (stream as Readable).on('data', (chunk: Buffer) => chunks.push(chunk));
-    (stream as Readable).on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
-    (stream as Readable).on('error', reject);
-  }));
+  return streamFromS3(s3Key).then(
+    ({ stream }) =>
+      new Promise<string>((resolve, reject) => {
+        const chunks: Buffer[] = [];
+        (stream as Readable).on('data', (chunk: Buffer) => chunks.push(chunk));
+        (stream as Readable).on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
+        (stream as Readable).on('error', reject);
+      }),
+  );
 }
 
 async function defaultFetchText(s3Key: string): Promise<string> {
@@ -114,7 +117,10 @@ async function defaultFetchText(s3Key: string): Promise<string> {
   return promise;
 }
 
-async function defaultPresign(s3Key: string, ttlSec: number = SEGMENT_URL_TTL_SEC): Promise<string> {
+async function defaultPresign(
+  s3Key: string,
+  ttlSec: number = SEGMENT_URL_TTL_SEC,
+): Promise<string> {
   return getPresignedUrl(s3Key, ttlSec);
 }
 
@@ -148,7 +154,13 @@ export async function buildMasterPlaylistFor(
  */
 export async function buildVariantPlaylistFor(
   entity: StreamableHlsEntity,
-  opts: { bitrateKbps: number; token: string; baseUrl: string; basePath: string; deps?: ManifestDeps },
+  opts: {
+    bitrateKbps: number;
+    token: string;
+    baseUrl: string;
+    basePath: string;
+    deps?: ManifestDeps;
+  },
 ): Promise<string> {
   const fetchText = opts.deps?.fetchText ?? defaultFetchText;
   const doPresign = opts.deps?.presign ?? defaultPresign;

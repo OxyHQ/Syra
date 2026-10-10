@@ -1,6 +1,12 @@
 import { musicService } from './musicService';
 import { api } from '@/utils/api';
-import { PlaylistVisibility, type Album, type Artist, type Playlist, type Track } from '@syra/shared-types';
+import {
+  PlaylistVisibility,
+  type Album,
+  type Artist,
+  type Playlist,
+  type Track,
+} from '@syra/shared-types';
 
 jest.mock('@/utils/api', () => ({
   api: {

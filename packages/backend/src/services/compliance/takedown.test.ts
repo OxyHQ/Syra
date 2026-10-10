@@ -81,14 +81,18 @@ function makeStorageSpy(objectsPerPrefix = 3): StorageSpy {
     deletedKeys: [],
     deletedPrefixes: [],
     notices: [],
-    deleteObject: async (key: string) => { spy.deletedKeys.push(key); },
+    deleteObject: async (key: string) => {
+      spy.deletedKeys.push(key);
+    },
     deletePrefix: async (prefix: string) => {
       spy.deletedPrefixes.push(prefix);
       return objectsPerPrefix;
     },
     // Captured rather than sent: the real notifier needs Oxy credentials, and a
     // test that let it fail silently would assert nothing about the notice.
-    notifyRemoval: async (notice) => { spy.notices.push(notice); },
+    notifyRemoval: async (notice) => {
+      spy.notices.push(notice);
+    },
   };
   return spy;
 }
@@ -96,7 +100,7 @@ function makeStorageSpy(objectsPerPrefix = 3): StorageSpy {
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
 async function makeArtist(
-  overrides: Partial<typeof catalogEntities.$inferInsert> = {}
+  overrides: Partial<typeof catalogEntities.$inferInsert> = {},
 ): Promise<string> {
   const suffix = uuidv7();
   const [artist] = await getDb()
@@ -168,31 +172,35 @@ async function makeLockerFile(options: {
 }): Promise<string> {
   // Minted here because every S3 key below is composed from it.
   const id = uuidv7();
-  await getDb().insert(userUploads).values({
-    id,
-    ownerOxyUserId: options.owner,
-    title: 'A file',
-    duration: 210,
-    sizeBytes: 5_000_000,
-    sha256: options.sha256,
-    matchedTrackId: options.matchedTrackId,
-    status: 'ready',
-    ...(options.fingerprint ? { fingerprint: options.fingerprint } : {}),
-    fingerprintDurationSec: options.fingerprintDurationSec,
-    audioSourceKey: `audio/${options.owner}/${id}.mp3`,
-    audioSourceFormat: 'mp3',
-    ...(options.withHls ? { hlsMasterKey: `hls/${options.owner}/${id}/master.m3u8` } : {}),
-  });
+  await getDb()
+    .insert(userUploads)
+    .values({
+      id,
+      ownerOxyUserId: options.owner,
+      title: 'A file',
+      duration: 210,
+      sizeBytes: 5_000_000,
+      sha256: options.sha256,
+      matchedTrackId: options.matchedTrackId,
+      status: 'ready',
+      ...(options.fingerprint ? { fingerprint: options.fingerprint } : {}),
+      fingerprintDurationSec: options.fingerprintDurationSec,
+      audioSourceKey: `audio/${options.owner}/${id}.mp3`,
+      audioSourceFormat: 'mp3',
+      ...(options.withHls ? { hlsMasterKey: `hls/${options.owner}/${id}/master.m3u8` } : {}),
+    });
   if (options.withHls) {
     // The ladder is a child table, so a rendition is a second insert rather
     // than an embedded array on the row above.
-    await getDb().insert(userUploadHlsRenditions).values({
-      userUploadId: id,
-      position: 0,
-      manifestKey: `hls/${options.owner}/${id}/160/index.m3u8`,
-      bitrateKbps: 160,
-      encrypted: true,
-    });
+    await getDb()
+      .insert(userUploadHlsRenditions)
+      .values({
+        userUploadId: id,
+        position: 0,
+        manifestKey: `hls/${options.owner}/${id}/160/index.m3u8`,
+        bitrateKbps: 160,
+        encrypted: true,
+      });
   }
   return id;
 }
@@ -204,7 +212,11 @@ describe('purgeLockerCopiesOfTrack — safe-harbour purge', () => {
     const artistId = await makeArtist();
     const trackId = await makeTrack(artistId);
 
-    const mine = await makeLockerFile({ owner: 'user-a', sha256: 'sha-abc', matchedTrackId: trackId });
+    const mine = await makeLockerFile({
+      owner: 'user-a',
+      sha256: 'sha-abc',
+      matchedTrackId: trackId,
+    });
     const theirs = await makeLockerFile({ owner: 'user-b', sha256: 'sha-abc' });
     const unrelated = await makeLockerFile({ owner: 'user-c', sha256: 'sha-zzz' });
 
@@ -263,13 +275,15 @@ describe('purgeLockerCopiesOfTrack — safe-harbour purge', () => {
       matchedTrackId: trackId,
       status: 'failed',
     });
-    await getDb().insert(userUploadHlsRenditions).values({
-      userUploadId: id,
-      position: 0,
-      manifestKey: `hls/uploads/user-a/${id}/160/index.m3u8`,
-      bitrateKbps: 160,
-      encrypted: true,
-    });
+    await getDb()
+      .insert(userUploadHlsRenditions)
+      .values({
+        userUploadId: id,
+        position: 0,
+        manifestKey: `hls/uploads/user-a/${id}/160/index.m3u8`,
+        bitrateKbps: 160,
+        encrypted: true,
+      });
 
     const spy = makeStorageSpy();
     await purgeLockerCopiesOfTrack(trackId, spy);
@@ -286,18 +300,20 @@ describe('purgeLockerCopiesOfTrack — safe-harbour purge', () => {
     const artistId = await makeArtist();
     const trackId = await makeTrack(artistId);
     const id = uuidv7();
-    await getDb().insert(userUploads).values({
-      id,
-      ownerOxyUserId: 'user-a',
-      title: 'Source only',
-      duration: 210,
-      sizeBytes: 1,
-      sha256: 'sha-source-only',
-      matchedTrackId: trackId,
-      status: 'ready',
-      audioSourceKey: `uploads/user-a/${id}.mp3`,
-      audioSourceFormat: 'mp3',
-    });
+    await getDb()
+      .insert(userUploads)
+      .values({
+        id,
+        ownerOxyUserId: 'user-a',
+        title: 'Source only',
+        duration: 210,
+        sizeBytes: 1,
+        sha256: 'sha-source-only',
+        matchedTrackId: trackId,
+        status: 'ready',
+        audioSourceKey: `uploads/user-a/${id}.mp3`,
+        audioSourceFormat: 'mp3',
+      });
 
     const spy = makeStorageSpy();
     await purgeLockerCopiesOfTrack(trackId, spy);
@@ -336,10 +352,7 @@ describe('purgeLockerCopiesOfTrack — safe-harbour purge', () => {
 
     expect(spy.deletedPrefixes).toEqual([]);
     // Only the keys the document itself recorded.
-    expect(spy.deletedKeys.sort()).toEqual([
-      'hls/shared/160/index.m3u8',
-      'hls/shared/master.m3u8',
-    ]);
+    expect(spy.deletedKeys.sort()).toEqual(['hls/shared/160/index.m3u8', 'hls/shared/master.m3u8']);
   });
 
   /**
@@ -415,7 +428,9 @@ describe('purgeLockerCopiesOfTrack — safe-harbour purge', () => {
     const artistId = await makeArtist();
     const trackId = await makeTrack(artistId);
     await getDb().insert(trackFingerprints).values({
-      trackId, fingerprint: makeFingerprint(), fingerprintDurationSec: 210,
+      trackId,
+      fingerprint: makeFingerprint(),
+      fingerprintDurationSec: 210,
     });
     await makeLockerFile({ owner: 'user-a', sha256: 'sha-abc', matchedTrackId: trackId });
 
@@ -465,7 +480,7 @@ describe('takeDownTrack', () => {
       await getDb()
         .select({ id: tracks.id })
         .from(tracks)
-        .where(and(eq(tracks.artistId, artistId), playableTrackFilter()))
+        .where(and(eq(tracks.artistId, artistId), playableTrackFilter())),
     ).toHaveLength(0);
 
     expect(result?.purge.uploadsDeleted).toBe(1);
@@ -587,7 +602,13 @@ describe('takeDownTrack', () => {
       { trackId, reason: 'DMCA notice', actorOxyUserId: 'reviewer-1' },
       makeStorageSpy(),
     );
-    expect(first?.strike).toEqual({ applied: true, against: 'artist', artistId, strikeCount: 1, terminated: false });
+    expect(first?.strike).toEqual({
+      applied: true,
+      against: 'artist',
+      artistId,
+      strikeCount: 1,
+      terminated: false,
+    });
 
     const replay = await takeDownTrack(
       { trackId, reason: 'DMCA notice again', actorOxyUserId: 'reviewer-1' },
@@ -605,9 +626,16 @@ describe('takeDownTrack', () => {
     const artistId = await makeArtist({ ownerOxyUserId: 'creator-1' });
     const trackId = await makeTrack(artistId);
 
-    await takeDownTrack({ trackId, reason: 'notice', actorOxyUserId: 'reviewer-1' }, makeStorageSpy());
+    await takeDownTrack(
+      { trackId, reason: 'notice', actorOxyUserId: 'reviewer-1' },
+      makeStorageSpy(),
+    );
 
-    const late = await makeLockerFile({ owner: 'user-late', sha256: 'sha-late', matchedTrackId: trackId });
+    const late = await makeLockerFile({
+      owner: 'user-late',
+      sha256: 'sha-late',
+      matchedTrackId: trackId,
+    });
     const replay = await takeDownTrack(
       { trackId, reason: 'notice', actorOxyUserId: 'reviewer-1' },
       makeStorageSpy(),
@@ -690,10 +718,14 @@ describe('locker removal notices', () => {
     expect(spy.notices).toHaveLength(2);
     const byOwner = new Map(spy.notices.map((notice) => [notice.ownerOxyUserId, notice]));
     expect(byOwner.get('user-a')).toEqual({
-      ownerOxyUserId: 'user-a', fileCount: 1, cause: 'takedown',
+      ownerOxyUserId: 'user-a',
+      fileCount: 1,
+      cause: 'takedown',
     });
     expect(byOwner.get('user-b')).toEqual({
-      ownerOxyUserId: 'user-b', fileCount: 2, cause: 'takedown',
+      ownerOxyUserId: 'user-b',
+      fileCount: 2,
+      cause: 'takedown',
     });
   });
 
@@ -768,8 +800,14 @@ describe('contributor termination', () => {
     const second = await contributeTrack('serial-uploader', 'Two');
 
     await takeDownTrack({ trackId: second, reason: 'notice 1', actorOxyUserId: 'reviewer-1' }, spy);
-    await takeDownTrack({ trackId: alsoTheirs, reason: 'notice 2', actorOxyUserId: 'reviewer-1' }, spy);
-    await takeDownTrack({ trackId: reported, reason: 'notice 3', actorOxyUserId: 'reviewer-1' }, spy);
+    await takeDownTrack(
+      { trackId: alsoTheirs, reason: 'notice 2', actorOxyUserId: 'reviewer-1' },
+      spy,
+    );
+    await takeDownTrack(
+      { trackId: reported, reason: 'notice 3', actorOxyUserId: 'reviewer-1' },
+      spy,
+    );
 
     for (const id of [reported, alsoTheirs, second]) {
       const track = await readTrack(id);
@@ -799,7 +837,9 @@ describe('contributor termination', () => {
 
     const termination = spy.notices.find((notice) => notice.cause === 'termination');
     expect(termination).toEqual({
-      ownerOxyUserId: 'serial-uploader', fileCount: 1, cause: 'termination',
+      ownerOxyUserId: 'serial-uploader',
+      fileCount: 1,
+      cause: 'termination',
     });
   });
 

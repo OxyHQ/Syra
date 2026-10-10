@@ -26,7 +26,11 @@ import { describeErrorSafely } from '../utils/error';
  * POST /api/copyright/report
  * Public endpoint to report copyright violation (no authentication required)
  */
-export const reportCopyrightViolation = async (req: AuthRequest, res: Response, next: NextFunction) => {
+export const reportCopyrightViolation = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+) => {
   try {
     if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
@@ -37,7 +41,7 @@ export const reportCopyrightViolation = async (req: AuthRequest, res: Response, 
     if (!trackId || !reason || !reason.trim()) {
       return res.status(400).json({
         error: 'Missing required fields',
-        message: 'trackId and reason are required'
+        message: 'trackId and reason are required',
       });
     }
 
@@ -64,15 +68,15 @@ export const reportCopyrightViolation = async (req: AuthRequest, res: Response, 
       .where(
         and(
           eq(copyrightReports.trackId, trackId),
-          inArray(copyrightReports.status, ['pending', 'approved'])
-        )
+          inArray(copyrightReports.status, ['pending', 'approved']),
+        ),
       )
       .limit(1);
 
     if (existingReport) {
       return res.status(400).json({
         error: 'Already reported',
-        message: 'This track has already been reported for copyright violation'
+        message: 'This track has already been reported for copyright violation',
       });
     }
 
@@ -91,7 +95,9 @@ export const reportCopyrightViolation = async (req: AuthRequest, res: Response, 
 
     if (!report) throw new Error('reportCopyrightViolation: insert returned no row');
 
-    logger.info(`[CopyrightController] Copyright report created for track ${trackId} by ${reporterOxyUserId || 'anonymous'}`);
+    logger.info(
+      `[CopyrightController] Copyright report created for track ${trackId} by ${reporterOxyUserId || 'anonymous'}`,
+    );
 
     res.status(201).json({
       id: report.id,
@@ -100,7 +106,9 @@ export const reportCopyrightViolation = async (req: AuthRequest, res: Response, 
       message: 'Copyright violation report submitted successfully',
     });
   } catch (error) {
-    logger.error('[CopyrightController] Error reporting copyright violation:', { error: describeErrorSafely(error) });
+    logger.error('[CopyrightController] Error reporting copyright violation:', {
+      error: describeErrorSafely(error),
+    });
     next(error);
   }
 };
@@ -209,7 +217,11 @@ export const listCopyrightReports = async (req: AuthRequest, res: Response, next
  * locker holding the same bytes, and strikes whoever published it. Three of those
  * terminate the account.
  */
-export const resolveCopyrightReport = async (req: AuthRequest, res: Response, next: NextFunction) => {
+export const resolveCopyrightReport = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+) => {
   try {
     if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
@@ -269,10 +281,10 @@ export const resolveCopyrightReport = async (req: AuthRequest, res: Response, ne
 
     logger.info(
       `[CopyrightController] Report ${id} ${parsed.data.status} by ${reviewerId}` +
-      (takedown
-        ? ` — struck=${takedown.strike.applied} terminated=${takedown.strike.applied && takedown.strike.terminated} ` +
-          `lockerFilesPurged=${takedown.purge.uploadsDeleted}`
-        : ''),
+        (takedown
+          ? ` — struck=${takedown.strike.applied} terminated=${takedown.strike.applied && takedown.strike.terminated} ` +
+            `lockerFilesPurged=${takedown.purge.uploadsDeleted}`
+          : ''),
     );
 
     res.json({

@@ -95,20 +95,36 @@ const ALLOWED_ORIGINS: string[] = [
 // One source of truth for the CORS allow-list so the HTTP and Socket.IO
 // configs can never drift apart. `X-Syra-Device-Id` lets a guest identify its
 // device for radio/session reads (not a security boundary — see radio.controller).
-const ALLOWED_HEADERS = ['Content-Type', 'Authorization', 'X-CSRF-Token', 'X-Requested-With', 'Accept', 'Accept-Version', 'Content-Length', 'Content-MD5', 'Date', 'X-Api-Version', 'X-Syra-Device-Id', 'X-Oxy-Edge-Region', 'X-Oxy-Activity-Id'];
+const ALLOWED_HEADERS = [
+  'Content-Type',
+  'Authorization',
+  'X-CSRF-Token',
+  'X-Requested-With',
+  'Accept',
+  'Accept-Version',
+  'Content-Length',
+  'Content-MD5',
+  'Date',
+  'X-Api-Version',
+  'X-Syra-Device-Id',
+  'X-Oxy-Edge-Region',
+  'X-Oxy-Activity-Id',
+];
 
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin || ALLOWED_ORIGINS.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(null, false);
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ALLOWED_HEADERS,
-}));
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(null, false);
+      }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ALLOWED_HEADERS,
+  }),
+);
 
 // LiveKit webhook — mounted BEFORE the global JSON parser (and the rate limiter)
 // because its own raw body parser must own the request bytes for signature
@@ -126,24 +142,26 @@ app.use('/livekit', livekitWebhookRoutes);
 app.use('/webhooks', createCrowdSourceWebhookRoutes());
 
 // Create Redis store for distributed rate limiting
-const redisStore = new RedisStore({ 
+const redisStore = new RedisStore({
   prefix: 'rate-limit:api:',
-  windowMs: 15 * 60 * 1000
+  windowMs: 15 * 60 * 1000,
 });
 
 // Single middleware that resolves session + applies per-user rate limiting
 app.use(createOxyRateLimit(oxy, { store: redisStore }));
 
-app.use(compression({
-  filter: (req, res) => {
-    if (req.headers['x-no-compression']) {
-      return false;
-    }
-    return compression.filter(req, res);
-  },
-  level: 6,
-  threshold: 1024,
-}));
+app.use(
+  compression({
+    filter: (req, res) => {
+      if (req.headers['x-no-compression']) {
+        return false;
+      }
+      return compression.filter(req, res);
+    },
+    level: 6,
+    threshold: 1024,
+  }),
+);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -179,9 +197,17 @@ server.headersTimeout = 66_000;
 server.requestTimeout = 120_000;
 
 type DisconnectReason =
-  | 'server disconnect' | 'client disconnect' | 'transport close' | 'transport error'
-  | 'ping timeout' | 'parse error' | 'forced close' | 'forced server close'
-  | 'server shutting down' | 'client namespace disconnect' | 'server namespace disconnect'
+  | 'server disconnect'
+  | 'client disconnect'
+  | 'transport close'
+  | 'transport error'
+  | 'ping timeout'
+  | 'parse error'
+  | 'forced close'
+  | 'forced server close'
+  | 'server shutting down'
+  | 'client namespace disconnect'
+  | 'server namespace disconnect'
   | 'unknown transport';
 
 const SOCKET_CONFIG = {
@@ -212,8 +238,15 @@ const io = new SocketIOServer(server, {
   },
   perMessageDeflate: {
     threshold: SOCKET_CONFIG.COMPRESSION_THRESHOLD,
-    zlibInflateOptions: { chunkSize: SOCKET_CONFIG.CHUNK_SIZE, windowBits: SOCKET_CONFIG.WINDOW_BITS },
-    zlibDeflateOptions: { chunkSize: SOCKET_CONFIG.CHUNK_SIZE, windowBits: SOCKET_CONFIG.WINDOW_BITS, level: SOCKET_CONFIG.COMPRESSION_LEVEL },
+    zlibInflateOptions: {
+      chunkSize: SOCKET_CONFIG.CHUNK_SIZE,
+      windowBits: SOCKET_CONFIG.WINDOW_BITS,
+    },
+    zlibDeflateOptions: {
+      chunkSize: SOCKET_CONFIG.CHUNK_SIZE,
+      windowBits: SOCKET_CONFIG.WINDOW_BITS,
+      level: SOCKET_CONFIG.COMPRESSION_LEVEL,
+    },
   },
 });
 
@@ -221,7 +254,7 @@ const io = new SocketIOServer(server, {
 // (e.g. `emitLiveRoomsUpdated`) can reach connected clients.
 initializeIO(io);
 const observeNamespace = (namespace: Namespace) => {
-  namespace.on('connection', socket => activity?.observeSocket(socket));
+  namespace.on('connection', (socket) => activity?.observeSocket(socket));
 };
 observeNamespace(io.of('/'));
 io.on('new_namespace', observeNamespace);
@@ -232,7 +265,9 @@ io.on('new_namespace', observeNamespace);
 
     await Promise.race([
       Promise.all([publisher.connect(), subscriber.connect()]),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Redis connection timeout')), 5000)),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Redis connection timeout')), 5000),
+      ),
     ]);
 
     const publisherReady = await ensureRedisConnected(publisher);
@@ -248,7 +283,11 @@ io.on('new_namespace', observeNamespace);
     logger.info('Socket.IO Redis adapter configured for horizontal scaling');
   } catch (error: unknown) {
     const err = error instanceof Error ? error : new Error(String(error));
-    if (isRedisConnectionError(err) || err.message.includes('timeout') || err.message.includes('not ready')) {
+    if (
+      isRedisConnectionError(err) ||
+      err.message.includes('timeout') ||
+      err.message.includes('not ready')
+    ) {
       logger.info('Redis unavailable - Socket.IO running in single-instance mode');
     } else {
       logger.warn('Failed to setup Socket.IO Redis adapter, running in single-instance mode');
@@ -338,7 +377,6 @@ publicApiRouter.use('/lyrics', lyricsRoutes);
 // ones for a signed-in listener. Optional auth resolves which.
 publicApiRouter.use('/radio', createOptionalOxyAuth(oxy), radioRoutes);
 
-
 // Live rooms: public discovery (optional auth resolves the viewer for
 // visibility gating); write routes self-enforce auth internally.
 publicApiRouter.use('/rooms', createOptionalOxyAuth(oxy), roomsRoutes);
@@ -384,7 +422,10 @@ app.get('/health', async (_req, res) => {
     // `readyState` until Task 8 removed the last Mongoose model — and a health
     // endpoint answering about a database the service no longer opens is worse
     // than one answering nothing, because it reads as green forever.
-    const dbStats = { engine: 'postgres' as const, state: dbConnected ? 'connected' : 'disconnected' };
+    const dbStats = {
+      engine: 'postgres' as const,
+      state: dbConnected ? 'connected' : 'disconnected',
+    };
     const redisStats = getRedisStats();
     const perfStats = getPerformanceStats();
 
@@ -416,21 +457,28 @@ app.get('/health', async (_req, res) => {
   }
 });
 
-app.use((err: Error & { statusCode?: number; status?: number }, req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  logger.error('Unhandled error', {
-    err,
-    path: req.path,
-    method: req.method,
-  });
+app.use(
+  (
+    err: Error & { statusCode?: number; status?: number },
+    req: express.Request,
+    res: express.Response,
+    _next: express.NextFunction,
+  ) => {
+    logger.error('Unhandled error', {
+      err,
+      path: req.path,
+      method: req.method,
+    });
 
-  const statusCode = err.statusCode ?? err.status ?? 500;
-  const message = err.message || 'Internal Server Error';
+    const statusCode = err.statusCode ?? err.status ?? 500;
+    const message = err.message || 'Internal Server Error';
 
-  res.status(statusCode).json({
-    error: message,
-    ...(env.NODE_ENV === 'development' && { stack: err.stack }),
-  });
-});
+    res.status(statusCode).json({
+      error: message,
+      ...(env.NODE_ENV === 'development' && { stack: err.stack }),
+    });
+  },
+);
 
 const bootServer = async () => {
   /**
@@ -450,9 +498,12 @@ const bootServer = async () => {
   try {
     await connectPostgres();
   } catch (error) {
-    logger.warn('PostgreSQL connection unavailable - ported routes will fail until it is reachable', {
-      reason: error instanceof Error ? error.message : 'unknown',
-    });
+    logger.warn(
+      'PostgreSQL connection unavailable - ported routes will fail until it is reachable',
+      {
+        reason: error instanceof Error ? error.message : 'unknown',
+      },
+    );
   }
 
   server.listen(env.PORT, '0.0.0.0', () => {
@@ -514,8 +565,8 @@ async function shutdown() {
   activityReady = false;
   const timeout = setTimeout(() => process.exit(1), 10_000);
   timeout.unref();
-  const httpClosed = new Promise<void>(resolve => server.close(() => resolve()));
-  await Promise.all([httpClosed, new Promise<void>(resolve => io.close(() => resolve()))]);
+  const httpClosed = new Promise<void>((resolve) => server.close(() => resolve()));
+  await Promise.all([httpClosed, new Promise<void>((resolve) => io.close(() => resolve()))]);
   await activity?.stop();
   clearTimeout(timeout);
   process.exit(0);

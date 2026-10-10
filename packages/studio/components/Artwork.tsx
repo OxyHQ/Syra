@@ -19,7 +19,8 @@ export function Artwork({
   rounded?: 'lg' | 'xl' | '2xl';
 }) {
   const theme = useTheme();
-  const radiusClass = rounded === '2xl' ? 'rounded-2xl' : rounded === 'xl' ? 'rounded-xl' : 'rounded-lg';
+  const radiusClass =
+    rounded === '2xl' ? 'rounded-2xl' : rounded === 'xl' ? 'rounded-xl' : 'rounded-lg';
 
   if (uri) {
     return (
@@ -38,7 +39,11 @@ export function Artwork({
       style={{ width: size, height: size }}
       className={cn(radiusClass, 'bg-surface items-center justify-center')}
     >
-      <MaterialCommunityIcons name="podcast" size={size * 0.45} color={theme.colors.textSecondary} />
+      <MaterialCommunityIcons
+        name="podcast"
+        size={size * 0.45}
+        color={theme.colors.textSecondary}
+      />
     </View>
   );
 }

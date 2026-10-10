@@ -17,11 +17,7 @@ import { uuidv7 } from '@oxy.so/db';
 import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
 import { clearDb, connectDb, disconnectDb } from '../test/postgres';
 import { getDb } from '../db/postgres';
-import {
-  episodes as episodesTable,
-  podcastSources,
-  podcasts,
-} from '../db/schema/podcasts';
+import { episodes as episodesTable, podcastSources, podcasts } from '../db/schema/podcasts';
 import * as realS3 from '../services/s3Service';
 import * as realIngest from '../services/podcasts/ingestEpisode';
 import podcastsRoutes from './podcasts.routes';
@@ -64,7 +60,7 @@ mock.module('../services/s3Service', () => ({
       return realUploadToS3(
         key,
         body as Parameters<typeof realS3.uploadToS3>[1],
-        options as Parameters<typeof realS3.uploadToS3>[2]
+        options as Parameters<typeof realS3.uploadToS3>[2],
       );
     }
   },
@@ -126,28 +122,30 @@ afterAll(async () => {
 
 async function seedShow(visibility: 'public' | 'unlisted' | 'private' = 'public'): Promise<string> {
   const id = uuidv7();
-  await getDb().insert(podcasts).values({
-    id,
-    title: 'Metadata Show',
-    source: 'syra',
-    status: 'active',
-    visibility,
-    ownerOxyUserId: OWNER,
-    feedUrl: `https://feeds.example.invalid/${id}.xml`,
-  });
+  await getDb()
+    .insert(podcasts)
+    .values({
+      id,
+      title: 'Metadata Show',
+      source: 'syra',
+      status: 'active',
+      visibility,
+      ownerOxyUserId: OWNER,
+      feedUrl: `https://feeds.example.invalid/${id}.xml`,
+    });
   return id;
 }
 
 /** `POST /api/podcasts/:id/episodes` with a real multipart body, as Studio sends it. */
 async function uploadEpisode(
   showId: string,
-  fields: Record<string, string>
+  fields: Record<string, string>,
 ): Promise<{ status: number; body: unknown }> {
   const form = new FormData();
   form.append(
     'audioFile',
     new Blob([new Uint8Array([1, 2, 3, 4])], { type: 'audio/mpeg' }),
-    'episode.mp3'
+    'episode.mp3',
   );
   for (const [key, value] of Object.entries(fields)) form.append(key, value);
 
@@ -199,7 +197,7 @@ describe('POST /api/podcasts/:id/episodes honours the metadata Studio sends', ()
      */
     const showId = await seedShow();
     expect(`upload: ${(await uploadEpisode(showId, { title: 'Plain' })).status}`).toBe(
-      'upload: 201'
+      'upload: 201',
     );
 
     const [episode] = await getDb().select().from(episodesTable);
@@ -213,18 +211,18 @@ describe('POST /api/podcasts/:id/episodes honours the metadata Studio sends', ()
   it('rejects a malformed number instead of storing a coerced lie', async () => {
     const showId = await seedShow();
     expect(
-      `nan: ${(await uploadEpisode(showId, { title: 'X', episodeNumber: 'abc' })).status}`
+      `nan: ${(await uploadEpisode(showId, { title: 'X', episodeNumber: 'abc' })).status}`,
     ).toBe('nan: 400');
     expect(`negative: ${(await uploadEpisode(showId, { title: 'X', season: '-1' })).status}`).toBe(
-      'negative: 400'
+      'negative: 400',
     );
     expect(
-      `bad enum: ${(await uploadEpisode(showId, { title: 'X', episodeType: 'movie' })).status}`
+      `bad enum: ${(await uploadEpisode(showId, { title: 'X', episodeType: 'movie' })).status}`,
     ).toBe('bad enum: 400');
     // Positive control: the same shape with valid values is accepted, so the
     // three refusals are the validation and not the endpoint.
     expect(
-      `valid: ${(await uploadEpisode(showId, { title: 'X', episodeNumber: '3', season: '1', episodeType: 'bonus' })).status}`
+      `valid: ${(await uploadEpisode(showId, { title: 'X', episodeNumber: '3', season: '1', episodeType: 'bonus' })).status}`,
     ).toBe('valid: 201');
   });
 });
@@ -255,7 +253,7 @@ describe('GET /api/podcasts/:id/episodes orders a numbered series by NUMBER', ()
           source: 'syra' as const,
           status: 'ready' as const,
           episodeNumber: n,
-        }))
+        })),
       );
   }
 
@@ -301,7 +299,7 @@ describe('GET /api/podcasts/:id/episodes orders a numbered series by NUMBER', ()
           pubDate: new Date(Date.UTC(2025, 0, 1 + index)),
           source: 'syra' as const,
           status: 'ready' as const,
-        }))
+        })),
       );
 
     expect(await listedTitles(showId)).toEqual([
@@ -331,7 +329,7 @@ describe('GET /api/podcasts/:id/episodes orders a numbered series by NUMBER', ()
           pubDate: new Date(Date.UTC(2026, 0, n)),
           source: 'syra' as const,
           status: 'ready' as const,
-        }))
+        })),
       );
 
     expect(await listedTitles(showId)).toEqual(['Undated 3', 'Undated 2', 'Undated 1']);
@@ -341,7 +339,9 @@ describe('GET /api/podcasts/:id/episodes orders a numbered series by NUMBER', ()
 // ── Provenance and disclosure ─────────────────────────────────────────────────
 
 describe('POST /api/podcasts records Alia provenance and the AI flag', () => {
-  async function createShow(body: Record<string, unknown>): Promise<{ status: number; id?: string }> {
+  async function createShow(
+    body: Record<string, unknown>,
+  ): Promise<{ status: number; id?: string }> {
     const response = await fetch(`${baseUrl}/api/podcasts`, {
       method: 'POST',
       headers: { [VIEWER_HEADER]: OWNER, 'content-type': 'application/json' },
@@ -403,7 +403,7 @@ describe('POST /api/podcasts records Alia provenance and the AI flag', () => {
     const [humanShow] = await getDb().select().from(podcasts).where(eq(podcasts.id, aliaOnly.id));
     expect(`alia but not ai: ${humanShow?.aiGenerated}`).toBe('alia but not ai: false');
     expect(
-      `alia row present: ${(await getDb().select().from(podcastSources).where(eq(podcastSources.podcastId, aliaOnly.id))).length}`
+      `alia row present: ${(await getDb().select().from(podcastSources).where(eq(podcastSources.podcastId, aliaOnly.id))).length}`,
     ).toBe('alia row present: 1');
 
     const aiOnly = await createShow({ title: 'Generated Elsewhere', aiGenerated: true });
@@ -411,7 +411,7 @@ describe('POST /api/podcasts records Alia provenance and the AI flag', () => {
     const [aiShow] = await getDb().select().from(podcasts).where(eq(podcasts.id, aiOnly.id));
     expect(`ai but no provenance: ${aiShow?.aiGenerated}`).toBe('ai but no provenance: true');
     expect(
-      `no source row: ${(await getDb().select().from(podcastSources).where(eq(podcastSources.podcastId, aiOnly.id))).length}`
+      `no source row: ${(await getDb().select().from(podcastSources).where(eq(podcastSources.podcastId, aiOnly.id))).length}`,
     ).toBe('no source row: 0');
   });
 
@@ -422,7 +422,7 @@ describe('POST /api/podcasts records Alia provenance and the AI flag', () => {
     const [show] = await getDb().select().from(podcasts).where(eq(podcasts.id, created.id));
     expect(`aiGenerated: ${show?.aiGenerated}`).toBe('aiGenerated: false');
     expect(
-      `sources: ${(await getDb().select().from(podcastSources).where(eq(podcastSources.podcastId, created.id))).length}`
+      `sources: ${(await getDb().select().from(podcastSources).where(eq(podcastSources.podcastId, created.id))).length}`,
     ).toBe('sources: 0');
   });
 
@@ -442,7 +442,7 @@ describe('POST /api/podcasts records Alia provenance and the AI flag', () => {
       });
       const body = (await response.json()) as { data: { podcast: Record<string, unknown> } };
       expect(`${viewer ?? 'anonymous'}: ${body.data.podcast.aiGenerated}`).toBe(
-        `${viewer ?? 'anonymous'}: true`
+        `${viewer ?? 'anonymous'}: true`,
       );
     }
   });
@@ -476,7 +476,7 @@ describe('POST /api/podcasts/:id/episodes enqueues the transcode for every visib
     expect(`public upload: ${publicUpload.status}`).toBe('public upload: 201');
     const publicId = (publicUpload.body as { data: { id: string } }).data.id;
     expect(`public enqueued: ${enqueuedEpisodeIds.includes(publicId)}`).toBe(
-      'public enqueued: true'
+      'public enqueued: true',
     );
 
     const privateShow = await seedShow('private');
@@ -484,7 +484,7 @@ describe('POST /api/podcasts/:id/episodes enqueues the transcode for every visib
     expect(`private upload: ${privateUpload.status}`).toBe('private upload: 201');
     const privateId = (privateUpload.body as { data: { id: string } }).data.id;
     expect(`private enqueued: ${enqueuedEpisodeIds.includes(privateId)}`).toBe(
-      'private enqueued: true'
+      'private enqueued: true',
     );
   });
 });

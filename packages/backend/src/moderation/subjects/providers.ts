@@ -81,10 +81,7 @@ function playlistProvider(): ModerationSubjectProvider {
       // A listing needs a title; a playlist cannot be created without a name, so
       // an absent one is a corrupted row rather than a case to describe.
       if (title === undefined) return null;
-      const description = bounded(
-        playlist.description,
-        CONTRACT_LIMITS.LONG_TEXT_MAX_LENGTH,
-      );
+      const description = bounded(playlist.description, CONTRACT_LIMITS.LONG_TEXT_MAX_LENGTH);
 
       return {
         subject: {
@@ -389,9 +386,7 @@ function roomProvider(): ModerationSubjectProvider {
       const hasRecording = await roomHasRecording(room.id);
 
       const context: ModerationContextResource[] = [];
-      const topicAndTags = claim(
-        [room.topic?.trim(), ...room.tags].filter(Boolean).join(', '),
-      );
+      const topicAndTags = claim([room.topic?.trim(), ...room.tags].filter(Boolean).join(', '));
 
       const content: ModerationResource = {
         type: 'metadata',

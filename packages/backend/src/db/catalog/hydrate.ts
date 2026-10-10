@@ -84,7 +84,7 @@ function albumImageIds(row: AlbumRow): (string | null)[] {
  * which is a syntax error in Postgres rather than an empty result.
  */
 export async function loadImageVariants(
-  ids: readonly (string | null)[]
+  ids: readonly (string | null)[],
 ): Promise<ImageVariantLookup> {
   const wanted = [...new Set(ids.filter((id): id is string => id !== null))];
   if (wanted.length === 0) return () => undefined;
@@ -210,10 +210,7 @@ export async function toTrackDtos(rows: readonly PublicTrackRow[]): Promise<Trac
       : [];
 
   const [lookup, hlsCounts, creditsByTrack] = await Promise.all([
-    loadImageVariants([
-      ...rows.flatMap(trackImageIds),
-      ...albumRows.flatMap(albumImageIds),
-    ]),
+    loadImageVariants([...rows.flatMap(trackImageIds), ...albumRows.flatMap(albumImageIds)]),
     loadHlsRenditionCounts(rows.map((row) => row.id)),
     loadTrackCredits(rows.map((row) => row.id)),
   ]);
@@ -231,7 +228,7 @@ export async function toTrackDtos(rows: readonly PublicTrackRow[]): Promise<Trac
       hlsRenditionCount: hlsCounts.get(row.id) ?? 0,
       albumCover: row.albumId ? coverByAlbumId.get(row.albumId) : undefined,
       credits: creditsByTrack.get(row.id),
-    })
+    }),
   );
 }
 
@@ -282,13 +279,13 @@ function playlistImageIds(row: PlaylistRow): (string | null)[] {
  */
 export async function toPlaylistDtos(
   rows: readonly PlaylistRow[],
-  collaboratorsByPlaylistId?: ReadonlyMap<string, readonly PlaylistCollaborator[]>
+  collaboratorsByPlaylistId?: ReadonlyMap<string, readonly PlaylistCollaborator[]>,
 ): Promise<Playlist[]> {
   if (rows.length === 0) return [];
 
   const lookup = await loadImageVariants(rows.flatMap(playlistImageIds));
   return rows.map((row) =>
-    toPlaylistDto(row, lookup, { collaborators: collaboratorsByPlaylistId?.get(row.id) })
+    toPlaylistDto(row, lookup, { collaborators: collaboratorsByPlaylistId?.get(row.id) }),
   );
 }
 
@@ -316,9 +313,7 @@ function artistImageIds(row: PublicCatalogEntityRow): (string | null)[] {
  * `ArtistDtoContext`: no listing surface renders either, and a shelf that
  * loaded them would pay two joins per page for fields nothing shows.
  */
-export async function toArtistDtos(
-  rows: readonly PublicCatalogEntityRow[]
-): Promise<Artist[]> {
+export async function toArtistDtos(rows: readonly PublicCatalogEntityRow[]): Promise<Artist[]> {
   if (rows.length === 0) return [];
 
   const lookup = await loadImageVariants(rows.flatMap(artistImageIds));

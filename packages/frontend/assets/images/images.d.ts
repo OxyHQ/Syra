@@ -1,4 +1,4 @@
-declare module "@/assets/images/*" {
+declare module '@/assets/images/*' {
   const value: any;
   export default value;
 }

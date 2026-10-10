@@ -96,9 +96,10 @@ interface FetchCall {
   body: unknown;
 }
 
-function fakeFetch(
-  handler: (url: string) => { status?: number; body: unknown },
-): { fetch: typeof fetch; calls: FetchCall[] } {
+function fakeFetch(handler: (url: string) => { status?: number; body: unknown }): {
+  fetch: typeof fetch;
+  calls: FetchCall[];
+} {
   const calls: FetchCall[] = [];
   const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString();
@@ -188,10 +189,7 @@ describe('createSyraClient.searchTracks', () => {
     const { fetch } = fakeFetch(() => ({
       body: {
         results: {
-          tracks: [
-            makeTrack({ previewAvailable: false }),
-            makeTrack({ previewAvailable: false }),
-          ],
+          tracks: [makeTrack({ previewAvailable: false }), makeTrack({ previewAvailable: false })],
         },
         hasMore: true,
         limit: 2,
@@ -270,8 +268,12 @@ describe('createSyraClient.previewUrl', () => {
 
   it('uses the provided start offset and clamps to an integer >= 0', () => {
     const client = createSyraClient({ baseURL: 'https://api.example.test' });
-    expect(client.previewUrl('abc', 42.9)).toBe('https://api.example.test/api/preview/abc.mp3?start=42');
-    expect(client.previewUrl('abc', -5)).toBe('https://api.example.test/api/preview/abc.mp3?start=0');
+    expect(client.previewUrl('abc', 42.9)).toBe(
+      'https://api.example.test/api/preview/abc.mp3?start=42',
+    );
+    expect(client.previewUrl('abc', -5)).toBe(
+      'https://api.example.test/api/preview/abc.mp3?start=0',
+    );
   });
 
   it('defaults to the production base URL', () => {
@@ -298,7 +300,9 @@ describe('createSyraClient.artworkUrl', () => {
   });
 
   it('passes through an absolute http(s) URL', () => {
-    expect(client.artworkUrl('https://cdn.example.com/x.jpg')).toBe('https://cdn.example.com/x.jpg');
+    expect(client.artworkUrl('https://cdn.example.com/x.jpg')).toBe(
+      'https://cdn.example.com/x.jpg',
+    );
   });
 
   it('prefers a named size from coverArtSizes', () => {
@@ -428,7 +432,9 @@ describe('createSyraClient.getPodcast', () => {
   it('throws SyraApiError on a non-2xx response', async () => {
     const { fetch } = fakeFetch(() => ({ status: 404, body: { error: 'not found' } }));
     const client = createSyraClient({ fetch });
-    await expect(client.getPodcast('507f1f77bcf86cd799439021')).rejects.toBeInstanceOf(SyraApiError);
+    await expect(client.getPodcast('507f1f77bcf86cd799439021')).rejects.toBeInstanceOf(
+      SyraApiError,
+    );
   });
 
   it('throws when data.podcast fails schema validation', async () => {
@@ -493,9 +499,9 @@ describe('createSyraClient.podcastArtworkUrl', () => {
   });
 
   it('falls back to imageSourceUrl when no Syra image is present', () => {
-    expect(
-      client.podcastArtworkUrl({ imageSourceUrl: 'https://cdn.example.com/cover.jpg' }),
-    ).toBe('https://cdn.example.com/cover.jpg');
+    expect(client.podcastArtworkUrl({ imageSourceUrl: 'https://cdn.example.com/cover.jpg' })).toBe(
+      'https://cdn.example.com/cover.jpg',
+    );
   });
 
   it('returns undefined when nothing resolvable is present', () => {
@@ -662,7 +668,9 @@ describe('createSyraClient.getEpisode', () => {
   it('throws SyraApiError on a non-2xx response', async () => {
     const { fetch } = fakeFetch(() => ({ status: 404, body: { error: 'not found' } }));
     const client = createSyraClient({ fetch });
-    await expect(client.getEpisode('507f1f77bcf86cd799439031')).rejects.toBeInstanceOf(SyraApiError);
+    await expect(client.getEpisode('507f1f77bcf86cd799439031')).rejects.toBeInstanceOf(
+      SyraApiError,
+    );
   });
 
   it('throws when data.episode fails schema validation', async () => {
@@ -962,7 +970,14 @@ describe('createSyraClient podcast subscriptions', () => {
 describe('createSyraClient write methods', () => {
   function authedClient(handler: (url: string) => { status?: number; body: unknown }) {
     const { fetch, calls } = fakeFetch(handler);
-    return { client: createSyraClient({ baseURL: 'https://api.example.test', fetch, getAccessToken: () => 'tok' }), calls };
+    return {
+      client: createSyraClient({
+        baseURL: 'https://api.example.test',
+        fetch,
+        getAccessToken: () => 'tok',
+      }),
+      calls,
+    };
   }
 
   it('createPodcast POSTs JSON and returns the parsed show', async () => {

@@ -32,7 +32,11 @@ function GoLive() {
   const { joinLiveRoom } = useLiveRoom();
 
   const roomsService = useMemo(() => createRoomsService(authenticatedClient), []);
-  const { data: liveRooms = [], isLoading, refetch } = useQuery({
+  const {
+    data: liveRooms = [],
+    isLoading,
+    refetch,
+  } = useQuery({
     queryKey: liveRoomsQueryKey,
     queryFn: () => roomsService.getRooms('live'),
     staleTime: 30_000,
@@ -66,18 +70,29 @@ function GoLive() {
             <Text className="text-lg font-bold text-foreground">Start a live room</Text>
           </View>
           <Text className="text-sm text-muted-foreground mb-4">
-            Go on air instantly, or schedule a room for later. Listeners can join, request to speak, and you can record.
+            Go on air instantly, or schedule a room for later. Listeners can join, request to speak,
+            and you can record.
           </Text>
           <Button
             fullWidth
             onPress={openCreateSheet}
-            icon={<MaterialCommunityIcons name="microphone-plus" size={18} color={theme.colors.primaryForeground} />} tone="accent" appearance="solid"
+            icon={
+              <MaterialCommunityIcons
+                name="microphone-plus"
+                size={18}
+                color={theme.colors.primaryForeground}
+              />
+            }
+            tone="accent"
+            appearance="solid"
           >
             Go Live
           </Button>
         </View>
 
-        <Text className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">Live now</Text>
+        <Text className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
+          Live now
+        </Text>
         {isLoading ? (
           <View className="items-center justify-center py-12">
             <ActivityIndicator color={theme.colors.primary} />
@@ -90,7 +105,11 @@ function GoLive() {
           </View>
         ) : (
           <View className="items-center justify-center py-10">
-            <MaterialCommunityIcons name="broadcast-off" size={44} color={theme.colors.textTertiary} />
+            <MaterialCommunityIcons
+              name="broadcast-off"
+              size={44}
+              color={theme.colors.textTertiary}
+            />
             <Text className="mt-3 text-sm text-muted-foreground text-center">
               No rooms are live right now. Be the first to go on air.
             </Text>
@@ -98,7 +117,11 @@ function GoLive() {
         )}
       </ScreenContainer>
 
-      <BottomSheet ref={sheetRef} enablePanDownToClose style={{ maxWidth: 500, marginHorizontal: 'auto' }}>
+      <BottomSheet
+        ref={sheetRef}
+        enablePanDownToClose
+        style={{ maxWidth: 500, marginHorizontal: 'auto' }}
+      >
         <CreateRoomSheet
           ref={createRef}
           onClose={closeCreateSheet}
@@ -108,14 +131,26 @@ function GoLive() {
         />
         <View
           className="gap-2.5 px-4 pt-2.5 pb-3.5"
-          style={{ borderTopWidth: 0.5, borderTopColor: theme.colors.border, backgroundColor: theme.colors.background }}
+          style={{
+            borderTopWidth: 0.5,
+            borderTopColor: theme.colors.border,
+            backgroundColor: theme.colors.background,
+          }}
         >
           <Button
             fullWidth
             disabled={!formState.isValid}
             loading={formState.loading}
             onPress={() => createRef.current?.handleCreateAndStart()}
-            icon={<MaterialCommunityIcons name="play" size={18} color={theme.colors.primaryForeground} />} tone="accent" appearance="solid"
+            icon={
+              <MaterialCommunityIcons
+                name="play"
+                size={18}
+                color={theme.colors.primaryForeground}
+              />
+            }
+            tone="accent"
+            appearance="solid"
           >
             Start now
           </Button>
@@ -124,7 +159,9 @@ function GoLive() {
               fullWidth
               disabled={!formState.isValid || formState.loading}
               onPress={() => createRef.current?.handleSchedule()}
-              icon={<MaterialCommunityIcons name="calendar" size={18} color={theme.colors.text} />} tone="neutral" appearance="outline"
+              icon={<MaterialCommunityIcons name="calendar" size={18} color={theme.colors.text} />}
+              tone="neutral"
+              appearance="outline"
             >
               Schedule room
             </Button>

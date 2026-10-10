@@ -209,7 +209,11 @@ describe('playerStore — Google Cast routing', () => {
   });
 
   it('routes a fresh playTrack through the cast engine, skipping the local engine and attachSource', async () => {
-    resolveStreamMock.mockResolvedValue({ url: 'https://cdn/hls/a.m3u8', type: 'hls', expiresAt: null });
+    resolveStreamMock.mockResolvedValue({
+      url: 'https://cdn/hls/a.m3u8',
+      type: 'hls',
+      expiresAt: null,
+    });
 
     // Connect first — the store's casting flag flips via the session subscription.
     fireCastSessionState('connected');
@@ -236,7 +240,9 @@ describe('playerStore — Google Cast routing', () => {
     // No HLS renditions → no stream resolution → the authenticated-URL path,
     // which falls back to the track's own audio source.
     expect(resolveStreamMock).not.toHaveBeenCalled();
-    expect(castTestEngine.replace).toHaveBeenCalledWith({ uri: 'https://api.syra.fm/audio/track-two.mp3' });
+    expect(castTestEngine.replace).toHaveBeenCalledWith({
+      uri: 'https://api.syra.fm/audio/track-two.mp3',
+    });
     // A progressive MP3 must NOT be announced as HLS or the receiver plays silence.
     expect(castController.setContentType).toHaveBeenCalledWith(CAST_PROGRESSIVE_CONTENT_TYPE);
     expect(getCastContentType()).toBe(CAST_PROGRESSIVE_CONTENT_TYPE);
@@ -244,7 +250,11 @@ describe('playerStore — Google Cast routing', () => {
   });
 
   it('hands the current track to the cast engine at the preserved position on connect', async () => {
-    resolveStreamMock.mockResolvedValue({ url: 'https://cdn/hls/b.m3u8', type: 'hls', expiresAt: null });
+    resolveStreamMock.mockResolvedValue({
+      url: 'https://cdn/hls/b.m3u8',
+      type: 'hls',
+      expiresAt: null,
+    });
     const previousPlayer = makeFakeEngine();
     usePlayerStore.setState({
       currentTrack: hlsTrack,
@@ -268,7 +278,11 @@ describe('playerStore — Google Cast routing', () => {
   });
 
   it('hands the current track back to the local engine on disconnect', async () => {
-    resolveStreamMock.mockResolvedValue({ url: 'https://cdn/hls/c.m3u8', type: 'hls', expiresAt: null });
+    resolveStreamMock.mockResolvedValue({
+      url: 'https://cdn/hls/c.m3u8',
+      type: 'hls',
+      expiresAt: null,
+    });
     setCastSessionState('connected');
     usePlayerStore.setState({
       currentTrack: hlsTrack,

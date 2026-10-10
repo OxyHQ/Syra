@@ -1,5 +1,8 @@
 import { Router, Response } from 'express';
-import { requireOxyAuth as requireAuth, type OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
+import {
+  requireOxyAuth as requireAuth,
+  type OxyAuthRequest as AuthRequest,
+} from '@oxy.so/core/server';
 import { getRequiredOxyUserId as getAuthenticatedUserId } from '@oxy.so/core/server';
 import { deleteUserBehavior } from '../db/user/behavior';
 import {
@@ -67,7 +70,6 @@ router.get('/settings/me', async (req: AuthRequest, res: Response) => {
     return sendErrorResponse(res, 500, 'Internal Server Error', 'Failed to fetch settings');
   }
 });
-
 
 /**
  * GET /api/profile/settings/:userId
@@ -172,24 +174,33 @@ function buildSettingsPatch(body: Record<string, unknown>): UserSettingsPatch {
 
   if (body.privacy) {
     const privacy = asRecord(body.privacy);
-    if (typeof privacy.showContactInfo === 'boolean') patch.privacyShowContactInfo = privacy.showContactInfo;
+    if (typeof privacy.showContactInfo === 'boolean')
+      patch.privacyShowContactInfo = privacy.showContactInfo;
     if (typeof privacy.allowTags === 'boolean') patch.privacyAllowTags = privacy.allowTags;
-    if (typeof privacy.allowMentions === 'boolean') patch.privacyAllowMentions = privacy.allowMentions;
-    if (typeof privacy.showOnlineStatus === 'boolean') patch.privacyShowOnlineStatus = privacy.showOnlineStatus;
-    if (typeof privacy.hideLikeCounts === 'boolean') patch.privacyHideLikeCounts = privacy.hideLikeCounts;
-    if (typeof privacy.hideShareCounts === 'boolean') patch.privacyHideShareCounts = privacy.hideShareCounts;
-    if (typeof privacy.hideReplyCounts === 'boolean') patch.privacyHideReplyCounts = privacy.hideReplyCounts;
-    if (typeof privacy.hideSaveCounts === 'boolean') patch.privacyHideSaveCounts = privacy.hideSaveCounts;
+    if (typeof privacy.allowMentions === 'boolean')
+      patch.privacyAllowMentions = privacy.allowMentions;
+    if (typeof privacy.showOnlineStatus === 'boolean')
+      patch.privacyShowOnlineStatus = privacy.showOnlineStatus;
+    if (typeof privacy.hideLikeCounts === 'boolean')
+      patch.privacyHideLikeCounts = privacy.hideLikeCounts;
+    if (typeof privacy.hideShareCounts === 'boolean')
+      patch.privacyHideShareCounts = privacy.hideShareCounts;
+    if (typeof privacy.hideReplyCounts === 'boolean')
+      patch.privacyHideReplyCounts = privacy.hideReplyCounts;
+    if (typeof privacy.hideSaveCounts === 'boolean')
+      patch.privacyHideSaveCounts = privacy.hideSaveCounts;
 
     if (isProfileVisibility(privacy.profileVisibility)) {
       patch.privacyProfileVisibility = privacy.profileVisibility;
     }
     if (Array.isArray(privacy.hiddenWords)) {
-      patch.privacyHiddenWords = privacy.hiddenWords.filter((w): w is string => typeof w === 'string');
+      patch.privacyHiddenWords = privacy.hiddenWords.filter(
+        (w): w is string => typeof w === 'string',
+      );
     }
     if (Array.isArray(privacy.restrictedUsers)) {
       patch.privacyRestrictedUsers = privacy.restrictedUsers.filter(
-        (u): u is string => typeof u === 'string'
+        (u): u is string => typeof u === 'string',
       );
     }
   }
@@ -218,7 +229,7 @@ function buildSettingsPatch(body: Record<string, unknown>): UserSettingsPatch {
       if (typeof diversity.maxConsecutiveSameAuthor === 'number') {
         patch.feedDiversityMaxConsecutiveSameAuthor = Math.max(
           1,
-          Math.min(10, Math.round(diversity.maxConsecutiveSameAuthor))
+          Math.min(10, Math.round(diversity.maxConsecutiveSameAuthor)),
         );
       } else if (diversity.maxConsecutiveSameAuthor === null) {
         patch.feedDiversityMaxConsecutiveSameAuthor = null;
@@ -276,11 +287,16 @@ router.delete('/settings/behavior', async (req: AuthRequest, res: Response) => {
       res,
       200,
       { success: true },
-      deleted ? 'Personalization data reset successfully' : 'No personalization data to reset'
+      deleted ? 'Personalization data reset successfully' : 'No personalization data to reset',
     );
   } catch (err) {
     logger.error('[ProfileSettings] Error resetting user behavior:', describeErrorSafely(err));
-    return sendErrorResponse(res, 500, 'Internal Server Error', 'Failed to reset personalization data');
+    return sendErrorResponse(
+      res,
+      500,
+      'Internal Server Error',
+      'Failed to reset personalization data',
+    );
   }
 });
 

@@ -60,21 +60,26 @@ export const SEO: React.FC<SEOProps> = ({
   const { t } = useTranslation();
 
   // Generate full URL
-  const fullUrl = url || (Platform.OS === 'web' && typeof window !== 'undefined'
-    ? `${window.location.origin}${pathname}`
-    : `${SITE_ORIGIN}${pathname}`);
+  const fullUrl =
+    url ||
+    (Platform.OS === 'web' && typeof window !== 'undefined'
+      ? `${window.location.origin}${pathname}`
+      : `${SITE_ORIGIN}${pathname}`);
 
   // Use provided siteName or translated default
   const finalSiteName = siteName || t('seo.siteName', { defaultValue: defaultSEO.siteName });
 
   // Default title if not provided (translated)
-  const pageTitle = title || t('seo.defaultTitle', { defaultValue: `${finalSiteName} - Music and podcasts` });
+  const pageTitle =
+    title || t('seo.defaultTitle', { defaultValue: `${finalSiteName} - Music and podcasts` });
 
   // Default description if not provided (translated)
-  const pageDescription = description || t('seo.defaultDescription', {
-    defaultValue: `Stream music, podcasts and live audio rooms on ${finalSiteName}.`,
-    siteName: finalSiteName
-  });
+  const pageDescription =
+    description ||
+    t('seo.defaultDescription', {
+      defaultValue: `Stream music, podcasts and live audio rooms on ${finalSiteName}.`,
+      siteName: finalSiteName,
+    });
 
   // There is no Syra share image in the repo yet, so pages without an explicit
   // `image` ship no image tags at all — an absent card degrades gracefully, while
@@ -93,7 +98,7 @@ export const SEO: React.FC<SEOProps> = ({
       <title>{pageTitle}</title>
       <meta name="title" content={pageTitle} />
       <meta name="description" content={pageDescription} />
-      
+
       {/* Open Graph / Facebook */}
       <meta property="og:type" content={type} />
       <meta property="og:url" content={fullUrl} />
@@ -111,7 +116,7 @@ export const SEO: React.FC<SEOProps> = ({
       {pageImage && <meta name="twitter:image" content={pageImage} />}
       {twitterHandle && <meta name="twitter:site" content={twitterHandle} />}
       {twitterHandle && <meta name="twitter:creator" content={twitterHandle} />}
-      
+
       {/* Article specific tags */}
       {type === 'article' && (
         <>
@@ -120,7 +125,7 @@ export const SEO: React.FC<SEOProps> = ({
           {modifiedTime && <meta property="article:modified_time" content={modifiedTime} />}
         </>
       )}
-      
+
       {/* Additional meta tags */}
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       <link rel="canonical" href={fullUrl} />
@@ -129,4 +134,3 @@ export const SEO: React.FC<SEOProps> = ({
 };
 
 export default SEO;
-

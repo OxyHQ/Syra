@@ -27,7 +27,9 @@ const CANNED_PACKAGE_RESULT: PackageResult = {
 };
 
 const CANNED_STORED: StoredHls = {
-  hls: [{ manifestKey: 'hls/oxy-locker-owner/u/160/stream.m3u8', bitrateKbps: 160, encrypted: true }],
+  hls: [
+    { manifestKey: 'hls/oxy-locker-owner/u/160/stream.m3u8', bitrateKbps: 160, encrypted: true },
+  ],
   hlsMasterKey: 'hls/oxy-locker-owner/u/master.m3u8',
 };
 

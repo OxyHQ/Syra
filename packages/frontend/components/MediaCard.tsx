@@ -1,5 +1,13 @@
 import React from 'react';
-import { StyleSheet, View, Text, Image, Pressable, Platform, GestureResponderEvent } from 'react-native';
+import {
+  StyleSheet,
+  View,
+  Text,
+  Image,
+  Pressable,
+  Platform,
+  GestureResponderEvent,
+} from 'react-native';
 import { webViewStyle } from '@/utils/webStyles';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxy.so/bloom/theme';
@@ -91,7 +99,8 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
-  const resolvedImageUri = resolvedImageUriProp ?? pickCatalogImageUrl(images, imageUri, 'card', imageSizes);
+  const resolvedImageUri =
+    resolvedImageUriProp ?? pickCatalogImageUrl(images, imageUri, 'card', imageSizes);
   const [isHovered, setIsHovered] = React.useState(false);
   const [hideIdleActions, setHideIdleActions] = React.useState(shouldHideIdleActionsByDefault);
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
@@ -108,7 +117,7 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
   // Auto-detect shape for artist type, or use provided shape
   const cardShape = shape || (type === 'artist' ? 'circle' : 'square');
   const borderRadius = cardShape === 'circle' ? 999 : 8;
-  
+
   const showPlayButton = isHovered && onPlayPress;
   const hasMenu = !!(onAddToQueue || onGoToArtist || onGoToAlbum);
   const usesHoverActions = hideIdleActions;
@@ -147,20 +156,23 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
     };
   }, []);
 
-  const setCardHoverState = React.useCallback((nextHovered: boolean) => {
-    if (isHoveredRef.current === nextHovered) {
-      return;
-    }
+  const setCardHoverState = React.useCallback(
+    (nextHovered: boolean) => {
+      if (isHoveredRef.current === nextHovered) {
+        return;
+      }
 
-    isHoveredRef.current = nextHovered;
-    setIsHovered(nextHovered);
+      isHoveredRef.current = nextHovered;
+      setIsHovered(nextHovered);
 
-    if (nextHovered) {
-      onHoverIn?.({ primaryColor, secondaryColor });
-    } else {
-      onHoverOut?.();
-    }
-  }, [onHoverIn, onHoverOut, primaryColor, secondaryColor]);
+      if (nextHovered) {
+        onHoverIn?.({ primaryColor, secondaryColor });
+      } else {
+        onHoverOut?.();
+      }
+    },
+    [onHoverIn, onHoverOut, primaryColor, secondaryColor],
+  );
 
   const activateHover = React.useCallback(() => {
     isPointerInsideCardRef.current = true;
@@ -205,17 +217,20 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
     onPress?.();
   }, [onPress]);
 
-  const handleLongPress = React.useCallback((event?: GestureResponderEvent) => {
-    if (!hasMenu || usesHoverActions) {
-      return;
-    }
+  const handleLongPress = React.useCallback(
+    (event?: GestureResponderEvent) => {
+      if (!hasMenu || usesHoverActions) {
+        return;
+      }
 
-    event?.stopPropagation?.();
-    suppressNextPressRef.current = true;
-    isPointerInsideCardRef.current = true;
-    setCardHoverState(true);
-    setIsMenuOpen(true);
-  }, [hasMenu, setCardHoverState, usesHoverActions]);
+      event?.stopPropagation?.();
+      suppressNextPressRef.current = true;
+      isPointerInsideCardRef.current = true;
+      setCardHoverState(true);
+      setIsMenuOpen(true);
+    },
+    [hasMenu, setCardHoverState, usesHoverActions],
+  );
 
   const renderMenuIcon = (name: React.ComponentProps<typeof Ionicons>['name']) => (
     <Ionicons name={name} size={18} color={theme.colors.textSecondary} />
@@ -229,8 +244,7 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
     // anchored trigger has no render prop any more, so the two flags come from
     // the hook the old `MenuTrigger` render prop was reading internally.
     const hideMenuTrigger =
-      !usesHoverActions ||
-      (!isHovered && !isMenuOpen && !triggerFocused && !triggerPressed);
+      !usesHoverActions || (!isHovered && !isMenuOpen && !triggerFocused && !triggerPressed);
 
     return (
       <View style={styles.menuContainer}>
@@ -248,13 +262,12 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
               }}
               style={[
                 styles.menuTrigger,
-                hideMenuTrigger
-                  ? styles.menuTriggerHidden
-                  : styles.menuTriggerVisible,
+                hideMenuTrigger ? styles.menuTriggerHidden : styles.menuTriggerVisible,
                 {
-                  backgroundColor: triggerFocused || triggerPressed
-                    ? theme.colors.backgroundTertiary
-                    : theme.colors.backgroundSecondary,
+                  backgroundColor:
+                    triggerFocused || triggerPressed
+                      ? theme.colors.backgroundTertiary
+                      : theme.colors.backgroundSecondary,
                 },
               ]}
             >
@@ -272,34 +285,22 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
           <DropdownMenuContent align="end" label={`More actions for ${title}`}>
             <DropdownMenuGroup>
               {onPress && (
-                <DropdownMenuItem
-                  leading={renderMenuIcon('open-outline')}
-                  onPress={onPress}
-                >
+                <DropdownMenuItem leading={renderMenuIcon('open-outline')} onPress={onPress}>
                   {t('common.open')}
                 </DropdownMenuItem>
               )}
               {onAddToQueue && (
-                <DropdownMenuItem
-                  leading={renderMenuIcon('list-outline')}
-                  onPress={onAddToQueue}
-                >
+                <DropdownMenuItem leading={renderMenuIcon('list-outline')} onPress={onAddToQueue}>
                   {t('common.addToQueue')}
                 </DropdownMenuItem>
               )}
               {onGoToAlbum && (
-                <DropdownMenuItem
-                  leading={renderMenuIcon('disc-outline')}
-                  onPress={onGoToAlbum}
-                >
+                <DropdownMenuItem leading={renderMenuIcon('disc-outline')} onPress={onGoToAlbum}>
                   {t('common.goToAlbum')}
                 </DropdownMenuItem>
               )}
               {onGoToArtist && (
-                <DropdownMenuItem
-                  leading={renderMenuIcon('person-outline')}
-                  onPress={onGoToArtist}
-                >
+                <DropdownMenuItem leading={renderMenuIcon('person-outline')} onPress={onGoToArtist}>
                   {t('common.goToArtist')}
                 </DropdownMenuItem>
               )}
@@ -309,16 +310,17 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
       </View>
     );
   };
-  
-  const hoverHandlers = Platform.OS === 'web'
-    ? ({
-      onMouseEnter: activateHover,
-      onMouseLeave: deactivateHover,
-    } as Record<string, unknown>)
-    : {
-      onHoverIn: activateHover,
-      onHoverOut: deactivateHover,
-    };
+
+  const hoverHandlers =
+    Platform.OS === 'web'
+      ? ({
+          onMouseEnter: activateHover,
+          onMouseLeave: deactivateHover,
+        } as Record<string, unknown>)
+      : {
+          onHoverIn: activateHover,
+          onHoverOut: deactivateHover,
+        };
 
   return (
     <Pressable
@@ -357,7 +359,8 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
             navigating, the inverse of what a listener expects. */}
         {showPlayButton && (
           <Pressable
-            className="bg-primary" style={styles.playButton}
+            className="bg-primary"
+            style={styles.playButton}
             onPress={handlePlayPress}
             accessibilityRole="button"
             accessibilityLabel={t('common.playTitle', { title })}
@@ -370,19 +373,13 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
       {/* Text Content */}
       <View style={styles.textContainer}>
         <View style={styles.titleRow}>
-          <Text
-            className="text-foreground" style={styles.title}
-            numberOfLines={2}
-          >
+          <Text className="text-foreground" style={styles.title} numberOfLines={2}>
             {title}
           </Text>
           {renderActionsMenu()}
         </View>
         {subtitle && (
-          <Text 
-            className="text-muted-foreground" style={styles.subtitle} 
-            numberOfLines={2}
-          >
+          <Text className="text-muted-foreground" style={styles.subtitle} numberOfLines={2}>
             {subtitle}
           </Text>
         )}

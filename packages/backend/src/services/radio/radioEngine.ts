@@ -181,7 +181,7 @@ export function hashStationPage(stationKey: string, page: number): number {
 /** Fisher-Yates over each run of tied scores, leaving the band order itself intact. */
 function shuffleEqualScoreBands(
   ranked: readonly RankedRadioCandidate[],
-  random: () => number
+  random: () => number,
 ): RankedRadioCandidate[] {
   const out: RankedRadioCandidate[] = [];
   let bandStart = 0;
@@ -225,7 +225,7 @@ function shuffleEqualScoreBands(
 export function applyRadioDiversity(
   ranked: readonly RankedRadioCandidate[],
   limit: number,
-  opts: RadioDiversityOptions
+  opts: RadioDiversityOptions,
 ): RankedRadioCandidate[] {
   if (limit <= 0) {
     return [];
@@ -272,7 +272,7 @@ export function applyRadioDiversity(
     const nextIndex = remaining.findIndex(
       (candidate) =>
         candidate.artistId !== lastArtistId &&
-        (perArtist.get(candidate.artistId) ?? 0) < MAX_TRACKS_PER_ARTIST_PER_PAGE
+        (perArtist.get(candidate.artistId) ?? 0) < MAX_TRACKS_PER_ARTIST_PER_PAGE,
     );
 
     // Nothing left can be placed without breaking a hard constraint. A short

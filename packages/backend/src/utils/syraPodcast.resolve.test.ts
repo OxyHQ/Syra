@@ -38,7 +38,10 @@ const episode = (over: Record<string, unknown>) => ({
 describe('resolvePodcastEpisode', () => {
   it('resolves a SYRA-HOSTED episode through audioSource, which has no enclosure', async () => {
     const spy = spyOn(syraClient, 'getEpisode').mockResolvedValue(
-      episode({ id: uid('syra'), audioSource: { url: `/api/podcasts/episodes/${uid('syra')}/audio` } })
+      episode({
+        id: uid('syra'),
+        audioSource: { url: `/api/podcasts/episodes/${uid('syra')}/audio` },
+      }),
     );
     const got = await resolvePodcastEpisode(uid('syra'));
     spy.mockRestore();
@@ -56,7 +59,7 @@ describe('resolvePodcastEpisode', () => {
 
   it('leaves an RSS mirror’s absolute enclosure untouched', async () => {
     const spy = spyOn(syraClient, 'getEpisode').mockResolvedValue(
-      episode({ id: uid('rss'), enclosureUrl: 'https://elsewhere.example/ep.mp3' })
+      episode({ id: uid('rss'), enclosureUrl: 'https://elsewhere.example/ep.mp3' }),
     );
     const got = await resolvePodcastEpisode(uid('rss'));
     spy.mockRestore();
@@ -68,7 +71,7 @@ describe('resolvePodcastEpisode', () => {
 
   it('refuses a DRAFTED episode, which exists but has nothing to play', async () => {
     const spy = spyOn(syraClient, 'getEpisode').mockResolvedValue(
-      episode({ id: uid('draft'), status: 'processing' })
+      episode({ id: uid('draft'), status: 'processing' }),
     );
     const got = await resolvePodcastEpisode(uid('draft'));
     spy.mockRestore();

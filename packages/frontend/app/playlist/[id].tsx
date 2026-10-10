@@ -266,8 +266,9 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
   const [trackActionsFor, setTrackActionsFor] = useState<Track | null>(null);
   // Mirrors the backend's `canEditPlaylist` (owner or editor collaborator) so a
   // viewer is never offered a removal that is certain to 403.
-  const canEditPlaylist = user?.id === playlist.ownerOxyUserId
-    || (playlist.collaborators ?? []).some(
+  const canEditPlaylist =
+    user?.id === playlist.ownerOxyUserId ||
+    (playlist.collaborators ?? []).some(
       (collaborator) => collaborator.oxyUserId === user?.id && collaborator.role === 'editor',
     );
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
@@ -280,7 +281,7 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
           translateY: interpolate(
             scrollOffset.value,
             [-HEADER_HEIGHT, 0, HEADER_HEIGHT],
-            [-HEADER_HEIGHT / 2, 0, HEADER_HEIGHT * 0.75]
+            [-HEADER_HEIGHT / 2, 0, HEADER_HEIGHT * 0.75],
           ),
         },
         {
@@ -295,7 +296,7 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
       scrollOffset.value,
       [0, HEADER_HEIGHT - 100, HEADER_HEIGHT - 50],
       [1, 0.3, 0],
-      'clamp'
+      'clamp',
     );
     return {
       opacity,
@@ -307,13 +308,13 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
       scrollOffset.value,
       [HEADER_HEIGHT - 100, HEADER_HEIGHT - 50],
       [0, 1],
-      'clamp'
+      'clamp',
     );
     const translateY = interpolate(
       scrollOffset.value,
       [HEADER_HEIGHT - 100, HEADER_HEIGHT - 50],
       [-20, 0],
-      'clamp'
+      'clamp',
     );
     return {
       opacity,
@@ -334,8 +335,18 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
     ? formatTotalDuration(playlist.totalDuration)
     : '';
 
-  const playlistStickyImage = pickCatalogImageUrl(undefined, playlist.coverArt, 'icon', playlist.coverArtSizes);
-  const playlistInfoImage = pickCatalogImageUrl(undefined, playlist.coverArt, 'smallArtwork', playlist.coverArtSizes);
+  const playlistStickyImage = pickCatalogImageUrl(
+    undefined,
+    playlist.coverArt,
+    'icon',
+    playlist.coverArtSizes,
+  );
+  const playlistInfoImage = pickCatalogImageUrl(
+    undefined,
+    playlist.coverArt,
+    'smallArtwork',
+    playlist.coverArtSizes,
+  );
 
   return (
     <>
@@ -347,10 +358,7 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
         {/* Sticky Header */}
         <Animated.View
           className="bg-background border-b-surface"
-          style={[
-            styles.stickyHeader,
-            stickyHeaderAnimatedStyle
-          ]}
+          style={[styles.stickyHeader, stickyHeaderAnimatedStyle]}
           pointerEvents="box-none"
         >
           <View style={styles.stickyHeaderContent}>
@@ -374,11 +382,9 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
 
             {/* Right side - Controls */}
             <View style={styles.stickyHeaderControls}>
-              <Pressable className="bg-primary"
-                style={[
-                  styles.stickyHeaderPlayButton,
-                  !canPlay && styles.disabledControl,
-                ]}
+              <Pressable
+                className="bg-primary"
+                style={[styles.stickyHeaderPlayButton, !canPlay && styles.disabledControl]}
                 onPress={onPlayPlaylist}
                 disabled={!canPlay}
                 accessibilityRole="button"
@@ -391,10 +397,12 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
                 onPress={onToggleSave}
                 accessibilityRole="button"
                 accessibilityState={{ selected: isSaved }}
-                accessibilityLabel={isSaved ? t('common.removeFromLibrary') : t('common.saveToLibrary')}
+                accessibilityLabel={
+                  isSaved ? t('common.removeFromLibrary') : t('common.saveToLibrary')
+                }
               >
                 <Ionicons
-                  name={isSaved ? "heart" : "heart-outline"}
+                  name={isSaved ? 'heart' : 'heart-outline'}
                   size={20}
                   color={isSaved ? theme.colors.primary : theme.colors.text}
                 />
@@ -428,11 +436,7 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
               accessibilityLabel={`${playlist.name} cover art`}
             >
               {heroImage ? (
-                <Image
-                  source={{ uri: heroImage }}
-                  style={styles.headerImage}
-                  resizeMode="cover"
-                />
+                <Image source={{ uri: heroImage }} style={styles.headerImage} resizeMode="cover" />
               ) : (
                 <View className="bg-surface" style={styles.headerPlaceholder}>
                   <Ionicons name="musical-notes" size={80} color={theme.colors.textSecondary} />
@@ -441,13 +445,22 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
             </View>
             {/* Gradient overlay for text readability */}
             <LinearGradient
-              colors={['transparent', 'rgba(0, 0, 0, 0.3)', 'rgba(0, 0, 0, 0.7)'] as readonly [string, string, string]}
+              colors={
+                ['transparent', 'rgba(0, 0, 0, 0.3)', 'rgba(0, 0, 0, 0.7)'] as readonly [
+                  string,
+                  string,
+                  string,
+                ]
+              }
               locations={[0, 0.6, 1] as readonly [number, number, number]}
               pointerEvents="none"
               style={styles.headerOverlay}
             />
             {/* Playlist Title */}
-            <Animated.View pointerEvents="none" style={[styles.titleContainer, headerTitleAnimatedStyle]}>
+            <Animated.View
+              pointerEvents="none"
+              style={[styles.titleContainer, headerTitleAnimatedStyle]}
+            >
               <Text style={[styles.playlistTitle, { color: '#FFFFFF' }]} numberOfLines={2}>
                 {playlist.name}
               </Text>
@@ -472,7 +485,11 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
                 )}
                 <View style={styles.infoTextContainer}>
                   {playlist.description && (
-                    <Text className="text-muted-foreground" style={styles.description} numberOfLines={2}>
+                    <Text
+                      className="text-muted-foreground"
+                      style={styles.description}
+                      numberOfLines={2}
+                    >
                       {playlist.description}
                     </Text>
                   )}
@@ -482,13 +499,20 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
                     </Text>
                     {playlist.trackCount > 0 && (
                       <>
-                        <Text className="text-muted-foreground" style={styles.metadataSeparator}>•</Text>
+                        <Text className="text-muted-foreground" style={styles.metadataSeparator}>
+                          •
+                        </Text>
                         <Text className="text-muted-foreground" style={styles.metadata}>
                           {playlist.trackCount} {playlist.trackCount === 1 ? 'song' : 'songs'}
                         </Text>
                         {totalDurationFormatted && (
                           <>
-                            <Text className="text-muted-foreground" style={styles.metadataSeparator}>•</Text>
+                            <Text
+                              className="text-muted-foreground"
+                              style={styles.metadataSeparator}
+                            >
+                              •
+                            </Text>
                             <Text className="text-muted-foreground" style={styles.metadata}>
                               {totalDurationFormatted}
                             </Text>
@@ -498,9 +522,12 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
                     )}
                     {playlist.followers !== undefined && playlist.followers > 0 && (
                       <>
-                        <Text className="text-muted-foreground" style={styles.metadataSeparator}>•</Text>
+                        <Text className="text-muted-foreground" style={styles.metadataSeparator}>
+                          •
+                        </Text>
                         <Text className="text-muted-foreground" style={styles.metadata}>
-                          {playlist.followers.toLocaleString()} {playlist.followers === 1 ? 'save' : 'saves'}
+                          {playlist.followers.toLocaleString()}{' '}
+                          {playlist.followers === 1 ? 'save' : 'saves'}
                         </Text>
                       </>
                     )}
@@ -511,11 +538,9 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
 
             {/* Playback Controls */}
             <View style={styles.controlsContainer}>
-              <Pressable className="bg-primary"
-                style={[
-                  styles.playButton,
-                  !canPlay && styles.disabledControl,
-                ]}
+              <Pressable
+                className="bg-primary"
+                style={[styles.playButton, !canPlay && styles.disabledControl]}
                 onPress={onPlayPlaylist}
                 disabled={!canPlay}
                 accessibilityRole="button"
@@ -531,7 +556,9 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
                 onPress={toggleShuffle}
                 accessibilityRole="button"
                 accessibilityState={{ selected: shuffle === 'on' }}
-                accessibilityLabel={shuffle === 'on' ? t('common.shuffleOff') : t('common.shuffleOn')}
+                accessibilityLabel={
+                  shuffle === 'on' ? t('common.shuffleOff') : t('common.shuffleOn')
+                }
               >
                 <Ionicons
                   name="shuffle"
@@ -545,10 +572,12 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
                 onPress={onToggleSave}
                 accessibilityRole="button"
                 accessibilityState={{ selected: isSaved }}
-                accessibilityLabel={isSaved ? t('common.removeFromLibrary') : t('common.saveToLibrary')}
+                accessibilityLabel={
+                  isSaved ? t('common.removeFromLibrary') : t('common.saveToLibrary')
+                }
               >
                 <Ionicons
-                  name={isSaved ? "heart" : "heart-outline"}
+                  name={isSaved ? 'heart' : 'heart-outline'}
                   size={24}
                   color={isSaved ? theme.colors.primary : theme.colors.text}
                 />
@@ -559,7 +588,7 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
                 onPress={() => setIsDownloaded(!isDownloaded)}
               >
                 <Ionicons
-                  name={isDownloaded ? "arrow-down-circle" : "arrow-down-circle-outline"}
+                  name={isDownloaded ? 'arrow-down-circle' : 'arrow-down-circle-outline'}
                   size={24}
                   color={theme.colors.text}
                 />
@@ -576,13 +605,19 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
             </View>
 
             {/* Divider */}
-            <View style={[styles.divider, { borderBottomColor: theme.colors.backgroundSecondary }]} />
+            <View
+              style={[styles.divider, { borderBottomColor: theme.colors.backgroundSecondary }]}
+            />
 
             {/* Track List Header */}
             <View style={styles.trackListHeader}>
               <View style={styles.trackListHeaderLeft}>
-                <Text className="text-muted-foreground" style={styles.trackListHeaderText}>#</Text>
-                <Text className="text-muted-foreground" style={styles.trackListHeaderText}>{t('common.title')}</Text>
+                <Text className="text-muted-foreground" style={styles.trackListHeaderText}>
+                  #
+                </Text>
+                <Text className="text-muted-foreground" style={styles.trackListHeaderText}>
+                  {t('common.title')}
+                </Text>
               </View>
               <Ionicons name="time-outline" size={16} color={theme.colors.textSecondary} />
             </View>
@@ -617,8 +652,8 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
               )}
             </View>
           </LinearGradient>
-        <PlaylistCollaboration playlist={playlist} />
-      </Animated.ScrollView>
+          <PlaylistCollaboration playlist={playlist} />
+        </Animated.ScrollView>
       </View>
 
       <PlaylistActionsSheet
@@ -634,9 +669,7 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
           onClose={() => setTrackActionsFor(null)}
           track={trackActionsFor}
           removeFrom={
-            canEditPlaylist
-              ? { playlistId: playlist.id, playlistName: playlist.name }
-              : undefined
+            canEditPlaylist ? { playlistId: playlist.id, playlistName: playlist.name } : undefined
           }
         />
       )}

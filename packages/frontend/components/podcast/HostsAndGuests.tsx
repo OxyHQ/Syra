@@ -39,7 +39,9 @@ export const HostsAndGuests: React.FC<HostsAndGuestsProps> = ({ persons, title }
 
   return (
     <View style={styles.section}>
-      <Text className="text-foreground" style={styles.sectionTitle}>{heading}</Text>
+      <Text className="text-foreground" style={styles.sectionTitle}>
+        {heading}
+      </Text>
       {persons.map((person, index) => {
         const isOxyLinked = Boolean(person.linkedOxyUserId);
         const label = person.displayName || person.name;
@@ -52,10 +54,10 @@ export const HostsAndGuests: React.FC<HostsAndGuestsProps> = ({ persons, title }
         const onPress = profileUsername
           ? () => router.push({ pathname: '/u/[username]', params: { username: profileUsername } })
           : linkedArtistId
-          ? () => router.push({ pathname: '/p/[id]', params: { id: linkedArtistId } })
-          : person.personId
-          ? () => router.push({ pathname: '/p/[id]', params: { id: person.personId } })
-          : undefined;
+            ? () => router.push({ pathname: '/p/[id]', params: { id: linkedArtistId } })
+            : person.personId
+              ? () => router.push({ pathname: '/p/[id]', params: { id: person.personId } })
+              : undefined;
 
         return (
           <Pressable
@@ -84,7 +86,9 @@ export const HostsAndGuests: React.FC<HostsAndGuestsProps> = ({ persons, title }
                 </Text>
               ) : null}
             </View>
-            {onPress ? <Ionicons name="chevron-forward" size={16} color={theme.colors.textSecondary} /> : null}
+            {onPress ? (
+              <Ionicons name="chevron-forward" size={16} color={theme.colors.textSecondary} />
+            ) : null}
           </Pressable>
         );
       })}

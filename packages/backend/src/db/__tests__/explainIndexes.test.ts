@@ -34,7 +34,8 @@ describe('expectIndexesWithin', () => {
    */
   it('rejects an unaccepted index sitting beside an accepted one', () => {
     const message = failureOf(() =>
-      expectIndexesWithin('probe', 'a_idx, tracks_seq_fallback_idx', ['a_idx']));
+      expectIndexesWithin('probe', 'a_idx, tracks_seq_fallback_idx', ['a_idx']),
+    );
     expect(message).toContain('tracks_seq_fallback_idx');
   });
 
@@ -45,8 +46,7 @@ describe('expectIndexesWithin', () => {
    * the test that says so.
    */
   it('rejects a plan that used no index at all', () => {
-    expect(failureOf(() => expectIndexesWithin('probe', '', ['a_idx'])))
-      .toContain('NO index scan');
+    expect(failureOf(() => expectIndexesWithin('probe', '', ['a_idx']))).toContain('NO index scan');
   });
 
   it('names both sides so a failure is actionable without opening the file', () => {

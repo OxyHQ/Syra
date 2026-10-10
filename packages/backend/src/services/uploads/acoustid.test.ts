@@ -488,12 +488,11 @@ describe('resolveAcousticIdentity turns a match into identifiers', () => {
     // different column cannot satisfy it.
     const [index] = await getDb().execute<{ indexdef: string }>(
       sql`select indexdef from pg_indexes
-          where tablename = 'isrc_registry' and indexname = 'isrc_registry_recording_mbid_idx'`
+          where tablename = 'isrc_registry' and indexname = 'isrc_registry_recording_mbid_idx'`,
     );
     expect(index?.indexdef ?? 'MISSING').toContain('(recording_mbid)');
   });
 });
-
 
 describe('identifyRecording — the credit arrives SEPARATED, and stays that way', () => {
   /**

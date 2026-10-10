@@ -94,7 +94,11 @@ export const AddToPlaylistSheet: React.FC<AddToPlaylistSheetProps> = ({
           icon={{ name: 'lock-closed-outline', size: 32 }}
           title={t('addToPlaylist.signInTitle')}
           subtitle={t('addToPlaylist.signInSubtitle')}
-          action={{ label: t('common.signIn'), onPress: () => openAccountDialog('signin'), icon: 'log-in-outline' }}
+          action={{
+            label: t('common.signIn'),
+            onPress: () => openAccountDialog('signin'),
+            icon: 'log-in-outline',
+          }}
           containerStyle={styles.stateContainer}
         />
       );
@@ -111,7 +115,9 @@ export const AddToPlaylistSheet: React.FC<AddToPlaylistSheetProps> = ({
           error={{
             title: t('addToPlaylist.loadError'),
             message: t('common.retryHint'),
-            onRetry: async () => { await playlistsQuery.refetch(); },
+            onRetry: async () => {
+              await playlistsQuery.refetch();
+            },
           }}
           containerStyle={styles.stateContainer}
         />
@@ -159,7 +165,11 @@ export const AddToPlaylistSheet: React.FC<AddToPlaylistSheetProps> = ({
                 <Text className="text-foreground" style={styles.rowTitle} numberOfLines={1}>
                   {playlist.name}
                 </Text>
-                <Text className="text-muted-foreground" style={styles.rowSubtitle} numberOfLines={1}>
+                <Text
+                  className="text-muted-foreground"
+                  style={styles.rowSubtitle}
+                  numberOfLines={1}
+                >
                   {playlist.trackCount} {playlist.trackCount === 1 ? 'song' : 'songs'}
                 </Text>
               </View>
@@ -185,7 +195,9 @@ export const AddToPlaylistSheet: React.FC<AddToPlaylistSheetProps> = ({
               accessibilityLabel={t('addToPlaylist.create')}
             >
               <Ionicons name="add" size={20} color={theme.colors.text} />
-              <Text className="text-foreground" style={styles.newButtonText}>{t('common.new')}</Text>
+              <Text className="text-foreground" style={styles.newButtonText}>
+                {t('common.new')}
+              </Text>
             </Pressable>
           )}
         </View>

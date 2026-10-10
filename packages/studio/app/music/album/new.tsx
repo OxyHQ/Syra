@@ -26,7 +26,15 @@ const ALBUM_TYPES: { value: AlbumType; label: string }[] = [
   { value: 'compilation', label: 'Compilation' },
 ];
 
-function TypeSelector({ value, onChange, disabled }: { value: AlbumType; onChange: (value: AlbumType) => void; disabled: boolean }) {
+function TypeSelector({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: AlbumType;
+  onChange: (value: AlbumType) => void;
+  disabled: boolean;
+}) {
   return (
     <View className="mb-4">
       <Text className="text-sm font-medium text-foreground mb-1.5">Type</Text>
@@ -43,7 +51,9 @@ function TypeSelector({ value, onChange, disabled }: { value: AlbumType; onChang
                 active ? 'border-primary bg-primary/10' : 'border-border bg-surface',
               )}
             >
-              <Text className={cn('text-sm font-semibold', active ? 'text-primary' : 'text-foreground')}>
+              <Text
+                className={cn('text-sm font-semibold', active ? 'text-primary' : 'text-foreground')}
+              >
                 {option.label}
               </Text>
             </Pressable>
@@ -54,7 +64,13 @@ function TypeSelector({ value, onChange, disabled }: { value: AlbumType; onChang
   );
 }
 
-function CreateAlbumForm({ artistId, uploadsDisabled }: { artistId: string; uploadsDisabled: boolean }) {
+function CreateAlbumForm({
+  artistId,
+  uploadsDisabled,
+}: {
+  artistId: string;
+  uploadsDisabled: boolean;
+}) {
   const router = useRouter();
   const theme = useTheme();
   const createAlbum = useCreateAlbum();
@@ -123,7 +139,11 @@ function CreateAlbumForm({ artistId, uploadsDisabled }: { artistId: string; uplo
   }, [title, releaseDate, coverArt, genres, label, type, explicit, artistId, createAlbum, router]);
 
   return (
-    <ScreenContainer title="Create album" subtitle="Group your tracks into a release" onBack={() => router.back()}>
+    <ScreenContainer
+      title="Create album"
+      subtitle="Group your tracks into a release"
+      onBack={() => router.back()}
+    >
       {uploadsDisabled ? (
         <View className="flex-row gap-3 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 mb-4">
           <MaterialCommunityIcons name="alert-circle" size={22} color={theme.colors.error} />
@@ -134,7 +154,13 @@ function CreateAlbumForm({ artistId, uploadsDisabled }: { artistId: string; uplo
       ) : null}
 
       <View className="items-center mb-6">
-        <CoverArtPicker value={coverArt} onChange={setCoverArt} size={180} disabled={busy} error={coverError} />
+        <CoverArtPicker
+          value={coverArt}
+          onChange={setCoverArt}
+          size={180}
+          disabled={busy}
+          error={coverError}
+        />
         <Text className="text-xs text-muted-foreground mt-2">Cover art (required)</Text>
       </View>
 
@@ -176,12 +202,21 @@ function CreateAlbumForm({ artistId, uploadsDisabled }: { artistId: string; uplo
       <View className="flex-row items-center justify-between rounded-xl border border-border bg-surface px-4 py-3 mb-6">
         <View className="flex-1 pr-3">
           <Text className="text-sm font-medium text-foreground">Explicit content</Text>
-          <Text className="text-xs text-muted-foreground mt-0.5">Marks this release as explicit.</Text>
+          <Text className="text-xs text-muted-foreground mt-0.5">
+            Marks this release as explicit.
+          </Text>
         </View>
         <Switch checked={explicit} onCheckedChange={setExplicit} disabled={busy} />
       </View>
 
-      <Button fullWidth onPress={onSubmit} loading={busy} disabled={busy || uploadsDisabled} tone="accent" appearance="solid">
+      <Button
+        fullWidth
+        onPress={onSubmit}
+        loading={busy}
+        disabled={busy || uploadsDisabled}
+        tone="accent"
+        appearance="solid"
+      >
         Create album
       </Button>
     </ScreenContainer>
@@ -208,11 +243,17 @@ function CreateAlbumGate() {
           <View className="w-16 h-16 rounded-2xl bg-primary/10 items-center justify-center mb-4">
             <MaterialCommunityIcons name="account-music" size={30} color={theme.colors.primary} />
           </View>
-          <Text className="text-lg font-semibold text-foreground mb-1">Register as an artist first</Text>
+          <Text className="text-lg font-semibold text-foreground mb-1">
+            Register as an artist first
+          </Text>
           <Text className="text-sm text-muted-foreground text-center mb-5 max-w-[360px]">
             Create your artist profile before creating albums.
           </Text>
-          <Button onPress={() => router.replace('/music/register')} tone="accent" appearance="solid">
+          <Button
+            onPress={() => router.replace('/music/register')}
+            tone="accent"
+            appearance="solid"
+          >
             Become an artist
           </Button>
         </View>

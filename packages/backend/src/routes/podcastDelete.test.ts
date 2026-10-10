@@ -163,15 +163,17 @@ interface ShowOptions {
 async function seedShow(options: ShowOptions = {}): Promise<string> {
   const id = uuidv7();
   suiteShowIds.add(id);
-  await getDb().insert(podcasts).values({
-    id,
-    title: 'Delete Show',
-    source: options.source ?? 'syra',
-    status: options.status ?? 'active',
-    ownerOxyUserId: options.owner === undefined ? OWNER : options.owner,
-    feedUrl: `https://feeds.example.invalid/${id}.xml`,
-    episodeCount: 0,
-  });
+  await getDb()
+    .insert(podcasts)
+    .values({
+      id,
+      title: 'Delete Show',
+      source: options.source ?? 'syra',
+      status: options.status ?? 'active',
+      ownerOxyUserId: options.owner === undefined ? OWNER : options.owner,
+      feedUrl: `https://feeds.example.invalid/${id}.xml`,
+      episodeCount: 0,
+    });
   return id;
 }
 
@@ -181,38 +183,44 @@ async function seedShow(options: ShowOptions = {}): Promise<string> {
  */
 async function seedEpisode(
   showId: string,
-  overrides: { readonly pubDate?: Date; readonly source?: 'syra' | 'rss' } = {}
+  overrides: { readonly pubDate?: Date; readonly source?: 'syra' | 'rss' } = {},
 ): Promise<string> {
   const id = uuidv7();
   const pubDate = overrides.pubDate ?? new Date();
 
-  await getDb().insert(episodesTable).values({
-    id,
-    podcastId: showId,
-    podcastTitle: 'Delete Show',
-    title: 'An Episode',
-    guid: id,
-    pubDate,
-    source: overrides.source ?? 'syra',
-    status: 'ready',
-    audioSourceUrl: `/api/podcasts/episodes/${id}/audio`,
-    audioSourceFormat: 'mp3',
-    hlsMasterKey: `hls/${showId}/${id}/master.m3u8`,
-  });
-  await getDb().insert(episodeHlsRenditions).values({
-    id: uuidv7(),
-    episodeId: id,
-    position: 0,
-    manifestKey: `hls/${showId}/${id}/96/index.m3u8`,
-    bitrateKbps: 96,
-    encrypted: true,
-  });
-  await getDb().insert(trackKeys).values({
-    id: uuidv7(),
-    episodeId: id,
-    keyHex: 'deadbeefdeadbeefdeadbeefdeadbeef',
-    keyUri: `/api/podcasts/episodes/${id}/key`,
-  });
+  await getDb()
+    .insert(episodesTable)
+    .values({
+      id,
+      podcastId: showId,
+      podcastTitle: 'Delete Show',
+      title: 'An Episode',
+      guid: id,
+      pubDate,
+      source: overrides.source ?? 'syra',
+      status: 'ready',
+      audioSourceUrl: `/api/podcasts/episodes/${id}/audio`,
+      audioSourceFormat: 'mp3',
+      hlsMasterKey: `hls/${showId}/${id}/master.m3u8`,
+    });
+  await getDb()
+    .insert(episodeHlsRenditions)
+    .values({
+      id: uuidv7(),
+      episodeId: id,
+      position: 0,
+      manifestKey: `hls/${showId}/${id}/96/index.m3u8`,
+      bitrateKbps: 96,
+      encrypted: true,
+    });
+  await getDb()
+    .insert(trackKeys)
+    .values({
+      id: uuidv7(),
+      episodeId: id,
+      keyHex: 'deadbeefdeadbeefdeadbeefdeadbeef',
+      keyUri: `/api/podcasts/episodes/${id}/key`,
+    });
 
   const [show] = await getDb()
     .select({ count: podcasts.episodeCount })
@@ -230,7 +238,7 @@ function request(
   path: string,
   method: string,
   viewer?: string,
-  headers: Record<string, string> = {}
+  headers: Record<string, string> = {},
 ): Promise<Response> {
   return fetch(`${baseUrl}${path}`, {
     method,
@@ -242,8 +250,12 @@ const showExists = async (id: string): Promise<boolean> =>
   (await getDb().select({ id: podcasts.id }).from(podcasts).where(eq(podcasts.id, id))).length > 0;
 
 const episodeExists = async (id: string): Promise<boolean> =>
-  (await getDb().select({ id: episodesTable.id }).from(episodesTable).where(eq(episodesTable.id, id)))
-    .length > 0;
+  (
+    await getDb()
+      .select({ id: episodesTable.id })
+      .from(episodesTable)
+      .where(eq(episodesTable.id, id))
+  ).length > 0;
 
 /** Every S3 call the handler made, so "it touched storage at all" is one check. */
 const touchedStorage = (): number => deletedKeys.length + deletedPrefixes.length;
@@ -266,12 +278,14 @@ describe('DELETE /api/podcasts/:id', () => {
       episodeId,
       positionSec: 42,
     });
-    await getDb().insert(episodeIngestTickets).values({
-      id: uuidv7(),
-      jti: uuidv7(),
-      episodeId,
-      expiresAt: new Date(Date.now() + 86_400_000),
-    });
+    await getDb()
+      .insert(episodeIngestTickets)
+      .values({
+        id: uuidv7(),
+        jti: uuidv7(),
+        episodeId,
+        expiresAt: new Date(Date.now() + 86_400_000),
+      });
 
     const response = await request(`/api/podcasts/${showId}`, 'DELETE', OWNER);
     expect(response.status).toBe(200);
@@ -283,16 +297,16 @@ describe('DELETE /api/podcasts/:id', () => {
     // hold OTHER people's rows.
     expect(
       (await getDb().select().from(userPodcastSubscriptions)).length,
-      'every subscriber\'s subscription'
+      "every subscriber's subscription",
     ).toBe(0);
     expect(
       (await getDb().select().from(episodeProgress)).length,
-      'every listener\'s saved position'
+      "every listener's saved position",
     ).toBe(0);
     expect((await getDb().select().from(trackKeys)).length, 'the AES keys').toBe(0);
     expect(
       (await getDb().select().from(episodeIngestTickets)).length,
-      'any outstanding ingest capability'
+      'any outstanding ingest capability',
     ).toBe(0);
     expect((await getDb().select().from(episodeHlsRenditions)).length, 'the HLS ladder').toBe(0);
   });
@@ -463,7 +477,7 @@ describe('DELETE /api/episodes/:id', () => {
     expect(deletedPrefixes, 'never the whole show').not.toContain(`hls/${showId}/`);
     expect(
       deletedKeys.concat(deletedPrefixes).some((target) => target.includes(older)),
-      "nothing belonging to the sibling episode"
+      'nothing belonging to the sibling episode',
     ).toBe(false);
 
     /**
@@ -476,7 +490,7 @@ describe('DELETE /api/episodes/:id', () => {
      * object through its `podcasts/audio/{showId}/` sweep and hid the gap.
      */
     expect(deletedKeys, 'the source audio is not under the HLS prefix').toContain(
-      `podcasts/audio/${showId}/${newer}.mp3`
+      `podcasts/audio/${showId}/${newer}.mp3`,
     );
   });
 
@@ -502,7 +516,7 @@ describe('DELETE /api/episodes/:id', () => {
     // `last_episode_at` cannot be decremented — deleting the newest has to find
     // the next newest, which is the older episode's date.
     expect(after?.last?.toISOString(), 'moves back to the next newest').toBe(
-      '2026-01-01T00:00:00.000Z'
+      '2026-01-01T00:00:00.000Z',
     );
   });
 
@@ -611,7 +625,7 @@ describe('the delete responses match the schemas @syra.fm/sdk parses them with',
      * instead of three all fail here.
      */
     expect(`objectsDeleted: ${parsed.objectsDeleted}`).toBe(
-      `objectsDeleted: ${3 * OBJECTS_PER_SWEPT_PREFIX}`
+      `objectsDeleted: ${3 * OBJECTS_PER_SWEPT_PREFIX}`,
     );
     expect(`trees swept: ${deletedPrefixes.length}`).toBe('trees swept: 3');
 
@@ -654,18 +668,14 @@ describe('the delete responses match the schemas @syra.fm/sdk parses them with',
      * is what tells the two apart.
      */
     expect(`objectsDeleted: ${parsed.objectsDeleted}`).toBe(
-      `objectsDeleted: ${OBJECTS_PER_SWEPT_PREFIX + 1}`
+      `objectsDeleted: ${OBJECTS_PER_SWEPT_PREFIX + 1}`,
     );
     expect(`trees swept: ${deletedPrefixes.length}`).toBe('trees swept: 1');
     expect(`swept the episode's own directory: ${deletedPrefixes[0]}`).toBe(
-      `swept the episode's own directory: hls/${showId}/${episodeId}/`
+      `swept the episode's own directory: hls/${showId}/${episodeId}/`,
     );
 
-    expect(Object.keys(body.data as object).sort()).toEqual([
-      'id',
-      'objectsDeleted',
-      'podcastId',
-    ]);
+    expect(Object.keys(body.data as object).sort()).toEqual(['id', 'objectsDeleted', 'podcastId']);
   });
 
   it('leaves the cover artwork behind — the one thing a show delete does NOT reclaim', async () => {
@@ -687,15 +697,15 @@ describe('the delete responses match the schemas @syra.fm/sdk parses them with',
     await request(`/api/podcasts/${showId}`, 'DELETE', OWNER);
 
     expect(`swept an images/ tree: ${deletedPrefixes.some((p) => p.startsWith('images/'))}`).toBe(
-      'swept an images/ tree: false'
+      'swept an images/ tree: false',
     );
     expect(`deleted an images/ object: ${deletedKeys.some((k) => k.startsWith('images/'))}`).toBe(
-      'deleted an images/ object: false'
+      'deleted an images/ object: false',
     );
     // The positive control: the audio trees WERE swept, so "no images/ prefix"
     // is not just this delete having touched nothing at all.
-    expect(`swept the audio tree: ${deletedPrefixes.some((p) => p.startsWith('podcasts/audio/'))}`).toBe(
-      'swept the audio tree: true'
-    );
+    expect(
+      `swept the audio tree: ${deletedPrefixes.some((p) => p.startsWith('podcasts/audio/'))}`,
+    ).toBe('swept the audio tree: true');
   });
 });

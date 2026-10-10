@@ -17,7 +17,12 @@ export const MobileBottomNav: React.FC = () => {
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
 
-  const tabs: { name: string; icon: MaterialCommunityIconName; iconOutline: MaterialCommunityIconName; route: '/' | '/search' | '/live' | '/podcasts' | '/library' }[] = [
+  const tabs: {
+    name: string;
+    icon: MaterialCommunityIconName;
+    iconOutline: MaterialCommunityIconName;
+    route: '/' | '/search' | '/live' | '/podcasts' | '/library';
+  }[] = [
     {
       name: 'Home',
       icon: 'home',
@@ -61,29 +66,28 @@ export const MobileBottomNav: React.FC = () => {
     <LinearGradient
       colors={['transparent', '#000000']}
       locations={[0, 1]}
-      style={[styles.container, { 
-        paddingBottom: Platform.OS === 'web' ? 8 : 8 + insets.bottom,
-        height: 60 + (Platform.OS === 'web' ? 8 : 8 + insets.bottom),
-      }]}
+      style={[
+        styles.container,
+        {
+          paddingBottom: Platform.OS === 'web' ? 8 : 8 + insets.bottom,
+          height: 60 + (Platform.OS === 'web' ? 8 : 8 + insets.bottom),
+        },
+      ]}
     >
       {tabs.map((tab) => {
         const active = isActive(tab.route);
         return (
-          <Pressable
-            key={tab.route}
-            onPress={() => router.push(tab.route)}
-            style={styles.tab}
-          >
+          <Pressable key={tab.route} onPress={() => router.push(tab.route)} style={styles.tab}>
             <MaterialCommunityIcons
               name={active ? tab.icon : tab.iconOutline}
               size={24}
-              color={active ? "#FFFFFF" : "#999999"}
+              color={active ? '#FFFFFF' : '#999999'}
             />
             <Text
               style={[
                 styles.tabLabel,
                 {
-                  color: active ? "#FFFFFF" : "#999999",
+                  color: active ? '#FFFFFF' : '#999999',
                 },
               ]}
             >

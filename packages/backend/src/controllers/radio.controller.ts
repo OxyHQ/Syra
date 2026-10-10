@@ -13,7 +13,11 @@ import {
 } from '@syra/shared-types';
 import { findMusicPreferences } from '../db/user/musicPreferences';
 import { PREVIEW_DURATION_SEC } from '../services/ingest/previewClip';
-import { decodeRadioCursor, encodeRadioCursor, RADIO_CURSOR_VERSION } from '../services/radio/radioCursor';
+import {
+  decodeRadioCursor,
+  encodeRadioCursor,
+  RADIO_CURSOR_VERSION,
+} from '../services/radio/radioCursor';
 import { buildRadioPage } from '../services/radio/radioPools';
 import { loadRadioTaste, resolveRadioSeed, type SeedResolution } from '../services/radio/radioSeed';
 import {
@@ -92,8 +96,9 @@ const radioPageQuerySchema = z
     path: ['seedType'],
   })
   .refine(
-    (value) => value.cursor !== undefined || value.seedType === 'user' || value.seedId !== undefined,
-    { message: 'seedId is required for this seedType', path: ['seedId'] }
+    (value) =>
+      value.cursor !== undefined || value.seedType === 'user' || value.seedId !== undefined,
+    { message: 'seedId is required for this seedType', path: ['seedId'] },
   );
 
 const radioClearQuerySchema = z
@@ -158,7 +163,7 @@ function resolveListener(req: AuthRequest): RadioListener {
 function toStation(
   seed: SeedResolution,
   identity: RadioStationIdentity,
-  state: RadioStationState
+  state: RadioStationState,
 ): RadioStation {
   return {
     seedType: identity.seedType,
@@ -243,7 +248,7 @@ export const getRadioPage = async (req: AuthRequest, res: Response, next: NextFu
       requested = {
         seedType: parsed.data.seedType,
         // A personalised station is seeded by the listener, so it points at nothing.
-        seedId: parsed.data.seedType === 'user' ? '' : parsed.data.seedId ?? '',
+        seedId: parsed.data.seedType === 'user' ? '' : (parsed.data.seedId ?? ''),
         page: 0,
       };
     } else {
@@ -260,7 +265,10 @@ export const getRadioPage = async (req: AuthRequest, res: Response, next: NextFu
 
     const [state, seed] = await Promise.all([
       readRadioStation(identity),
-      resolveRadioSeed({ seedType: requested.seedType, seedId: requested.seedId }, listener.oxyUserId),
+      resolveRadioSeed(
+        { seedType: requested.seedType, seedId: requested.seedId },
+        listener.oxyUserId,
+      ),
     ]);
 
     if (!seed) {
@@ -296,9 +304,7 @@ export const getRadioPage = async (req: AuthRequest, res: Response, next: NextFu
 
     const [taste, preferences] = await Promise.all([
       loadRadioTaste(listener.oxyUserId),
-      listener.oxyUserId
-        ? findMusicPreferences(listener.oxyUserId)
-        : Promise.resolve(undefined),
+      listener.oxyUserId ? findMusicPreferences(listener.oxyUserId) : Promise.resolve(undefined),
     ]);
 
     const result = await buildRadioPage({
@@ -359,7 +365,7 @@ export const clearRadio = async (req: AuthRequest, res: Response, next: NextFunc
     const listener = resolveListener(req);
     await clearRadioStation({
       seedType: parsed.data.seedType,
-      seedId: parsed.data.seedType === 'user' ? '' : parsed.data.seedId ?? '',
+      seedId: parsed.data.seedType === 'user' ? '' : (parsed.data.seedId ?? ''),
       ownerKey: listener.ownerKey,
     });
 

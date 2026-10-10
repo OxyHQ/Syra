@@ -4,7 +4,10 @@ import { useMediaQuery } from 'react-responsive';
 import { useUIStore } from '@/stores/uiStore';
 import { useLibraryCollections } from '@/hooks/useLibraryCollections';
 import { LibrarySidebarCollapsed } from './LibrarySidebar/LibrarySidebarCollapsed';
-import { LibrarySidebarExpanded, type LibraryFilter } from './LibrarySidebar/LibrarySidebarExpanded';
+import {
+  LibrarySidebarExpanded,
+  type LibraryFilter,
+} from './LibrarySidebar/LibrarySidebarExpanded';
 
 /**
  * Library Sidebar Component
@@ -47,7 +50,7 @@ export const LibrarySidebar: React.FC = () => {
   return (
     <View className="flex-1 h-full web:overflow-y-auto">
       {!isLibrarySidebarExpanded ? (
-        <LibrarySidebarCollapsed 
+        <LibrarySidebarCollapsed
           onExpand={() => setLibrarySidebarExpanded(true)}
           playlists={playlists}
           savedAlbums={savedAlbums}

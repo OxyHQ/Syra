@@ -113,15 +113,23 @@ async function withManifestKeys(
     hlsMasterKey: string | null;
     cacheObjectKey: string | null;
     cacheHlsMasterKey: string | null;
-  }[]
+  }[],
 ): Promise<EpisodeStorageRef[]> {
   if (rows.length === 0) return [];
 
   const manifests = new Map<string, string[]>();
   const renditions = await getDb()
-    .select({ episodeId: episodeHlsRenditions.episodeId, manifestKey: episodeHlsRenditions.manifestKey })
+    .select({
+      episodeId: episodeHlsRenditions.episodeId,
+      manifestKey: episodeHlsRenditions.manifestKey,
+    })
     .from(episodeHlsRenditions)
-    .where(inArray(episodeHlsRenditions.episodeId, rows.map((row) => row.id)));
+    .where(
+      inArray(
+        episodeHlsRenditions.episodeId,
+        rows.map((row) => row.id),
+      ),
+    );
 
   for (const rendition of renditions) {
     const existing = manifests.get(rendition.episodeId);
@@ -134,9 +142,12 @@ async function withManifestKeys(
 
 /** Where ONE episode's bytes are, or undefined when no such episode exists. */
 export async function findEpisodeStorageRef(
-  episodeId: string
+  episodeId: string,
 ): Promise<EpisodeStorageRef | undefined> {
-  const rows = await getDb().select(STORAGE_COLUMNS).from(episodes).where(eq(episodes.id, episodeId));
+  const rows = await getDb()
+    .select(STORAGE_COLUMNS)
+    .from(episodes)
+    .where(eq(episodes.id, episodeId));
   const [ref] = await withManifestKeys(rows);
   return ref;
 }
@@ -149,7 +160,7 @@ export async function findEpisodeStorageRef(
  * after the row naming it is gone — with nothing able to find it again.
  */
 export async function findEpisodeStorageRefsByShow(
-  podcastId: string
+  podcastId: string,
 ): Promise<EpisodeStorageRef[]> {
   const rows = await getDb()
     .select(STORAGE_COLUMNS)

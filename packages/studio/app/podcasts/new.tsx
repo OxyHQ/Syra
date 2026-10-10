@@ -18,7 +18,13 @@ const TYPES: { value: PodcastType; label: string; hint: string }[] = [
   { value: 'serial', label: 'Serial', hint: 'Meant to be heard in order' },
 ];
 
-function TypeSelector({ value, onChange }: { value: PodcastType; onChange: (value: PodcastType) => void }) {
+function TypeSelector({
+  value,
+  onChange,
+}: {
+  value: PodcastType;
+  onChange: (value: PodcastType) => void;
+}) {
   return (
     <View className="mb-4">
       <Text className="text-sm font-medium text-foreground mb-1.5">Podcast type</Text>
@@ -34,7 +40,9 @@ function TypeSelector({ value, onChange }: { value: PodcastType; onChange: (valu
                 active ? 'border-primary bg-primary/10' : 'border-border bg-surface',
               )}
             >
-              <Text className={cn('text-sm font-semibold', active ? 'text-primary' : 'text-foreground')}>
+              <Text
+                className={cn('text-sm font-semibold', active ? 'text-primary' : 'text-foreground')}
+              >
                 {option.label}
               </Text>
               <Text className="text-xs text-muted-foreground mt-0.5">{option.hint}</Text>
@@ -102,10 +110,26 @@ function CreateShowForm() {
         toast.error('Could not create the podcast. Please try again.');
       }
     }
-  }, [title, description, author, image, language, categories, explicit, type, hostsGuests, createPodcast, router]);
+  }, [
+    title,
+    description,
+    author,
+    image,
+    language,
+    categories,
+    explicit,
+    type,
+    hostsGuests,
+    createPodcast,
+    router,
+  ]);
 
   return (
-    <ScreenContainer title="New podcast" subtitle="Create a Syra-hosted podcast" onBack={() => router.back()}>
+    <ScreenContainer
+      title="New podcast"
+      subtitle="Create a Syra-hosted podcast"
+      onBack={() => router.back()}
+    >
       <FormField
         label="Title"
         placeholder="My amazing podcast"
@@ -162,11 +186,20 @@ function CreateShowForm() {
       <View className="flex-row items-center justify-between rounded-xl border border-border bg-surface px-4 py-3 mb-6">
         <View className="flex-1 pr-3">
           <Text className="text-sm font-medium text-foreground">Explicit content</Text>
-          <Text className="text-xs text-muted-foreground mt-0.5">Marks the feed as explicit in directories.</Text>
+          <Text className="text-xs text-muted-foreground mt-0.5">
+            Marks the feed as explicit in directories.
+          </Text>
         </View>
         <Switch checked={explicit} onCheckedChange={setExplicit} />
       </View>
-      <Button fullWidth onPress={onSubmit} loading={createPodcast.isPending} disabled={createPodcast.isPending} tone="accent" appearance="solid">
+      <Button
+        fullWidth
+        onPress={onSubmit}
+        loading={createPodcast.isPending}
+        disabled={createPodcast.isPending}
+        tone="accent"
+        appearance="solid"
+      >
         Create show
       </Button>
     </ScreenContainer>

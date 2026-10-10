@@ -24,7 +24,7 @@ export function performanceMiddleware(req: Request, res: Response, next: NextFun
 
   // Override res.end to capture response time
   const originalEnd = res.end.bind(res);
-  res.end = function(chunk?: any, encoding?: any, cb?: () => void): Response {
+  res.end = function (chunk?: any, encoding?: any, cb?: () => void): Response {
     const responseTime = Date.now() - startTime;
     const statusCode = res.statusCode;
 
@@ -77,14 +77,14 @@ export function getPerformanceStats() {
     };
   }
 
-  const responseTimes = metrics.map(m => m.responseTime).sort((a, b) => a - b);
+  const responseTimes = metrics.map((m) => m.responseTime).sort((a, b) => a - b);
   const totalRequests = metrics.length;
   const averageResponseTime = responseTimes.reduce((a, b) => a + b, 0) / totalRequests;
   const p50 = responseTimes[Math.floor(totalRequests * 0.5)];
   const p95 = responseTimes[Math.floor(totalRequests * 0.95)];
   const p99 = responseTimes[Math.floor(totalRequests * 0.99)];
-  const slowRequests = metrics.filter(m => m.responseTime > 1000).length;
-  const errorRequests = metrics.filter(m => m.statusCode >= 400).length;
+  const slowRequests = metrics.filter((m) => m.responseTime > 1000).length;
+  const errorRequests = metrics.filter((m) => m.statusCode >= 400).length;
   const errorRate = (errorRequests / totalRequests) * 100;
 
   return {
@@ -104,7 +104,7 @@ export function getPerformanceStats() {
 export function getMetricsByEndpoint() {
   const endpointMap = new Map<string, { count: number; totalTime: number; errors: number }>();
 
-  metrics.forEach(metric => {
+  metrics.forEach((metric) => {
     const key = `${metric.method} ${metric.path}`;
     const existing = endpointMap.get(key) || { count: 0, totalTime: 0, errors: 0 };
     existing.count++;
@@ -140,4 +140,3 @@ export function getMetricsByEndpoint() {
 export function clearMetrics(): void {
   metrics.length = 0;
 }
-

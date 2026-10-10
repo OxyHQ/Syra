@@ -1,6 +1,19 @@
 import type { Queue, PlayableItem } from '@syra/shared-types';
 import { moveQueueOccurrence, removeQueueOccurrence } from './queue-occurrences';
-const item = (id: string): PlayableItem => ({ kind: 'track', id, title: id, artistId: 'artist', artistName: 'Artist', duration: 100, isExplicit: false, isAvailable: true, source: 'upload', status: 'ready', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' });
+const item = (id: string): PlayableItem => ({
+  kind: 'track',
+  id,
+  title: id,
+  artistId: 'artist',
+  artistName: 'Artist',
+  duration: 100,
+  isExplicit: false,
+  isAvailable: true,
+  source: 'upload',
+  status: 'ready',
+  createdAt: '2026-01-01T00:00:00Z',
+  updatedAt: '2026-01-01T00:00:00Z',
+});
 describe('queue occurrences', () => {
   it('moves the selected duplicate without jumping to the first occurrence', () => {
     const queue: Queue = { current: 2, tracks: [item('same'), item('other'), item('same')] };

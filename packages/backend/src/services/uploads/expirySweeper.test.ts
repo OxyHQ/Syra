@@ -7,7 +7,11 @@ import { userUploadHlsRenditions, userUploads } from '../../db/schema/creators';
 import { trackKeys } from '../../db/schema/trackKeys';
 import type { UploadStorageRef } from '../../db/creators/uploads';
 import { deleteUploadStoredObjects } from '../compliance/takedown';
-import { getS3LockerAudioKey, getS3LockerHlsKey, getS3LockerHlsPrefix } from '../../config/s3.config';
+import {
+  getS3LockerAudioKey,
+  getS3LockerHlsKey,
+  getS3LockerHlsPrefix,
+} from '../../config/s3.config';
 import {
   computeUploadExpiry,
   recordUploadPlay,
@@ -31,7 +35,7 @@ const at = (offsetDays: number): Date => new Date(T0.getTime() + offsetDays * DA
 let shaCounter = 0;
 
 async function seedUpload(
-  overrides: Partial<typeof userUploads.$inferInsert> = {}
+  overrides: Partial<typeof userUploads.$inferInsert> = {},
 ): Promise<{ id: string }> {
   shaCounter += 1;
   const [upload] = await getDb()
@@ -331,7 +335,7 @@ describe('expiry sweep — T+30d hard delete', () => {
     expect(result.uploadsHardDeleted).toBe(1);
     expect(await reload(upload.id)).toBeUndefined();
     expect(
-      await getDb().select().from(trackKeys).where(eq(trackKeys.userUploadId, upload.id))
+      await getDb().select().from(trackKeys).where(eq(trackKeys.userUploadId, upload.id)),
     ).toEqual([]);
   });
 
@@ -366,29 +370,33 @@ describe('expiry sweep — T+30d hard delete', () => {
     const uploadId = uuidv7();
     const audioKey = getS3LockerAudioKey(ownerOxyUserId, uploadId, 'mp3');
 
-    await getDb().insert(userUploads).values({
-      id: uploadId,
-      ownerOxyUserId,
-      title: 'Expired',
-      duration: 210,
-      sizeBytes: 1024,
-      sha256: 'e'.repeat(64),
-      status: 'ready',
-      audioSourceKey: audioKey,
-      audioSourceFormat: 'mp3',
-      hlsMasterKey: getS3LockerHlsKey(ownerOxyUserId, uploadId, 'master.m3u8'),
-      expiresAt: at(-HARD_DELETE_GRACE_DAYS - 1),
-      deletedAt: at(-HARD_DELETE_GRACE_DAYS - 1),
-    });
+    await getDb()
+      .insert(userUploads)
+      .values({
+        id: uploadId,
+        ownerOxyUserId,
+        title: 'Expired',
+        duration: 210,
+        sizeBytes: 1024,
+        sha256: 'e'.repeat(64),
+        status: 'ready',
+        audioSourceKey: audioKey,
+        audioSourceFormat: 'mp3',
+        hlsMasterKey: getS3LockerHlsKey(ownerOxyUserId, uploadId, 'master.m3u8'),
+        expiresAt: at(-HARD_DELETE_GRACE_DAYS - 1),
+        deletedAt: at(-HARD_DELETE_GRACE_DAYS - 1),
+      });
     // The ladder is a child table, so the manifest the purge has to find is a
     // second insert rather than an embedded array on the row above.
-    await getDb().insert(userUploadHlsRenditions).values({
-      userUploadId: uploadId,
-      position: 0,
-      manifestKey: getS3LockerHlsKey(ownerOxyUserId, uploadId, '160/index.m3u8'),
-      bitrateKbps: 160,
-      encrypted: true,
-    });
+    await getDb()
+      .insert(userUploadHlsRenditions)
+      .values({
+        userUploadId: uploadId,
+        position: 0,
+        manifestKey: getS3LockerHlsKey(ownerOxyUserId, uploadId, '160/index.m3u8'),
+        bitrateKbps: 160,
+        encrypted: true,
+      });
 
     const objectDeletes: string[] = [];
     const prefixDeletes: string[] = [];
@@ -396,8 +404,13 @@ describe('expiry sweep — T+30d hard delete', () => {
     const result = await sweepAt(T0, {
       deleteObjects: (upload) =>
         deleteUploadStoredObjects(upload, {
-          deleteObject: async (key) => { objectDeletes.push(key); },
-          deletePrefix: async (prefix) => { prefixDeletes.push(prefix); return 3; },
+          deleteObject: async (key) => {
+            objectDeletes.push(key);
+          },
+          deletePrefix: async (prefix) => {
+            prefixDeletes.push(prefix);
+            return 3;
+          },
         }),
     });
 
@@ -424,26 +437,31 @@ describe('expiry sweep — T+30d hard delete', () => {
     const ownerOxyUserId = 'oxy-owner';
     const uploadId = uuidv7();
 
-    await getDb().insert(userUploads).values({
-      id: uploadId,
-      ownerOxyUserId,
-      title: 'Never transcoded',
-      duration: 210,
-      sizeBytes: 1024,
-      sha256: 'd'.repeat(64),
-      status: 'failed',
-      audioSourceKey: getS3LockerAudioKey(ownerOxyUserId, uploadId, 'mp3'),
-      audioSourceFormat: 'mp3',
-      expiresAt: at(-HARD_DELETE_GRACE_DAYS - 1),
-      deletedAt: at(-HARD_DELETE_GRACE_DAYS - 1),
-    });
+    await getDb()
+      .insert(userUploads)
+      .values({
+        id: uploadId,
+        ownerOxyUserId,
+        title: 'Never transcoded',
+        duration: 210,
+        sizeBytes: 1024,
+        sha256: 'd'.repeat(64),
+        status: 'failed',
+        audioSourceKey: getS3LockerAudioKey(ownerOxyUserId, uploadId, 'mp3'),
+        audioSourceFormat: 'mp3',
+        expiresAt: at(-HARD_DELETE_GRACE_DAYS - 1),
+        deletedAt: at(-HARD_DELETE_GRACE_DAYS - 1),
+      });
 
     const prefixDeletes: string[] = [];
     await sweepAt(T0, {
       deleteObjects: (upload) =>
         deleteUploadStoredObjects(upload, {
           deleteObject: async () => undefined,
-          deletePrefix: async (prefix) => { prefixDeletes.push(prefix); return 1; },
+          deletePrefix: async (prefix) => {
+            prefixDeletes.push(prefix);
+            return 1;
+          },
         }),
     });
 

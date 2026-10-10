@@ -67,7 +67,9 @@ export async function recount(artistId: string): Promise<void> {
     .from(catalogEntities)
     .where(eq(catalogEntities.id, artistId))
     .limit(1);
-  logger.info(`Recounted "${artist.name}": ${after?.tracks ?? 0} track(s), ${after?.albums ?? 0} album(s)`);
+  logger.info(
+    `Recounted "${artist.name}": ${after?.tracks ?? 0} track(s), ${after?.albums ?? 0} album(s)`,
+  );
 }
 
 /**
@@ -100,7 +102,7 @@ export async function link(name: string): Promise<void> {
   if (!artist) {
     throw new Error(
       `No artist with name key "${nameKey}". Create it first — this mode links ` +
-        'credits to an artist that exists, it does not invent one.'
+        'credits to an artist that exists, it does not invent one.',
     );
   }
 

@@ -32,7 +32,9 @@ import { splitArtistCredit } from './artistNames';
  * once. The type is taken with an explicit import-resolution mode so the
  * type-only reference does not itself trip TS1542.
  */
-type MusicMetadataModule = typeof import('music-metadata', { with: { 'resolution-mode': 'import' } });
+type MusicMetadataModule = typeof import('music-metadata', { with: {
+  'resolution-mode': 'import',
+}});
 
 let musicMetadataModule: Promise<MusicMetadataModule> | undefined;
 
@@ -265,7 +267,9 @@ function renderTagValue(value: unknown): string {
   return JSON.stringify(value);
 }
 
-function collectNativeTags(native: Record<string, Array<{ id: string; value: unknown }>>): NativeTag[] {
+function collectNativeTags(
+  native: Record<string, Array<{ id: string; value: unknown }>>,
+): NativeTag[] {
   const tags: NativeTag[] = [];
   for (const [tagType, entries] of Object.entries(native)) {
     for (const entry of entries) {

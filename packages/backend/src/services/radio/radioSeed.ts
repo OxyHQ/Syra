@@ -101,8 +101,9 @@ function distinct(values: (string | null | undefined)[]): string[] {
 
 /** "deep house" → "Deep House", for genre/mood station titles. */
 function toTitleCase(value: string): string {
-  return value.replace(/(^|\s)([a-z])/g, (_match, boundary: string, letter: string) =>
-    `${boundary}${letter.toUpperCase()}`
+  return value.replace(
+    /(^|\s)([a-z])/g,
+    (_match, boundary: string, letter: string) => `${boundary}${letter.toUpperCase()}`,
   );
 }
 
@@ -132,7 +133,7 @@ async function anyPlayableTrackWith(condition: ReturnType<typeof eq>): Promise<b
  */
 export async function resolveRadioSeed(
   seed: RadioSeed,
-  oxyUserId: string | undefined
+  oxyUserId: string | undefined,
 ): Promise<SeedResolution | null> {
   switch (seed.seedType) {
     case 'track':
@@ -263,7 +264,7 @@ async function resolveAlbumSeed(seedId: string): Promise<SeedResolution | null> 
 
 async function resolvePlaylistSeed(
   seedId: string,
-  oxyUserId: string | undefined
+  oxyUserId: string | undefined,
 ): Promise<SeedResolution | null> {
   const [playlist] = await getDb()
     .select({
@@ -294,7 +295,7 @@ async function resolvePlaylistSeed(
       ownerOxyUserId: playlist.ownerOxyUserId,
       collaboratorOxyUserIds: collaborators.map((entry) => entry.oxyUserId),
     },
-    oxyUserId
+    oxyUserId,
   );
   if (!viewable) return null;
 
@@ -312,7 +313,7 @@ async function resolvePlaylistSeed(
           .select(SEED_TRACK_COLUMNS)
           .from(tracks)
           .where(and(inArray(tracks.id, orderedIds), playableTrackFilter())),
-        orderedIds
+        orderedIds,
       )
     : [];
 

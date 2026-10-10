@@ -144,8 +144,9 @@ function authedListingSql(): string {
   // `inArray` as `id in ($2, $3, … $N)`, never `= ANY($2::text[])`, so there is
   // no array case to handle. An earlier version carried a branch for one; it was
   // dead, and a dead branch here reads as evidence that the other form occurs.
-  return query.sql.replace(/\$(\d+)/g, (_match, index) =>
-    `'${String(query.params[Number(index) - 1])}'`
+  return query.sql.replace(
+    /\$(\d+)/g,
+    (_match, index) => `'${String(query.params[Number(index) - 1])}'`,
   );
 }
 
@@ -491,7 +492,9 @@ async function seed(tx: Tx): Promise<void> {
    * `hiddenHouseIds` has a real mix to narrow rather than one value repeated.
    * One in nine is hidden and one in five is members-only.
    */
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into houses (id, name, description, created_by,
                         visibility_discovery, visibility_rooms, visibility_join, created_at)
     select '${MARKER}-h-' || g,
@@ -502,7 +505,8 @@ async function seed(tx: Tx): Promise<void> {
            case when g % 5 = 0 then 'members' else 'anyone' end,
            case when g % 3 = 0 then 'anyone' else 'invite' end,
            now() - (g || ' seconds')::interval
-    from generate_series(1, ${SEEDED_HOUSES}) g`));
+    from generate_series(1, ${SEEDED_HOUSES}) g`),
+  );
 
   /**
    * The roster. ONE IN SEVEN membership rows goes to the probed user, for the
@@ -515,7 +519,9 @@ async function seed(tx: Tx): Promise<void> {
    * users stepping by a modulus coprime to the house count; the probed user gets
    * a distinct house each time rather than colliding on one.
    */
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into house_members (id, house_id, oxy_user_id, role, joined_at)
     select '${MARKER}-hm-' || g,
            '${MARKER}-h-' || (1 + (g % ${SEEDED_HOUSES})),
@@ -524,9 +530,12 @@ async function seed(tx: Tx): Promise<void> {
            case when g % 13 = 0 then 'owner' when g % 5 = 0 then 'admin' else 'member' end,
            now() - (g || ' seconds')::interval
     from generate_series(1, ${SEEDED_MEMBERS}) g
-    on conflict do nothing`));
+    on conflict do nothing`),
+  );
 
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into series (id, title, house_id, created_by, recurrence_type, recurrence_time,
                         recurrence_timezone, room_template_title_pattern, room_template_type,
                         next_episode_number, is_active, created_at)
@@ -539,7 +548,8 @@ async function seed(tx: Tx): Promise<void> {
            '18:00', 'UTC', 'Episode {n}', 'talk', 1,
            case when g % 6 = 0 then false else true end,
            now() - (g || ' seconds')::interval
-    from generate_series(1, ${SEEDED_SERIES}) g`));
+    from generate_series(1, ${SEEDED_SERIES}) g`),
+  );
 
   /**
    * The rooms, with every dimension the probes narrow on actually varying.
@@ -551,7 +561,9 @@ async function seed(tx: Tx): Promise<void> {
    * `active_ingress_id` is set on one room in 40, matching the real shape the
    * partial `rooms_active_ingress_id_idx` was built for.
    */
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into rooms (id, title, owner_type, host, house_id, type, broadcast_kind, status,
                        speaker_permission, participants, speakers, max_participants,
                        tags, archived, series_id, active_ingress_id, stream_image, created_at)
@@ -575,9 +587,12 @@ async function seed(tx: Tx): Promise<void> {
            case when g % 40 = 0 then '${MARKER}-ing-' || g else null end,
            'https://cdn.example/img-' || g || '.jpg',
            now() - (g || ' seconds')::interval
-    from generate_series(1, ${SEEDED_ROOMS}) g`));
+    from generate_series(1, ${SEEDED_ROOMS}) g`),
+  );
 
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into series_episodes (id, series_id, position, room_id, scheduled_start, episode_number)
     select '${MARKER}-se-' || g,
            case when g % 7 = 0 then '${MARKER}-s-7'
@@ -586,7 +601,8 @@ async function seed(tx: Tx): Promise<void> {
            case when g % 7 = 0 then '${MARKER}-r-7'
                 else '${MARKER}-r-' || (1 + (g % ${SEEDED_ROOMS})) end,
            now() - (g || ' seconds')::interval, 1 + (g % 50)
-    from generate_series(1, ${SEEDED_EPISODES}) g`));
+    from generate_series(1, ${SEEDED_EPISODES}) g`),
+  );
 
   /**
    * Recordings. Status varies across all five values so
@@ -594,7 +610,9 @@ async function seed(tx: Tx): Promise<void> {
    * one in six is participants-only so the GIN containment probe is not the
    * whole table. `participant_ids` puts the probed user on one row in seven.
    */
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into recordings (id, room_id, room_title, host, status, egress_id, object_key,
                             started_at, access, participant_ids, expires_at, created_at)
     select '${MARKER}-rec-' || g,
@@ -615,9 +633,12 @@ async function seed(tx: Tx): Promise<void> {
                 else array['${MARKER}-u-' || (1 + (g % 1500))]::text[] end,
            now() + interval '180 days',
            now() - (g || ' seconds')::interval
-    from generate_series(1, ${SEEDED_RECORDINGS}) g`));
+    from generate_series(1, ${SEEDED_RECORDINGS}) g`),
+  );
 
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into room_media_queue_items (id, room_id, position, kind, episode_id, track_id)
     select '${MARKER}-q-' || g,
            case when g % 7 = 0 then '${MARKER}-r-7'
@@ -626,36 +647,51 @@ async function seed(tx: Tx): Promise<void> {
            case when g % 2 = 0 then 'podcast' else 'track' end,
            case when g % 2 = 0 then '${MARKER}-ep-' || g else null end,
            case when g % 2 = 0 then null else '${MARKER}-t-' || g end
-    from generate_series(1, ${SEEDED_QUEUE_ITEMS}) g`));
+    from generate_series(1, ${SEEDED_QUEUE_ITEMS}) g`),
+  );
 
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into room_user_preferences (id, oxy_user_id, live_visibility)
     select '${MARKER}-pref-' || g, '${MARKER}-u-' || g,
            case when g % 3 = 0 then 'speaking' else 'active' end
-    from generate_series(1, ${SEEDED_PREFERENCES}) g`));
+    from generate_series(1, ${SEEDED_PREFERENCES}) g`),
+  );
 
-  await executeRows(tx, sql.raw(
-    'analyze houses, house_members, series, series_episodes, rooms, ' +
-    'room_media_queue_items, recordings, room_user_preferences'
-  ));
+  await executeRows(
+    tx,
+    sql.raw(
+      'analyze houses, house_members, series, series_episodes, rooms, ' +
+        'room_media_queue_items, recordings, room_user_preferences',
+    ),
+  );
 
   const [rooms] = await executeRows<{ total: number }>(
-    tx, sql.raw(`select count(*)::int as total from rooms where id like '${MARKER}-%'`));
+    tx,
+    sql.raw(`select count(*)::int as total from rooms where id like '${MARKER}-%'`),
+  );
   seededRoomCount = rooms?.total ?? 0;
 
   const [houses] = await executeRows<{ total: number }>(
-    tx, sql.raw(`select count(*)::int as total from houses where id like '${MARKER}-%'`));
+    tx,
+    sql.raw(`select count(*)::int as total from houses where id like '${MARKER}-%'`),
+  );
   seededHouseCount = houses?.total ?? 0;
 
   const [recordings] = await executeRows<{ total: number }>(
-    tx, sql.raw(`select count(*)::int as total from recordings where id like '${MARKER}-%'`));
+    tx,
+    sql.raw(`select count(*)::int as total from recordings where id like '${MARKER}-%'`),
+  );
   seededRecordingCount = recordings?.total ?? 0;
 
   // Read back rather than reconstructed: the roster insert carries
   // `on conflict do nothing`, so the probed member's real house set is whatever
   // survived the unique constraint.
   const memberRows = await executeRows<{ house_id: string }>(
-    tx, sql.raw(`select house_id from house_members where oxy_user_id = '${MARKER}-u-7'`));
+    tx,
+    sql.raw(`select house_id from house_members where oxy_user_id = '${MARKER}-u-7'`),
+  );
   seededMemberHouseIds = memberRows.map((row) => row.house_id);
 }
 
@@ -673,7 +709,9 @@ beforeAll(async () => {
       for (const probe of PROBES) {
         const statement = typeof probe.sql === 'function' ? probe.sql() : probe.sql;
         const rows = await executeRows<{ 'QUERY PLAN': string }>(
-          tx, sql.raw(`explain (analyze, buffers) ${statement}`));
+          tx,
+          sql.raw(`explain (analyze, buffers) ${statement}`),
+        );
         plans.set(probe.name, rows.map((row) => row['QUERY PLAN']).join('\n'));
       }
 
@@ -689,15 +727,16 @@ afterAll(closePostgres);
 /** Index names the planner actually used, in the order they appear. */
 function indexesIn(probe: string): string[] {
   const plan = plans.get(probe) ?? '';
-  const names = [...plan.matchAll(/Index (?:Only )?Scan using (\w+)|Bitmap Index Scan on (\w+)/g)]
-    .map((match) => match[1] ?? match[2]);
+  const names = [
+    ...plan.matchAll(/Index (?:Only )?Scan using (\w+)|Bitmap Index Scan on (\w+)/g),
+  ].map((match) => match[1] ?? match[2]);
   return [...new Set(names)];
 }
 
 /** Assert one probe reached an index at all, naming the table it must not scan. */
 function expectIndexed(probe: string, table: string): void {
   expect(`${probe}: ${plans.get(probe)?.includes(`Seq Scan on ${table}`) ?? 'NO PLAN'}`).toBe(
-    `${probe}: false`
+    `${probe}: false`,
   );
 }
 
@@ -715,7 +754,7 @@ function expectIndexAmong(probe: string, allowed: readonly string[]): void {
   const used = indexesIn(probe);
   const offenders = used.filter((name) => !allowed.includes(name));
   expect(`${probe} used unexpected: ${offenders.join(', ') || 'none'}`).toBe(
-    `${probe} used unexpected: none`
+    `${probe} used unexpected: none`,
   );
   // Vacuity floor: an empty list satisfies the filter above trivially.
   expect(`${probe} used any index: ${used.length > 0}`).toBe(`${probe} used any index: true`);
@@ -731,7 +770,7 @@ function expectIndexAmong(probe: string, allowed: readonly string[]): void {
  */
 function expectNoSort(probe: string): void {
   expect(`${probe} sorts: ${plans.get(probe)?.includes('Sort Key:') ?? 'NO PLAN'}`).toBe(
-    `${probe} sorts: false`
+    `${probe} sorts: false`,
   );
 }
 
@@ -766,7 +805,13 @@ describe('the seed is real', () => {
 });
 
 describe('room listings reach a partial listing index and do not sort', () => {
-  for (const probe of ['roomsDefault', 'roomsByHouse', 'roomsByHost', 'roomsByType', 'roomsByOwnerType']) {
+  for (const probe of [
+    'roomsDefault',
+    'roomsByHouse',
+    'roomsByHost',
+    'roomsByType',
+    'roomsByOwnerType',
+  ]) {
     it(`${probe} is indexed`, () => {
       expectIndexed(probe, 'rooms');
       expectIndexAmong(probe, ROOM_LISTING_INDEXES);
@@ -1025,7 +1070,11 @@ describe('room queue and preferences', () => {
  * partial on `archived = false`, and the RI query below carries no such clause.
  */
 describe('the constraint-support indexes serve the referential-integrity queries', () => {
-  const RI_PROBES: readonly { readonly probe: string; readonly table: string; readonly index: string }[] = [
+  const RI_PROBES: readonly {
+    readonly probe: string;
+    readonly table: string;
+    readonly index: string;
+  }[] = [
     { probe: 'riRoomsByHouse', table: 'rooms', index: 'rooms_house_id_idx' },
     { probe: 'riSeriesByHouse', table: 'series', index: 'series_house_id_idx' },
     { probe: 'riRoomsBySeries', table: 'rooms', index: 'rooms_series_id_idx' },

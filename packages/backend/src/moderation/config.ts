@@ -43,11 +43,7 @@ import { logger } from '../utils/logger';
  * direction nothing fails on.
  */
 
-const ENFORCEMENT_MODES: readonly ModerationEnforcementMode[] = [
-  'observe',
-  'manual',
-  'automatic',
-];
+const ENFORCEMENT_MODES: readonly ModerationEnforcementMode[] = ['observe', 'manual', 'automatic'];
 
 const DEFAULT_OUTBOX_BATCH_SIZE = 50;
 const DEFAULT_OUTBOX_POLL_INTERVAL_MS = 5_000;
@@ -105,10 +101,9 @@ function enforcementMode(value: string | undefined): ModerationEnforcementMode {
   if (candidate === undefined) return 'observe';
   const match = ENFORCEMENT_MODES.find((mode) => mode === candidate);
   if (match) return match;
-  logger.warn(
-    '[CrowdSource] unrecognised CROWDSOURCE_ENFORCEMENT_MODE, falling back to observe',
-    { value: candidate },
-  );
+  logger.warn('[CrowdSource] unrecognised CROWDSOURCE_ENFORCEMENT_MODE, falling back to observe', {
+    value: candidate,
+  });
   return 'observe';
 }
 

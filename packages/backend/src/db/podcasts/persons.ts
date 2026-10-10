@@ -107,7 +107,7 @@ export function podcastCreditsPerson(person: CreditIdentity): SQL {
     getDb()
       .select({ one: sql`1` })
       .from(podcastPersons)
-      .where(and(eq(podcastPersons.podcastId, podcasts.id), match))
+      .where(and(eq(podcastPersons.podcastId, podcasts.id), match)),
   );
 }
 
@@ -125,6 +125,6 @@ export function episodeCreditsPerson(person: CreditIdentity): SQL {
     getDb()
       .select({ one: sql`1` })
       .from(episodePersons)
-      .where(and(eq(episodePersons.episodeId, episodes.id), match))
+      .where(and(eq(episodePersons.episodeId, episodes.id), match)),
   );
 }

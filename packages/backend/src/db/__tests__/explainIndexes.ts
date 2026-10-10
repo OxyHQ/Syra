@@ -46,7 +46,10 @@ export function expectIndexesWithin(
   used: string,
   accepted: readonly string[],
 ): void {
-  const names = used.split(', ').map((name) => name.trim()).filter(Boolean);
+  const names = used
+    .split(', ')
+    .map((name) => name.trim())
+    .filter(Boolean);
 
   /**
    * A plan with no index scan at all must FAIL, not pass vacuously. A subset
@@ -62,10 +65,10 @@ export function expectIndexesWithin(
 
   expect(
     names.filter((name) => !accepted.includes(name)),
-    `${probe} used indexes this test does not accept.\n`
-      + `  used:     ${names.join(', ')}\n`
-      + `  accepted: ${accepted.join(', ')}\n`
-      + 'Either the plan regressed, or the accepted set needs a new member with a reason.',
+    `${probe} used indexes this test does not accept.\n` +
+      `  used:     ${names.join(', ')}\n` +
+      `  accepted: ${accepted.join(', ')}\n` +
+      'Either the plan regressed, or the accepted set needs a new member with a reason.',
   ).toEqual([]);
 }
 

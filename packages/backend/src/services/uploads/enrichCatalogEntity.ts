@@ -32,7 +32,12 @@
  */
 
 import { and, asc, count, eq, sql } from 'drizzle-orm';
-import type { ArtistMember, CatalogImageSizes, ImageLicence, SourceProvenance } from '@syra/shared-types';
+import type {
+  ArtistMember,
+  CatalogImageSizes,
+  ImageLicence,
+  SourceProvenance,
+} from '@syra/shared-types';
 import { normalizeNameKey } from '@syra/shared-types';
 import { getDb, type DbOrTransaction } from '../../db/postgres';
 import {
@@ -97,9 +102,10 @@ async function appendProvenance(
   externalId: string,
   fields: string[],
 ): Promise<void> {
-  const column = parentColumn === 'catalogEntityId'
-    ? catalogEntitySources.catalogEntityId
-    : albumSources.albumId;
+  const column =
+    parentColumn === 'catalogEntityId'
+      ? catalogEntitySources.catalogEntityId
+      : albumSources.albumId;
   const [existing] = await db.select({ total: count() }).from(table).where(eq(column, parentId));
 
   await db.insert(table).values({
@@ -153,15 +159,41 @@ type EnrichableArtist = {
 type ArtistPatch = Partial<
   Pick<
     typeof catalogEntities.$inferInsert,
-    | 'bio' | 'country' | 'sortName' | 'disambiguation' | 'artistType'
-    | 'activeFrom' | 'activeUntil' | 'aliases' | 'labels' | 'members'
-    | 'linksWebsite' | 'linksInstagram' | 'linksX' | 'linksYoutube'
-    | 'linksWikidata' | 'linksDiscogs' | 'linksBandcamp' | 'linksSoundcloud'
-    | 'externalWikidataId' | 'externalIsni' | 'externalIpi' | 'externalDiscogsArtistId'
-    | 'imageId' | 'imageSizesSmallId' | 'imageSizesMediumId' | 'imageSizesLargeId'
-    | 'imageSizesXlargeId' | 'imageSizesXxlargeId' | 'imageSizesOriginalId'
-    | 'imageLicenceLicence' | 'imageLicenceLicenceUrl' | 'imageLicenceAttribution'
-    | 'imageLicenceSourceUrl' | 'primaryColor' | 'secondaryColor'
+    | 'bio'
+    | 'country'
+    | 'sortName'
+    | 'disambiguation'
+    | 'artistType'
+    | 'activeFrom'
+    | 'activeUntil'
+    | 'aliases'
+    | 'labels'
+    | 'members'
+    | 'linksWebsite'
+    | 'linksInstagram'
+    | 'linksX'
+    | 'linksYoutube'
+    | 'linksWikidata'
+    | 'linksDiscogs'
+    | 'linksBandcamp'
+    | 'linksSoundcloud'
+    | 'externalWikidataId'
+    | 'externalIsni'
+    | 'externalIpi'
+    | 'externalDiscogsArtistId'
+    | 'imageId'
+    | 'imageSizesSmallId'
+    | 'imageSizesMediumId'
+    | 'imageSizesLargeId'
+    | 'imageSizesXlargeId'
+    | 'imageSizesXxlargeId'
+    | 'imageSizesOriginalId'
+    | 'imageLicenceLicence'
+    | 'imageLicenceLicenceUrl'
+    | 'imageLicenceAttribution'
+    | 'imageLicenceSourceUrl'
+    | 'primaryColor'
+    | 'secondaryColor'
   >
 >;
 
@@ -240,10 +272,23 @@ function gapFilling(
   fillText('sortName', 'sortName', artist.sortName, musicBrainz?.sortName);
   fillText('disambiguation', 'disambiguation', artist.disambiguation, musicBrainz?.disambiguation);
   fillText('artistType', 'artistType', artist.artistType, musicBrainz?.artistType);
-  fillText('activeFrom', 'activeFrom', artist.activeFrom, musicBrainz?.beginDate ?? facts.activeFrom);
-  fillText('activeUntil', 'activeUntil', artist.activeUntil, musicBrainz?.endDate ?? facts.activeUntil);
+  fillText(
+    'activeFrom',
+    'activeFrom',
+    artist.activeFrom,
+    musicBrainz?.beginDate ?? facts.activeFrom,
+  );
+  fillText(
+    'activeUntil',
+    'activeUntil',
+    artist.activeUntil,
+    musicBrainz?.endDate ?? facts.activeUntil,
+  );
 
-  fillList('aliases', 'aliases', artist.aliases, [...(musicBrainz?.aliases ?? []), ...facts.aliases]);
+  fillList('aliases', 'aliases', artist.aliases, [
+    ...(musicBrainz?.aliases ?? []),
+    ...facts.aliases,
+  ]);
   fillList(
     'labels',
     'labels',
@@ -264,7 +309,12 @@ function gapFilling(
     fields.push('members');
   }
 
-  fillText('linksWebsite', 'links.website', artist.linksWebsite, urlFor(musicBrainz, 'official homepage') ?? facts.officialWebsite);
+  fillText(
+    'linksWebsite',
+    'links.website',
+    artist.linksWebsite,
+    urlFor(musicBrainz, 'official homepage') ?? facts.officialWebsite,
+  );
   fillText('linksInstagram', 'links.instagram', artist.linksInstagram, facts.instagram);
   fillText('linksX', 'links.x', artist.linksX, facts.x);
   fillText('linksYoutube', 'links.youtube', artist.linksYoutube, facts.youtube);
@@ -287,7 +337,12 @@ function gapFilling(
     artist.externalWikidataId,
     facts.itemId ? facts.itemId : undefined,
   );
-  fillText('externalIsni', 'externalIds.isni', artist.externalIsni, musicBrainz?.isni ?? facts.isni);
+  fillText(
+    'externalIsni',
+    'externalIds.isni',
+    artist.externalIsni,
+    musicBrainz?.isni ?? facts.isni,
+  );
   fillText('externalIpi', 'externalIds.ipi', artist.externalIpi, musicBrainz?.ipi ?? facts.ipi);
   fillText(
     'externalDiscogsArtistId',
@@ -366,7 +421,12 @@ export async function enrichArtistProfile(artistId: string): Promise<ArtistEnric
     .limit(1);
 
   if (!artist) {
-    return { status: 'skipped', fieldsWritten: [], imageWritten: false, reason: 'artist not found' };
+    return {
+      status: 'skipped',
+      fieldsWritten: [],
+      imageWritten: false,
+      reason: 'artist not found',
+    };
   }
 
   const mbid = artist.externalMusicbrainzArtistId;
@@ -687,7 +747,9 @@ export async function recoverCoverArt(input: {
 }): Promise<RecoveredCoverArt | undefined> {
   const found =
     (input.releaseMbid ? await fetchCoverArtForRelease(input.releaseMbid) : undefined) ??
-    (input.releaseGroupMbid ? await fetchCoverArtForReleaseGroup(input.releaseGroupMbid) : undefined);
+    (input.releaseGroupMbid
+      ? await fetchCoverArtForReleaseGroup(input.releaseGroupMbid)
+      : undefined);
   if (!found) return undefined;
 
   const mirrored = await mirrorCatalogImage([{ url: found.url }], {

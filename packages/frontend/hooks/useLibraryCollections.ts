@@ -35,9 +35,11 @@ const HYDRATE_LIMIT = 50;
  */
 export const CATALOG_QUERY_KEYS = {
   album: (id: string, identity: CatalogIdentity) => ['album', id, identity] as const,
-  albumTracks: (id: string, identity: CatalogIdentity) => ['album', id, 'tracks', identity] as const,
+  albumTracks: (id: string, identity: CatalogIdentity) =>
+    ['album', id, 'tracks', identity] as const,
   playlist: (id: string, identity: CatalogIdentity) => ['playlist', id, identity] as const,
-  playlistTracks: (id: string, identity: CatalogIdentity) => ['playlist', id, 'tracks', identity] as const,
+  playlistTracks: (id: string, identity: CatalogIdentity) =>
+    ['playlist', id, 'tracks', identity] as const,
   artist: (id: string, identity: CatalogIdentity) => ['artist', id, identity] as const,
   entity: (id: string, identity: CatalogIdentity) => ['entity', id, identity] as const,
 };
@@ -161,13 +163,19 @@ export function useLibraryCollections(): LibraryCollections {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: LIBRARY_QUERY_KEY }),
       ...albumIds.map((albumId) =>
-        queryClient.invalidateQueries({ queryKey: CATALOG_QUERY_KEYS.album(albumId, catalogIdentity) }),
+        queryClient.invalidateQueries({
+          queryKey: CATALOG_QUERY_KEYS.album(albumId, catalogIdentity),
+        }),
       ),
       ...artistIds.map((artistId) =>
-        queryClient.invalidateQueries({ queryKey: CATALOG_QUERY_KEYS.artist(artistId, catalogIdentity) }),
+        queryClient.invalidateQueries({
+          queryKey: CATALOG_QUERY_KEYS.artist(artistId, catalogIdentity),
+        }),
       ),
       ...playlistIds.map((playlistId) =>
-        queryClient.invalidateQueries({ queryKey: CATALOG_QUERY_KEYS.playlist(playlistId, catalogIdentity) }),
+        queryClient.invalidateQueries({
+          queryKey: CATALOG_QUERY_KEYS.playlist(playlistId, catalogIdentity),
+        }),
       ),
     ]);
   }, [queryClient, retryAuthGate, albumIds, artistIds, playlistIds, catalogIdentity]);

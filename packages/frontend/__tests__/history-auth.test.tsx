@@ -21,11 +21,18 @@ jest.mock('@/hooks/useAuthGate', () => ({
 jest.mock('@tanstack/react-query', () => ({
   useQuery: () => ({ data: undefined, isError: true, isPending: false, refetch: mockRefetch }),
 }));
-jest.mock('@/services/libraryService', () => ({ libraryService: { getRecentlyPlayed: jest.fn() } }));
+jest.mock('@/services/libraryService', () => ({
+  libraryService: { getRecentlyPlayed: jest.fn() },
+}));
 jest.mock('@/components/TrackRow', () => ({ TrackRow: () => null }));
 jest.mock('@/stores/playerStore', () => ({
-  usePlayerStore: (selector: (state: { currentTrack: null; isPlaying: boolean; playTrackList: () => void }) => unknown) =>
-    selector({ currentTrack: null, isPlaying: false, playTrackList: () => undefined }),
+  usePlayerStore: (
+    selector: (state: {
+      currentTrack: null;
+      isPlaying: boolean;
+      playTrackList: () => void;
+    }) => unknown,
+  ) => selector({ currentTrack: null, isPlaying: false, playTrackList: () => undefined }),
 }));
 
 describe('history retries respect the private API gate', () => {
@@ -38,7 +45,9 @@ describe('history retries respect the private API gate', () => {
 
   it('retries session resolution without calling the private endpoint while unresolved', () => {
     mockCanUsePrivateApi = false;
-    act(() => { screen = TestRenderer.create(<HistoryScreen />); });
+    act(() => {
+      screen = TestRenderer.create(<HistoryScreen />);
+    });
     if (!screen) throw new Error('History screen did not render');
     const retryButton = screen.root.findAllByProps({ accessibilityRole: 'button' })[0];
     if (!retryButton) throw new Error('Retry button did not render');
@@ -49,7 +58,9 @@ describe('history retries respect the private API gate', () => {
 
   it('retries the history request once the session is authorized', () => {
     mockCanUsePrivateApi = true;
-    act(() => { screen = TestRenderer.create(<HistoryScreen />); });
+    act(() => {
+      screen = TestRenderer.create(<HistoryScreen />);
+    });
     if (!screen) throw new Error('History screen did not render');
     const retryButton = screen.root.findAllByProps({ accessibilityRole: 'button' })[0];
     if (!retryButton) throw new Error('Retry button did not render');

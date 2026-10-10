@@ -42,10 +42,7 @@ const EpisodeRowComponent: React.FC<EpisodeRowProps> = ({
   const theme = useTheme();
   const pause = usePlayerStore((state) => state.pause);
   const resume = usePlayerStore((state) => state.resume);
-  const imageUri = useMemo(
-    () => resolvePodcastArtwork(episode, 'thumbnail'),
-    [episode],
-  );
+  const imageUri = useMemo(() => resolvePodcastArtwork(episode, 'thumbnail'), [episode]);
 
   /**
    * The one contract for this control, so its icon and its action can never
@@ -67,10 +64,12 @@ const EpisodeRowComponent: React.FC<EpisodeRowProps> = ({
   };
 
   const completed = progress?.completed ?? false;
-  const hasProgress = !completed && (progress?.progressSec ?? 0) > 0 && (progress?.durationSec ?? 0) > 0;
-  const progressPercent = hasProgress && progress
-    ? Math.min(100, (progress.progressSec / progress.durationSec) * 100)
-    : 0;
+  const hasProgress =
+    !completed && (progress?.progressSec ?? 0) > 0 && (progress?.durationSec ?? 0) > 0;
+  const progressPercent =
+    hasProgress && progress
+      ? Math.min(100, (progress.progressSec / progress.durationSec) * 100)
+      : 0;
 
   const metaLabel = useMemo(() => {
     const parts: string[] = [];
@@ -92,7 +91,8 @@ const EpisodeRowComponent: React.FC<EpisodeRowProps> = ({
   }, [episode.pubDate, episode.duration, completed, hasProgress, progress]);
 
   return (
-    <Pressable className={isCurrent ? 'bg-surface/25' : undefined}
+    <Pressable
+      className={isCurrent ? 'bg-surface/25' : undefined}
       onPress={onPress}
       style={[
         styles.row,
@@ -117,9 +117,7 @@ const EpisodeRowComponent: React.FC<EpisodeRowProps> = ({
         </Text>
 
         <View style={styles.metaRow}>
-          {completed && (
-            <View className="bg-primary" style={styles.playedDot} />
-          )}
+          {completed && <View className="bg-primary" style={styles.playedDot} />}
           <Text className="text-muted-foreground" style={styles.meta} numberOfLines={1}>
             {metaLabel}
           </Text>
@@ -140,15 +138,12 @@ const EpisodeRowComponent: React.FC<EpisodeRowProps> = ({
           event?.stopPropagation?.();
           handlePlayPress();
         }}
-        className="border-border" style={styles.playButton}
+        className="border-border"
+        style={styles.playButton}
         accessibilityRole="button"
         accessibilityLabel={isPlaying ? 'Pause episode' : 'Play episode'}
       >
-        <Ionicons
-          name={isPlaying ? 'pause' : 'play'}
-          size={20}
-          color={theme.colors.text}
-        />
+        <Ionicons name={isPlaying ? 'pause' : 'play'} size={20} color={theme.colors.text} />
       </Pressable>
     </Pressable>
   );

@@ -44,12 +44,20 @@ function appendNativeFile(formData: FormData, file: NativeFormDataFile): void {
   nativeFormData.append('file', file);
 }
 
-export function StreamConfigPanel({ roomId, roomStatus, initialStreamUrl, initialRtmpUrl, initialStreamKey, onClose, onStreamStarted }: StreamConfigPanelProps) {
+export function StreamConfigPanel({
+  roomId,
+  roomStatus,
+  initialStreamUrl,
+  initialRtmpUrl,
+  initialStreamKey,
+  onClose,
+  onStreamStarted,
+}: StreamConfigPanelProps) {
   const { useTheme, roomsService, toast, onRoomChanged } = useLiveConfig();
   const theme = useTheme();
 
   const initialUrl = initialStreamUrl?.trim() ?? '';
-  const hasExistingKey = !!(initialStreamKey);
+  const hasExistingKey = !!initialStreamKey;
   const isEditingUrlStream = roomStatus === 'live' && initialUrl.length > 0;
   const [mode, setMode] = useState<StreamMode>(hasExistingKey ? 'rtmp' : 'url');
   const [loading, setLoading] = useState(false);
@@ -97,7 +105,10 @@ export function StreamConfigPanel({ roomId, roomStatus, initialStreamUrl, initia
         if (Platform.OS === 'web') {
           const response = await fetch(asset.uri);
           const blob = await response.blob();
-          formData.append('file', new File([blob], 'stream-cover.jpg', { type: asset.mimeType || 'image/jpeg' }));
+          formData.append(
+            'file',
+            new File([blob], 'stream-cover.jpg', { type: asset.mimeType || 'image/jpeg' }),
+          );
         } else {
           const nativeFile: NativeFormDataFile = {
             uri: asset.uri,
@@ -355,12 +366,21 @@ export function StreamConfigPanel({ roomId, roomStatus, initialStreamUrl, initia
           style={[
             styles.modeTab,
             { borderColor: theme.colors.border },
-            mode === 'url' && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
+            mode === 'url' && {
+              backgroundColor: theme.colors.primary,
+              borderColor: theme.colors.primary,
+            },
           ]}
           onPress={() => setMode('url')}
         >
-          <MaterialCommunityIcons name="link" size={16} color={mode === 'url' ? '#FFFFFF' : theme.colors.text} />
-          <Text style={[styles.modeTabText, { color: mode === 'url' ? '#FFFFFF' : theme.colors.text }]}>
+          <MaterialCommunityIcons
+            name="link"
+            size={16}
+            color={mode === 'url' ? '#FFFFFF' : theme.colors.text}
+          />
+          <Text
+            style={[styles.modeTabText, { color: mode === 'url' ? '#FFFFFF' : theme.colors.text }]}
+          >
             Stream URL
           </Text>
         </TouchableOpacity>
@@ -368,12 +388,21 @@ export function StreamConfigPanel({ roomId, roomStatus, initialStreamUrl, initia
           style={[
             styles.modeTab,
             { borderColor: theme.colors.border },
-            mode === 'rtmp' && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
+            mode === 'rtmp' && {
+              backgroundColor: theme.colors.primary,
+              borderColor: theme.colors.primary,
+            },
           ]}
           onPress={() => setMode('rtmp')}
         >
-          <MaterialCommunityIcons name="key" size={16} color={mode === 'rtmp' ? '#FFFFFF' : theme.colors.text} />
-          <Text style={[styles.modeTabText, { color: mode === 'rtmp' ? '#FFFFFF' : theme.colors.text }]}>
+          <MaterialCommunityIcons
+            name="key"
+            size={16}
+            color={mode === 'rtmp' ? '#FFFFFF' : theme.colors.text}
+          />
+          <Text
+            style={[styles.modeTabText, { color: mode === 'rtmp' ? '#FFFFFF' : theme.colors.text }]}
+          >
             External App
           </Text>
         </TouchableOpacity>
@@ -381,12 +410,24 @@ export function StreamConfigPanel({ roomId, roomStatus, initialStreamUrl, initia
           style={[
             styles.modeTab,
             { borderColor: theme.colors.border },
-            mode === 'podcast' && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
+            mode === 'podcast' && {
+              backgroundColor: theme.colors.primary,
+              borderColor: theme.colors.primary,
+            },
           ]}
           onPress={() => setMode('podcast')}
         >
-          <MaterialCommunityIcons name="podcast" size={16} color={mode === 'podcast' ? '#FFFFFF' : theme.colors.text} />
-          <Text style={[styles.modeTabText, { color: mode === 'podcast' ? '#FFFFFF' : theme.colors.text }]}>
+          <MaterialCommunityIcons
+            name="podcast"
+            size={16}
+            color={mode === 'podcast' ? '#FFFFFF' : theme.colors.text}
+          />
+          <Text
+            style={[
+              styles.modeTabText,
+              { color: mode === 'podcast' ? '#FFFFFF' : theme.colors.text },
+            ]}
+          >
             Podcast
           </Text>
         </TouchableOpacity>
@@ -394,205 +435,308 @@ export function StreamConfigPanel({ roomId, roomStatus, initialStreamUrl, initia
           style={[
             styles.modeTab,
             { borderColor: theme.colors.border },
-            mode === 'music' && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
+            mode === 'music' && {
+              backgroundColor: theme.colors.primary,
+              borderColor: theme.colors.primary,
+            },
           ]}
           onPress={() => setMode('music')}
         >
-          <MaterialCommunityIcons name="music" size={16} color={mode === 'music' ? '#FFFFFF' : theme.colors.text} />
-          <Text style={[styles.modeTabText, { color: mode === 'music' ? '#FFFFFF' : theme.colors.text }]}>
+          <MaterialCommunityIcons
+            name="music"
+            size={16}
+            color={mode === 'music' ? '#FFFFFF' : theme.colors.text}
+          />
+          <Text
+            style={[
+              styles.modeTabText,
+              { color: mode === 'music' ? '#FFFFFF' : theme.colors.text },
+            ]}
+          >
             Music
           </Text>
         </TouchableOpacity>
       </View>
 
       {mode === 'podcast' ? (
-        <PodcastStreamPicker onSelectEpisode={handleStartPodcast} onStartQueue={handleStartPodcastQueue} />
+        <PodcastStreamPicker
+          onSelectEpisode={handleStartPodcast}
+          onStartQueue={handleStartPodcastQueue}
+        />
       ) : mode === 'music' ? (
         <MusicPicker onSelectTrack={handleStartTrack} onStartQueue={handleStartTrackQueue} />
       ) : (
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        {mode === 'url' && (
-          <View style={styles.section}>
-            <TextInput
-              style={[styles.input, { backgroundColor: `${theme.colors.card}80`, borderColor: theme.colors.border, color: theme.colors.text }]}
-              placeholder="Stream URL (m3u8, Icecast, etc.)"
-              placeholderTextColor={theme.colors.textSecondary}
-              value={streamUrl}
-              onChangeText={setStreamUrl}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="url"
-            />
-          </View>
-        )}
-
-        {mode === 'rtmp' && (
-          <View style={styles.section}>
-            {!streamKey ? (
-              <View style={styles.loadingBox}>
-                <ActivityIndicator size="small" color={theme.colors.primary} />
-                <Text style={[styles.loadingText, { color: theme.colors.textSecondary }]}>
-                  Generating stream key...
-                </Text>
-              </View>
-            ) : (
-              <View style={styles.credentialsBox}>
-                <Text style={[styles.credLabel, { color: theme.colors.textSecondary }]}>RTMP URL</Text>
-                <View style={[styles.credRow, { backgroundColor: `${theme.colors.card}80`, borderColor: theme.colors.border }]}>
-                  <Text style={[styles.credValue, { color: theme.colors.text }]} numberOfLines={1}>
-                    {rtmpUrl}
-                  </Text>
-                  <TouchableOpacity onPress={() => copyToClipboard(rtmpUrl ?? '', 'RTMP URL')} style={styles.copyBtn}>
-                    <MaterialCommunityIcons name="content-copy" size={18} color={theme.colors.primary} />
-                  </TouchableOpacity>
-                </View>
-
-                <Text style={[styles.credLabel, { color: theme.colors.textSecondary, marginTop: 12 }]}>Stream Key</Text>
-                <View style={[styles.credRow, { backgroundColor: `${theme.colors.card}80`, borderColor: theme.colors.border }]}>
-                  <Text style={[styles.credValue, { color: theme.colors.text }]} numberOfLines={1}>
-                    {streamKey}
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => {
-                      if (streamKey) copyToClipboard(streamKey, 'Stream key');
-                    }}
-                    style={styles.copyBtn}
-                  >
-                    <MaterialCommunityIcons name="content-copy" size={18} color={theme.colors.primary} />
-                  </TouchableOpacity>
-                </View>
-
-                <View style={styles.infoRow}>
-                  <MaterialCommunityIcons name="information" size={16} color={theme.colors.textSecondary} />
-                  <Text style={[styles.infoText, { color: theme.colors.textSecondary }]}>
-                    Use these in OBS or your streaming app. Audio will play in the room once you start streaming.
-                  </Text>
-                </View>
-
-                <TouchableOpacity
-                  style={styles.regenerateBtn}
-                  onPress={() => {
-                    setStreamKey(null);
-                    setRtmpUrl(null);
-                    generateKey();
-                  }}
-                  disabled={generatingKey}
-                >
-                  <MaterialCommunityIcons name="refresh" size={16} color={theme.colors.textSecondary} />
-                  <Text style={[styles.regenerateText, { color: theme.colors.textSecondary }]}>
-                    Regenerate key
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        )}
-
-        <View style={styles.section}>
-          <Text style={[styles.sectionLabel, { color: theme.colors.textSecondary }]}>
-            Stream Info (optional)
-          </Text>
-
-          <TextInput
-            style={[styles.input, { backgroundColor: `${theme.colors.card}80`, borderColor: theme.colors.border, color: theme.colors.text }]}
-            placeholder="Title"
-            placeholderTextColor={theme.colors.textSecondary}
-            value={title}
-            onChangeText={setTitle}
-            maxLength={200}
-          />
-
-          <TouchableOpacity
-            style={[styles.imagePicker, { backgroundColor: `${theme.colors.card}80`, borderColor: theme.colors.border }]}
-            onPress={handlePickImage}
-            disabled={uploadingImage}
-          >
-            {imagePreviewUri ? (
-              <Image source={{ uri: imagePreviewUri }} style={styles.imagePreview} />
-            ) : (
-              <View style={styles.imagePickerPlaceholder}>
-                <MaterialCommunityIcons name="image" size={24} color={theme.colors.textSecondary} />
-                <Text style={[styles.imagePickerText, { color: theme.colors.textSecondary }]}>
-                  Cover image
-                </Text>
-              </View>
-            )}
-            {uploadingImage && (
-              <View style={styles.imageOverlay}>
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              </View>
-            )}
-          </TouchableOpacity>
-
-          <TextInput
-            style={[styles.input, styles.inputMultiline, { backgroundColor: `${theme.colors.card}80`, borderColor: theme.colors.border, color: theme.colors.text }]}
-            placeholder="Description"
-            placeholderTextColor={theme.colors.textSecondary}
-            value={description}
-            onChangeText={setDescription}
-            maxLength={500}
-            multiline
-            numberOfLines={2}
-          />
-        </View>
-
-        <View style={styles.footer}>
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
           {mode === 'url' && (
-            <TouchableOpacity
+            <View style={styles.section}>
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: `${theme.colors.card}80`,
+                    borderColor: theme.colors.border,
+                    color: theme.colors.text,
+                  },
+                ]}
+                placeholder="Stream URL (m3u8, Icecast, etc.)"
+                placeholderTextColor={theme.colors.textSecondary}
+                value={streamUrl}
+                onChangeText={setStreamUrl}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+              />
+            </View>
+          )}
+
+          {mode === 'rtmp' && (
+            <View style={styles.section}>
+              {!streamKey ? (
+                <View style={styles.loadingBox}>
+                  <ActivityIndicator size="small" color={theme.colors.primary} />
+                  <Text style={[styles.loadingText, { color: theme.colors.textSecondary }]}>
+                    Generating stream key...
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.credentialsBox}>
+                  <Text style={[styles.credLabel, { color: theme.colors.textSecondary }]}>
+                    RTMP URL
+                  </Text>
+                  <View
+                    style={[
+                      styles.credRow,
+                      {
+                        backgroundColor: `${theme.colors.card}80`,
+                        borderColor: theme.colors.border,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[styles.credValue, { color: theme.colors.text }]}
+                      numberOfLines={1}
+                    >
+                      {rtmpUrl}
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => copyToClipboard(rtmpUrl ?? '', 'RTMP URL')}
+                      style={styles.copyBtn}
+                    >
+                      <MaterialCommunityIcons
+                        name="content-copy"
+                        size={18}
+                        color={theme.colors.primary}
+                      />
+                    </TouchableOpacity>
+                  </View>
+
+                  <Text
+                    style={[styles.credLabel, { color: theme.colors.textSecondary, marginTop: 12 }]}
+                  >
+                    Stream Key
+                  </Text>
+                  <View
+                    style={[
+                      styles.credRow,
+                      {
+                        backgroundColor: `${theme.colors.card}80`,
+                        borderColor: theme.colors.border,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[styles.credValue, { color: theme.colors.text }]}
+                      numberOfLines={1}
+                    >
+                      {streamKey}
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => {
+                        if (streamKey) copyToClipboard(streamKey, 'Stream key');
+                      }}
+                      style={styles.copyBtn}
+                    >
+                      <MaterialCommunityIcons
+                        name="content-copy"
+                        size={18}
+                        color={theme.colors.primary}
+                      />
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.infoRow}>
+                    <MaterialCommunityIcons
+                      name="information"
+                      size={16}
+                      color={theme.colors.textSecondary}
+                    />
+                    <Text style={[styles.infoText, { color: theme.colors.textSecondary }]}>
+                      Use these in OBS or your streaming app. Audio will play in the room once you
+                      start streaming.
+                    </Text>
+                  </View>
+
+                  <TouchableOpacity
+                    style={styles.regenerateBtn}
+                    onPress={() => {
+                      setStreamKey(null);
+                      setRtmpUrl(null);
+                      generateKey();
+                    }}
+                    disabled={generatingKey}
+                  >
+                    <MaterialCommunityIcons
+                      name="refresh"
+                      size={16}
+                      color={theme.colors.textSecondary}
+                    />
+                    <Text style={[styles.regenerateText, { color: theme.colors.textSecondary }]}>
+                      Regenerate key
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          )}
+
+          <View style={styles.section}>
+            <Text style={[styles.sectionLabel, { color: theme.colors.textSecondary }]}>
+              Stream Info (optional)
+            </Text>
+
+            <TextInput
               style={[
-                styles.startBtn,
+                styles.input,
                 {
-                  backgroundColor: streamUrl.trim() ? theme.colors.primary : theme.colors.backgroundSecondary,
-                  opacity: loading ? 0.6 : 1,
+                  backgroundColor: `${theme.colors.card}80`,
+                  borderColor: theme.colors.border,
+                  color: theme.colors.text,
                 },
               ]}
-              onPress={isEditingUrlStream ? handleUpdateMetadata : handleStartUrlStream}
-              disabled={!streamUrl.trim() || loading}
-            >
-              {loading ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : isEditingUrlStream ? (
-                <MaterialCommunityIcons
-                  name="content-save"
-                  size={18}
-                  color={streamUrl.trim() ? '#FFFFFF' : theme.colors.textSecondary}
-                />
-              ) : (
-                <MaterialCommunityIcons
-                  name="play"
-                  size={18}
-                  color={streamUrl.trim() ? '#FFFFFF' : theme.colors.textSecondary}
-                />
-              )}
-              <Text style={{ color: streamUrl.trim() ? '#FFFFFF' : theme.colors.textSecondary, fontWeight: '600', fontSize: 16 }}>
-                {isEditingUrlStream ? 'Save Stream Info' : 'Start Stream'}
-              </Text>
-            </TouchableOpacity>
-          )}
+              placeholder="Title"
+              placeholderTextColor={theme.colors.textSecondary}
+              value={title}
+              onChangeText={setTitle}
+              maxLength={200}
+            />
 
-          {mode === 'rtmp' && streamKey && (
             <TouchableOpacity
-              style={[styles.startBtn, { backgroundColor: theme.colors.primary, opacity: loading ? 0.6 : 1 }]}
-              onPress={handleUpdateMetadata}
-              disabled={loading}
+              style={[
+                styles.imagePicker,
+                { backgroundColor: `${theme.colors.card}80`, borderColor: theme.colors.border },
+              ]}
+              onPress={handlePickImage}
+              disabled={uploadingImage}
             >
-              {loading ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
+              {imagePreviewUri ? (
+                <Image source={{ uri: imagePreviewUri }} style={styles.imagePreview} />
               ) : (
-                <MaterialCommunityIcons name="content-save" size={18} color="#FFFFFF" />
+                <View style={styles.imagePickerPlaceholder}>
+                  <MaterialCommunityIcons
+                    name="image"
+                    size={24}
+                    color={theme.colors.textSecondary}
+                  />
+                  <Text style={[styles.imagePickerText, { color: theme.colors.textSecondary }]}>
+                    Cover image
+                  </Text>
+                </View>
               )}
-              <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 16 }}>
-                Save Stream Info
-              </Text>
+              {uploadingImage && (
+                <View style={styles.imageOverlay}>
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                </View>
+              )}
             </TouchableOpacity>
-          )}
-        </View>
-      </ScrollView>
+
+            <TextInput
+              style={[
+                styles.input,
+                styles.inputMultiline,
+                {
+                  backgroundColor: `${theme.colors.card}80`,
+                  borderColor: theme.colors.border,
+                  color: theme.colors.text,
+                },
+              ]}
+              placeholder="Description"
+              placeholderTextColor={theme.colors.textSecondary}
+              value={description}
+              onChangeText={setDescription}
+              maxLength={500}
+              multiline
+              numberOfLines={2}
+            />
+          </View>
+
+          <View style={styles.footer}>
+            {mode === 'url' && (
+              <TouchableOpacity
+                style={[
+                  styles.startBtn,
+                  {
+                    backgroundColor: streamUrl.trim()
+                      ? theme.colors.primary
+                      : theme.colors.backgroundSecondary,
+                    opacity: loading ? 0.6 : 1,
+                  },
+                ]}
+                onPress={isEditingUrlStream ? handleUpdateMetadata : handleStartUrlStream}
+                disabled={!streamUrl.trim() || loading}
+              >
+                {loading ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : isEditingUrlStream ? (
+                  <MaterialCommunityIcons
+                    name="content-save"
+                    size={18}
+                    color={streamUrl.trim() ? '#FFFFFF' : theme.colors.textSecondary}
+                  />
+                ) : (
+                  <MaterialCommunityIcons
+                    name="play"
+                    size={18}
+                    color={streamUrl.trim() ? '#FFFFFF' : theme.colors.textSecondary}
+                  />
+                )}
+                <Text
+                  style={{
+                    color: streamUrl.trim() ? '#FFFFFF' : theme.colors.textSecondary,
+                    fontWeight: '600',
+                    fontSize: 16,
+                  }}
+                >
+                  {isEditingUrlStream ? 'Save Stream Info' : 'Start Stream'}
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {mode === 'rtmp' && streamKey && (
+              <TouchableOpacity
+                style={[
+                  styles.startBtn,
+                  { backgroundColor: theme.colors.primary, opacity: loading ? 0.6 : 1 },
+                ]}
+                onPress={handleUpdateMetadata}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <MaterialCommunityIcons name="content-save" size={18} color="#FFFFFF" />
+                )}
+                <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 16 }}>
+                  Save Stream Info
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </ScrollView>
       )}
     </View>
   );

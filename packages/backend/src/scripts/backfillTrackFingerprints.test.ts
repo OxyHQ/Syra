@@ -478,19 +478,21 @@ function makeStorageSpy(): StorageSpy {
 async function makeReencode(fingerprint: number[]): Promise<string> {
   // Minted here because the S3 key below is composed from it.
   const id = uuidv7();
-  await getDb().insert(userUploads).values({
-    id,
-    ownerOxyUserId: 'user-r',
-    title: 'A re-encode',
-    duration: 210,
-    sizeBytes: 5_000_000,
-    sha256: 'a-completely-different-hash',
-    status: 'ready',
-    fingerprint,
-    fingerprintDurationSec: 211,
-    audioSourceKey: `audio/user-r/${id}.mp3`,
-    audioSourceFormat: 'mp3',
-  });
+  await getDb()
+    .insert(userUploads)
+    .values({
+      id,
+      ownerOxyUserId: 'user-r',
+      title: 'A re-encode',
+      duration: 210,
+      sizeBytes: 5_000_000,
+      sha256: 'a-completely-different-hash',
+      status: 'ready',
+      fingerprint,
+      fingerprintDurationSec: 211,
+      audioSourceKey: `audio/user-r/${id}.mp3`,
+      audioSourceFormat: 'mp3',
+    });
   return id;
 }
 

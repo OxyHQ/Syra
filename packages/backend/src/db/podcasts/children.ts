@@ -88,7 +88,7 @@ import {
  */
 export async function resolvePodcastCategoryIds(
   db: DbOrTransaction,
-  names: readonly string[]
+  names: readonly string[],
 ): Promise<string[]> {
   const byLowercase = new Map<string, string>();
   for (const raw of names) {
@@ -118,10 +118,10 @@ export async function resolvePodcastCategoryIds(
       and(
         inArray(
           sql`lower(${genres.name})`,
-          wanted.map((name) => name.toLowerCase())
+          wanted.map((name) => name.toLowerCase()),
         ),
-        eq(genres.kind, 'podcast')
-      )
+        eq(genres.kind, 'podcast'),
+      ),
     );
 
   const idByLowercaseName = new Map(rows.map((row) => [row.name.toLowerCase(), row.id]));
@@ -150,30 +150,28 @@ export async function resolvePodcastCategoryIds(
 export async function setPodcastCategories(
   db: DbOrTransaction,
   podcastId: string,
-  names: readonly string[]
+  names: readonly string[],
 ): Promise<void> {
   const genreIds = await resolvePodcastCategoryIds(db, names);
 
   await db.delete(podcastCategories).where(eq(podcastCategories.podcastId, podcastId));
   if (genreIds.length === 0) return;
 
-  await db
-    .insert(podcastCategories)
-    .values(
-      genreIds.map((genreId, position) => ({
-        podcastId,
-        genreId,
-        position,
-        kind: 'podcast' as const,
-      }))
-    );
+  await db.insert(podcastCategories).values(
+    genreIds.map((genreId, position) => ({
+      podcastId,
+      genreId,
+      position,
+      kind: 'podcast' as const,
+    })),
+  );
 }
 
 /** Replace a show's `<podcast:funding>` links. */
 export async function setPodcastFunding(
   db: DbOrTransaction,
   podcastId: string,
-  funding: readonly PodcastFunding[]
+  funding: readonly PodcastFunding[],
 ): Promise<void> {
   await db.delete(podcastFunding).where(eq(podcastFunding.podcastId, podcastId));
   if (funding.length === 0) return;
@@ -184,7 +182,7 @@ export async function setPodcastFunding(
       position,
       url: entry.url,
       message: entry.message ?? null,
-    }))
+    })),
   );
 }
 
@@ -213,7 +211,7 @@ function creditColumns(credit: EpisodePerson, position: number) {
 export async function setPodcastPersons(
   db: DbOrTransaction,
   podcastId: string,
-  persons: readonly EpisodePerson[]
+  persons: readonly EpisodePerson[],
 ): Promise<void> {
   await db.delete(podcastPersons).where(eq(podcastPersons.podcastId, podcastId));
   if (persons.length === 0) return;
@@ -227,7 +225,7 @@ export async function setPodcastPersons(
 export async function setPodcastSources(
   db: DbOrTransaction,
   podcastId: string,
-  sources: readonly PodcastSourceProvenance[]
+  sources: readonly PodcastSourceProvenance[],
 ): Promise<void> {
   await db.delete(podcastSources).where(eq(podcastSources.podcastId, podcastId));
   if (sources.length === 0) return;
@@ -240,7 +238,7 @@ export async function setPodcastSources(
       externalId: entry.externalId,
       importedAt: entry.importedAt,
       fields: entry.fields,
-    }))
+    })),
   );
 }
 
@@ -248,7 +246,7 @@ export async function setPodcastSources(
 export async function setEpisodeTranscripts(
   db: DbOrTransaction,
   episodeId: string,
-  transcripts: readonly EpisodeTranscript[]
+  transcripts: readonly EpisodeTranscript[],
 ): Promise<void> {
   await db.delete(episodeTranscripts).where(eq(episodeTranscripts.episodeId, episodeId));
   if (transcripts.length === 0) return;
@@ -260,7 +258,7 @@ export async function setEpisodeTranscripts(
       url: entry.url,
       type: entry.type,
       language: entry.language ?? null,
-    }))
+    })),
   );
 }
 
@@ -268,7 +266,7 @@ export async function setEpisodeTranscripts(
 export async function setEpisodePersons(
   db: DbOrTransaction,
   episodeId: string,
-  persons: readonly EpisodePerson[]
+  persons: readonly EpisodePerson[],
 ): Promise<void> {
   await db.delete(episodePersons).where(eq(episodePersons.episodeId, episodeId));
   if (persons.length === 0) return;
@@ -282,7 +280,7 @@ export async function setEpisodePersons(
 export async function setEpisodeHlsRenditions(
   db: DbOrTransaction,
   episodeId: string,
-  renditions: readonly HlsRendition[]
+  renditions: readonly HlsRendition[],
 ): Promise<void> {
   await db.delete(episodeHlsRenditions).where(eq(episodeHlsRenditions.episodeId, episodeId));
   if (renditions.length === 0) return;
@@ -294,6 +292,6 @@ export async function setEpisodeHlsRenditions(
       manifestKey: entry.manifestKey,
       bitrateKbps: entry.bitrateKbps,
       encrypted: entry.encrypted,
-    }))
+    })),
   );
 }

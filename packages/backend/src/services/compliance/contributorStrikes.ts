@@ -115,7 +115,7 @@ export async function recordContributorStrike(
 
   logger.info(
     `[ContributorStrikes] Strike ${outcome.strikeCount} recorded against ${oxyUserId}` +
-    (outcome.terminated ? ' — account TERMINATED as a repeat infringer' : ''),
+      (outcome.terminated ? ' — account TERMINATED as a repeat infringer' : ''),
   );
 
   return outcome;

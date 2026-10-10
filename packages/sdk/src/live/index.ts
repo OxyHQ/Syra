@@ -95,7 +95,11 @@ export { MiniRoomBar, MINI_BAR_HEIGHT } from './components/MiniRoomBar';
 export { StreamConfigModal } from './components/StreamConfigModal';
 export { StreamConfigPanel } from './components/StreamConfigPanel';
 export { InsightsPanel } from './components/InsightsPanel';
-export { CreateRoomSheet, type CreateRoomSheetRef, type CreateRoomFormState } from './components/CreateRoomSheet';
+export {
+  CreateRoomSheet,
+  type CreateRoomSheetRef,
+  type CreateRoomFormState,
+} from './components/CreateRoomSheet';
 export { RecordingsPanel } from './components/RecordingsPanel';
 export { RecordingCard } from './components/RecordingCard';
 

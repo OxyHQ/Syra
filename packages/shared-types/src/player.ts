@@ -6,13 +6,7 @@ import { playableItemSchema, playableRefSchema } from './upload';
 export const audioQualitySchema = z.enum(['low', 'normal', 'high', 'very_high']);
 export type AudioQuality = z.infer<typeof audioQualitySchema>;
 
-export const playbackStateSchema = z.enum([
-  'playing',
-  'paused',
-  'stopped',
-  'buffering',
-  'error',
-]);
+export const playbackStateSchema = z.enum(['playing', 'paused', 'stopped', 'buffering', 'error']);
 export type PlaybackState = z.infer<typeof playbackStateSchema>;
 
 export const repeatModeSchema = z.enum(['off', 'all', 'one']);

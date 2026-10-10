@@ -87,9 +87,7 @@
   },
   "overrides": [
     {
-      "includes": [
-        "**/eas.json"
-      ],
+      "includes": ["**/eas.json"],
       "json": {
         "parser": {
           "allowComments": true,
@@ -111,9 +109,7 @@
       }
     },
     {
-      "includes": [
-        "packages/frontend/**"
-      ],
+      "includes": ["packages/frontend/**"],
       "linter": {
         "rules": {
           "style": {

@@ -38,33 +38,59 @@ describe('Syra ecosystem activity', () => {
     process.env.OXY_SERVICE_API_SECRET = 'test-secret';
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       const path = new URL(String(input)).pathname;
-      publications.push({ path, body: typeof init?.body === 'string' ? JSON.parse(init.body) : null });
-      return new Response(JSON.stringify(path === '/auth/service-token' ? { token: 'test-token', expiresIn: 3600 } : { ok: true }), { headers: { 'content-type': 'application/json' } });
+      publications.push({
+        path,
+        body: typeof init?.body === 'string' ? JSON.parse(init.body) : null,
+      });
+      return new Response(
+        JSON.stringify(
+          path === '/auth/service-token' ? { token: 'test-token', expiresIn: 3600 } : { ok: true },
+        ),
+        { headers: { 'content-type': 'application/json' } },
+      );
     }) as typeof fetch;
     let traffic: ReturnType<typeof startPlatformActivity> = undefined;
     try {
       traffic = startPlatformActivity(() => true);
       expect(traffic).toBeDefined();
       const response = new EventEmitter();
-      traffic!.observeHttp({ path: '/api/stream/private-track-id', headers: { 'cf-ray': 'anonymous-MAD' } }, response, () => {});
+      traffic!.observeHttp(
+        { path: '/api/stream/private-track-id', headers: { 'cf-ray': 'anonymous-MAD' } },
+        response,
+        () => {},
+      );
       response.emit('finish');
       await traffic!.stop();
-      const batch = publications.find(item => item.path === '/internal/activity')?.body as Array<Record<string, unknown>>;
+      const batch = publications.find((item) => item.path === '/internal/activity')?.body as Array<
+        Record<string, unknown>
+      >;
       expect(batch).toHaveLength(2);
-      expect(batch.map(event => [event.service, event.direction, event.scope, event.activityType])).toEqual([
-        ['syra', 'inbound', 'external', 'media'], ['syra', 'outbound', 'external', 'media'],
+      expect(
+        batch.map((event) => [event.service, event.direction, event.scope, event.activityType]),
+      ).toEqual([
+        ['syra', 'inbound', 'external', 'media'],
+        ['syra', 'outbound', 'external', 'media'],
       ]);
       expect(batch[0].sourceRegion).toBe('edge-mad');
       expect(batch[1].targetRegion).toBe('edge-mad');
       expect(JSON.stringify(batch)).not.toMatch(/private-track-id|test-secret/);
-      const members = publications.filter(item => item.path === '/internal/activity/infrastructure').map(item => item.body as Record<string, unknown>);
+      const members = publications
+        .filter((item) => item.path === '/internal/activity/infrastructure')
+        .map((item) => item.body as Record<string, unknown>);
       expect(members[0]).toMatchObject({ service: 'syra', region: 'us-west-2', removed: false });
       expect(members.at(-1)).toMatchObject({ service: 'syra', removed: true });
     } finally {
       await traffic?.stop();
       globalThis.fetch = previousFetch;
-      for (const key of ['OXY_ECOSYSTEM_ACTIVITY_ENABLED', 'AWS_REGION', 'OXY_API_URL', 'OXY_SERVICE_API_KEY', 'OXY_SERVICE_API_SECRET']) {
-        if (saved[key] === undefined) delete process.env[key]; else process.env[key] = saved[key];
+      for (const key of [
+        'OXY_ECOSYSTEM_ACTIVITY_ENABLED',
+        'AWS_REGION',
+        'OXY_API_URL',
+        'OXY_SERVICE_API_KEY',
+        'OXY_SERVICE_API_SECRET',
+      ]) {
+        if (saved[key] === undefined) delete process.env[key];
+        else process.env[key] = saved[key];
       }
     }
   });

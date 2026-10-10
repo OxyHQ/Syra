@@ -134,7 +134,7 @@ export async function forEachMinableEvent(
   while (visited < filter.maxEvents) {
     const pageSize = Math.min(
       filter.pageSize ?? DEFAULT_MINE_PAGE_SIZE,
-      filter.maxEvents - visited
+      filter.maxEvents - visited,
     );
 
     const page = await db
@@ -147,7 +147,11 @@ export async function forEachMinableEvent(
       })
       .from(listeningEvents)
       .where(and(minableFilter(filter.since, filter.minCompletion), afterSeek(seek)))
-      .orderBy(asc(listeningEvents.oxyUserId), asc(listeningEvents.playedAt), asc(listeningEvents.id))
+      .orderBy(
+        asc(listeningEvents.oxyUserId),
+        asc(listeningEvents.playedAt),
+        asc(listeningEvents.id),
+      )
       .limit(pageSize);
 
     if (page.length === 0) break;

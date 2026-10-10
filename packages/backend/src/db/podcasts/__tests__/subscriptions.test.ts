@@ -44,10 +44,12 @@ const USER = 'oxy-user-subs';
 async function makeShow(
   title = 'A Show',
   subscriberCount = 0,
-  over: Partial<typeof podcasts.$inferInsert> = {}
+  over: Partial<typeof podcasts.$inferInsert> = {},
 ): Promise<string> {
   const id = uuidv7();
-  await getDb().insert(podcasts).values({ id, title, source: 'rss', subscriberCount, ...over });
+  await getDb()
+    .insert(podcasts)
+    .values({ id, title, source: 'rss', subscriberCount, ...over });
   return id;
 }
 
@@ -158,7 +160,7 @@ describe('unsubscribeFromPodcast', () => {
 });
 
 describe('the two read directions', () => {
-  it('a user\'s subscriptions come back oldest first', async () => {
+  it("a user's subscriptions come back oldest first", async () => {
     // The order the Mongo array had, since `$addToSet` appended — and two
     // callers read it as an order rather than a set.
     const first = await makeShow('First');
@@ -171,7 +173,7 @@ describe('the two read directions', () => {
     expect(await listSubscribedPodcastIds(USER)).toEqual([first, second, third]);
   });
 
-  it('a show\'s subscribers are the reverse read, and exclude other shows\'', async () => {
+  it("a show's subscribers are the reverse read, and exclude other shows'", async () => {
     const showId = await makeShow('Watched');
     const otherId = await makeShow('Ignored');
     await subscribeToPodcast('user-a', showId);
@@ -222,7 +224,10 @@ describe('listReadableSubscribedPodcastIds', () => {
   });
 
   it('drops a show whose creator made it PRIVATE, while the subscription row survives', async () => {
-    const showId = await makeShow('Gone Private', 0, { visibility: 'private', ownerOxyUserId: OWNER });
+    const showId = await makeShow('Gone Private', 0, {
+      visibility: 'private',
+      ownerOxyUserId: OWNER,
+    });
     await subscribeToPodcast(USER, showId);
 
     expect(await listReadableSubscribedPodcastIds(USER)).toEqual([]);
@@ -262,7 +267,7 @@ describe('listReadableSubscribedPodcastIds', () => {
     expect(await listReadableSubscribedPodcastIds(USER)).toEqual([showId]);
   });
 
-  it('KEEPS the owner\'s own private show in the owner\'s library', async () => {
+  it("KEEPS the owner's own private show in the owner's library", async () => {
     // The owner arm of `viewerCanReadShowFilter`. Without it, making your own
     // show private removes it from your own library — the creator locked out of
     // their own work, which is the failure the arm exists to prevent.
@@ -275,7 +280,7 @@ describe('listReadableSubscribedPodcastIds', () => {
     expect(await listReadableSubscribedPodcastIds(OWNER)).toEqual([showId]);
   });
 
-  it('KEEPS the owner\'s own unpublished show in the owner\'s library', async () => {
+  it("KEEPS the owner's own unpublished show in the owner's library", async () => {
     // Same arm, the other axis: a filter written as `reachable OR owned-and-
     // public` would pass the case above and fail this one.
     const showId = await makeShow('Mine, Unpublished', 0, {
@@ -287,7 +292,7 @@ describe('listReadableSubscribedPodcastIds', () => {
     expect(await listReadableSubscribedPodcastIds(OWNER)).toEqual([showId]);
   });
 
-  it('does not let one viewer\'s ownership unlock a show for anyone else', async () => {
+  it("does not let one viewer's ownership unlock a show for anyone else", async () => {
     /**
      * The owner arm must be scoped to the ASKING viewer. A predicate that tested
      * `owner_oxy_user_id is not null` — or that bound the owner to the wrong
@@ -305,7 +310,7 @@ describe('listReadableSubscribedPodcastIds', () => {
     expect(await listReadableSubscribedPodcastIds(USER)).toEqual([]);
   });
 
-  it('returns only the asking user\'s own subscriptions', async () => {
+  it("returns only the asking user's own subscriptions", async () => {
     const mine = await makeShow('Mine');
     const theirs = await makeShow('Theirs');
     await subscribeToPodcast(USER, mine);
@@ -342,8 +347,8 @@ describe('listReadableSubscribedPodcastIds', () => {
         .where(
           and(
             eq(userPodcastSubscriptions.oxyUserId, USER),
-            eq(userPodcastSubscriptions.podcastId, podcastId)
-          )
+            eq(userPodcastSubscriptions.podcastId, podcastId),
+          ),
         );
 
     await at('2020-03-01T00:00:00.000Z', first);

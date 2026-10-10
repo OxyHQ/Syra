@@ -60,8 +60,14 @@ export const DEFERRED_FOREIGN_KEYS: readonly DeferredForeignKey[] = [];
  */
 export const ID_COLUMNS_WITHOUT_FOREIGN_KEY: readonly { column: string; reason: string }[] = [
   // ── CROSS-SERVICE: Oxy account ids, owned by oxy-api, never a Syra row ────
-  { column: 'playlist_activity.actor_oxy_user_id', reason: 'Authenticated Oxy account that performed the playlist action.' },
-  { column: 'playlist_activity.target_oxy_user_id', reason: 'Oxy account whose collaborator role was changed or revoked.' },
+  {
+    column: 'playlist_activity.actor_oxy_user_id',
+    reason: 'Authenticated Oxy account that performed the playlist action.',
+  },
+  {
+    column: 'playlist_activity.target_oxy_user_id',
+    reason: 'Oxy account whose collaborator role was changed or revoked.',
+  },
   {
     column: 'catalog_entities.owner_oxy_user_id',
     reason: 'The Oxy account that registered/owns this artist profile (RELATIONS.md).',
@@ -72,11 +78,13 @@ export const ID_COLUMNS_WITHOUT_FOREIGN_KEY: readonly { column: string; reason: 
   },
   {
     column: 'catalog_entities.linked_oxy_user_id',
-    reason: 'Strong dedup key for type:person rows — links a podcast credit to an Oxy account (RELATIONS.md).',
+    reason:
+      'Strong dedup key for type:person rows — links a podcast credit to an Oxy account (RELATIONS.md).',
   },
   {
     column: 'podcasts.owner_oxy_user_id',
-    reason: 'The Oxy account that registered/owns this show (RELATIONS.md: Podcast.ownerOxyUserId).',
+    reason:
+      'The Oxy account that registered/owns this show (RELATIONS.md: Podcast.ownerOxyUserId).',
   },
   {
     column: 'podcasts.claimed_by_oxy_user_id',
@@ -85,23 +93,25 @@ export const ID_COLUMNS_WITHOUT_FOREIGN_KEY: readonly { column: string; reason: 
   {
     column: 'podcast_persons.linked_oxy_user_id',
     reason:
-      "Channel-level <podcast:person> credit linked to an Oxy account (RELATIONS.md: " +
+      'Channel-level <podcast:person> credit linked to an Oxy account (RELATIONS.md: ' +
       'Podcast.persons[].linkedOxyUserId).',
   },
   {
     column: 'episode_persons.linked_oxy_user_id',
     reason:
-      "Per-episode <podcast:person> credit linked to an Oxy account (RELATIONS.md: " +
+      'Per-episode <podcast:person> credit linked to an Oxy account (RELATIONS.md: ' +
       'Episode.persons[].linkedOxyUserId).',
   },
   {
     column: 'episode_progress.oxy_user_id',
-    reason: 'The Oxy account whose resume position this row tracks (RELATIONS.md: EpisodeProgress.oxyUserId).',
+    reason:
+      'The Oxy account whose resume position this row tracks (RELATIONS.md: EpisodeProgress.oxyUserId).',
   },
   // ── EXTERNAL: another provider's own id, not a Syra row ───────────────────
   {
     column: 'catalog_entities.external_musicbrainz_artist_id',
-    reason: 'MusicBrainz artist MBID — the one strong artist identifier an uploaded file can carry (RELATIONS.md).',
+    reason:
+      'MusicBrainz artist MBID — the one strong artist identifier an uploaded file can carry (RELATIONS.md).',
   },
   {
     column: 'catalog_entities.external_wikidata_id',
@@ -113,15 +123,18 @@ export const ID_COLUMNS_WITHOUT_FOREIGN_KEY: readonly { column: string; reason: 
   },
   {
     column: 'albums.external_musicbrainz_release_id',
-    reason: 'MusicBrainz release MBID — dedup tier 2 for album resolution, behind upc (RELATIONS.md).',
+    reason:
+      'MusicBrainz release MBID — dedup tier 2 for album resolution, behind upc (RELATIONS.md).',
   },
   {
     column: 'image_assets.catalog_external_id',
-    reason: "A mirrored catalog image's id at its origin provider, e.g. Cover Art Archive (RELATIONS.md).",
+    reason:
+      "A mirrored catalog image's id at its origin provider, e.g. Cover Art Archive (RELATIONS.md).",
   },
   {
     column: 'track_sources.external_id',
-    reason: 'The provenance log records which EXTERNAL provider supplied a field, keyed by that provider\'s own id.',
+    reason:
+      "The provenance log records which EXTERNAL provider supplied a field, keyed by that provider's own id.",
   },
   {
     column: 'album_sources.external_id',
@@ -133,27 +146,38 @@ export const ID_COLUMNS_WITHOUT_FOREIGN_KEY: readonly { column: string; reason: 
   },
   {
     column: 'playlist_sources.external_id',
-    reason: 'Same provenance-log pattern as track_sources.external_id — the fourth SourceProvenance sibling (RELATIONS.md).',
+    reason:
+      'Same provenance-log pattern as track_sources.external_id — the fourth SourceProvenance sibling (RELATIONS.md).',
   },
   {
     column: 'discogs_releases.discogs_release_id',
-    reason: "This row's own external identity (Discogs' id for the release) — not a reference to a Syra row (RELATIONS.md).",
+    reason:
+      "This row's own external identity (Discogs' id for the release) — not a reference to a Syra row (RELATIONS.md).",
   },
   {
     column: 'podcasts.podcast_index_id',
-    reason: "PodcastIndex.org's own directory id for this show — not a reference to a Syra row (RELATIONS.md).",
+    reason:
+      "PodcastIndex.org's own directory id for this show — not a reference to a Syra row (RELATIONS.md).",
   },
   {
     column: 'podcasts.apple_collection_id',
-    reason: "Apple Podcasts' own directory id for this show — not a reference to a Syra row (RELATIONS.md).",
+    reason:
+      "Apple Podcasts' own directory id for this show — not a reference to a Syra row (RELATIONS.md).",
   },
   {
     column: 'podcast_sources.external_id',
-    reason: 'Same provenance-log pattern as track_sources.external_id — records which EXTERNAL provider supplied a field.',
+    reason:
+      'Same provenance-log pattern as track_sources.external_id — records which EXTERNAL provider supplied a field.',
   },
   // ── CROSS-SERVICE: Oxy account ids, owned by oxy-api, never a Syra row ────
-  { column: 'playlist_activity.actor_oxy_user_id', reason: 'Authenticated Oxy account that performed the playlist action.' },
-  { column: 'playlist_activity.target_oxy_user_id', reason: 'Oxy account whose collaborator role was changed or revoked.' },
+  {
+    column: 'playlist_activity.actor_oxy_user_id',
+    reason: 'Authenticated Oxy account that performed the playlist action.',
+  },
+  {
+    column: 'playlist_activity.target_oxy_user_id',
+    reason: 'Oxy account whose collaborator role was changed or revoked.',
+  },
   {
     column: 'playlists.owner_oxy_user_id',
     reason: "The playlist owner's Oxy account id (RELATIONS.md: Playlist.ownerOxyUserId).",
@@ -164,11 +188,13 @@ export const ID_COLUMNS_WITHOUT_FOREIGN_KEY: readonly { column: string; reason: 
   },
   {
     column: 'recently_played.oxy_user_id',
-    reason: 'The Oxy account whose play history this row belongs to (RELATIONS.md: RecentlyPlayed.oxyUserId).',
+    reason:
+      'The Oxy account whose play history this row belongs to (RELATIONS.md: RecentlyPlayed.oxyUserId).',
   },
   {
     column: 'playback_states.oxy_user_id',
-    reason: 'The Oxy account this now-playing state belongs to — one row per account (RELATIONS.md: PlaybackState.oxyUserId).',
+    reason:
+      'The Oxy account this now-playing state belongs to — one row per account (RELATIONS.md: PlaybackState.oxyUserId).',
   },
   {
     column: 'devices.oxy_user_id',
@@ -176,27 +202,33 @@ export const ID_COLUMNS_WITHOUT_FOREIGN_KEY: readonly { column: string; reason: 
   },
   {
     column: 'user_liked_tracks.oxy_user_id',
-    reason: 'The Oxy account that liked the track — the owning side of this junction (RELATIONS.md: Library.oxyUserId).',
+    reason:
+      'The Oxy account that liked the track — the owning side of this junction (RELATIONS.md: Library.oxyUserId).',
   },
   {
     column: 'user_saved_albums.oxy_user_id',
-    reason: 'The Oxy account that saved the album — the owning side of this junction (RELATIONS.md: Library.oxyUserId).',
+    reason:
+      'The Oxy account that saved the album — the owning side of this junction (RELATIONS.md: Library.oxyUserId).',
   },
   {
     column: 'user_followed_artists.oxy_user_id',
-    reason: 'The Oxy account that followed the artist — the owning side of this junction (RELATIONS.md: Library.oxyUserId).',
+    reason:
+      'The Oxy account that followed the artist — the owning side of this junction (RELATIONS.md: Library.oxyUserId).',
   },
   {
     column: 'user_saved_playlists.oxy_user_id',
-    reason: 'The Oxy account that saved the playlist — the owning side of this junction (RELATIONS.md: Library.oxyUserId).',
+    reason:
+      'The Oxy account that saved the playlist — the owning side of this junction (RELATIONS.md: Library.oxyUserId).',
   },
   {
     column: 'user_podcast_subscriptions.oxy_user_id',
-    reason: 'The Oxy account that subscribed — the owning side of this junction (RELATIONS.md: Library.oxyUserId).',
+    reason:
+      'The Oxy account that subscribed — the owning side of this junction (RELATIONS.md: Library.oxyUserId).',
   },
   {
     column: 'user_uploads.owner_oxy_user_id',
-    reason: 'The Oxy account whose private locker this file is in (RELATIONS.md: UserUpload.ownerOxyUserId).',
+    reason:
+      'The Oxy account whose private locker this file is in (RELATIONS.md: UserUpload.ownerOxyUserId).',
   },
   {
     column: 'artist_claims.oxy_user_id',
@@ -239,19 +271,25 @@ export const ID_COLUMNS_WITHOUT_FOREIGN_KEY: readonly { column: string; reason: 
       'has zero functional consequence beyond a UI label (RELATIONS.md: PlaybackState.contextId).',
   },
   // ── CROSS-SERVICE: Oxy account ids, owned by oxy-api, never a Syra row ────
-  { column: 'playlist_activity.actor_oxy_user_id', reason: 'Authenticated Oxy account that performed the playlist action.' },
-  { column: 'playlist_activity.target_oxy_user_id', reason: 'Oxy account whose collaborator role was changed or revoked.' },
+  {
+    column: 'playlist_activity.actor_oxy_user_id',
+    reason: 'Authenticated Oxy account that performed the playlist action.',
+  },
+  {
+    column: 'playlist_activity.target_oxy_user_id',
+    reason: 'Oxy account whose collaborator role was changed or revoked.',
+  },
   {
     column: 'house_members.oxy_user_id',
     reason:
       "A house member's Oxy account id (RELATIONS.md: House.members[].userId). Renamed from Mongo's " +
-      '`userId` to match every other Oxy account id in this schema — see the column\'s own comment.',
+      "`userId` to match every other Oxy account id in this schema — see the column's own comment.",
   },
   {
     column: 'room_user_preferences.oxy_user_id',
     reason:
       'The Oxy account whose live-presence preference this row holds — one row per account ' +
-      "(RELATIONS.md: RoomUserPreference.userId). Same rename as house_members.oxy_user_id.",
+      '(RELATIONS.md: RoomUserPreference.userId). Same rename as house_members.oxy_user_id.',
   },
   // ── EXTERNAL: LiveKit's own ids, not a Syra row ───────────────────────────
   {
@@ -270,14 +308,14 @@ export const ID_COLUMNS_WITHOUT_FOREIGN_KEY: readonly { column: string; reason: 
     column: 'recordings.egress_id',
     reason:
       "LiveKit's own egress job id, set from the egress webhook payload — this recording's identity " +
-      "at LiveKit, not a reference to a Syra row (RELATIONS.md: Recording.egressId).",
+      'at LiveKit, not a reference to a Syra row (RELATIONS.md: Recording.egressId).',
   },
   // ── Polymorphic AND resolved out-of-process over HTTP ─────────────────────
   {
     column: 'room_media_queue_items.episode_id',
     reason:
       "Meaningful only when kind = 'podcast'. Logically an FK to episodes, but the join happens " +
-      'through Syra\'s own SDK client over HTTP (routes/rooms.routes.ts:538-565 → syraClient.getEpisode), ' +
+      "through Syra's own SDK client over HTTP (routes/rooms.routes.ts:538-565 → syraClient.getEpisode), " +
       'never in SQL — RELATIONS.md recommends a plain unconstrained column for exactly that ' +
       'indirection. A real key IS expressible now that episodes exists; declining it follows ' +
       'RELATIONS.md rather than the table being unavailable.',
@@ -292,29 +330,38 @@ export const ID_COLUMNS_WITHOUT_FOREIGN_KEY: readonly { column: string; reason: 
     column: 'room_media_queue_items.syra_podcast_id',
     reason:
       "Optional show-level pairing check for a kind = 'podcast' row, cross-checked against the " +
-      'resolved episode\'s own show rather than looked up directly — never resolved to a row at all ' +
+      "resolved episode's own show rather than looked up directly — never resolved to a row at all " +
       '(RELATIONS.md: Room.podcastQueue[].syraPodcastId).',
   },
   // ── CROSS-SERVICE: Oxy account ids, owned by oxy-api, never a Syra row ────
-  { column: 'playlist_activity.actor_oxy_user_id', reason: 'Authenticated Oxy account that performed the playlist action.' },
-  { column: 'playlist_activity.target_oxy_user_id', reason: 'Oxy account whose collaborator role was changed or revoked.' },
+  {
+    column: 'playlist_activity.actor_oxy_user_id',
+    reason: 'Authenticated Oxy account that performed the playlist action.',
+  },
+  {
+    column: 'playlist_activity.target_oxy_user_id',
+    reason: 'Oxy account whose collaborator role was changed or revoked.',
+  },
   {
     column: 'user_settings.oxy_user_id',
-    reason: 'The Oxy account these profile settings belong to — one row per account (RELATIONS.md).',
+    reason:
+      'The Oxy account these profile settings belong to — one row per account (RELATIONS.md).',
   },
   {
     column: 'user_music_preferences.oxy_user_id',
-    reason: 'The Oxy account these player preferences belong to — one row per account (RELATIONS.md).',
+    reason:
+      'The Oxy account these player preferences belong to — one row per account (RELATIONS.md).',
   },
   {
     column: 'user_behavior.oxy_user_id',
     reason:
       'The Oxy account this personalisation row would belong to — one row per account. Nothing has ' +
-      'ever written one; see schema/user.ts\'s file-level doc comment (RELATIONS.md).',
+      "ever written one; see schema/user.ts's file-level doc comment (RELATIONS.md).",
   },
   {
     column: 'user_taste_profiles.oxy_user_id',
-    reason: 'The Oxy account whose learned taste this row holds — one row per account (RELATIONS.md).',
+    reason:
+      'The Oxy account whose learned taste this row holds — one row per account (RELATIONS.md).',
   },
   {
     column: 'listening_events.oxy_user_id',
@@ -324,7 +371,8 @@ export const ID_COLUMNS_WITHOUT_FOREIGN_KEY: readonly { column: string; reason: 
   },
   {
     column: 'notification_preferences.oxy_user_id',
-    reason: 'The Oxy account whose event opt-outs this row holds — one row per account (RELATIONS.md).',
+    reason:
+      'The Oxy account whose event opt-outs this row holds — one row per account (RELATIONS.md).',
   },
   {
     column: 'notification_suppressions.oxy_user_id',

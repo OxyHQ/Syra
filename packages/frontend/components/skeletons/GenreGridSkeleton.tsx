@@ -13,17 +13,15 @@ interface GenreGridSkeletonProps {
  * of 4:3 cards. Mirrors {@link GenreCard} dimensions and the search screen's
  * `genreGrid` / `genreGridItem` 4-up desktop / 2-up mobile layout.
  */
-export const GenreGridSkeleton: React.FC<GenreGridSkeletonProps> = React.memo(
-  ({ count = 8 }) => {
-    return (
-      <ResponsiveGrid minItemWidth={160} gap={12}>
-        {Array.from({ length: count }).map((_, index) => (
-          <Skeleton.Box key={index} width="100%" style={styles.card} />
-        ))}
-      </ResponsiveGrid>
-    );
-  },
-);
+export const GenreGridSkeleton: React.FC<GenreGridSkeletonProps> = React.memo(({ count = 8 }) => {
+  return (
+    <ResponsiveGrid minItemWidth={160} gap={12}>
+      {Array.from({ length: count }).map((_, index) => (
+        <Skeleton.Box key={index} width="100%" style={styles.card} />
+      ))}
+    </ResponsiveGrid>
+  );
+});
 GenreGridSkeleton.displayName = 'GenreGridSkeleton';
 
 const styles = StyleSheet.create({

@@ -44,16 +44,15 @@ import { ReportCategory } from './types';
  */
 export const REPORT_TAXONOMY_VERSION = '2026.07';
 
-const CATEGORY_TO_ALLEGATION: Readonly<Record<ReportCategory, TaxonomyCode>> =
-  Object.freeze({
-    [ReportCategory.SPAM]: 'integrity.spam',
-    [ReportCategory.HARASSMENT]: 'harassment.targeted_abuse',
-    [ReportCategory.HATE_SPEECH]: 'hate.protected_targeting',
-    [ReportCategory.EXPLICIT_CONTENT]: 'sexual_content.explicit_activity',
-    [ReportCategory.IMPERSONATION]: 'integrity.impersonation',
-    [ReportCategory.VIOLENCE]: 'violence.graphic',
-    [ReportCategory.OTHER]: 'other.unclassifiable',
-  });
+const CATEGORY_TO_ALLEGATION: Readonly<Record<ReportCategory, TaxonomyCode>> = Object.freeze({
+  [ReportCategory.SPAM]: 'integrity.spam',
+  [ReportCategory.HARASSMENT]: 'harassment.targeted_abuse',
+  [ReportCategory.HATE_SPEECH]: 'hate.protected_targeting',
+  [ReportCategory.EXPLICIT_CONTENT]: 'sexual_content.explicit_activity',
+  [ReportCategory.IMPERSONATION]: 'integrity.impersonation',
+  [ReportCategory.VIOLENCE]: 'violence.graphic',
+  [ReportCategory.OTHER]: 'other.unclassifiable',
+});
 
 /**
  * The allegation codes for a report's categories, deduplicated and ORDERED.
@@ -63,9 +62,7 @@ const CATEGORY_TO_ALLEGATION: Readonly<Record<ReportCategory, TaxonomyCode>> =
  * client happened to send its categories would turn a legitimate outbox retry into
  * a permanent 409 — days later, as a report silently stuck in a queue.
  */
-export function allegationsForCategories(
-  categories: readonly ReportCategory[],
-): TaxonomyCode[] {
+export function allegationsForCategories(categories: readonly ReportCategory[]): TaxonomyCode[] {
   const codes = new Set<TaxonomyCode>();
   for (const category of categories) {
     const code = CATEGORY_TO_ALLEGATION[category];

@@ -234,7 +234,13 @@ export const MEDIA_QUEUE_KINDS = ['podcast', 'track'] as const;
 export const SERIES_RECURRENCE_TYPES = ['daily', 'weekly', 'biweekly', 'monthly'] as const;
 
 /** `models/Recording.ts` `RecordingStatus`. */
-export const RECORDING_STATUSES = ['recording', 'processing', 'ready', 'failed', 'deleted'] as const;
+export const RECORDING_STATUSES = [
+  'recording',
+  'processing',
+  'ready',
+  'failed',
+  'deleted',
+] as const;
 
 /** `models/Recording.ts` `RecordingAccess`. */
 export const RECORDING_ACCESS_LEVELS = ['public', 'participants'] as const;
@@ -293,7 +299,7 @@ export const houses = pgTable(
     // The member ROSTER is `house_members` (child table, below).
     tags: text().array().notNull().default(sql`array[]::text[]`),
     searchVector: tsvector().generatedAlwaysAs(
-      sql`to_tsvector('english', name || ' ' || coalesce(description, ''))`
+      sql`to_tsvector('english', name || ' ' || coalesce(description, ''))`,
     ),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -301,29 +307,32 @@ export const houses = pgTable(
   (t) => [
     check(
       'houses_visibility_discovery_check',
-      sql`${t.visibilityDiscovery} in (${sql.raw(inList(HOUSE_DISCOVERY_LEVELS))})`
+      sql`${t.visibilityDiscovery} in (${sql.raw(inList(HOUSE_DISCOVERY_LEVELS))})`,
     ),
     check(
       'houses_visibility_rooms_check',
-      sql`${t.visibilityRooms} in (${sql.raw(inList(HOUSE_ROOM_ACCESS_LEVELS))})`
+      sql`${t.visibilityRooms} in (${sql.raw(inList(HOUSE_ROOM_ACCESS_LEVELS))})`,
     ),
     check(
       'houses_visibility_join_check',
-      sql`${t.visibilityJoin} in (${sql.raw(inList(HOUSE_JOIN_POLICIES))})`
+      sql`${t.visibilityJoin} in (${sql.raw(inList(HOUSE_JOIN_POLICIES))})`,
     ),
     check(
       'houses_name_length_check',
-      sql`char_length(${t.name}) <= ${sql.raw(String(HOUSE_NAME_MAX_LENGTH))}`
+      sql`char_length(${t.name}) <= ${sql.raw(String(HOUSE_NAME_MAX_LENGTH))}`,
     ),
     check(
       'houses_description_length_check',
-      sql`${t.description} is null or char_length(${t.description}) <= ${sql.raw(String(HOUSE_DESCRIPTION_MAX_LENGTH))}`
+      sql`${t.description} is null or char_length(${t.description}) <= ${sql.raw(String(HOUSE_DESCRIPTION_MAX_LENGTH))}`,
     ),
     // `GET /api/houses` — the discoverable listing, newest first
     // (routes/houses.routes.ts:210). Non-partial on purpose: the query is a
     // `$nin`/NOT IN over the axis, so no single value can be baked into a
     // predicate.
-    index('houses_visibility_discovery_created_at_idx').on(t.visibilityDiscovery, t.createdAt.desc()),
+    index('houses_visibility_discovery_created_at_idx').on(
+      t.visibilityDiscovery,
+      t.createdAt.desc(),
+    ),
     /**
      * The `rooms` axis on its own, so `houseIdsWithRoomsHiddenFrom`
      * (`models/House.ts:331`) can be served by an index union with the
@@ -334,7 +343,7 @@ export const houses = pgTable(
     // Replaces Mongo's `{ name: 'text', description: 'text' }`, which
     // `routes/houses.routes.ts:203` queries with `$text`.
     index('houses_search_gin').using('gin', t.searchVector),
-  ]
+  ],
 );
 
 // ── house_members (child of houses — the membership roster) ────────────────
@@ -373,7 +382,7 @@ export const houseMembers = pgTable(
     // `houseIdsWithRoomsHiddenFrom`'s `$ne` both need. Not served by the
     // unique index above, which leads with house_id.
     index('house_members_oxy_user_id_idx').on(t.oxyUserId),
-  ]
+  ],
 );
 
 // ── series ────────────────────────────────────────────────────────────────
@@ -405,7 +414,9 @@ export const series = pgTable(
     roomTemplateType: text({ enum: ROOM_TYPES }).notNull().default('talk'),
     roomTemplateDescription: text(),
     roomTemplateMaxParticipants: integer().notNull().default(100),
-    roomTemplateSpeakerPermission: text({ enum: ROOM_SPEAKER_PERMISSIONS }).notNull().default('invited'),
+    roomTemplateSpeakerPermission: text({ enum: ROOM_SPEAKER_PERMISSIONS })
+      .notNull()
+      .default('invited'),
     roomTemplateTags: text().array().notNull().default(sql`array[]::text[]`),
     // The generated-episode LOG is `series_episodes` (child table, below).
     nextEpisodeNumber: integer().notNull().default(1),
@@ -416,47 +427,47 @@ export const series = pgTable(
   (t) => [
     check(
       'series_recurrence_type_check',
-      sql`${t.recurrenceType} in (${sql.raw(inList(SERIES_RECURRENCE_TYPES))})`
+      sql`${t.recurrenceType} in (${sql.raw(inList(SERIES_RECURRENCE_TYPES))})`,
     ),
     check(
       'series_recurrence_day_of_week_check',
-      sql`${t.recurrenceDayOfWeek} is null or ${t.recurrenceDayOfWeek} between 0 and 6`
+      sql`${t.recurrenceDayOfWeek} is null or ${t.recurrenceDayOfWeek} between 0 and 6`,
     ),
     check(
       'series_recurrence_day_of_month_check',
-      sql`${t.recurrenceDayOfMonth} is null or ${t.recurrenceDayOfMonth} between 1 and 31`
+      sql`${t.recurrenceDayOfMonth} is null or ${t.recurrenceDayOfMonth} between 1 and 31`,
     ),
     // Mongoose's own `match: /^\d{2}:\d{2}$/` (models/Series.ts:84). `~` with
     // an anchored POSIX class is the same assertion.
     check('series_recurrence_time_check', sql`${t.recurrenceTime} ~ '^[0-9]{2}:[0-9]{2}$'`),
     check(
       'series_room_template_type_check',
-      sql`${t.roomTemplateType} in (${sql.raw(inList(ROOM_TYPES))})`
+      sql`${t.roomTemplateType} in (${sql.raw(inList(ROOM_TYPES))})`,
     ),
     check(
       'series_room_template_max_participants_check',
-      sql`${t.roomTemplateMaxParticipants} between 1 and 10000`
+      sql`${t.roomTemplateMaxParticipants} between 1 and 10000`,
     ),
     check(
       'series_room_template_speaker_permission_check',
-      sql`${t.roomTemplateSpeakerPermission} in (${sql.raw(inList(ROOM_SPEAKER_PERMISSIONS))})`
+      sql`${t.roomTemplateSpeakerPermission} in (${sql.raw(inList(ROOM_SPEAKER_PERMISSIONS))})`,
     ),
     check('series_next_episode_number_check', sql`${t.nextEpisodeNumber} >= 1`),
     check(
       'series_title_length_check',
-      sql`char_length(${t.title}) <= ${sql.raw(String(SERIES_TITLE_MAX_LENGTH))}`
+      sql`char_length(${t.title}) <= ${sql.raw(String(SERIES_TITLE_MAX_LENGTH))}`,
     ),
     check(
       'series_description_length_check',
-      sql`${t.description} is null or char_length(${t.description}) <= ${sql.raw(String(SERIES_DESCRIPTION_MAX_LENGTH))}`
+      sql`${t.description} is null or char_length(${t.description}) <= ${sql.raw(String(SERIES_DESCRIPTION_MAX_LENGTH))}`,
     ),
     check(
       'series_room_template_title_pattern_length_check',
-      sql`char_length(${t.roomTemplateTitlePattern}) <= ${sql.raw(String(SERIES_TITLE_PATTERN_MAX_LENGTH))}`
+      sql`char_length(${t.roomTemplateTitlePattern}) <= ${sql.raw(String(SERIES_TITLE_PATTERN_MAX_LENGTH))}`,
     ),
     check(
       'series_room_template_description_length_check',
-      sql`${t.roomTemplateDescription} is null or char_length(${t.roomTemplateDescription}) <= ${sql.raw(String(SERIES_TEMPLATE_DESCRIPTION_MAX_LENGTH))}`
+      sql`${t.roomTemplateDescription} is null or char_length(${t.roomTemplateDescription}) <= ${sql.raw(String(SERIES_TEMPLATE_DESCRIPTION_MAX_LENGTH))}`,
     ),
     /**
      * `GET /api/houses/:id/series` — the only listing there is
@@ -479,7 +490,7 @@ export const series = pgTable(
      * `series` before this existed.
      */
     index('series_house_id_idx').on(t.houseId),
-  ]
+  ],
 );
 
 // ── rooms ─────────────────────────────────────────────────────────────────
@@ -609,12 +620,12 @@ export const rooms = pgTable(
     check('rooms_type_check', sql`${t.type} in (${sql.raw(inList(ROOM_TYPES))})`),
     check(
       'rooms_broadcast_kind_check',
-      sql`${t.broadcastKind} is null or ${t.broadcastKind} in (${sql.raw(inList(ROOM_BROADCAST_KINDS))})`
+      sql`${t.broadcastKind} is null or ${t.broadcastKind} in (${sql.raw(inList(ROOM_BROADCAST_KINDS))})`,
     ),
     check('rooms_status_check', sql`${t.status} in (${sql.raw(inList(ROOM_STATUSES))})`),
     check(
       'rooms_speaker_permission_check',
-      sql`${t.speakerPermission} in (${sql.raw(inList(ROOM_SPEAKER_PERMISSIONS))})`
+      sql`${t.speakerPermission} in (${sql.raw(inList(ROOM_SPEAKER_PERMISSIONS))})`,
     ),
     /**
      * `RoomSchema.pre('validate')` (`models/Room.ts:349-351`) clears
@@ -629,7 +640,7 @@ export const rooms = pgTable(
     // schema rather than silently emitting one that shadows the other.
     check(
       'rooms_broadcast_kind_requires_type_check',
-      sql`${t.type} = 'broadcast' or ${t.broadcastKind} is null`
+      sql`${t.type} = 'broadcast' or ${t.broadcastKind} is null`,
     ),
     /**
      * The other half of the same hook (`models/Room.ts:357-359`): a broadcast
@@ -640,34 +651,34 @@ export const rooms = pgTable(
      */
     check(
       'rooms_broadcast_speaker_permission_check',
-      sql`${t.type} <> 'broadcast' or ${t.speakerPermission} = 'invited'`
+      sql`${t.type} <> 'broadcast' or ${t.speakerPermission} = 'invited'`,
     ),
     check('rooms_max_participants_check', sql`${t.maxParticipants} between 1 and 10000`),
     check('rooms_stats_peak_listeners_check', sql`${t.statsPeakListeners} >= 0`),
     check('rooms_stats_total_joined_check', sql`${t.statsTotalJoined} >= 0`),
     check(
       'rooms_stream_duration_sec_check',
-      sql`${t.streamDurationSec} is null or ${t.streamDurationSec} >= 0`
+      sql`${t.streamDurationSec} is null or ${t.streamDurationSec} >= 0`,
     ),
     check(
       'rooms_title_length_check',
-      sql`char_length(${t.title}) <= ${sql.raw(String(ROOM_TITLE_MAX_LENGTH))}`
+      sql`char_length(${t.title}) <= ${sql.raw(String(ROOM_TITLE_MAX_LENGTH))}`,
     ),
     check(
       'rooms_description_length_check',
-      sql`${t.description} is null or char_length(${t.description}) <= ${sql.raw(String(ROOM_DESCRIPTION_MAX_LENGTH))}`
+      sql`${t.description} is null or char_length(${t.description}) <= ${sql.raw(String(ROOM_DESCRIPTION_MAX_LENGTH))}`,
     ),
     check(
       'rooms_topic_length_check',
-      sql`${t.topic} is null or char_length(${t.topic}) <= ${sql.raw(String(ROOM_TOPIC_MAX_LENGTH))}`
+      sql`${t.topic} is null or char_length(${t.topic}) <= ${sql.raw(String(ROOM_TOPIC_MAX_LENGTH))}`,
     ),
     check(
       'rooms_stream_title_length_check',
-      sql`${t.streamTitle} is null or char_length(${t.streamTitle}) <= ${sql.raw(String(ROOM_STREAM_TITLE_MAX_LENGTH))}`
+      sql`${t.streamTitle} is null or char_length(${t.streamTitle}) <= ${sql.raw(String(ROOM_STREAM_TITLE_MAX_LENGTH))}`,
     ),
     check(
       'rooms_stream_description_length_check',
-      sql`${t.streamDescription} is null or char_length(${t.streamDescription}) <= ${sql.raw(String(ROOM_STREAM_DESCRIPTION_MAX_LENGTH))}`
+      sql`${t.streamDescription} is null or char_length(${t.streamDescription}) <= ${sql.raw(String(ROOM_STREAM_DESCRIPTION_MAX_LENGTH))}`,
     ),
     /**
      * The five listing indexes below are all partial on `archived = false`,
@@ -767,7 +778,7 @@ export const rooms = pgTable(
      * for this exact query, not just the index definition.
      */
     index('rooms_house_id_idx').on(t.houseId),
-  ]
+  ],
 );
 
 // ── room_media_queue_items (child of rooms — Mongo's `podcastQueue`) ───────
@@ -799,7 +810,10 @@ export const roomMediaQueueItems = pgTable(
     trackId: text(),
   },
   (t) => [
-    check('room_media_queue_items_kind_check', sql`${t.kind} in (${sql.raw(inList(MEDIA_QUEUE_KINDS))})`),
+    check(
+      'room_media_queue_items_kind_check',
+      sql`${t.kind} in (${sql.raw(inList(MEDIA_QUEUE_KINDS))})`,
+    ),
     check('room_media_queue_items_position_check', sql`${t.position} >= 0`),
     /**
      * `models/Room.ts:39-51` asserts that "the parse/seed paths guarantee the
@@ -815,12 +829,12 @@ export const roomMediaQueueItems = pgTable(
     check(
       'room_media_queue_items_kind_ids_check',
       sql`(${t.kind} = 'podcast' and ${t.episodeId} is not null and ${t.trackId} is null)
-          or (${t.kind} = 'track' and ${t.trackId} is not null and ${t.episodeId} is null and ${t.syraPodcastId} is null)`
+          or (${t.kind} = 'track' and ${t.trackId} is not null and ${t.episodeId} is null and ${t.syraPodcastId} is null)`,
     ),
     // Preserves the Mongo array's ORDER — this queue is popped head-first
     // (`advancePodcastQueueForRoom`), so a lost order is a lost queue.
     unique('room_media_queue_items_room_id_position_key').on(t.roomId, t.position),
-  ]
+  ],
 );
 
 // ── series_episodes (child of series — the generated-episode log) ──────────
@@ -859,7 +873,7 @@ export const seriesEpisodes = pgTable(
     // Support for `rooms`' `ON DELETE SET NULL` above, which has to find every
     // referencing episode row.
     index('series_episodes_room_id_idx').on(t.roomId),
-  ]
+  ],
 );
 
 // ── recordings ────────────────────────────────────────────────────────────
@@ -914,7 +928,10 @@ export const recordings = pgTable(
   },
   (t) => [
     check('recordings_status_check', sql`${t.status} in (${sql.raw(inList(RECORDING_STATUSES))})`),
-    check('recordings_access_check', sql`${t.access} in (${sql.raw(inList(RECORDING_ACCESS_LEVELS))})`),
+    check(
+      'recordings_access_check',
+      sql`${t.access} in (${sql.raw(inList(RECORDING_ACCESS_LEVELS))})`,
+    ),
     check('recordings_file_size_check', sql`${t.fileSize} is null or ${t.fileSize} >= 0`),
     check('recordings_duration_ms_check', sql`${t.durationMs} is null or ${t.durationMs} >= 0`),
     // `Recording.findOne({ egressId })` — the LiveKit egress webhook's only
@@ -949,7 +966,7 @@ export const recordings = pgTable(
     // `{ access: 'participants', participantIds: userId }` — the containment
     // half of the same per-room listing. See the file-level doc comment.
     index('recordings_participant_ids_gin').using('gin', t.participantIds),
-  ]
+  ],
 );
 
 // ── room_user_preferences (one row per user — the "live" presence badge) ───
@@ -970,12 +987,12 @@ export const roomUserPreferences = pgTable(
   (t) => [
     check(
       'room_user_preferences_live_visibility_check',
-      sql`${t.liveVisibility} in (${sql.raw(inList(LIVE_VISIBILITIES))})`
+      sql`${t.liveVisibility} in (${sql.raw(inList(LIVE_VISIBILITIES))})`,
     ),
     // One row per account — a direct port of Mongo's unique `userId`, and the
     // index the batched `{ userId: { $in: [...] } }` read
     // (`routes/rooms.routes.ts:1228`) needs. No separate standalone index is
     // added; an index dropped in writing, per Task 2's convention.
     unique('room_user_preferences_oxy_user_id_key').on(t.oxyUserId),
-  ]
+  ],
 );

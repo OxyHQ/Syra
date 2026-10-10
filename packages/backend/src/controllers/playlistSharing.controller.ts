@@ -2,7 +2,14 @@ import type { Response, NextFunction } from 'express';
 import type { OxyAuthRequest } from '@oxy.so/core/server';
 import { acceptPlaylistInviteSchema, playlistInviteRequestSchema } from '@syra/shared-types';
 import { z } from 'zod';
-import { createPlaylistInvite, joinPlaylist, changePlaylistMember, revokePlaylistInvites, readPlaylistActivity, PlaylistAccessError } from '../services/playlists/collaboration';
+import {
+  createPlaylistInvite,
+  joinPlaylist,
+  changePlaylistMember,
+  revokePlaylistInvites,
+  readPlaylistActivity,
+  PlaylistAccessError,
+} from '../services/playlists/collaboration';
 
 const idSchema = z.string().min(1).max(128);
 export async function playlistSharing(req: OxyAuthRequest, res: Response, next: NextFunction) {
@@ -24,13 +31,16 @@ export async function playlistSharing(req: OxyAuthRequest, res: Response, next: 
       await revokePlaylistInvites(id, userId);
     } else {
       const memberId = idSchema.parse(req.params.memberId);
-      const role = req.method === 'DELETE' ? null : playlistInviteRequestSchema.parse(req.body).role;
+      const role =
+        req.method === 'DELETE' ? null : playlistInviteRequestSchema.parse(req.body).role;
       await changePlaylistMember(id, userId, memberId, role);
     }
     return res.status(204).send();
   } catch (error) {
-    if (error instanceof PlaylistAccessError) return res.status(error.status).json({ error: error.message });
-    if (error instanceof z.ZodError) return res.status(400).json({ error: 'Invalid playlist sharing request' });
+    if (error instanceof PlaylistAccessError)
+      return res.status(error.status).json({ error: error.message });
+    if (error instanceof z.ZodError)
+      return res.status(400).json({ error: 'Invalid playlist sharing request' });
     return next(error);
   }
 }

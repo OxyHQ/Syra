@@ -133,7 +133,10 @@ export async function ingestEpisode(episodeId: string, deps?: IngestEpisodeDeps)
    */
   if (!episode.audioSourceUrl || !episode.audioSourceFormat) {
     await setEpisodeStatus(episodeId, 'failed').catch((saveErr) =>
-      logger.error('[podcasts] failed to persist failed episode status', { episodeId, err: saveErr }),
+      logger.error('[podcasts] failed to persist failed episode status', {
+        episodeId,
+        err: saveErr,
+      }),
     );
     throw new Error(`ingestEpisode: no source audio for episode ${episodeId}`);
   }
@@ -189,7 +192,10 @@ export async function ingestEpisode(episodeId: string, deps?: IngestEpisodeDeps)
     await setEpisodeHls(episodeId, stored.hlsMasterKey, stored.hls);
   } catch (err) {
     await setEpisodeStatus(episodeId, 'failed').catch((saveErr) =>
-      logger.error('[podcasts] failed to persist failed episode status', { episodeId, err: saveErr }),
+      logger.error('[podcasts] failed to persist failed episode status', {
+        episodeId,
+        err: saveErr,
+      }),
     );
     logger.error('[podcasts] episode ingest failed', { episodeId, err: describeErrorSafely(err) });
     throw err;
@@ -205,7 +211,10 @@ export async function ingestEpisode(episodeId: string, deps?: IngestEpisodeDeps)
 
 export function enqueueEpisodeIngest(episodeId: string): void {
   ingestEpisode(episodeId).catch((err) =>
-    logger.error('[podcasts] episode ingest enqueue failed', { episodeId, err: describeErrorSafely(err) }),
+    logger.error('[podcasts] episode ingest enqueue failed', {
+      episodeId,
+      err: describeErrorSafely(err),
+    }),
   );
 }
 

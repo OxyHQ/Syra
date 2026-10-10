@@ -100,7 +100,7 @@ const happyDeps = {
 };
 
 async function createTrack(
-  overrides: Partial<typeof tracks.$inferInsert> = {}
+  overrides: Partial<typeof tracks.$inferInsert> = {},
 ): Promise<{ id: string }> {
   const suffix = uuidv7();
   const [artist] = await getDb()
@@ -194,9 +194,7 @@ describe('ingestTrack', () => {
 
   it('missing audioSource: rejects with clear error', async () => {
     const track = await createTrack({ audioSourceUrl: null, audioSourceFormat: null });
-    await expect(ingestTrack(track.id, happyDeps)).rejects.toThrow(
-      /no source audio/i,
-    );
+    await expect(ingestTrack(track.id, happyDeps)).rejects.toThrow(/no source audio/i);
 
     const reloaded = await reload(track.id);
     expect(reloaded?.status).toBe('failed');
@@ -292,7 +290,9 @@ describe('ingestTrack', () => {
     await ingestTrack(trackId, happyDeps);
 
     const row = await fingerprintFor(trackId);
-    expect(row?.fingerprint).toEqual(CANNED_FINGERPRINT.status === 'ok' ? CANNED_FINGERPRINT.values : []);
+    expect(row?.fingerprint).toEqual(
+      CANNED_FINGERPRINT.status === 'ok' ? CANNED_FINGERPRINT.values : [],
+    );
     expect(row?.fingerprintDurationSec).toBe(184);
   });
 
@@ -352,11 +352,13 @@ describe('ingestTrack', () => {
     // honour it rather than spending seconds recomputing the same values.
     const track = await createTrack();
     const trackId = track.id;
-    await getDb().insert(trackFingerprints).values({
-      trackId,
-      fingerprint: [9, 9, 9],
-      fingerprintDurationSec: 42,
-    });
+    await getDb()
+      .insert(trackFingerprints)
+      .values({
+        trackId,
+        fingerprint: [9, 9, 9],
+        fingerprintDurationSec: 42,
+      });
 
     let fingerprintCalls = 0;
     await ingestTrack(trackId, {

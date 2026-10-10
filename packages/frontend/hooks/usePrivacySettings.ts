@@ -72,7 +72,9 @@ export function usePrivacySettings(userId?: string | null): PrivacySettings | nu
     staleTime: PRIVACY_SETTINGS_STALE_TIME_MS,
     queryFn: async () => {
       try {
-        const response = await api.get<{ privacy?: PrivacySettings }>(`/profile/settings/${userId}`);
+        const response = await api.get<{ privacy?: PrivacySettings }>(
+          `/profile/settings/${userId}`,
+        );
         const parsed = privacyResponseSchema.safeParse(response.data);
         return parsed.success && parsed.data.privacy
           ? parsed.data.privacy
@@ -109,9 +111,8 @@ export function useCurrentUserPrivacySettings(): PrivacySettings | null {
       try {
         const response = await api.get<{ privacy?: PrivacySettings }>('/profile/settings/me');
         const parsed = privacyResponseSchema.safeParse(response.data);
-        const freshSettings = parsed.success && parsed.data.privacy
-          ? parsed.data.privacy
-          : DEFAULT_PRIVACY_SETTINGS;
+        const freshSettings =
+          parsed.success && parsed.data.privacy ? parsed.data.privacy : DEFAULT_PRIVACY_SETTINGS;
 
         await writeCachedPrivacySettings(freshSettings);
         return freshSettings;

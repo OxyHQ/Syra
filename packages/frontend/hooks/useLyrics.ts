@@ -24,7 +24,10 @@ export function useLyrics(trackId?: string): {
     queryKey: ['lyrics', trackId],
     queryFn: async () => {
       try {
-        const res = await api.get<Lyrics>(`/lyrics/${trackId}`, undefined, { timeout: 12_000, retry: false });
+        const res = await api.get<Lyrics>(`/lyrics/${trackId}`, undefined, {
+          timeout: 12_000,
+          retry: false,
+        });
         return lyricsSchema.parse(res.data);
       } catch (err) {
         if (isNotFoundError(err)) return null;
@@ -42,6 +45,8 @@ export function useLyrics(trackId?: string): {
     lyrics: data ?? null,
     isLoading,
     isError,
-    retry: () => { void refetch(); },
+    retry: () => {
+      void refetch();
+    },
   };
 }

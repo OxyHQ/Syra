@@ -6,8 +6,12 @@ import { getErrorMessage } from './error';
  * Check if an error is a Redis connection error
  */
 export function isRedisConnectionError(error: any): boolean {
-  return error?.code === 'ECONNREFUSED' || error?.code === 'ENOTFOUND' || 
-         error?.message?.includes('ECONNREFUSED') || error?.message?.includes('ENOTFOUND');
+  return (
+    error?.code === 'ECONNREFUSED' ||
+    error?.code === 'ENOTFOUND' ||
+    error?.message?.includes('ECONNREFUSED') ||
+    error?.message?.includes('ENOTFOUND')
+  );
 }
 
 /**
@@ -15,7 +19,10 @@ export function isRedisConnectionError(error: any): boolean {
  * Returns true if connected and ready, false if unavailable
  * This function verifies the client is actually ready, not just connected
  */
-export async function ensureRedisConnected(client: RedisClientType, timeoutMs: number = 2000): Promise<boolean> {
+export async function ensureRedisConnected(
+  client: RedisClientType,
+  timeoutMs: number = 2000,
+): Promise<boolean> {
   // If already ready, verify with ping to ensure it's actually working
   if (client.isReady) {
     try {
@@ -31,7 +38,7 @@ export async function ensureRedisConnected(client: RedisClientType, timeoutMs: n
   if (client.isOpen) {
     const startTime = Date.now();
     const maxWait = timeoutMs;
-    
+
     // Wait for ready state with timeout
     while (Date.now() - startTime < maxWait) {
       if (client.isReady) {
@@ -43,7 +50,7 @@ export async function ensureRedisConnected(client: RedisClientType, timeoutMs: n
           return false;
         }
       }
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
     }
     // If still not ready after timeout, return false
     return false;
@@ -52,11 +59,11 @@ export async function ensureRedisConnected(client: RedisClientType, timeoutMs: n
   // Socket is not open, try to connect
   try {
     await client.connect();
-    
+
     // Wait for ready state after connection
     const startTime = Date.now();
     const maxWait = timeoutMs;
-    
+
     while (Date.now() - startTime < maxWait) {
       if (client.isReady) {
         // Verify with ping
@@ -67,21 +74,23 @@ export async function ensureRedisConnected(client: RedisClientType, timeoutMs: n
           return false;
         }
       }
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
     }
-    
+
     // If still not ready after timeout, return false
     return false;
   } catch (error: unknown) {
     // Handle "Socket already opened" error gracefully - this means connection is in progress
     const msg = getErrorMessage(error);
-    if (msg.includes('Socket already opened') ||
-        msg.includes('already open') ||
-        msg.includes('already connected')) {
+    if (
+      msg.includes('Socket already opened') ||
+      msg.includes('already open') ||
+      msg.includes('already connected')
+    ) {
       // Socket is already open/connecting, check if it becomes ready
       const startTime = Date.now();
       const maxWait = timeoutMs;
-      
+
       while (Date.now() - startTime < maxWait) {
         if (client.isReady) {
           try {
@@ -91,7 +100,7 @@ export async function ensureRedisConnected(client: RedisClientType, timeoutMs: n
             return false;
           }
         }
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise((resolve) => setTimeout(resolve, 100));
       }
       return false;
     }
@@ -122,9 +131,7 @@ export async function verifyRedisConnectionWithDiagnostics(client: RedisClientTy
       try {
         await Promise.race([
           client.ping(),
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Ping timeout')), 2000)
-          )
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Ping timeout')), 2000)),
         ]);
         ping = true;
       } catch (pingError: any) {
@@ -140,14 +147,14 @@ export async function verifyRedisConnectionWithDiagnostics(client: RedisClientTy
       connected,
       ready,
       ping,
-      error
+      error,
     };
   } catch (error: unknown) {
     return {
       connected: false,
       ready: false,
       ping: false,
-      error: getErrorMessage(error)
+      error: getErrorMessage(error),
     };
   }
 }
@@ -160,7 +167,7 @@ export async function withRedisFallback<T>(
   client: RedisClientType,
   operation: () => Promise<T>,
   fallback: T,
-  operationName?: string
+  operationName?: string,
 ): Promise<T> {
   try {
     const connected = await ensureRedisConnected(client);
@@ -179,4 +186,3 @@ export async function withRedisFallback<T>(
     throw error;
   }
 }
-

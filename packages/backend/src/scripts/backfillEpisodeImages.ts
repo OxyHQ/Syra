@@ -47,7 +47,11 @@ import dotenv from 'dotenv';
 import { closePostgres, connectPostgres, getDb } from '../db/postgres';
 import { updateEpisode } from '../db/podcasts/episodes';
 import { episodes, podcasts } from '../db/schema/podcasts';
-import { fetchAndParse, type ParsedEpisode, type SafeFetchFn } from '../services/podcasts/RssConnector';
+import {
+  fetchAndParse,
+  type ParsedEpisode,
+  type SafeFetchFn,
+} from '../services/podcasts/RssConnector';
 import { rehostPodcastImage } from '../services/podcasts/podcastMedia';
 import { artworkColumns } from '../services/podcasts/podcastImportService';
 import { logger } from '../utils/logger';
@@ -116,7 +120,7 @@ async function backfillOneEpisode(
   parsed: ParsedEpisode | undefined,
   showImageUrl: string | undefined,
   stats: BackfillStats,
-  options: BackfillOptions
+  options: BackfillOptions,
 ): Promise<void> {
   stats.episodesScanned += 1;
 
@@ -169,7 +173,7 @@ async function backfillOneEpisode(
 async function backfillOnePodcast(
   podcast: BackfillPodcast,
   stats: BackfillStats,
-  options: BackfillOptions
+  options: BackfillOptions,
 ): Promise<void> {
   if (!podcast.feedUrl) {
     // An `rss` show with no feed url is not representable in steady state, but
@@ -240,7 +244,7 @@ export async function backfillEpisodeImages(options: BackfillOptions = {}): Prom
       .where(
         lastId === undefined
           ? eq(podcasts.source, 'rss')
-          : and(eq(podcasts.source, 'rss'), gt(podcasts.id, lastId))
+          : and(eq(podcasts.source, 'rss'), gt(podcasts.id, lastId)),
       )
       .orderBy(asc(podcasts.id))
       .limit(BATCH_SIZE);
@@ -252,7 +256,8 @@ export async function backfillEpisodeImages(options: BackfillOptions = {}): Prom
     // counter mid-batch — `reimportPodcastFeeds.ts` pre-slices its targets for
     // the same reason: a hard stop instead of several workers overshooting it
     // by a few podcasts each while they notice.
-    const remaining = options.limit === undefined ? batch.length : options.limit - stats.podcastsScanned;
+    const remaining =
+      options.limit === undefined ? batch.length : options.limit - stats.podcastsScanned;
     const queue = batch.slice(0, Math.max(remaining, 0));
 
     // A hand-rolled pool, not chunked `Promise.all`: chunking waits for the
@@ -286,7 +291,7 @@ async function main(): Promise<void> {
     if (!Number.isInteger(limit) || limit < 0) {
       throw new Error(
         `--limit needs a non-negative whole number, got ${JSON.stringify(process.argv[limitFlag + 1])}. ` +
-          'Refusing to run: an unparseable limit would otherwise mean no limit at all.'
+          'Refusing to run: an unparseable limit would otherwise mean no limit at all.',
       );
     }
   }
@@ -297,7 +302,7 @@ async function main(): Promise<void> {
     concurrency = Number(process.argv[concurrencyFlag + 1]);
     if (!Number.isInteger(concurrency) || concurrency < 1) {
       throw new Error(
-        `--concurrency needs a whole number of at least 1, got ${JSON.stringify(process.argv[concurrencyFlag + 1])}.`
+        `--concurrency needs a whole number of at least 1, got ${JSON.stringify(process.argv[concurrencyFlag + 1])}.`,
       );
     }
   }
@@ -306,7 +311,7 @@ async function main(): Promise<void> {
   logger.info(
     `[backfill-episode-images] starting${dryRun ? ' (dry run — nothing will be written)' : ''}` +
       `${limit !== undefined ? ` (limit ${limit} podcasts)` : ''}` +
-      ` (concurrency ${concurrency ?? DEFAULT_CONCURRENCY})`
+      ` (concurrency ${concurrency ?? DEFAULT_CONCURRENCY})`,
   );
 
   const stats = await backfillEpisodeImages({ dryRun, limit, concurrency });
@@ -316,14 +321,14 @@ async function main(): Promise<void> {
       `${stats.podcastsSkipped} already complete | ${stats.podcastsFailed} feed failures | ` +
       `${stats.episodesScanned} episodes scanned | ${stats.episodesFixed} fixed | ` +
       `${stats.episodesNoDistinctArt} had no distinct art | ` +
-      `${stats.episodesGoneFromFeed} gone from the feed | ${stats.episodesFailed} re-host failures`
+      `${stats.episodesGoneFromFeed} gone from the feed | ${stats.episodesFailed} re-host failures`,
   );
 
   if (stats.episodesFailed > 0 || stats.podcastsFailed > 0) {
     logger.warn(
       `[backfill-episode-images] ${stats.episodesFailed} episode(s) and ${stats.podcastsFailed} ` +
         'feed(s) could not be fixed this pass. Re-running retries only those — fixed episodes and ' +
-        'completed shows are skipped.'
+        'completed shows are skipped.',
     );
   }
 }

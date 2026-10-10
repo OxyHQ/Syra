@@ -9,7 +9,12 @@ function makeProvider(fetchJson: (url: string) => Promise<FetchResult>): LrclibP
   return new LrclibProvider({ fetchJson, apiBase: TEST_BASE });
 }
 
-const QUERY = { trackName: 'Open Road', artistName: 'Free Artist', albumName: 'Open Album', durationSec: 210 };
+const QUERY = {
+  trackName: 'Open Road',
+  artistName: 'Free Artist',
+  albumName: 'Open Album',
+  durationSec: 210,
+};
 
 describe('LrclibProvider.getLyrics — synced lyrics', () => {
   it('returns synced lyrics when syncedLyrics present', async () => {
@@ -124,21 +129,31 @@ describe('LrclibProvider — metadata', () => {
   });
 });
 
-
 describe('provider fallback and failure distinctions', () => {
   it('uses plain lyrics when the advertised timed payload has no usable timestamps', async () => {
-    const provider = makeProvider(async () => ({ status: 200, body: { syncedLyrics: 'not LRC', plainLyrics: 'A real line' } }));
-    expect(await provider.getLyrics(QUERY)).toMatchObject({ synced: false, plain: 'A real line', lines: [{ timeMs: 0, text: 'A real line' }] });
+    const provider = makeProvider(async () => ({
+      status: 200,
+      body: { syncedLyrics: 'not LRC', plainLyrics: 'A real line' },
+    }));
+    expect(await provider.getLyrics(QUERY)).toMatchObject({
+      synced: false,
+      plain: 'A real line',
+      lines: [{ timeMs: 0, text: 'A real line' }],
+    });
   });
   it('rejects corrupt timed content without a plain fallback', async () => {
     const provider = makeProvider(async () => ({ status: 200, body: { syncedLyrics: 'not LRC' } }));
     await expect(provider.getLyrics(QUERY)).rejects.toThrow('Invalid lrclib timed lyrics');
   });
   it('propagates network timeouts instead of returning not found', async () => {
-    const provider = makeProvider(async () => { throw new Error('request timeout'); });
+    const provider = makeProvider(async () => {
+      throw new Error('request timeout');
+    });
     await expect(provider.getLyrics(QUERY)).rejects.toThrow('request timeout');
   });
   it('accepts an explicit no-content response', async () => {
-    expect(await makeProvider(async () => ({ status: 204, body: null })).getLyrics(QUERY)).toBeNull();
+    expect(
+      await makeProvider(async () => ({ status: 204, body: null })).getLyrics(QUERY),
+    ).toBeNull();
   });
 });

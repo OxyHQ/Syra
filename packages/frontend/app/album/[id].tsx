@@ -146,7 +146,8 @@ const AlbumScreen: React.FC = () => {
   if (isCatalogLoading) {
     return (
       <ScrollView
-        className="bg-surface" style={styles.scrollView}
+        className="bg-surface"
+        style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
@@ -264,7 +265,12 @@ const AlbumView: React.FC<AlbumViewProps> = ({
   const [trackActionsFor, setTrackActionsFor] = useState<Track | null>(null);
   const releaseDateFormatted = formatReleaseDate(album.releaseDate);
   const totalDurationFormatted = formatTotalDuration(album.totalDuration);
-  const albumThumbImage = pickCatalogImageUrl(undefined, album.coverArt, 'icon', album.coverArtSizes);
+  const albumThumbImage = pickCatalogImageUrl(
+    undefined,
+    album.coverArt,
+    'icon',
+    album.coverArtSizes,
+  );
   const gradientColors: readonly [string, string, string] = [
     album.primaryColor ?? theme.colors.backgroundSecondary,
     album.secondaryColor ?? theme.colors.backgroundSecondary,
@@ -278,7 +284,8 @@ const AlbumView: React.FC<AlbumViewProps> = ({
         description={`Listen to ${album.title} by ${album.artistName}`}
       />
       <ScrollView
-        className="bg-surface" style={styles.scrollView}
+        className="bg-surface"
+        style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
@@ -311,15 +318,8 @@ const AlbumView: React.FC<AlbumViewProps> = ({
               </Text>
 
               {/* Artist Info */}
-              <Pressable
-                style={styles.artistRow}
-                onPress={onGoToArtist}
-              >
-                <Avatar
-                  source={albumThumbImage}
-                  size={24}
-                  style={styles.artistAvatar}
-                />
+              <Pressable style={styles.artistRow} onPress={onGoToArtist}>
+                <Avatar source={albumThumbImage} size={24} style={styles.artistAvatar} />
                 <Text className="text-foreground" style={styles.artistName}>
                   {album.artistName}
                 </Text>
@@ -327,18 +327,17 @@ const AlbumView: React.FC<AlbumViewProps> = ({
 
               {/* Metadata */}
               <Text className="text-muted-foreground" style={styles.metadata}>
-                {new Date(album.releaseDate).getFullYear()} • {album.totalTracks} songs, {totalDurationFormatted}
+                {new Date(album.releaseDate).getFullYear()} • {album.totalTracks} songs,{' '}
+                {totalDurationFormatted}
               </Text>
             </View>
           </View>
 
           {/* Playback Controls */}
           <View style={styles.controlsContainer}>
-            <Pressable className="bg-primary"
-              style={[
-                styles.playButton,
-                !canPlay && styles.disabledControl,
-              ]}
+            <Pressable
+              className="bg-primary"
+              style={[styles.playButton, !canPlay && styles.disabledControl]}
               onPress={onPlayAlbum}
               disabled={!canPlay}
               accessibilityRole="button"
@@ -366,21 +365,20 @@ const AlbumView: React.FC<AlbumViewProps> = ({
               onPress={onToggleSave}
               accessibilityRole="button"
               accessibilityState={{ selected: isSaved }}
-              accessibilityLabel={isSaved ? t('common.removeFromLibrary') : t('common.saveToLibrary')}
+              accessibilityLabel={
+                isSaved ? t('common.removeFromLibrary') : t('common.saveToLibrary')
+              }
             >
               <Ionicons
-                name={isSaved ? "checkmark-circle" : "checkmark-circle-outline"}
+                name={isSaved ? 'checkmark-circle' : 'checkmark-circle-outline'}
                 size={24}
                 color={isSaved ? theme.colors.primary : theme.colors.text}
               />
             </Pressable>
 
-            <Pressable
-              style={styles.controlButton}
-              onPress={() => setIsDownloaded(!isDownloaded)}
-            >
+            <Pressable style={styles.controlButton} onPress={() => setIsDownloaded(!isDownloaded)}>
               <Ionicons
-                name={isDownloaded ? "arrow-down-circle" : "arrow-down-circle-outline"}
+                name={isDownloaded ? 'arrow-down-circle' : 'arrow-down-circle-outline'}
                 size={24}
                 color={theme.colors.text}
               />
@@ -396,7 +394,9 @@ const AlbumView: React.FC<AlbumViewProps> = ({
             </Pressable>
 
             <View style={styles.listViewContainer}>
-              <Text className="text-foreground" style={styles.listViewText}>{t('common.list')}</Text>
+              <Text className="text-foreground" style={styles.listViewText}>
+                {t('common.list')}
+              </Text>
               <Ionicons name="list" size={20} color={theme.colors.text} />
             </View>
           </View>
@@ -408,8 +408,12 @@ const AlbumView: React.FC<AlbumViewProps> = ({
         {/* Track List Header */}
         <View style={styles.trackListHeader}>
           <View style={styles.trackListHeaderLeft}>
-            <Text className="text-muted-foreground" style={styles.trackListHeaderText}>#</Text>
-            <Text className="text-muted-foreground" style={styles.trackListHeaderText}>{t('common.title')}</Text>
+            <Text className="text-muted-foreground" style={styles.trackListHeaderText}>
+              #
+            </Text>
+            <Text className="text-muted-foreground" style={styles.trackListHeaderText}>
+              {t('common.title')}
+            </Text>
           </View>
           <Ionicons name="time-outline" size={16} color={theme.colors.textSecondary} />
         </View>
@@ -422,103 +426,116 @@ const AlbumView: React.FC<AlbumViewProps> = ({
                 {t('common.noPlayableTracks')}
               </Text>
             </View>
-          ) : tracks.map((track, index) => {
-            const isCurrentTrack = currentTrack?.id === track.id;
-            const isTrackPlaying = isCurrentTrack && isPlaying;
-            const isLiked = isTrackLiked(track.id);
+          ) : (
+            tracks.map((track, index) => {
+              const isCurrentTrack = currentTrack?.id === track.id;
+              const isTrackPlaying = isCurrentTrack && isPlaying;
+              const isLiked = isTrackLiked(track.id);
 
-            return (
-              <Pressable className={isCurrentTrack ? 'bg-surface/25' : undefined}
-                key={track.id}
-                style={[
-                  styles.trackRow,
-                  undefined,
-                ]}
-                onPress={() => onTrackPress(track)}
-              >
-                <View style={styles.trackRowLeft}>
-                  <View style={styles.trackNumberContainer}>
-                    {isTrackPlaying ? (
-                      <Ionicons name="volume-high" size={16} color={theme.colors.primary} />
-                    ) : (
+              return (
+                <Pressable
+                  className={isCurrentTrack ? 'bg-surface/25' : undefined}
+                  key={track.id}
+                  style={[styles.trackRow, undefined]}
+                  onPress={() => onTrackPress(track)}
+                >
+                  <View style={styles.trackRowLeft}>
+                    <View style={styles.trackNumberContainer}>
+                      {isTrackPlaying ? (
+                        <Ionicons name="volume-high" size={16} color={theme.colors.primary} />
+                      ) : (
+                        <Text
+                          style={[
+                            styles.trackNumber,
+                            {
+                              color: isCurrentTrack
+                                ? theme.colors.primary
+                                : theme.colors.textSecondary,
+                            },
+                          ]}
+                        >
+                          {track.trackNumber || index + 1}
+                        </Text>
+                      )}
+                    </View>
+                    <View style={styles.trackInfo}>
                       <Text
                         style={[
-                          styles.trackNumber,
-                          { color: isCurrentTrack ? theme.colors.primary : theme.colors.textSecondary }
+                          styles.trackTitle,
+                          { color: isCurrentTrack ? theme.colors.primary : theme.colors.text },
                         ]}
-                      >
-                        {track.trackNumber || index + 1}
-                      </Text>
-                    )}
-                  </View>
-                  <View style={styles.trackInfo}>
-                    <Text
-                      style={[
-                        styles.trackTitle,
-                        { color: isCurrentTrack ? theme.colors.primary : theme.colors.text }
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {track.title}
-                    </Text>
-                    <View style={styles.trackArtistRow}>
-                      {track.isExplicit && (
-                        <View className="bg-popover" style={styles.explicitBadge}>
-                          <Text className="text-muted-foreground" style={styles.explicitText}>E</Text>
-                        </View>
-                      )}
-                      <TrackArtistLine
-                        track={track}
-                        className="text-muted-foreground"
-                        style={styles.trackArtist}
                         numberOfLines={1}
-                        fallback={track.artistName}
-                      />
+                      >
+                        {track.title}
+                      </Text>
+                      <View style={styles.trackArtistRow}>
+                        {track.isExplicit && (
+                          <View className="bg-popover" style={styles.explicitBadge}>
+                            <Text className="text-muted-foreground" style={styles.explicitText}>
+                              E
+                            </Text>
+                          </View>
+                        )}
+                        <TrackArtistLine
+                          track={track}
+                          className="text-muted-foreground"
+                          style={styles.trackArtist}
+                          numberOfLines={1}
+                          fallback={track.artistName}
+                        />
+                      </View>
                     </View>
                   </View>
-                </View>
-                <View style={styles.trackRowRight}>
-                  {isDownloaded && (
-                    <Ionicons name="checkmark-circle" size={16} color={theme.colors.primary} style={styles.trackIcon} />
-                  )}
-                  <Pressable
-                    onPress={(e) => {
-                      e?.stopPropagation?.();
-                      onToggleTrackLike(track, isLiked);
-                    }}
-                    style={styles.trackLikeButton}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: isLiked }}
-                    accessibilityLabel={isLiked ? t('common.removeFromLiked') : t('common.saveToLiked')}
-                  >
-                    <Ionicons
-                      name={isLiked ? 'heart' : 'heart-outline'}
-                      size={18}
-                      color={isLiked ? theme.colors.primary : theme.colors.textSecondary}
-                    />
-                  </Pressable>
-                  <Text className="text-muted-foreground" style={styles.trackDuration}>
-                    {formatDuration(track.duration)}
-                  </Text>
-                  <Pressable
-                    onPress={(e) => {
-                      e?.stopPropagation?.();
-                      setTrackActionsFor(track);
-                    }}
-                    style={styles.trackLikeButton}
-                    accessibilityRole="button"
-                    accessibilityLabel={`More options for ${track.title}`}
-                  >
-                    <Ionicons
-                      name="ellipsis-horizontal"
-                      size={18}
-                      color={theme.colors.textSecondary}
-                    />
-                  </Pressable>
-                </View>
-              </Pressable>
-            );
-          })}
+                  <View style={styles.trackRowRight}>
+                    {isDownloaded && (
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={16}
+                        color={theme.colors.primary}
+                        style={styles.trackIcon}
+                      />
+                    )}
+                    <Pressable
+                      onPress={(e) => {
+                        e?.stopPropagation?.();
+                        onToggleTrackLike(track, isLiked);
+                      }}
+                      style={styles.trackLikeButton}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: isLiked }}
+                      accessibilityLabel={
+                        isLiked ? t('common.removeFromLiked') : t('common.saveToLiked')
+                      }
+                    >
+                      <Ionicons
+                        name={isLiked ? 'heart' : 'heart-outline'}
+                        size={18}
+                        color={isLiked ? theme.colors.primary : theme.colors.textSecondary}
+                      />
+                    </Pressable>
+                    <Text className="text-muted-foreground" style={styles.trackDuration}>
+                      {formatDuration(track.duration)}
+                    </Text>
+                    <Pressable
+                      onPress={(e) => {
+                        e?.stopPropagation?.();
+                        setTrackActionsFor(track);
+                      }}
+                      style={styles.trackLikeButton}
+                      accessibilityRole="button"
+                      accessibilityLabel={`More options for ${track.title}`}
+                    >
+                      <Ionicons
+                        name="ellipsis-horizontal"
+                        size={18}
+                        color={theme.colors.textSecondary}
+                      />
+                    </Pressable>
+                  </View>
+                </Pressable>
+              );
+            })
+          )}
         </View>
 
         {/* Release Date & Copyright */}

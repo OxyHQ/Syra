@@ -25,7 +25,3 @@ router.get('/made-for-you', getMadeForYou);
 router.get('/charts', getCharts);
 
 export default router;
-
-
-
-

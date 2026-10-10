@@ -276,24 +276,33 @@ const PROBES: readonly { readonly name: string; readonly sql: string }[] = [
 type Tx = Parameters<Parameters<ReturnType<typeof getDb>['transaction']>[0]>[0];
 
 async function seed(tx: Tx): Promise<void> {
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into image_assets (id, s3_key, filename, content_type, byte_size, owner_type, width, height)
     select '${MARKER}-img-' || g, '${MARKER}/' || g, g || '.jpg', 'image/jpeg', 1000, 'album', 640, 640
-    from generate_series(1, 600) g`));
+    from generate_series(1, 600) g`),
+  );
 
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into catalog_entities (id, type, name, name_key, source, popularity, image_id, genres, terminated, stats_followers)
     select '${MARKER}-art-' || g, 'artist', '${MARKER} artist ' || g, '${MARKER}-artist' || g, 'upload', g % 101,
            case when g % 3 = 0 then '${MARKER}-img-' || g else null end,
            case g % 3 when 0 then array['rock','pop'] when 1 then array['jazz'] else array['ambient','hiphop'] end,
            case when g % 97 = 0 then true else false end, g % 500
-    from generate_series(1, 300) g`));
+    from generate_series(1, 300) g`),
+  );
 
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into albums (id, title, artist_id, artist_name, release_date, cover_art_id, popularity)
     select '${MARKER}-alb-' || g, 'Album ' || g, '${MARKER}-art-' || (1 + (g % 300)), 'Artist', '2020-01-01',
            '${MARKER}-img-' || (1 + (g % 600)), g % 101
-    from generate_series(1, 600) g`));
+    from generate_series(1, 600) g`),
+  );
 
   /**
    * Both removal states are represented, and that is what the two moderation
@@ -302,7 +311,9 @@ async function seed(tx: Tx): Promise<void> {
    * combinations all occur. A seed where every track is playable cannot tell a
    * partial index that serves a query from one that cannot.
    */
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into tracks (id, title, artist_id, artist_name, album_id, duration, source, status,
                         popularity, play_count, is_available, copyright_removed, is_explicit,
                         genre, mood, track_number, cover_art_id)
@@ -315,42 +326,63 @@ async function seed(tx: Tx): Promise<void> {
            (array['chill','energetic','sad','happy'])[1 + (g % 4)],
            1 + (g % 12),
            case when g % 4 = 0 then '${MARKER}-img-' || (1 + (g % 600)) else null end
-    from generate_series(1, ${SEEDED_TRACKS}) g`));
+    from generate_series(1, ${SEEDED_TRACKS}) g`),
+  );
 
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into track_credits (id, track_id, position, name, role, name_key)
     select '${MARKER}-c-' || g, '${MARKER}-t-' || g, 0, 'Person ' || (g % 50), 'producer',
            '${MARKER}-namekey-' || (g % 50)
-    from generate_series(1, 8000) g`));
+    from generate_series(1, 8000) g`),
+  );
 
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into track_fingerprints (id, track_id, fingerprint, fingerprint_duration_sec)
     select '${MARKER}-fp-' || g, '${MARKER}-t-' || g, array[1,2,3], 150 + (g % 120)
-    from generate_series(1, 8000) g`));
+    from generate_series(1, 8000) g`),
+  );
 
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into track_hls_renditions (id, track_id, position, manifest_key, bitrate_kbps, encrypted)
     select '${MARKER}-r-' || g, '${MARKER}-t-' || (1 + (g % 20000)), g % 3, 'k', 96, true
-    from generate_series(1, 20000) g`));
+    from generate_series(1, 20000) g`),
+  );
 
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into catalog_entity_sources (id, catalog_entity_id, position, provider, external_id, imported_at, fields)
     select '${MARKER}-src-' || g, '${MARKER}-art-' || (1 + (g % 300)), g / 300, 'cc', 'ext-' || g,
            now(), array['bio']
-    from generate_series(0, 899) g`));
+    from generate_series(0, 899) g`),
+  );
 
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into track_keys (id, track_id, key_hex, key_uri)
     select '${MARKER}-k-' || g, '${MARKER}-t-' || g, repeat('ab', 16), 'key'
-    from generate_series(1, 20000) g`));
+    from generate_series(1, 20000) g`),
+  );
 
-  await executeRows(tx, sql.raw(
-    'analyze image_assets, catalog_entities, albums, tracks, track_credits, track_fingerprints, ' +
-    'track_hls_renditions, track_keys, catalog_entity_sources'
-  ));
+  await executeRows(
+    tx,
+    sql.raw(
+      'analyze image_assets, catalog_entities, albums, tracks, track_credits, track_fingerprints, ' +
+        'track_hls_renditions, track_keys, catalog_entity_sources',
+    ),
+  );
 
   const [counted] = await executeRows<{ total: number }>(
-    tx, sql.raw(`select count(*)::int as total from tracks where id like '${MARKER}-%'`));
+    tx,
+    sql.raw(`select count(*)::int as total from tracks where id like '${MARKER}-%'`),
+  );
   seededTrackCount = counted?.total ?? 0;
 }
 
@@ -367,7 +399,9 @@ beforeAll(async () => {
 
       for (const probe of PROBES) {
         const rows = await executeRows<{ 'QUERY PLAN': string }>(
-          tx, sql.raw(`explain (analyze, buffers) ${probe.sql}`));
+          tx,
+          sql.raw(`explain (analyze, buffers) ${probe.sql}`),
+        );
         plans.set(probe.name, rows.map((row) => row['QUERY PLAN']).join('\n'));
       }
 
@@ -383,8 +417,9 @@ afterAll(closePostgres);
 /** Index names the planner actually used, in the order they appear. */
 function indexesIn(probe: string): string {
   const plan = plans.get(probe) ?? '';
-  const names = [...plan.matchAll(/Index (?:Only )?Scan using (\w+)|Bitmap Index Scan on (\w+)/g)]
-    .map((match) => match[1] ?? match[2]);
+  const names = [
+    ...plan.matchAll(/Index (?:Only )?Scan using (\w+)|Bitmap Index Scan on (\w+)/g),
+  ].map((match) => match[1] ?? match[2]);
   return [...new Set(names)].join(', ');
 }
 
@@ -411,7 +446,7 @@ describe('the artist-wide moderation queries reach migration 0017 index', () => 
   it('taking down an artist every track does not scan the table', () => {
     expect(plans.get('strikeTakedown')).not.toContain('Seq Scan on tracks');
     expect(`strike takedown: ${indexesIn('strikeTakedown')}`).toBe(
-      'strike takedown: tracks_artist_id_idx'
+      'strike takedown: tracks_artist_id_idx',
     );
   });
 
@@ -420,7 +455,7 @@ describe('the artist-wide moderation queries reach migration 0017 index', () => 
     // index on this table can ever serve, whatever else is added later.
     expect(plans.get('terminationCascade')).not.toContain('Seq Scan on tracks');
     expect(`termination cascade: ${indexesIn('terminationCascade')}`).toBe(
-      'termination cascade: tracks_artist_id_idx'
+      'termination cascade: tracks_artist_id_idx',
     );
   });
 });
@@ -454,7 +489,7 @@ describe('the service read paths reach an index', () => {
 
   it('the fingerprint candidate bucket range-scans its duration index', () => {
     expect(`fingerprints: ${indexesIn('fingerprintBucket')}`).toContain(
-      'track_fingerprints_duration_idx'
+      'track_fingerprints_duration_idx',
     );
   });
 
@@ -518,7 +553,7 @@ describe('the artist surface reads reach an index', () => {
   it('the dashboard recent list reaches the plain artist index', () => {
     expect(plans.get('artistDashboardRecent')).not.toContain('Seq Scan on tracks');
     expect(`dashboard recent: ${indexesIn('artistDashboardRecent')}`).toBe(
-      'dashboard recent: tracks_artist_id_idx'
+      'dashboard recent: tracks_artist_id_idx',
     );
   });
 
@@ -526,7 +561,7 @@ describe('the artist surface reads reach an index', () => {
     // `copyright_removed = true` is the complement of every partial index here.
     expect(plans.get('artistDashboardRemoved')).not.toContain('Seq Scan on tracks');
     expect(`dashboard removed: ${indexesIn('artistDashboardRemoved')}`).toBe(
-      'dashboard removed: tracks_artist_id_idx'
+      'dashboard removed: tracks_artist_id_idx',
     );
   });
 
@@ -573,7 +608,7 @@ describe('widening the recommendation projections did not cost an index', () => 
   it('the related-artists genre fallback still enters through an index', () => {
     expect(plans.get('relatedArtistsGenre')).not.toContain('Seq Scan on catalog_entities');
     expect(`related artists: ${indexesIn('relatedArtistsGenre')}`).toBe(
-      'related artists: catalog_entities_artist_name_key_key'
+      'related artists: catalog_entities_artist_name_key_key',
     );
   });
 
@@ -582,7 +617,7 @@ describe('widening the recommendation projections did not cost an index', () => 
     // Both arms of the `genre = … OR artist_id = …` are indexed; a plan that
     // lost either would fall back to scanning for that half.
     expect(`similar tracks: ${indexesIn('similarTracksContent')}`).toBe(
-      'similar tracks: tracks_genre_idx, tracks_artist_id_album_id_idx'
+      'similar tracks: tracks_genre_idx, tracks_artist_id_album_id_idx',
     );
   });
 });

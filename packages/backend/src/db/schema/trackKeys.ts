@@ -73,10 +73,10 @@ export const trackKeys = pgTable(
   (t) => [
     check(
       'track_keys_one_parent_check',
-      sql`num_nonnulls(${t.trackId}, ${t.userUploadId}, ${t.episodeId}) = 1`
+      sql`num_nonnulls(${t.trackId}, ${t.userUploadId}, ${t.episodeId}) = 1`,
     ),
     unique('track_keys_track_id_key').on(t.trackId),
     unique('track_keys_user_upload_id_key').on(t.userUploadId),
     unique('track_keys_episode_id_key').on(t.episodeId),
-  ]
+  ],
 );

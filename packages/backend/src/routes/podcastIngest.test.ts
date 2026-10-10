@@ -33,11 +33,7 @@ import { uuidv7 } from '@oxy.so/db';
 import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
 import { clearDb, connectDb, disconnectDb } from '../test/postgres';
 import { getDb } from '../db/postgres';
-import {
-  episodeIngestTickets,
-  episodes as episodesTable,
-  podcasts,
-} from '../db/schema/podcasts';
+import { episodeIngestTickets, episodes as episodesTable, podcasts } from '../db/schema/podcasts';
 import * as realS3 from '../services/s3Service';
 import * as realIngest from '../services/podcasts/ingestEpisode';
 import podcastsRoutes from './podcasts.routes';
@@ -82,7 +78,11 @@ mock.module('../services/s3Service', () => ({
   ...realS3,
   uploadToS3: async (key: string, body: unknown, options?: unknown) => {
     if (![...suiteEpisodeIds].some((id) => key.includes(id))) {
-      return realUploadToS3(key, body as Parameters<typeof realS3.uploadToS3>[1], options as Parameters<typeof realS3.uploadToS3>[2]);
+      return realUploadToS3(
+        key,
+        body as Parameters<typeof realS3.uploadToS3>[1],
+        options as Parameters<typeof realS3.uploadToS3>[2],
+      );
     }
     storedKeys.push(key);
   },
@@ -145,14 +145,16 @@ afterAll(async () => {
 
 async function seedShow(ownerOxyUserId: string = OWNER): Promise<string> {
   const id = uuidv7();
-  await getDb().insert(podcasts).values({
-    id,
-    title: 'Ingest Show',
-    source: 'syra',
-    status: 'active',
-    ownerOxyUserId,
-    feedUrl: `https://feeds.example.invalid/${id}.xml`,
-  });
+  await getDb()
+    .insert(podcasts)
+    .values({
+      id,
+      title: 'Ingest Show',
+      source: 'syra',
+      status: 'active',
+      ownerOxyUserId,
+      feedUrl: `https://feeds.example.invalid/${id}.xml`,
+    });
   return id;
 }
 
@@ -166,7 +168,7 @@ interface Draft {
 async function draft(
   showId: string,
   viewer: string = OWNER,
-  body: Record<string, unknown> = { title: 'An Episode' }
+  body: Record<string, unknown> = { title: 'An Episode' },
 ): Promise<{ status: number; draft?: Draft }> {
   const response = await fetch(`${baseUrl}/api/podcasts/${showId}/episodes/draft`, {
     method: 'POST',
@@ -183,10 +185,14 @@ async function draft(
 async function ingest(
   episodeId: string,
   ticket: string | undefined,
-  fields: Record<string, string> = {}
+  fields: Record<string, string> = {},
 ): Promise<Response> {
   const form = new FormData();
-  form.append('audioFile', new Blob([new Uint8Array([1, 2, 3, 4])], { type: 'audio/mpeg' }), 'episode.mp3');
+  form.append(
+    'audioFile',
+    new Blob([new Uint8Array([1, 2, 3, 4])], { type: 'audio/mpeg' }),
+    'episode.mp3',
+  );
   for (const [key, value] of Object.entries(fields)) form.append(key, value);
 
   return fetch(`${baseUrl}/api/podcasts/episodes/${episodeId}/ingest`, {
@@ -197,11 +203,7 @@ async function ingest(
 }
 
 async function readEpisode(id: string) {
-  const [row] = await getDb()
-    .select()
-    .from(episodesTable)
-    .where(eq(episodesTable.id, id))
-    .limit(1);
+  const [row] = await getDb().select().from(episodesTable).where(eq(episodesTable.id, id)).limit(1);
   return row;
 }
 
@@ -246,7 +248,7 @@ async function claimInAnotherProcess(jti: string, episodeId: string): Promise<st
 async function abandon(
   episodeId: string,
   ticket: string | undefined,
-  body?: Record<string, unknown>
+  body?: Record<string, unknown>,
 ): Promise<Response> {
   return fetch(`${baseUrl}/api/podcasts/episodes/${episodeId}/ingest/abandon`, {
     method: 'POST',
@@ -291,7 +293,7 @@ describe('POST /api/podcasts/:id/episodes/draft', () => {
     if (!drafted) throw new Error('no draft in response');
     expect(`ticket present: ${drafted.ingestTicket.length > 0}`).toBe('ticket present: true');
     expect(`expiry parses: ${!Number.isNaN(Date.parse(drafted.expiresAt))}`).toBe(
-      'expiry parses: true'
+      'expiry parses: true',
     );
 
     const episode = await readEpisode(drafted.episodeId);
@@ -309,7 +311,7 @@ describe('POST /api/podcasts/:id/episodes/draft', () => {
     const tickets = await getDb().select().from(episodeIngestTickets);
     expect(`tickets: ${tickets.length}`).toBe('tickets: 1');
     expect(`ticket episode: ${tickets[0]?.episodeId === drafted.episodeId}`).toBe(
-      'ticket episode: true'
+      'ticket episode: true',
     );
     expect(`consumed: ${tickets[0]?.consumedAt}`).toBe('consumed: null');
   });
@@ -346,7 +348,7 @@ describe('POST /api/podcasts/:id/episodes/draft', () => {
     const showId = await seedShow();
     expect(`no title: ${(await draft(showId, OWNER, {})).status}`).toBe('no title: 400');
     expect(`blank title: ${(await draft(showId, OWNER, { title: '   ' })).status}`).toBe(
-      'blank title: 400'
+      'blank title: 400',
     );
   });
 });
@@ -384,7 +386,7 @@ describe('POST /api/podcasts/episodes/:id/ingest — the happy path', () => {
     // transcode really was queued — both observable, not assumed.
     expect(`stored: ${storedKeys.length}`).toBe('stored: 1');
     expect(`key names episode: ${storedKeys[0]?.includes(drafted.episodeId)}`).toBe(
-      'key names episode: true'
+      'key names episode: true',
     );
     expect(`enqueued: ${enqueuedEpisodeIds.join(',')}`).toBe(`enqueued: ${drafted.episodeId}`);
   });
@@ -445,7 +447,7 @@ describe('the redemption gate refuses', () => {
 
     // Positive control: the same request WITH the ticket works.
     expect(`with ticket: ${(await ingest(d.episodeId, d.ingestTicket)).status}`).toBe(
-      'with ticket: 202'
+      'with ticket: 202',
     );
   });
 
@@ -460,7 +462,7 @@ describe('the redemption gate refuses', () => {
     const second = await drafted();
 
     expect(`crossed: ${(await ingest(second.episodeId, first.ingestTicket)).status}`).toBe(
-      'crossed: 404'
+      'crossed: 404',
     );
     // Nothing was written to the episode the ticket was pointed at.
     expect(`no upload: ${storedKeys.length}`).toBe('no upload: 0');
@@ -468,11 +470,11 @@ describe('the redemption gate refuses', () => {
     // And each ticket still works on its OWN episode, which is what says the
     // refusal above was the binding and not a broken fixture.
     expect(`first on first: ${(await ingest(first.episodeId, first.ingestTicket)).status}`).toBe(
-      'first on first: 202'
+      'first on first: 202',
     );
-    expect(`second on second: ${(await ingest(second.episodeId, second.ingestTicket)).status}`).toBe(
-      'second on second: 202'
-    );
+    expect(
+      `second on second: ${(await ingest(second.episodeId, second.ingestTicket)).status}`,
+    ).toBe('second on second: 202');
   });
 
   it('a ticket for a different episode OF THE SAME SHOW', async () => {
@@ -492,16 +494,16 @@ describe('the redemption gate refuses', () => {
     if (!one.draft || !two.draft) throw new Error('no draft');
 
     expect(
-      `same show crossed: ${(await ingest(two.draft.episodeId, one.draft.ingestTicket)).status}`
+      `same show crossed: ${(await ingest(two.draft.episodeId, one.draft.ingestTicket)).status}`,
     ).toBe('same show crossed: 404');
     expect(`no upload: ${storedKeys.length}`).toBe('no upload: 0');
 
     // Both tickets still work on their own episode.
     expect(`one: ${(await ingest(one.draft.episodeId, one.draft.ingestTicket)).status}`).toBe(
-      'one: 202'
+      'one: 202',
     );
     expect(`two: ${(await ingest(two.draft.episodeId, two.draft.ingestTicket)).status}`).toBe(
-      'two: 202'
+      'two: 202',
     );
   });
 
@@ -526,7 +528,7 @@ describe('the redemption gate refuses', () => {
       .where(eq(episodeIngestTickets.jti, jti));
 
     expect(`stale row: ${(await ingest(d.episodeId, d.ingestTicket)).status}`).toBe(
-      'stale row: 409'
+      'stale row: 409',
     );
     expect(`no upload: ${storedKeys.length}`).toBe('no upload: 0');
 
@@ -554,7 +556,7 @@ describe('the redemption gate refuses', () => {
     const d = await drafted();
 
     expect(`first use: ${(await ingest(d.episodeId, d.ingestTicket)).status}`).toBe(
-      'first use: 202'
+      'first use: 202',
     );
     expect(`replay: ${(await ingest(d.episodeId, d.ingestTicket)).status}`).toBe('replay: 409');
     // The replay uploaded nothing — the claim is ahead of the upload on purpose.
@@ -578,7 +580,7 @@ describe('the redemption gate refuses', () => {
      */
     const consumed = await drafted();
     expect(`first use: ${(await ingest(consumed.episodeId, consumed.ingestTicket)).status}`).toBe(
-      'first use: 202'
+      'first use: 202',
     );
 
     // An UNUSED ticket, claimed by the same separate process. The positive
@@ -586,11 +588,11 @@ describe('the redemption gate refuses', () => {
     // child process being unable to claim anything at all.
     const unused = await drafted();
     expect(
-      `other process, unused: ${await claimInAnotherProcess(jtiOf(unused.ingestTicket), unused.episodeId)}`
+      `other process, unused: ${await claimInAnotherProcess(jtiOf(unused.ingestTicket), unused.episodeId)}`,
     ).toBe('other process, unused: true');
 
     expect(
-      `other process, replay: ${await claimInAnotherProcess(jtiOf(consumed.ingestTicket), consumed.episodeId)}`
+      `other process, replay: ${await claimInAnotherProcess(jtiOf(consumed.ingestTicket), consumed.episodeId)}`,
     ).toBe('other process, replay: false');
   });
 
@@ -600,7 +602,7 @@ describe('the redemption gate refuses', () => {
     // and the endpoint still refuses.
     const d = await drafted();
     expect(`first use: ${(await ingest(d.episodeId, d.ingestTicket)).status}`).toBe(
-      'first use: 202'
+      'first use: 202',
     );
     const fresh = await drafted();
 
@@ -608,13 +610,13 @@ describe('the redemption gate refuses', () => {
     await connectDb();
 
     expect(`replay after reconnect: ${(await ingest(d.episodeId, d.ingestTicket)).status}`).toBe(
-      'replay after reconnect: 409'
+      'replay after reconnect: 409',
     );
     // The control: a ticket drafted before the reconnect still works after it,
     // so the refusal is the claim and not the reconnect breaking everything.
-    expect(`fresh after reconnect: ${(await ingest(fresh.episodeId, fresh.ingestTicket)).status}`).toBe(
-      'fresh after reconnect: 202'
-    );
+    expect(
+      `fresh after reconnect: ${(await ingest(fresh.episodeId, fresh.ingestTicket)).status}`,
+    ).toBe('fresh after reconnect: 202');
   });
 
   it('a ticket for an episode that is already READY', async () => {
@@ -624,7 +626,7 @@ describe('the redemption gate refuses', () => {
     // this endpoint always says.
     const other = await drafted();
     expect(`control: ${(await ingest(other.episodeId, other.ingestTicket)).status}`).toBe(
-      'control: 202'
+      'control: 202',
     );
 
     await getDb()
@@ -653,7 +655,7 @@ describe('the redemption gate refuses', () => {
       .where(eq(episodesTable.id, d.episodeId));
 
     expect(`has media: ${(await ingest(d.episodeId, d.ingestTicket)).status}`).toBe(
-      'has media: 409'
+      'has media: 409',
     );
   });
 
@@ -668,7 +670,7 @@ describe('the redemption gate refuses', () => {
     // The signed owner records who was entitled at mint time; the show says who
     // is entitled now. Both have to agree, so the ticket dies with the transfer.
     expect(`after transfer: ${(await ingest(d.episodeId, d.ingestTicket)).status}`).toBe(
-      'after transfer: 404'
+      'after transfer: 404',
     );
     expect(`no upload: ${storedKeys.length}`).toBe('no upload: 0');
   });
@@ -698,7 +700,7 @@ describe('the redemption gate refuses', () => {
     const jti = jtiOf(d.ingestTicket);
     expect(`ticket unspent: ${(await readTicket(jti))?.consumedAt}`).toBe('ticket unspent: null');
     expect(`retry works: ${(await ingest(d.episodeId, d.ingestTicket)).status}`).toBe(
-      'retry works: 202'
+      'retry works: 202',
     );
   });
 });
@@ -779,17 +781,17 @@ describe('a ticket holder can set the audio metadata and NOTHING else', () => {
 
     // `Number('abc')` is NaN and `Number('')` is 0 — both would reach an
     // `integer` column as a crash or a wrong answer.
-    expect(`nan: ${(await ingest(d.episodeId, d.ingestTicket, { episodeNumber: 'abc' })).status}`).toBe(
-      'nan: 400'
-    );
-    expect(`negative: ${(await ingest(d.episodeId, d.ingestTicket, { season: '-4' })).status}`).toBe(
-      'negative: 400'
-    );
+    expect(
+      `nan: ${(await ingest(d.episodeId, d.ingestTicket, { episodeNumber: 'abc' })).status}`,
+    ).toBe('nan: 400');
+    expect(
+      `negative: ${(await ingest(d.episodeId, d.ingestTicket, { season: '-4' })).status}`,
+    ).toBe('negative: 400');
     // Positive control, same ticket: a real number is accepted, so the two
     // refusals are the validation and not the endpoint.
-    expect(`valid: ${(await ingest(d.episodeId, d.ingestTicket, { episodeNumber: '12' })).status}`).toBe(
-      'valid: 202'
-    );
+    expect(
+      `valid: ${(await ingest(d.episodeId, d.ingestTicket, { episodeNumber: '12' })).status}`,
+    ).toBe('valid: 202');
   });
 });
 
@@ -824,7 +826,9 @@ describe('the ingest ticket may name the episode', () => {
     // The response a worker reads back carries the new name too, so it never has
     // to re-fetch to learn what the episode is now called.
     const body = (await response.json()) as { data: { title?: string } };
-    expect(`dto title: ${body.data.title}`).toBe('dto title: Why the Moon Pays the Electricity Bill');
+    expect(`dto title: ${body.data.title}`).toBe(
+      'dto title: Why the Moon Pays the Electricity Bill',
+    );
   });
 
   it('keeps the draft title when the ingest carries none', async () => {
@@ -865,26 +869,26 @@ describe('the ingest ticket may name the episode', () => {
     const d = await draftedWithTitle('Still Named');
 
     expect(`empty: ${(await ingest(d.episodeId, d.ingestTicket, { title: '' })).status}`).toBe(
-      'empty: 400'
+      'empty: 400',
     );
     expect(`blank: ${(await ingest(d.episodeId, d.ingestTicket, { title: '   ' })).status}`).toBe(
-      'blank: 400'
+      'blank: 400',
     );
 
     const unchanged = await readEpisode(d.episodeId);
     expect(`title: ${unchanged?.title}`).toBe('title: Still Named');
     expect(`no upload: ${storedKeys.length}`).toBe('no upload: 0');
     expect(`ticket unspent: ${(await readTicket(jtiOf(d.ingestTicket)))?.consumedAt}`).toBe(
-      'ticket unspent: null'
+      'ticket unspent: null',
     );
 
     // Positive control, same ticket: a real name is accepted, so the two
     // refusals are the validation and not a ticket this suite had already burnt.
     expect(
-      `valid: ${(await ingest(d.episodeId, d.ingestTicket, { title: 'A Real Name' })).status}`
+      `valid: ${(await ingest(d.episodeId, d.ingestTicket, { title: 'A Real Name' })).status}`,
     ).toBe('valid: 202');
     expect(`stored title: ${(await readEpisode(d.episodeId))?.title}`).toBe(
-      'stored title: A Real Name'
+      'stored title: A Real Name',
     );
   });
 
@@ -935,7 +939,7 @@ describe('POST /api/podcasts/episodes/:id/ingest/abandon', () => {
 
     expect(`after: ${(await readEpisode(d.episodeId))?.status}`).toBe('after: failed');
     expect(`ticket spent: ${(await readTicket(jtiOf(d.ingestTicket)))?.consumedAt !== null}`).toBe(
-      'ticket spent: true'
+      'ticket spent: true',
     );
     // Nothing was uploaded and nothing was queued — this ending touches neither.
     expect(`no upload: ${storedKeys.length}`).toBe('no upload: 0');
@@ -980,7 +984,7 @@ describe('POST /api/podcasts/episodes/:id/ingest/abandon', () => {
     const other = await drafted();
     await ingest(other.episodeId, other.ingestTicket, { title: marker });
     expect(`control, stored title: ${(await readEpisode(other.episodeId))?.title}`).toBe(
-      `control, stored title: ${marker}`
+      `control, stored title: ${marker}`,
     );
   });
 
@@ -997,22 +1001,22 @@ describe('POST /api/podcasts/episodes/:id/ingest/abandon', () => {
      */
     const d = await drafted();
 
-    expect(`too long: ${(await abandon(d.episodeId, d.ingestTicket, { reason: 'x'.repeat(201) })).status}`).toBe(
-      'too long: 400'
-    );
+    expect(
+      `too long: ${(await abandon(d.episodeId, d.ingestTicket, { reason: 'x'.repeat(201) })).status}`,
+    ).toBe('too long: 400');
     expect(`blank: ${(await abandon(d.episodeId, d.ingestTicket, { reason: '   ' })).status}`).toBe(
-      'blank: 400'
+      'blank: 400',
     );
 
     expect(`untouched: ${(await readEpisode(d.episodeId))?.status}`).toBe('untouched: processing');
     expect(`ticket unspent: ${(await readTicket(jtiOf(d.ingestTicket)))?.consumedAt}`).toBe(
-      'ticket unspent: null'
+      'ticket unspent: null',
     );
 
     // The control, same ticket: a reason at the limit is accepted, so the two
     // refusals are the bound and not a ticket this test had already burnt.
     expect(
-      `at the limit: ${(await abandon(d.episodeId, d.ingestTicket, { reason: 'x'.repeat(200) })).status}`
+      `at the limit: ${(await abandon(d.episodeId, d.ingestTicket, { reason: 'x'.repeat(200) })).status}`,
     ).toBe('at the limit: 200');
   });
 
@@ -1028,25 +1032,25 @@ describe('POST /api/podcasts/episodes/:id/ingest/abandon', () => {
     const two = await draft(showId);
     if (!one.draft || !two.draft) throw new Error('no draft');
 
-    expect(
-      `crossed: ${(await abandon(two.draft.episodeId, one.draft.ingestTicket)).status}`
-    ).toBe('crossed: 404');
+    expect(`crossed: ${(await abandon(two.draft.episodeId, one.draft.ingestTicket)).status}`).toBe(
+      'crossed: 404',
+    );
     // The episode the ticket was pointed at was not touched.
     expect(`untouched: ${(await readEpisode(two.draft.episodeId))?.status}`).toBe(
-      'untouched: processing'
+      'untouched: processing',
     );
     // And neither ticket was spent on the refusal.
     expect(`one unspent: ${(await readTicket(jtiOf(one.draft.ingestTicket)))?.consumedAt}`).toBe(
-      'one unspent: null'
+      'one unspent: null',
     );
 
     // Both tickets still work on their OWN episode, which is what says the
     // refusal was the binding and not a broken fixture.
     expect(`one: ${(await abandon(one.draft.episodeId, one.draft.ingestTicket)).status}`).toBe(
-      'one: 200'
+      'one: 200',
     );
     expect(`two: ${(await abandon(two.draft.episodeId, two.draft.ingestTicket)).status}`).toBe(
-      'two: 200'
+      'two: 200',
     );
   });
 
@@ -1063,7 +1067,7 @@ describe('POST /api/podcasts/episodes/:id/ingest/abandon', () => {
       .where(eq(episodeIngestTickets.jti, jti));
 
     expect(`stale row: ${(await abandon(d.episodeId, d.ingestTicket)).status}`).toBe(
-      'stale row: 409'
+      'stale row: 409',
     );
     expect(`untouched: ${(await readEpisode(d.episodeId))?.status}`).toBe('untouched: processing');
 
@@ -1080,10 +1084,12 @@ describe('POST /api/podcasts/episodes/:id/ingest/abandon', () => {
     const d = await drafted();
 
     expect(`first use: ${(await abandon(d.episodeId, d.ingestTicket)).status}`).toBe(
-      'first use: 200'
+      'first use: 200',
     );
     expect(`replay: ${(await abandon(d.episodeId, d.ingestTicket)).status}`).toBe('replay: 409');
-    expect(`still failed: ${(await readEpisode(d.episodeId))?.status}`).toBe('still failed: failed');
+    expect(`still failed: ${(await readEpisode(d.episodeId))?.status}`).toBe(
+      'still failed: failed',
+    );
   });
 
   it('spends the SAME single use the audio redemption spends, in both directions', async () => {
@@ -1096,23 +1102,23 @@ describe('POST /api/podcasts/episodes/:id/ingest/abandon', () => {
      */
     const abandoned = await drafted();
     expect(`abandon: ${(await abandon(abandoned.episodeId, abandoned.ingestTicket)).status}`).toBe(
-      'abandon: 200'
+      'abandon: 200',
     );
     expect(
-      `then ingest: ${(await ingest(abandoned.episodeId, abandoned.ingestTicket)).status}`
+      `then ingest: ${(await ingest(abandoned.episodeId, abandoned.ingestTicket)).status}`,
     ).toBe('then ingest: 409');
     expect(`no upload: ${storedKeys.length}`).toBe('no upload: 0');
 
     const ingested = await drafted();
     expect(`ingest: ${(await ingest(ingested.episodeId, ingested.ingestTicket)).status}`).toBe(
-      'ingest: 202'
+      'ingest: 202',
     );
     expect(
-      `then abandon: ${(await abandon(ingested.episodeId, ingested.ingestTicket)).status}`
+      `then abandon: ${(await abandon(ingested.episodeId, ingested.ingestTicket)).status}`,
     ).toBe('then abandon: 409');
     // The episode that DID get audio was not dragged to `failed` by the refusal.
     expect(`ingested status: ${(await readEpisode(ingested.episodeId))?.status}`).toBe(
-      'ingested status: processing'
+      'ingested status: processing',
     );
   });
 
@@ -1128,17 +1134,17 @@ describe('POST /api/podcasts/episodes/:id/ingest/abandon', () => {
      * alone cannot tell whether the first guard is there at all.
      */
     expect(`no header reason: ${((await missing.json()) as { error?: string }).error}`).toBe(
-      'no header reason: Ingest ticket required'
+      'no header reason: Ingest ticket required',
     );
 
     const bad = await abandon(d.episodeId, 'not-a-jwt');
     expect(`bad token reason: ${((await bad.json()) as { error?: string }).error}`).toBe(
-      'bad token reason: Invalid ingest ticket'
+      'bad token reason: Invalid ingest ticket',
     );
 
     // Positive control: the same request WITH the ticket works.
     expect(`with ticket: ${(await abandon(d.episodeId, d.ingestTicket)).status}`).toBe(
-      'with ticket: 200'
+      'with ticket: 200',
     );
   });
 
@@ -1151,7 +1157,7 @@ describe('POST /api/podcasts/episodes/:id/ingest/abandon', () => {
       .where(eq(podcasts.ownerOxyUserId, OWNER));
 
     expect(`after transfer: ${(await abandon(d.episodeId, d.ingestTicket)).status}`).toBe(
-      'after transfer: 404'
+      'after transfer: 404',
     );
     expect(`untouched: ${(await readEpisode(d.episodeId))?.status}`).toBe('untouched: processing');
   });
@@ -1168,7 +1174,7 @@ describe('POST /api/podcasts/episodes/:id/ingest/abandon', () => {
     // this endpoint always says.
     const other = await drafted();
     expect(`control: ${(await abandon(other.episodeId, other.ingestTicket)).status}`).toBe(
-      'control: 200'
+      'control: 200',
     );
 
     await getDb()
@@ -1180,7 +1186,7 @@ describe('POST /api/podcasts/episodes/:id/ingest/abandon', () => {
     expect(`still ready: ${(await readEpisode(d.episodeId))?.status}`).toBe('still ready: ready');
     // The ticket was NOT spent on the refusal.
     expect(`ticket unspent: ${(await readTicket(jtiOf(d.ingestTicket)))?.consumedAt}`).toBe(
-      'ticket unspent: null'
+      'ticket unspent: null',
     );
   });
 });

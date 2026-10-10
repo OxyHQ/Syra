@@ -64,7 +64,7 @@ import { episodes, podcasts } from '../schema/podcasts';
  */
 export function viewerOwnsShow(
   show: { readonly ownerOxyUserId: string | null },
-  viewerId: string | null | undefined
+  viewerId: string | null | undefined,
 ): boolean {
   return !!viewerId && show.ownerOxyUserId !== null && show.ownerOxyUserId === viewerId;
 }
@@ -84,8 +84,12 @@ function showOwnedBy(viewerId: string | null | undefined): SQL | undefined {
  * question, and the two must never be able to disagree. Change them together.
  */
 export function viewerCanReadShow(
-  show: { readonly status: string; readonly visibility: string; readonly ownerOxyUserId: string | null },
-  viewerId: string | null | undefined
+  show: {
+    readonly status: string;
+    readonly visibility: string;
+    readonly ownerOxyUserId: string | null;
+  },
+  viewerId: string | null | undefined,
 ): boolean {
   if (viewerOwnsShow(show, viewerId)) return true;
   return show.status === 'active' && show.visibility !== 'private';
@@ -142,7 +146,7 @@ function showOfEpisode(condition: SQL): SQL {
     getDb()
       .select({ one: sql`1` })
       .from(podcasts)
-      .where(and(eq(podcasts.id, episodes.podcastId), condition))
+      .where(and(eq(podcasts.id, episodes.podcastId), condition)),
   );
 }
 
@@ -183,7 +187,7 @@ export function showIsReadableByViewer(viewerId: string | null | undefined): SQL
  */
 export function episodeVisibilityFilter(
   ownerOxyUserId: string | null | undefined,
-  viewerId: string | null | undefined
+  viewerId: string | null | undefined,
 ): SQL | undefined {
   const isOwner = !!viewerId && !!ownerOxyUserId && viewerId === ownerOxyUserId;
   return isOwner ? undefined : eq(episodes.status, 'ready');
@@ -209,7 +213,7 @@ export function publiclyPlayableEpisodeFilter(): SQL {
     showIsListable(),
     or(
       eq(episodes.source, 'syra'),
-      and(isNotNull(episodes.enclosureUrl), ne(episodes.enclosureUrl, ''))
-    )
+      and(isNotNull(episodes.enclosureUrl), ne(episodes.enclosureUrl, '')),
+    ),
   ) as SQL;
 }

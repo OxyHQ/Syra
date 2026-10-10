@@ -22,35 +22,49 @@ const albumResponseSchema = albumSchema.passthrough();
 const artistResponseSchema = artistSchema.passthrough();
 const playlistResponseSchema = playlistSchema.passthrough();
 
-const tracksResponseSchema = z.object({
-  tracks: z.array(trackResponseSchema),
-  total: z.number(),
-  hasMore: z.boolean(),
-}).passthrough();
-const albumsResponseSchema = z.object({
-  albums: z.array(albumResponseSchema),
-  total: z.number(),
-  hasMore: z.boolean(),
-}).passthrough();
-const artistsResponseSchema = z.object({
-  artists: z.array(artistResponseSchema),
-  total: z.number(),
-  hasMore: z.boolean(),
-}).passthrough();
-const albumTracksResponseSchema = z.object({
-  tracks: z.array(trackResponseSchema),
-}).passthrough();
-const artistAlbumsResponseSchema = z.object({
-  albums: z.array(albumResponseSchema),
-}).passthrough();
-const playlistTracksResponseSchema = z.object({
-  tracks: z.array(trackResponseSchema),
-  total: z.number(),
-}).passthrough();
-const playlistsResponseSchema = z.object({
-  playlists: z.array(playlistResponseSchema),
-  total: z.number(),
-}).passthrough();
+const tracksResponseSchema = z
+  .object({
+    tracks: z.array(trackResponseSchema),
+    total: z.number(),
+    hasMore: z.boolean(),
+  })
+  .passthrough();
+const albumsResponseSchema = z
+  .object({
+    albums: z.array(albumResponseSchema),
+    total: z.number(),
+    hasMore: z.boolean(),
+  })
+  .passthrough();
+const artistsResponseSchema = z
+  .object({
+    artists: z.array(artistResponseSchema),
+    total: z.number(),
+    hasMore: z.boolean(),
+  })
+  .passthrough();
+const albumTracksResponseSchema = z
+  .object({
+    tracks: z.array(trackResponseSchema),
+  })
+  .passthrough();
+const artistAlbumsResponseSchema = z
+  .object({
+    albums: z.array(albumResponseSchema),
+  })
+  .passthrough();
+const playlistTracksResponseSchema = z
+  .object({
+    tracks: z.array(trackResponseSchema),
+    total: z.number(),
+  })
+  .passthrough();
+const playlistsResponseSchema = z
+  .object({
+    playlists: z.array(playlistResponseSchema),
+    total: z.number(),
+  })
+  .passthrough();
 
 function parseMusicResponse<T>(schema: z.ZodType<T>, data: unknown, label: string): T {
   const parsed = schema.safeParse(data);
@@ -68,7 +82,10 @@ function parseMusicResponse<T>(schema: z.ZodType<T>, data: unknown, label: strin
  */
 export const musicService = {
   // Tracks
-  async getTracks(params?: { limit?: number; offset?: number }): Promise<{ tracks: Track[]; total: number; hasMore: boolean }> {
+  async getTracks(params?: {
+    limit?: number;
+    offset?: number;
+  }): Promise<{ tracks: Track[]; total: number; hasMore: boolean }> {
     const response = await api.get<unknown>('/tracks', params);
     const data = parseMusicResponse(tracksResponseSchema, response.data, 'tracks');
     return { ...data, tracks: data.tracks.map(normalizeTrackImages) };
@@ -79,14 +96,20 @@ export const musicService = {
     return normalizeTrackImages(parseMusicResponse(trackResponseSchema, response.data, 'track'));
   },
 
-  async searchTracks(query: string, params?: { limit?: number; offset?: number }): Promise<{ tracks: Track[]; total: number; hasMore: boolean }> {
+  async searchTracks(
+    query: string,
+    params?: { limit?: number; offset?: number },
+  ): Promise<{ tracks: Track[]; total: number; hasMore: boolean }> {
     const response = await api.get<unknown>('/tracks/search', { q: query, ...params });
     const data = parseMusicResponse(tracksResponseSchema, response.data, 'track search');
     return { ...data, tracks: data.tracks.map(normalizeTrackImages) };
   },
 
   // Albums
-  async getAlbums(params?: { limit?: number; offset?: number }): Promise<{ albums: Album[]; total: number; hasMore: boolean }> {
+  async getAlbums(params?: {
+    limit?: number;
+    offset?: number;
+  }): Promise<{ albums: Album[]; total: number; hasMore: boolean }> {
     const response = await api.get<unknown>('/albums', params);
     const data = parseMusicResponse(albumsResponseSchema, response.data, 'albums');
     return { ...data, albums: data.albums.map(normalizeAlbumImages) };
@@ -104,7 +127,10 @@ export const musicService = {
   },
 
   // Artists
-  async getArtists(params?: { limit?: number; offset?: number }): Promise<{ artists: Artist[]; total: number; hasMore: boolean }> {
+  async getArtists(params?: {
+    limit?: number;
+    offset?: number;
+  }): Promise<{ artists: Artist[]; total: number; hasMore: boolean }> {
     const response = await api.get<unknown>('/artists', params);
     const data = parseMusicResponse(artistsResponseSchema, response.data, 'artists');
     return { ...data, artists: data.artists.map(normalizeArtistImages) };
@@ -121,7 +147,10 @@ export const musicService = {
     return { ...data, albums: data.albums.map(normalizeAlbumImages) };
   },
 
-  async getArtistTracks(artistId: string, params?: { limit?: number; offset?: number }): Promise<{ tracks: Track[]; total: number; hasMore: boolean }> {
+  async getArtistTracks(
+    artistId: string,
+    params?: { limit?: number; offset?: number },
+  ): Promise<{ tracks: Track[]; total: number; hasMore: boolean }> {
     const response = await api.get<unknown>(`/artists/${artistId}/tracks`, params);
     const data = parseMusicResponse(tracksResponseSchema, response.data, 'artist tracks');
     return { ...data, tracks: data.tracks.map(normalizeTrackImages) };
@@ -130,7 +159,9 @@ export const musicService = {
   // Playlists
   async getPlaylistById(id: string): Promise<Playlist> {
     const response = await api.get<unknown>(`/playlists/${id}`);
-    return normalizePlaylistImages(parseMusicResponse(playlistResponseSchema, response.data, 'playlist'));
+    return normalizePlaylistImages(
+      parseMusicResponse(playlistResponseSchema, response.data, 'playlist'),
+    );
   },
 
   async getPlaylistTracks(playlistId: string): Promise<{ tracks: Track[]; total: number }> {
@@ -152,6 +183,8 @@ export const musicService = {
     visibility?: string;
   }): Promise<Playlist> {
     const response = await api.post<unknown>('/playlists', data);
-    return normalizePlaylistImages(parseMusicResponse(playlistResponseSchema, response.data, 'create playlist'));
+    return normalizePlaylistImages(
+      parseMusicResponse(playlistResponseSchema, response.data, 'create playlist'),
+    );
   },
 };

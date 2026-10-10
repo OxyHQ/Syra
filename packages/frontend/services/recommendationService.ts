@@ -32,13 +32,19 @@ export interface MadeForYouResponse {
  */
 export const recommendationService = {
   /** Artists fans of `artistId` also listen to. Works for guests too. */
-  async getRelatedArtists(artistId: string, params?: { limit?: number }): Promise<RelatedArtistsResponse> {
+  async getRelatedArtists(
+    artistId: string,
+    params?: { limit?: number },
+  ): Promise<RelatedArtistsResponse> {
     const response = await api.get<RelatedArtistsResponse>(`/artists/${artistId}/related`, params);
     return { ...response.data, artists: response.data.artists.map(normalizeArtistImages) };
   },
 
   /** Tracks similar to `trackId`. Works for guests too. */
-  async getSimilarTracks(trackId: string, params?: { limit?: number }): Promise<SimilarTracksResponse> {
+  async getSimilarTracks(
+    trackId: string,
+    params?: { limit?: number },
+  ): Promise<SimilarTracksResponse> {
     const response = await api.get<SimilarTracksResponse>(`/tracks/${trackId}/similar`, params);
     return { ...response.data, tracks: response.data.tracks.map(normalizeTrackImages) };
   },

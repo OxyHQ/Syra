@@ -254,7 +254,13 @@ export const PODCAST_SOURCES = ['rss', 'syra'] as const;
  * Syra-hosted; the provenance row records who made it, and
  * {@link podcasts.aiGenerated} records whether a machine did.
  */
-export const PODCAST_PROVENANCE_PROVIDERS = ['rss', 'syra', 'podcastindex', 'apple', 'alia'] as const;
+export const PODCAST_PROVENANCE_PROVIDERS = [
+  'rss',
+  'syra',
+  'podcastindex',
+  'apple',
+  'alia',
+] as const;
 
 /** `@syra/shared-types` `podcastTypeSchema`. */
 export const PODCAST_TYPES = ['episodic', 'serial'] as const;
@@ -387,7 +393,7 @@ export const podcasts = pgTable(
     // The provenance LOG is `podcast_sources` (child table, below) — see the
     // file-level doc comment for why it is built despite having no writer.
     searchVector: tsvector().generatedAlwaysAs(
-      sql`to_tsvector('english', title || ' ' || coalesce(author, ''))`
+      sql`to_tsvector('english', title || ' ' || coalesce(author, ''))`,
     ),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -398,7 +404,7 @@ export const podcasts = pgTable(
     check('podcasts_status_check', sql`${t.status} in (${sql.raw(inList(PODCAST_STATUSES))})`),
     check(
       'podcasts_visibility_check',
-      sql`${t.visibility} in (${sql.raw(inList(PODCAST_VISIBILITIES))})`
+      sql`${t.visibility} in (${sql.raw(inList(PODCAST_VISIBILITIES))})`,
     ),
     check('podcasts_popularity_check', sql`${t.popularity} between 0 and 100`),
     // Sparse-unique in Mongo — a plain Postgres `unique()` already tolerates
@@ -458,7 +464,7 @@ export const podcasts = pgTable(
     index('podcasts_image_sizes_xlarge_id_idx').on(t.imageSizesXlargeId),
     index('podcasts_image_sizes_xxlarge_id_idx').on(t.imageSizesXxlargeId),
     index('podcasts_image_sizes_original_id_idx').on(t.imageSizesOriginalId),
-  ]
+  ],
 );
 
 // ── podcast_funding (child of podcasts) ─────────────────────────────────────
@@ -477,7 +483,7 @@ export const podcastFunding = pgTable(
   (t) => [
     check('podcast_funding_position_check', sql`${t.position} >= 0`),
     unique('podcast_funding_podcast_id_position_key').on(t.podcastId, t.position),
-  ]
+  ],
 );
 
 // ── podcast_persons (child of podcasts — channel-level Hosts & Guests) ──────
@@ -506,7 +512,7 @@ export const podcastPersons = pgTable(
     // strong-key tier. See the file-level doc comment.
     index('podcast_persons_linked_oxy_user_id_idx').on(t.linkedOxyUserId),
     index('podcast_persons_href_idx').on(t.href),
-  ]
+  ],
 );
 
 // ── podcast_sources (SourceProvenance child table — see the file-level doc comment) ──
@@ -532,11 +538,11 @@ export const podcastSources = pgTable(
   (t) => [
     check(
       'podcast_sources_provider_check',
-      sql`${t.provider} in (${sql.raw(inList(PODCAST_PROVENANCE_PROVIDERS))})`
+      sql`${t.provider} in (${sql.raw(inList(PODCAST_PROVENANCE_PROVIDERS))})`,
     ),
     check('podcast_sources_position_check', sql`${t.position} >= 0`),
     unique('podcast_sources_podcast_id_position_key').on(t.podcastId, t.position),
-  ]
+  ],
 );
 
 // ── podcast_categories (junction, Podcast ↔ genres — see the file-level doc comment) ──
@@ -593,7 +599,7 @@ export const podcastCategories = pgTable(
       columns: [t.genreId, t.kind],
       foreignColumns: [genres.id, genres.kind],
     }).onDelete('restrict'),
-  ]
+  ],
 );
 
 // ── episodes ──────────────────────────────────────────────────────────────
@@ -677,16 +683,19 @@ export const episodes = pgTable(
     updatedAt: updatedAt(),
   },
   (t) => [
-    check('episodes_episode_type_check', sql`${t.episodeType} in (${sql.raw(inList(EPISODE_TYPES))})`),
+    check(
+      'episodes_episode_type_check',
+      sql`${t.episodeType} in (${sql.raw(inList(EPISODE_TYPES))})`,
+    ),
     check('episodes_source_check', sql`${t.source} in (${sql.raw(inList(PODCAST_SOURCES))})`),
     check('episodes_status_check', sql`${t.status} in (${sql.raw(inList(EPISODE_STATUSES))})`),
     check(
       'episodes_cache_status_check',
-      sql`${t.cacheStatus} is null or ${t.cacheStatus} in (${sql.raw(inList(EPISODE_CACHE_STATUSES))})`
+      sql`${t.cacheStatus} is null or ${t.cacheStatus} in (${sql.raw(inList(EPISODE_CACHE_STATUSES))})`,
     ),
     check(
       'episodes_audio_source_format_check',
-      sql`${t.audioSourceFormat} is null or ${t.audioSourceFormat} in (${sql.raw(inList(AUDIO_FORMATS))})`
+      sql`${t.audioSourceFormat} is null or ${t.audioSourceFormat} in (${sql.raw(inList(AUDIO_FORMATS))})`,
     ),
     check('episodes_popularity_check', sql`${t.popularity} between 0 and 100`),
     // One episode per feed guid, direct port of the Mongo compound unique.
@@ -726,7 +735,7 @@ export const episodes = pgTable(
     index('episodes_podcast_id_episode_number_pub_date_idx').on(
       t.podcastId,
       t.episodeNumber.desc(),
-      t.pubDate.desc()
+      t.pubDate.desc(),
     ),
     // Cross-show listings (search, "appears in") — public playability gate.
     index('episodes_ready_popularity_idx')
@@ -743,7 +752,7 @@ export const episodes = pgTable(
     index('episodes_image_sizes_xlarge_id_idx').on(t.imageSizesXlargeId),
     index('episodes_image_sizes_xxlarge_id_idx').on(t.imageSizesXxlargeId),
     index('episodes_image_sizes_original_id_idx').on(t.imageSizesOriginalId),
-  ]
+  ],
 );
 
 // ── episode_transcripts (child of episodes) ─────────────────────────────────
@@ -763,7 +772,7 @@ export const episodeTranscripts = pgTable(
   (t) => [
     check('episode_transcripts_position_check', sql`${t.position} >= 0`),
     unique('episode_transcripts_episode_id_position_key').on(t.episodeId, t.position),
-  ]
+  ],
 );
 
 // ── episode_persons (child of episodes — per-episode Hosts & Guests) ────────
@@ -790,7 +799,7 @@ export const episodePersons = pgTable(
     // strongKeyCreditMatch (resolvePersons.ts) — same evidence as podcast_persons.
     index('episode_persons_linked_oxy_user_id_idx').on(t.linkedOxyUserId),
     index('episode_persons_href_idx').on(t.href),
-  ]
+  ],
 );
 
 // ── episode_hls_renditions (child of episodes) ──────────────────────────────
@@ -810,7 +819,7 @@ export const episodeHlsRenditions = pgTable(
   (t) => [
     check('episode_hls_renditions_position_check', sql`${t.position} >= 0`),
     unique('episode_hls_renditions_episode_id_position_key').on(t.episodeId, t.position),
-  ]
+  ],
 );
 
 // ── episode_progress (per-user playback position — "continue listening") ───
@@ -845,7 +854,7 @@ export const episodeProgress = pgTable(
     index('episode_progress_oxy_user_id_updated_at_idx')
       .on(t.oxyUserId, t.updatedAt.desc())
       .where(sql`${t.completed} = false`),
-  ]
+  ],
 );
 
 // ── episode_ingest_tickets (single-use capability to attach audio) ─────────
@@ -909,5 +918,5 @@ export const episodeIngestTickets = pgTable(
     // The expiry sweep's leading key (`db/expiry.ts`); `gates.test.ts` fails a
     // registered target that has no index whose FIRST key is the swept column.
     index('episode_ingest_tickets_expires_at_idx').on(t.expiresAt),
-  ]
+  ],
 );

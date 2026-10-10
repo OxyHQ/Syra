@@ -77,7 +77,7 @@ const SHAPES: readonly Shape[] = [true, false].flatMap((isAvailable) =>
     id: `${MARKER}-available=${isAvailable}-removed=${copyrightRemoved}`,
     isAvailable,
     copyrightRemoved,
-  }))
+  })),
 );
 
 beforeAll(async () => {
@@ -99,7 +99,7 @@ beforeAll(async () => {
       status: 'ready' as const,
       isAvailable: shape.isAvailable,
       copyrightRemoved: shape.copyrightRemoved,
-    }))
+    })),
   );
 });
 
@@ -122,12 +122,19 @@ describe('playableTrackFilter / isPlayableTrack agreement', () => {
       .where(and(playableTrackFilter(), like(tracks.id, `${MARKER}%`)));
 
     const stored = await db
-      .select({ id: tracks.id, isAvailable: tracks.isAvailable, copyrightRemoved: tracks.copyrightRemoved })
+      .select({
+        id: tracks.id,
+        isAvailable: tracks.isAvailable,
+        copyrightRemoved: tracks.copyrightRemoved,
+      })
       .from(tracks)
       .where(like(tracks.id, `${MARKER}%`));
 
     expect(listed.map((row) => row.id).sort()).toEqual(
-      stored.filter(isPlayableTrack).map((row) => row.id).sort()
+      stored
+        .filter(isPlayableTrack)
+        .map((row) => row.id)
+        .sort(),
     );
   });
 
@@ -135,7 +142,11 @@ describe('playableTrackFilter / isPlayableTrack agreement', () => {
     const db = getDb();
 
     const stored = await db
-      .select({ id: tracks.id, isAvailable: tracks.isAvailable, copyrightRemoved: tracks.copyrightRemoved })
+      .select({
+        id: tracks.id,
+        isAvailable: tracks.isAvailable,
+        copyrightRemoved: tracks.copyrightRemoved,
+      })
       .from(tracks)
       .where(like(tracks.id, `${MARKER}%`));
 
@@ -149,7 +160,11 @@ describe('playableTrackFilter / isPlayableTrack agreement', () => {
     const db = getDb();
 
     const stored = await db
-      .select({ id: tracks.id, isAvailable: tracks.isAvailable, copyrightRemoved: tracks.copyrightRemoved })
+      .select({
+        id: tracks.id,
+        isAvailable: tracks.isAvailable,
+        copyrightRemoved: tracks.copyrightRemoved,
+      })
       .from(tracks)
       .where(like(tracks.id, `${MARKER}%`));
     const listed = (
@@ -165,7 +180,10 @@ describe('playableTrackFilter / isPlayableTrack agreement', () => {
     // Without this, a predicate ignoring `copyright_removed` would still agree
     // with the query on every row the suite happened to insert, which is how a
     // surviving mutation looks from the inside.
-    const ignoringRemoval = stored.filter((row) => row.isAvailable).map((row) => row.id).sort();
+    const ignoringRemoval = stored
+      .filter((row) => row.isAvailable)
+      .map((row) => row.id)
+      .sort();
     const ignoringAvailability = stored
       .filter((row) => !row.copyrightRemoved)
       .map((row) => row.id)
@@ -203,8 +221,8 @@ describe('the shapes the Mongo pair disagreed on are unrepresentable', () => {
     expect(
       await sqlStateOfRefusal(
         sql`insert into ${tracks} (id, title, artist_id, artist_name, duration, source, status, is_available)
-            values (${`${MARKER}-null-available`}, 'x', ${ARTIST_ID}, 'x', 1, 'upload', 'ready', null)`
-      )
+            values (${`${MARKER}-null-available`}, 'x', ${ARTIST_ID}, 'x', 1, 'upload', 'ready', null)`,
+      ),
     ).toBe('23502');
   });
 
@@ -212,8 +230,8 @@ describe('the shapes the Mongo pair disagreed on are unrepresentable', () => {
     expect(
       await sqlStateOfRefusal(
         sql`insert into ${tracks} (id, title, artist_id, artist_name, duration, source, status, copyright_removed)
-            values (${`${MARKER}-null-removed`}, 'x', ${ARTIST_ID}, 'x', 1, 'upload', 'ready', null)`
-      )
+            values (${`${MARKER}-null-removed`}, 'x', ${ARTIST_ID}, 'x', 1, 'upload', 'ready', null)`,
+      ),
     ).toBe('23502');
   });
 
@@ -224,8 +242,8 @@ describe('the shapes the Mongo pair disagreed on are unrepresentable', () => {
     expect(
       await sqlStateOfRefusal(
         sql`insert into ${tracks} (id, title, artist_id, artist_name, duration, source, status, copyright_removed)
-            values (${`${MARKER}-nonboolean`}, 'x', ${ARTIST_ID}, 'x', 1, 'upload', 'ready', 'not-a-boolean')`
-      )
+            values (${`${MARKER}-nonboolean`}, 'x', ${ARTIST_ID}, 'x', 1, 'upload', 'ready', 'not-a-boolean')`,
+      ),
     ).toBe('22P02');
   });
 
@@ -238,7 +256,7 @@ describe('the shapes the Mongo pair disagreed on are unrepresentable', () => {
           `${MARKER}-null-available`,
           `${MARKER}-null-removed`,
           `${MARKER}-nonboolean`,
-        ])
+        ]),
       );
 
     expect(leftovers).toEqual([]);
@@ -264,7 +282,11 @@ describe('the catalog and playback authorities cannot drift apart on a real row'
     const db = getDb();
 
     const listed = await db
-      .select({ id: tracks.id, isAvailable: tracks.isAvailable, copyrightRemoved: tracks.copyrightRemoved })
+      .select({
+        id: tracks.id,
+        isAvailable: tracks.isAvailable,
+        copyrightRemoved: tracks.copyrightRemoved,
+      })
       .from(tracks)
       .where(and(playableTrackFilter(), like(tracks.id, `${MARKER}%`)));
 
@@ -283,7 +305,11 @@ describe('the catalog and playback authorities cannot drift apart on a real row'
    */
   it('all three agree on every representable row', async () => {
     const stored = await getDb()
-      .select({ id: tracks.id, isAvailable: tracks.isAvailable, copyrightRemoved: tracks.copyrightRemoved })
+      .select({
+        id: tracks.id,
+        isAvailable: tracks.isAvailable,
+        copyrightRemoved: tracks.copyrightRemoved,
+      })
       .from(tracks)
       .where(like(tracks.id, `${MARKER}%`));
 
@@ -293,14 +319,15 @@ describe('the catalog and playback authorities cannot drift apart on a real row'
           .select({ id: tracks.id })
           .from(tracks)
           .where(and(playableTrackFilter(), like(tracks.id, `${MARKER}%`)))
-      ).map((row) => row.id)
+      ).map((row) => row.id),
     );
 
     // One line per row naming all three answers, so a failure says WHICH row and
     // WHICH authority dissented rather than "expected [] to equal [X]".
     const verdicts = stored
-      .map((row) =>
-        `${row.id}: sql=${listed.has(row.id)} memory=${isPlayableTrack(row)} playback=${isTrackPlayable(row)}`
+      .map(
+        (row) =>
+          `${row.id}: sql=${listed.has(row.id)} memory=${isPlayableTrack(row)} playback=${isTrackPlayable(row)}`,
       )
       .sort();
 
@@ -310,7 +337,7 @@ describe('the catalog and playback authorities cannot drift apart on a real row'
           const expected = row.isAvailable && !row.copyrightRemoved;
           return `${row.id}: sql=${expected} memory=${expected} playback=${expected}`;
         })
-        .sort()
+        .sort(),
     );
   });
 
@@ -325,7 +352,11 @@ describe('the catalog and playback authorities cannot drift apart on a real row'
         .from(tracks)
         .where(and(playableTrackFilter(), eq(tracks.id, playable)));
       const [row] = await db
-        .select({ id: tracks.id, isAvailable: tracks.isAvailable, copyrightRemoved: tracks.copyrightRemoved })
+        .select({
+          id: tracks.id,
+          isAvailable: tracks.isAvailable,
+          copyrightRemoved: tracks.copyrightRemoved,
+        })
         .from(tracks)
         .where(eq(tracks.id, playable));
 

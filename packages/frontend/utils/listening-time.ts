@@ -9,7 +9,8 @@ export function listenedBetween(previous: ListeningSample | null, next: Listenin
   if (!previous || !previous.playing) return 0;
   const elapsed = (next.at - previous.at) / 1000;
   const advanced = next.position - previous.position;
-  if (!Number.isFinite(elapsed) || !Number.isFinite(advanced) || elapsed <= 0 || advanced <= 0) return 0;
+  if (!Number.isFinite(elapsed) || !Number.isFinite(advanced) || elapsed <= 0 || advanced <= 0)
+    return 0;
   // Tolerate scheduling jitter but not scrubbing forward. Music always plays at 1x.
   if (advanced > elapsed * 1.5 + 0.25) return 0;
   return Math.min(advanced, elapsed);

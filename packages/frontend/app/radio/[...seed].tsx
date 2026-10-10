@@ -40,11 +40,7 @@ const RadioStationScreen: React.FC = () => {
   // seed type that is not in the contract resolves to `null` and renders the
   // not-found branch below instead of firing a request that cannot succeed.
   const seed = useMemo<RadioSeed | null>(() => {
-    const segments = Array.isArray(params.seed)
-      ? params.seed
-      : params.seed
-        ? [params.seed]
-        : [];
+    const segments = Array.isArray(params.seed) ? params.seed : params.seed ? [params.seed] : [];
     const seedType = radioSeedTypeSchema.safeParse(segments[0]);
     if (!seedType.success) {
       return null;
@@ -125,7 +121,10 @@ const RadioStationScreen: React.FC = () => {
   }
 
   const playFrom = (track: Track) => {
-    const index = Math.max(0, tracks.findIndex((item) => item.id === track.id));
+    const index = Math.max(
+      0,
+      tracks.findIndex((item) => item.id === track.id),
+    );
     playTrackList(tracks, index, { type: 'radio', name: title, radio: seed });
   };
 
@@ -183,7 +182,8 @@ const RadioStationScreen: React.FC = () => {
                 </Text>
                 {stationInfo?.subtitle ? (
                   <Text
-                    className="text-muted-foreground" style={styles.headerSubtitle}
+                    className="text-muted-foreground"
+                    style={styles.headerSubtitle}
                     numberOfLines={2}
                   >
                     {stationInfo.subtitle}

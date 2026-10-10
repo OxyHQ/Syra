@@ -17,7 +17,11 @@ import {
   descNullsLast,
 } from '../db/catalog/containers';
 import { loadImageVariants, toAlbumDtos, toTrackDtos } from '../db/catalog/hydrate';
-import { normalizeImageRef, toArtistDto, type PublicCatalogEntityRow } from '../db/catalog/serialize';
+import {
+  normalizeImageRef,
+  toArtistDto,
+  type PublicCatalogEntityRow,
+} from '../db/catalog/serialize';
 import {
   findArtistClaimById,
   insertArtistClaim,
@@ -27,10 +31,7 @@ import {
   resolvePendingArtistClaim,
   toArtistClaimDto,
 } from '../db/creators/claims';
-import {
-  findAttestationUploader,
-  findAttestationsByTrackIds,
-} from '../db/creators/attestations';
+import { findAttestationUploader, findAttestationsByTrackIds } from '../db/creators/attestations';
 import { takeDownTrack } from '../services/compliance/takedown';
 import { mirrorCatalogImage } from '../services/catalog/catalogImageAssets';
 import { logger } from '../utils/logger';
@@ -88,7 +89,7 @@ async function toArtistResponses(rows: readonly PublicCatalogEntityRow[]) {
       row.imageSizesXlargeId,
       row.imageSizesXxlargeId,
       row.imageSizesOriginalId,
-    ])
+    ]),
   );
   return rows.map((row) => toArtistDto(row, lookup));
 }
@@ -119,7 +120,7 @@ async function findOwnArtistWithSuggestions(ownerOxyUserId: string) {
     })
     .from(catalogEntities)
     .where(
-      and(eq(catalogEntities.type, 'artist'), eq(catalogEntities.ownerOxyUserId, ownerOxyUserId))
+      and(eq(catalogEntities.type, 'artist'), eq(catalogEntities.ownerOxyUserId, ownerOxyUserId)),
     )
     .limit(1);
 
@@ -128,13 +129,13 @@ async function findOwnArtistWithSuggestions(ownerOxyUserId: string) {
 
 /** The signed-in user's own artist row, or `undefined`. */
 async function findOwnedArtistRow(
-  ownerOxyUserId: string
+  ownerOxyUserId: string,
 ): Promise<PublicCatalogEntityRow | undefined> {
   const [row] = await getDb()
     .select(publicColumns(catalogEntities, PROTECTED_COLUMNS_BY_TABLE))
     .from(catalogEntities)
     .where(
-      and(eq(catalogEntities.type, 'artist'), eq(catalogEntities.ownerOxyUserId, ownerOxyUserId))
+      and(eq(catalogEntities.type, 'artist'), eq(catalogEntities.ownerOxyUserId, ownerOxyUserId)),
     )
     .limit(1);
 
@@ -186,7 +187,7 @@ export const getArtistById = async (req: Request, res: Response, next: NextFunct
     }
 
     const id = getParam(req, 'id');
-    
+
     if (!isLiveEntityId(id)) {
       return res.status(404).json({ error: 'Artist not found' });
     }
@@ -214,11 +215,11 @@ export const getArtistAlbums = async (req: Request, res: Response, next: NextFun
     }
 
     const id = getParam(req, 'id');
-    
+
     if (!isLiveEntityId(id)) {
       return res.status(404).json({ error: 'Artist not found' });
     }
-    
+
     // Verify artist exists
     const artist = await findOneArtistWithPlayableTracks(id);
     if (!artist) {
@@ -255,11 +256,11 @@ export const getArtistTracks = async (req: Request, res: Response, next: NextFun
     const id = getParam(req, 'id');
     const limit = parseBoundedLimit(req.query.limit, 20);
     const offset = parseOffset(req.query.offset);
-    
+
     if (!isLiveEntityId(id)) {
       return res.status(404).json({ error: 'Artist not found' });
     }
-    
+
     // Verify artist exists
     const artist = await findOneArtistWithPlayableTracks(id);
     if (!artist) {
@@ -273,7 +274,11 @@ export const getArtistTracks = async (req: Request, res: Response, next: NextFun
         .select(publicColumns(tracks, PROTECTED_COLUMNS_BY_TABLE))
         .from(tracks)
         .where(artistTracksWhere)
-        .orderBy(imageFirst(tracks.coverArtId), descNullsLast(tracks.popularity), descNullsLast(tracks.createdAt))
+        .orderBy(
+          imageFirst(tracks.coverArtId),
+          descNullsLast(tracks.popularity),
+          descNullsLast(tracks.createdAt),
+        )
         .offset(offset)
         .limit(limit),
       getDb().select({ total: count() }).from(tracks).where(artistTracksWhere),
@@ -309,7 +314,7 @@ export const registerAsArtist = async (req: AuthRequest, res: Response, next: Ne
     // Check if user already has an artist profile
     const existingArtist = await findOwnedArtistRow(userId);
     if (existingArtist) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Already registered',
         message: 'You already have an artist profile',
         artistId: existingArtist.id,
@@ -324,7 +329,7 @@ export const registerAsArtist = async (req: AuthRequest, res: Response, next: Ne
       .where(and(eq(catalogEntities.type, 'artist'), eq(catalogEntities.name, data.name)))
       .limit(1);
     if (nameExists) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Name taken',
         message: 'This artist name is already taken',
       });
@@ -334,10 +339,16 @@ export const registerAsArtist = async (req: AuthRequest, res: Response, next: Ne
     let colors;
     if (data.image !== undefined && data.image !== null && data.image !== '') {
       // Reject blob URLs, http/https URLs, or any other format
-      if (data.image.startsWith('blob:') || data.image.startsWith('http://') || data.image.startsWith('https://') || data.image.startsWith('/api/')) {
-        return res.status(400).json({ 
-          error: 'Invalid image', 
-          message: 'image must be a valid image ID. Images must be uploaded first using /api/images/upload.' 
+      if (
+        data.image.startsWith('blob:') ||
+        data.image.startsWith('http://') ||
+        data.image.startsWith('https://') ||
+        data.image.startsWith('/api/')
+      ) {
+        return res.status(400).json({
+          error: 'Invalid image',
+          message:
+            'image must be a valid image ID. Images must be uploaded first using /api/images/upload.',
         });
       }
 
@@ -350,9 +361,10 @@ export const registerAsArtist = async (req: AuthRequest, res: Response, next: Ne
        * ObjectId (24 hex characters)" and is corrected with the check.
        */
       if (!isLiveEntityId(data.image)) {
-        return res.status(400).json({ 
-          error: 'Invalid image', 
-          message: 'image must be a valid image ID. Images must be uploaded first using /api/images/upload.' 
+        return res.status(400).json({
+          error: 'Invalid image',
+          message:
+            'image must be a valid image ID. Images must be uploaded first using /api/images/upload.',
         });
       }
 
@@ -449,7 +461,7 @@ export const getArtistDashboard = async (req: AuthRequest, res: Response, next: 
     // Get artist profile
     const artist = await findOwnedArtistRow(userId);
     if (!artist) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         error: 'Not found',
         message: 'You do not have an artist profile',
       });
@@ -467,7 +479,9 @@ export const getArtistDashboard = async (req: AuthRequest, res: Response, next: 
       await Promise.all([
         db
           .select({
-            id: tracks.id, title: tracks.title, createdAt: tracks.createdAt,
+            id: tracks.id,
+            title: tracks.title,
+            createdAt: tracks.createdAt,
             playCount: tracks.playCount,
           })
           .from(tracks)
@@ -476,7 +490,9 @@ export const getArtistDashboard = async (req: AuthRequest, res: Response, next: 
           .limit(10),
         db
           .select({
-            id: albums.id, title: albums.title, createdAt: albums.createdAt,
+            id: albums.id,
+            title: albums.title,
+            createdAt: albums.createdAt,
             totalTracks: albums.totalTracks,
           })
           .from(albums)
@@ -485,7 +501,9 @@ export const getArtistDashboard = async (req: AuthRequest, res: Response, next: 
           .limit(10),
         db
           .select({
-            id: tracks.id, title: tracks.title, removedAt: tracks.removedAt,
+            id: tracks.id,
+            title: tracks.title,
+            removedAt: tracks.removedAt,
             removedReason: tracks.removedReason,
           })
           .from(tracks)
@@ -512,19 +530,19 @@ export const getArtistDashboard = async (req: AuthRequest, res: Response, next: 
       followers: artist.statsFollowers || 0,
       strikeCount: artist.strikeCount || 0,
       uploadsDisabled: artist.uploadsDisabled || false,
-      recentTracks: recentTracks.map(track => ({
+      recentTracks: recentTracks.map((track) => ({
         id: track.id,
         title: track.title,
         createdAt: track.createdAt.toISOString(),
         playCount: track.playCount || 0,
       })),
-      recentAlbums: recentAlbums.map(album => ({
+      recentAlbums: recentAlbums.map((album) => ({
         id: album.id,
         title: album.title,
         createdAt: album.createdAt.toISOString(),
         totalTracks: album.totalTracks || 0,
       })),
-      copyrightRemovedTracks: copyrightRemovedTracks.map(track => ({
+      copyrightRemovedTracks: copyrightRemovedTracks.map((track) => ({
         id: track.id,
         title: track.title,
         removedAt: track.removedAt?.toISOString() || new Date().toISOString(),
@@ -554,7 +572,7 @@ export const getArtistInsights = async (req: AuthRequest, res: Response, next: N
     // Get artist profile
     const artist = await findOwnedArtistRow(userId);
     if (!artist) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         error: 'Not found',
         message: 'You do not have an artist profile',
       });
@@ -609,7 +627,11 @@ export const getArtistInsights = async (req: AuthRequest, res: Response, next: N
  * profile at all. The body is parsed, never spread, so ownership, strike state
  * (`uploadsDisabled`, `strikes`, `terminated`) and stats stay unreachable.
  */
-export const updateMyArtistProfile = async (req: AuthRequest, res: Response, next: NextFunction) => {
+export const updateMyArtistProfile = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+) => {
   try {
     if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
@@ -742,8 +764,7 @@ export const createArtistClaim = async (req: AuthRequest, res: Response, next: N
     if (existingProfile) {
       return res.status(409).json({
         error: 'Already an artist',
-        message:
-          'You already have an artist profile. Contact support to merge it with this one.',
+        message: 'You already have an artist profile. Contact support to merge it with this one.',
         artistId: existingProfile.id,
       });
     }
@@ -907,8 +928,8 @@ export const resolveArtistClaim = async (req: AuthRequest, res: Response, next: 
             eq(catalogEntities.type, 'artist'),
             eq(catalogEntities.claimable, true),
             isNull(catalogEntities.ownerOxyUserId),
-            isNull(catalogEntities.claimedByOxyUserId)
-          )
+            isNull(catalogEntities.claimedByOxyUserId),
+          ),
         )
         .returning({ id: catalogEntities.id });
 
@@ -1019,10 +1040,15 @@ const contributionSettingsSchema = z.object({
  *      serves the `IN`, as the unique index served the `$lookup` before.
  *   3. The page itself, over the contributed ids only.
  */
-async function loadContributedTrackIds(artistId: string): Promise<Map<string, {
-  uploaderOxyUserId: string;
-  acceptedAt: Date;
-}>> {
+async function loadContributedTrackIds(artistId: string): Promise<
+  Map<
+    string,
+    {
+      uploaderOxyUserId: string;
+      acceptedAt: Date;
+    }
+  >
+> {
   const ownTrackIds = (
     await getDb().select({ id: tracks.id }).from(tracks).where(eq(tracks.artistId, artistId))
   ).map((row) => row.id);
@@ -1110,7 +1136,11 @@ export const getMyContributions = async (req: AuthRequest, res: Response, next: 
  * answers "what happens to what other people put on my page", and the creator's
  * own catalog is edited through the track routes.
  */
-export const resolveMyContribution = async (req: AuthRequest, res: Response, next: NextFunction) => {
+export const resolveMyContribution = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+) => {
   try {
     if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
@@ -1202,7 +1232,8 @@ export const resolveMyContribution = async (req: AuthRequest, res: Response, nex
           trackId,
           artistId: artist.id,
           reporterOxyUserId: userId,
-          reason: parsed.data.reason?.trim() ||
+          reason:
+            parsed.data.reason?.trim() ||
             `Takedown requested by the owner of the artist profile "${artist.name}"`,
           status: 'approved',
           resolvedAt: new Date(),
@@ -1249,7 +1280,11 @@ export const resolveMyContribution = async (req: AuthRequest, res: Response, nex
  * descriptive profile field: it is the one switch that decides whether a stranger
  * may attach a recording to this artist's page, and only the artist can flip it.
  */
-export const updateMyContributionSettings = async (req: AuthRequest, res: Response, next: NextFunction) => {
+export const updateMyContributionSettings = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+) => {
   try {
     if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
@@ -1265,9 +1300,7 @@ export const updateMyContributionSettings = async (req: AuthRequest, res: Respon
     const [updated] = await getDb()
       .update(catalogEntities)
       .set({ acceptsContributions: parsed.data.acceptsContributions })
-      .where(
-        and(eq(catalogEntities.type, 'artist'), eq(catalogEntities.ownerOxyUserId, userId))
-      )
+      .where(and(eq(catalogEntities.type, 'artist'), eq(catalogEntities.ownerOxyUserId, userId)))
       .returning({ acceptsContributions: catalogEntities.acceptsContributions });
 
     if (!updated) {
@@ -1319,7 +1352,11 @@ const imageSuggestionActionSchema = z.object({
 });
 
 /** GET /api/artists/me/image-suggestions — the artist's own pending photo suggestions. */
-export const getMyImageSuggestions = async (req: AuthRequest, res: Response, next: NextFunction) => {
+export const getMyImageSuggestions = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+) => {
   try {
     if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
@@ -1363,7 +1400,11 @@ export const getMyImageSuggestions = async (req: AuthRequest, res: Response, nex
  * Every suggestion is cleared on acceptance, including the ones not chosen: the
  * question has been answered, and leaving the rest pending would ask it again.
  */
-export const acceptMyImageSuggestion = async (req: AuthRequest, res: Response, next: NextFunction) => {
+export const acceptMyImageSuggestion = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+) => {
   try {
     if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
@@ -1380,8 +1421,9 @@ export const acceptMyImageSuggestion = async (req: AuthRequest, res: Response, n
       return res.status(404).json({ error: 'Artist profile not found' });
     }
 
-    const suggestion = (artist.imageSuggestions ?? [])
-      .find((candidate) => candidate.image.url === parsed.data.url);
+    const suggestion = (artist.imageSuggestions ?? []).find(
+      (candidate) => candidate.image.url === parsed.data.url,
+    );
     if (!suggestion) {
       return res.status(404).json({
         error: 'Suggestion not found',
@@ -1431,7 +1473,13 @@ export const acceptMyImageSuggestion = async (req: AuthRequest, res: Response, n
       : undefined;
 
     const mirrored = await mirrorCatalogImage(
-      [{ url: suggestion.image.url, width: suggestion.image.width, height: suggestion.image.height }],
+      [
+        {
+          url: suggestion.image.url,
+          width: suggestion.image.width,
+          height: suggestion.image.height,
+        },
+      ],
       {
         // Syra's own provenance vocabulary, not the image-provider enum: an
         // externally sourced photo is `cc`, one lifted from an uploaded file is
@@ -1488,7 +1536,7 @@ export const acceptMyImageSuggestion = async (req: AuthRequest, res: Response, n
 
     logger.info(
       `[Artists] Artist ${artist.id} accepted a suggested profile photo ` +
-      `(${externalImage ? `external/${externalImage.provider}` : 'upload'})`,
+        `(${externalImage ? `external/${externalImage.provider}` : 'upload'})`,
     );
 
     res.json(await toArtistResponse(updated));
@@ -1504,7 +1552,11 @@ export const acceptMyImageSuggestion = async (req: AuthRequest, res: Response, n
  * me" is the answer a misattributed photo needs, and it has to be recordable
  * without adopting one of the alternatives.
  */
-export const discardMyImageSuggestion = async (req: AuthRequest, res: Response, next: NextFunction) => {
+export const discardMyImageSuggestion = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+) => {
   try {
     if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
@@ -1521,8 +1573,9 @@ export const discardMyImageSuggestion = async (req: AuthRequest, res: Response, 
       return res.status(404).json({ error: 'Artist profile not found' });
     }
 
-    const remaining = (artist.imageSuggestions ?? [])
-      .filter((candidate) => candidate.image.url !== parsed.data.url);
+    const remaining = (artist.imageSuggestions ?? []).filter(
+      (candidate) => candidate.image.url !== parsed.data.url,
+    );
     if (remaining.length === (artist.imageSuggestions ?? []).length) {
       return res.status(404).json({ error: 'Suggestion not found' });
     }

@@ -1,5 +1,13 @@
 import React from 'react';
-import { GestureResponderEvent, StyleSheet, View, Text, Image, Pressable, Platform } from 'react-native';
+import {
+  GestureResponderEvent,
+  StyleSheet,
+  View,
+  Text,
+  Image,
+  Pressable,
+  Platform,
+} from 'react-native';
 import { webViewStyle } from '@/utils/webStyles';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@oxy.so/bloom/theme';
@@ -65,11 +73,7 @@ const GenreCardComponent: React.FC<GenreCardProps> = ({
         }),
       ]}
     >
-      <Pressable
-        accessibilityRole="button"
-        onPress={onPress}
-        style={styles.cardPressable}
-      >
+      <Pressable accessibilityRole="button" onPress={onPress} style={styles.cardPressable}>
         <LinearGradient
           colors={gradientColors}
           start={{ x: 0, y: 0 }}
@@ -79,11 +83,7 @@ const GenreCardComponent: React.FC<GenreCardProps> = ({
           {/* Cover Art (optional) */}
           {coverArt && (
             <View style={styles.coverArtContainer}>
-              <Image
-                source={{ uri: coverArt }}
-                style={styles.coverArt}
-                resizeMode="cover"
-              />
+              <Image source={{ uri: coverArt }} style={styles.coverArt} resizeMode="cover" />
             </View>
           )}
 

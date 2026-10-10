@@ -43,7 +43,7 @@ export interface OwnedArtist {
  */
 export async function findOwnedArtist(
   artistId: string,
-  userId: string
+  userId: string,
 ): Promise<OwnedArtist | null> {
   const [row] = await getDb()
     .select({
@@ -57,8 +57,8 @@ export async function findOwnedArtist(
       and(
         eq(catalogEntities.id, artistId),
         eq(catalogEntities.type, 'artist'),
-        eq(catalogEntities.ownerOxyUserId, userId)
-      )
+        eq(catalogEntities.ownerOxyUserId, userId),
+      ),
     )
     .limit(1);
 

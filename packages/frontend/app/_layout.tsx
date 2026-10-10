@@ -3,28 +3,28 @@ import 'react-native-reanimated';
 
 import NetInfo from '@react-native-community/netinfo';
 import { focusManager, onlineManager } from '@tanstack/react-query';
-import { Slot } from "expo-router";
+import { Slot } from 'expo-router';
 import { preventNativeSplashAutoHide, useHideNativeSplashWhenReady } from '@oxy.so/expo-splash';
-import React, { useCallback, useEffect, useMemo, useState, memo } from "react";
-import { AppState, Platform, StyleSheet, View, type AppStateStatus } from "react-native";
+import React, { useCallback, useEffect, useMemo, useState, memo } from 'react';
+import { AppState, Platform, StyleSheet, View, type AppStateStatus } from 'react-native';
 
 // Components
 import AppSplashScreen from '@/components/AppSplashScreen';
-import { PlayerBar } from "@/components/PlayerBar";
-import { MobilePlayerBar } from "@/components/MobilePlayerBar";
-import { MobileBottomNav } from "@/components/MobileBottomNav";
-import { TopBar, TOP_BAR_HEIGHT } from "@/components/TopBar";
-import { LibrarySidebar } from "@/components/LibrarySidebar";
-import { NowPlaying } from "@/components/NowPlaying";
-import { ThemedView } from "@/components/ThemedView";
-import { Panel } from "@/components/Panel";
+import { PlayerBar } from '@/components/PlayerBar';
+import { MobilePlayerBar } from '@/components/MobilePlayerBar';
+import { MobileBottomNav } from '@/components/MobileBottomNav';
+import { TopBar, TOP_BAR_HEIGHT } from '@/components/TopBar';
+import { LibrarySidebar } from '@/components/LibrarySidebar';
+import { NowPlaying } from '@/components/NowPlaying';
+import { ThemedView } from '@/components/ThemedView';
+import { Panel } from '@/components/Panel';
 import { AppProviders } from '@/components/providers/AppProviders';
 import { Provider as PortalProvider, Outlet as PortalOutlet } from '@/components/Portal';
 import { PLAYER_BAR_HEIGHT } from '@/constants/layout';
 
 // Hooks
-import { useKeyboardVisibility } from "@/hooks/useKeyboardVisibility";
-import { useIsScreenNotMobile, useIsDesktop } from "@/hooks/useOptimizedMediaQuery";
+import { useKeyboardVisibility } from '@/hooks/useKeyboardVisibility';
+import { useIsScreenNotMobile, useIsDesktop } from '@/hooks/useOptimizedMediaQuery';
 import { BloomThemeProvider, useTheme } from '@oxy.so/bloom/theme';
 import { LayoutScrollProvider, useLayoutScroll } from '@/context/LayoutScrollContext';
 import { usePlayerStore } from '@/stores/playerStore';
@@ -90,14 +90,15 @@ const MainLayout: React.FC<MainLayoutProps> = memo(({ isScreenNotMobile }) => {
   const { forwardWheelEvent } = useLayoutScroll();
   const isDesktop = useIsDesktop();
   const keyboardVisible = useKeyboardVisibility();
-  const currentTrack = usePlayerStore(s => s.currentTrack);
-  const currentEpisode = usePlayerStore(s => s.currentEpisode);
+  const currentTrack = usePlayerStore((s) => s.currentTrack);
+  const currentEpisode = usePlayerStore((s) => s.currentEpisode);
   const hasNowPlaying = !!currentTrack || !!currentEpisode;
-  const fullscreenPanel = useUIStore(s => s.fullscreenPanel);
-  const isLibrarySidebarExpanded = useUIStore(s => s.isLibrarySidebarExpanded);
+  const fullscreenPanel = useUIStore((s) => s.fullscreenPanel);
+  const isLibrarySidebarExpanded = useUIStore((s) => s.isLibrarySidebarExpanded);
   const isLibraryFullscreen = fullscreenPanel === 'library';
   const isNowPlayingFullscreen = fullscreenPanel === 'nowPlaying';
-  const showNowPlayingPanel = isDesktop && !isLibraryFullscreen && (isNowPlayingFullscreen || hasNowPlaying);
+  const showNowPlayingPanel =
+    isDesktop && !isLibraryFullscreen && (isNowPlayingFullscreen || hasNowPlaying);
 
   // On mobile, no gaps or padding
   const gapSize = isScreenNotMobile ? 12 : 0;
@@ -115,85 +116,105 @@ const MainLayout: React.FC<MainLayoutProps> = memo(({ isScreenNotMobile }) => {
   const NOW_PLAYING_WIDTH = 360;
   const LIBRARY_WIDTH_EXPANDED = 320;
   const LIBRARY_WIDTH_COLLAPSED = 72;
-  const librarySidebarWidth = isLibrarySidebarExpanded ? LIBRARY_WIDTH_EXPANDED : LIBRARY_WIDTH_COLLAPSED;
+  const librarySidebarWidth = isLibrarySidebarExpanded
+    ? LIBRARY_WIDTH_EXPANDED
+    : LIBRARY_WIDTH_COLLAPSED;
   const panelHeight = webDimension(
     isScreenNotMobile
       ? `calc(100vh - ${TOP_BAR_HEIGHT}px - ${PLAYER_BAR_HEIGHT}px - ${outerPadding}px)`
-      : `calc(100vh - ${TOP_BAR_HEIGHT}px - ${PLAYER_BAR_HEIGHT}px)`
+      : `calc(100vh - ${TOP_BAR_HEIGHT}px - ${PLAYER_BAR_HEIGHT}px)`,
   );
 
-  const styles = useMemo(() => StyleSheet.create({
-    outerContainer: {
-      flex: 1,
-      width: '100%',
-    },
-    contentWrapper: {
-      flex: 1,
-    },
-    topBarContainer: webViewStyle({
-      zIndex: 1000,
-      ...(Platform.OS === 'web' && isScreenNotMobile
-        ? {
-          position: 'sticky' as const,
-          top: 0,
-        }
-        : {}),
-    }),
-    panelsWrapper: {
-      flex: 1,
-      flexDirection: isScreenNotMobile ? 'row' : 'column',
-      ...Platform.select({
-        web: isScreenNotMobile ? {
-          paddingLeft: outerPadding,
-          paddingRight: outerPadding,
-          paddingBottom: outerPadding,
-          gap: gapSize, // Consistent gap between panels
-        } : {},
-      }),
-    },
-    leftSidebarContainer: {
-      flexShrink: 0,
-      flexGrow: isLibraryFullscreen ? 1 : 0,
-      width: isLibraryFullscreen ? undefined : librarySidebarWidth,
-      ...Platform.select({
-        web: {
-          height: panelHeight,
+  const styles = useMemo(
+    () =>
+      StyleSheet.create({
+        outerContainer: {
+          flex: 1,
+          width: '100%',
+        },
+        contentWrapper: {
+          flex: 1,
+        },
+        topBarContainer: webViewStyle({
+          zIndex: 1000,
+          ...(Platform.OS === 'web' && isScreenNotMobile
+            ? {
+                position: 'sticky' as const,
+                top: 0,
+              }
+            : {}),
+        }),
+        panelsWrapper: {
+          flex: 1,
+          flexDirection: isScreenNotMobile ? 'row' : 'column',
+          ...Platform.select({
+            web: isScreenNotMobile
+              ? {
+                  paddingLeft: outerPadding,
+                  paddingRight: outerPadding,
+                  paddingBottom: outerPadding,
+                  gap: gapSize, // Consistent gap between panels
+                }
+              : {},
+          }),
+        },
+        leftSidebarContainer: {
+          flexShrink: 0,
+          flexGrow: isLibraryFullscreen ? 1 : 0,
+          width: isLibraryFullscreen ? undefined : librarySidebarWidth,
+          ...Platform.select({
+            web: {
+              height: panelHeight,
+            },
+          }),
+        },
+        mainContentWrapper: webViewStyle({
+          flex: 1,
+          minWidth: 0, // Allow flexbox to shrink below content size
+          ...Platform.select({
+            web: {
+              overflowY: 'auto',
+              height: panelHeight,
+            },
+          }),
+        }),
+        rightSidebarContainer: {
+          flexShrink: 0,
+          flexGrow: isNowPlayingFullscreen ? 1 : 0,
+          // Fixed width in sidebar state; undefined in fullscreen so flexGrow fills.
+          width: isNowPlayingFullscreen ? undefined : NOW_PLAYING_WIDTH,
+          ...Platform.select({
+            web: {
+              height: panelHeight,
+            },
+          }),
+        },
+        playerBarContainer: {
+          // Desktop only - mobile player bar handles its own positioning
         },
       }),
-    },
-    mainContentWrapper: webViewStyle({
-      flex: 1,
-      minWidth: 0, // Allow flexbox to shrink below content size
-      ...Platform.select({
-        web: {
-          overflowY: 'auto',
-          height: panelHeight,
-        },
-      }),
-    }),
-    rightSidebarContainer: {
-      flexShrink: 0,
-      flexGrow: isNowPlayingFullscreen ? 1 : 0,
-      // Fixed width in sidebar state; undefined in fullscreen so flexGrow fills.
-      width: isNowPlayingFullscreen ? undefined : NOW_PLAYING_WIDTH,
-      ...Platform.select({
-        web: {
-          height: panelHeight,
-        },
-      }),
-    },
-    playerBarContainer: {
-      // Desktop only - mobile player bar handles its own positioning
-    },
-  }), [isScreenNotMobile, theme.colors.background, gapSize, outerPadding, panelHeight, isLibraryFullscreen, isNowPlayingFullscreen, librarySidebarWidth]);
+    [
+      isScreenNotMobile,
+      theme.colors.background,
+      gapSize,
+      outerPadding,
+      panelHeight,
+      isLibraryFullscreen,
+      isNowPlayingFullscreen,
+      librarySidebarWidth,
+    ],
+  );
 
-  const handleWheel = useCallback((event: Parameters<typeof forwardWheelEvent>[0]) => {
-    forwardWheelEvent(event);
-  }, [forwardWheelEvent]);
+  const handleWheel = useCallback(
+    (event: Parameters<typeof forwardWheelEvent>[0]) => {
+      forwardWheelEvent(event);
+    },
+    [forwardWheelEvent],
+  );
 
   const containerProps = useMemo(
     () => (Platform.OS === 'web' ? { onWheel: handleWheel } : {}),
-    [handleWheel]
+    [handleWheel],
   );
 
   return (
@@ -358,11 +379,7 @@ export default function RootLayout() {
   // Memoize app content to prevent unnecessary re-renders
   const appContent = useMemo(() => {
     return (
-      <AppProviders
-        oxyServices={oxyServices}
-        queryClient={queryClient}
-        isAppReady={appIsReady}
-      >
+      <AppProviders oxyServices={oxyServices} queryClient={queryClient} isAppReady={appIsReady}>
         {appIsReady ? (
           <>
             {/* Portal Provider for rendering components outside tree */}
@@ -377,10 +394,7 @@ export default function RootLayout() {
           // WEB: the custom splash covers font-load + init and fades out; its
           // `onFadeComplete` gates `appIsReady`. NATIVE renders null here — the
           // held OS splash is on top, so nothing underneath needs to paint.
-          <AppSplashScreen
-            startFade={startFade}
-            onFadeComplete={handleSplashFadeComplete}
-          />
+          <AppSplashScreen startFade={startFade} onFadeComplete={handleSplashFadeComplete} />
         ) : null}
       </AppProviders>
     );
@@ -404,9 +418,7 @@ export default function RootLayout() {
       // sites call `useAmbientTheme().setAmbient(...)`/`clearAmbient()` and the
       // provider consumes that store internally — no `seed` prop threading here.
     >
-      <ThemedView style={{ flex: 1 }}>
-        {appContent}
-      </ThemedView>
+      <ThemedView style={{ flex: 1 }}>{appContent}</ThemedView>
     </BloomThemeProvider>
   );
 }

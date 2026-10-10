@@ -44,13 +44,15 @@ interface Credit {
 async function showCrediting(title: string, credit: Credit): Promise<string> {
   const id = uuidv7();
   await getDb().insert(podcasts).values({ id, title, source: 'rss', status: 'active' });
-  await getDb().insert(podcastPersons).values({
-    podcastId: id,
-    position: 0,
-    name: credit.name,
-    href: credit.href ?? null,
-    linkedOxyUserId: credit.linkedOxyUserId ?? null,
-  });
+  await getDb()
+    .insert(podcastPersons)
+    .values({
+      podcastId: id,
+      position: 0,
+      name: credit.name,
+      href: credit.href ?? null,
+      linkedOxyUserId: credit.linkedOxyUserId ?? null,
+    });
   return id;
 }
 
@@ -58,25 +60,31 @@ async function showCrediting(title: string, credit: Credit): Promise<string> {
 async function episodeCrediting(title: string, credit: Credit): Promise<string> {
   const showId = uuidv7();
   const id = uuidv7();
-  await getDb().insert(podcasts).values({ id: showId, title: `${title} show`, source: 'rss' });
-  await getDb().insert(episodes).values({
-    id,
-    podcastId: showId,
-    podcastTitle: `${title} show`,
-    title,
-    guid: id,
-    pubDate: new Date(),
-    source: 'rss',
-    enclosureUrl: 'https://x/e.mp3',
-    status: 'ready',
-  });
-  await getDb().insert(episodePersons).values({
-    episodeId: id,
-    position: 0,
-    name: credit.name,
-    href: credit.href ?? null,
-    linkedOxyUserId: credit.linkedOxyUserId ?? null,
-  });
+  await getDb()
+    .insert(podcasts)
+    .values({ id: showId, title: `${title} show`, source: 'rss' });
+  await getDb()
+    .insert(episodes)
+    .values({
+      id,
+      podcastId: showId,
+      podcastTitle: `${title} show`,
+      title,
+      guid: id,
+      pubDate: new Date(),
+      source: 'rss',
+      enclosureUrl: 'https://x/e.mp3',
+      status: 'ready',
+    });
+  await getDb()
+    .insert(episodePersons)
+    .values({
+      episodeId: id,
+      position: 0,
+      name: credit.name,
+      href: credit.href ?? null,
+      linkedOxyUserId: credit.linkedOxyUserId ?? null,
+    });
   return id;
 }
 
@@ -180,7 +188,9 @@ describe('credit match — an uncredited person', () => {
   it('selects nothing', async () => {
     await showCrediting('Hers', { name: 'Jane Host', linkedOxyUserId: 'oxy1' });
 
-    expect(await showTitlesCrediting({ name: 'Nobody', linkedOxyUserId: 'oxy-nobody' })).toEqual([]);
+    expect(await showTitlesCrediting({ name: 'Nobody', linkedOxyUserId: 'oxy-nobody' })).toEqual(
+      [],
+    );
     expect(await episodeTitlesCrediting({ name: 'Nobody', href: 'https://x/nobody' })).toEqual([]);
   });
 });

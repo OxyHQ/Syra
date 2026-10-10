@@ -53,9 +53,17 @@ function makeRes(): CapturedRes {
   return {
     _status: 200,
     _body: undefined,
-    status(code) { this._status = code; return this; },
-    set() { return this; },
-    json(body) { this._body = body; return this; },
+    status(code) {
+      this._status = code;
+      return this;
+    },
+    set() {
+      return this;
+    },
+    json(body) {
+      this._body = body;
+      return this;
+    },
   };
 }
 
@@ -107,7 +115,7 @@ describe('track credits — listing and detail agree', () => {
     await getTrackById(
       { params: { id: track.id }, query: {} } as unknown as Request,
       res as unknown as Response,
-      next
+      next,
     );
     // `getTrackById` responds with the track object itself, not a `{ data }`
     // envelope — asserted here so a reshaped response cannot make this test

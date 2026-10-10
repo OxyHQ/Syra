@@ -46,8 +46,9 @@ export const PlaylistActionsSheet: React.FC<PlaylistActionsSheetProps> = ({
   const deletePlaylist = useDeletePlaylist();
 
   const isOwner = user?.id === playlist.ownerOxyUserId;
-  const canEdit = isOwner
-    || (playlist.collaborators ?? []).some(
+  const canEdit =
+    isOwner ||
+    (playlist.collaborators ?? []).some(
       (collaborator) => collaborator.oxyUserId === user?.id && collaborator.role === 'editor',
     );
 
@@ -140,7 +141,8 @@ export const PlaylistActionsSheet: React.FC<PlaylistActionsSheetProps> = ({
                   </Text>
                 </Pressable>
                 <Pressable
-                  className="bg-primary" style={styles.primaryButton}
+                  className="bg-primary"
+                  style={styles.primaryButton}
                   onPress={handleRenameSubmit}
                   disabled={updatePlaylist.isPending}
                   accessibilityRole="button"
@@ -160,7 +162,9 @@ export const PlaylistActionsSheet: React.FC<PlaylistActionsSheetProps> = ({
                 accessibilityRole="button"
               >
                 <Ionicons name="pencil-outline" size={22} color={theme.colors.text} />
-                <Text className="text-foreground" style={styles.actionText}>{t('common.rename')}</Text>
+                <Text className="text-foreground" style={styles.actionText}>
+                  {t('common.rename')}
+                </Text>
               </Pressable>
 
               {isOwner && (

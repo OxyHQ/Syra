@@ -27,7 +27,7 @@ afterEach(clearDb);
 afterAll(disconnectDb);
 
 async function makeArtist(
-  overrides: Partial<typeof catalogEntities.$inferInsert> = {}
+  overrides: Partial<typeof catalogEntities.$inferInsert> = {},
 ): Promise<{ id: string }> {
   const suffix = uuidv7();
   const [artist] = await getDb()
@@ -49,22 +49,29 @@ async function makeArtist(
 
 async function makeTrack(
   artistId: string,
-  overrides: Partial<typeof tracks.$inferInsert> = {}
+  overrides: Partial<typeof tracks.$inferInsert> = {},
 ): Promise<void> {
-  await getDb().insert(tracks).values({
-    title: `Track ${uuidv7()}`,
-    artistId,
-    artistName: 'Someone',
-    duration: 200,
-    source: 'upload',
-    status: 'ready',
-    ...overrides,
-  });
+  await getDb()
+    .insert(tracks)
+    .values({
+      title: `Track ${uuidv7()}`,
+      artistId,
+      artistName: 'Someone',
+      duration: 200,
+      source: 'upload',
+      status: 'ready',
+      ...overrides,
+    });
 }
 
 async function relate(sourceId: string, targetId: string, score: number) {
   await getDb().insert(catalogRelations).values({
-    kind: 'artist', sourceId, targetId, score, coCount: 10, computedAt: new Date(),
+    kind: 'artist',
+    sourceId,
+    targetId,
+    score,
+    coCount: 10,
+    computedAt: new Date(),
   });
 }
 

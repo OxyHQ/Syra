@@ -38,63 +38,77 @@ export function usePlayEntity(): PlayEntity {
   const playTrackList = usePlayerStore((state) => state.playTrackList);
   const playEpisodeList = usePlayerStore((state) => state.playEpisodeList);
 
-  const playAlbum = useCallback(async (albumId: string, albumName?: string) => {
-    try {
-      const { tracks } = await musicService.getAlbumTracks(albumId);
-      if (tracks.length === 0) {
-        toast.info(t('common.noPlayableTracks'));
-        return;
+  const playAlbum = useCallback(
+    async (albumId: string, albumName?: string) => {
+      try {
+        const { tracks } = await musicService.getAlbumTracks(albumId);
+        if (tracks.length === 0) {
+          toast.info(t('common.noPlayableTracks'));
+          return;
+        }
+        await playTrackList(tracks, 0, { type: 'album', id: albumId, name: albumName });
+      } catch (error) {
+        logger.error('Error playing album', { albumId, error });
+        toast.error(t('common.playbackFailed'));
       }
-      await playTrackList(tracks, 0, { type: 'album', id: albumId, name: albumName });
-    } catch (error) {
-      logger.error('Error playing album', { albumId, error });
-      toast.error(t('common.playbackFailed'));
-    }
-  }, [playTrackList, t]);
+    },
+    [playTrackList, t],
+  );
 
-  const playPlaylist = useCallback(async (playlistId: string, playlistName?: string) => {
-    try {
-      const { tracks } = await musicService.getPlaylistTracks(playlistId);
-      if (tracks.length === 0) {
-        toast.info(t('common.noPlayableTracks'));
-        return;
+  const playPlaylist = useCallback(
+    async (playlistId: string, playlistName?: string) => {
+      try {
+        const { tracks } = await musicService.getPlaylistTracks(playlistId);
+        if (tracks.length === 0) {
+          toast.info(t('common.noPlayableTracks'));
+          return;
+        }
+        await playTrackList(tracks, 0, { type: 'playlist', id: playlistId, name: playlistName });
+      } catch (error) {
+        logger.error('Error playing playlist', { playlistId, error });
+        toast.error(t('common.playbackFailed'));
       }
-      await playTrackList(tracks, 0, { type: 'playlist', id: playlistId, name: playlistName });
-    } catch (error) {
-      logger.error('Error playing playlist', { playlistId, error });
-      toast.error(t('common.playbackFailed'));
-    }
-  }, [playTrackList, t]);
+    },
+    [playTrackList, t],
+  );
 
-  const playArtist = useCallback(async (artistId: string, artistName?: string) => {
-    try {
-      const { tracks } = await musicService.getArtistTracks(artistId, { limit: ARTIST_TRACK_LIMIT });
-      if (tracks.length === 0) {
-        toast.info(t('common.noPlayableTracks'));
-        return;
+  const playArtist = useCallback(
+    async (artistId: string, artistName?: string) => {
+      try {
+        const { tracks } = await musicService.getArtistTracks(artistId, {
+          limit: ARTIST_TRACK_LIMIT,
+        });
+        if (tracks.length === 0) {
+          toast.info(t('common.noPlayableTracks'));
+          return;
+        }
+        await playTrackList(tracks, 0, { type: 'artist', id: artistId, name: artistName });
+      } catch (error) {
+        logger.error('Error playing artist', { artistId, error });
+        toast.error(t('common.playbackFailed'));
       }
-      await playTrackList(tracks, 0, { type: 'artist', id: artistId, name: artistName });
-    } catch (error) {
-      logger.error('Error playing artist', { artistId, error });
-      toast.error(t('common.playbackFailed'));
-    }
-  }, [playTrackList, t]);
+    },
+    [playTrackList, t],
+  );
 
-  const playPodcast = useCallback(async (podcastId: string, podcastTitle?: string) => {
-    try {
-      // Episodes come back reverse-chronological, so the first is the latest —
-      // which is what a listener pressing play on a show expects to hear.
-      const episodes = await podcastService.getPodcastEpisodes(podcastId, { limit: 1 });
-      if (episodes.length === 0) {
-        toast.info(t('common.noPlayableTracks'));
-        return;
+  const playPodcast = useCallback(
+    async (podcastId: string, podcastTitle?: string) => {
+      try {
+        // Episodes come back reverse-chronological, so the first is the latest —
+        // which is what a listener pressing play on a show expects to hear.
+        const episodes = await podcastService.getPodcastEpisodes(podcastId, { limit: 1 });
+        if (episodes.length === 0) {
+          toast.info(t('common.noPlayableTracks'));
+          return;
+        }
+        await playEpisodeList(episodes, 0, { type: 'podcast', id: podcastId, name: podcastTitle });
+      } catch (error) {
+        logger.error('Error playing podcast', { podcastId, error });
+        toast.error(t('common.playbackFailed'));
       }
-      await playEpisodeList(episodes, 0, { type: 'podcast', id: podcastId, name: podcastTitle });
-    } catch (error) {
-      logger.error('Error playing podcast', { podcastId, error });
-      toast.error(t('common.playbackFailed'));
-    }
-  }, [playEpisodeList, t]);
+    },
+    [playEpisodeList, t],
+  );
 
   return { playAlbum, playPlaylist, playArtist, playPodcast };
 }

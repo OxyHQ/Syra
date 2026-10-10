@@ -60,7 +60,9 @@ export const castController: CastController = {
   requestSession: jest.fn(async () => {}),
   endSession: jest.fn(async () => {}),
   getDeviceName: jest.fn(() => (sessionState === 'connected' ? 'Living Room TV' : null)),
-  getEngine: jest.fn((): PlayerEngine | null => (sessionState === 'connected' ? castTestEngine : null)),
+  getEngine: jest.fn((): PlayerEngine | null =>
+    sessionState === 'connected' ? castTestEngine : null,
+  ),
   setMediaMetadata: jest.fn(),
   setContentType: jest.fn((nextContentType: string) => {
     contentType = nextContentType;

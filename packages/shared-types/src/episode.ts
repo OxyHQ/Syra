@@ -1,10 +1,6 @@
 import { z } from 'zod';
 import { timestampsSchema } from './common';
-import {
-  audioSourceSchema,
-  hlsRenditionSchema,
-  catalogImageSizesSchema,
-} from './track';
+import { audioSourceSchema, hlsRenditionSchema, catalogImageSizesSchema } from './track';
 import { podcastSourceSchema } from './podcast';
 
 export const episodeTypeSchema = z.enum(['full', 'trailer', 'bonus']);

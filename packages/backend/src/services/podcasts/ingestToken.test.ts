@@ -15,11 +15,7 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import jwt from 'jsonwebtoken';
-import {
-  INGEST_TICKET_PURPOSE,
-  mintIngestTicket,
-  verifyIngestTicket,
-} from './ingestToken';
+import { INGEST_TICKET_PURPOSE, mintIngestTicket, verifyIngestTicket } from './ingestToken';
 
 const SECRET = 'test-secret-ingest-token-unit';
 const OTHER_SECRET = 'a-different-secret-entirely';
@@ -92,7 +88,7 @@ describe('verifyIngestTicket refuses', () => {
   function accepted(): string {
     const { token } = mintIngestTicket(CLAIMS);
     expect(`control accepted: ${verifyIngestTicket(token) !== null}`).toBe(
-      'control accepted: true'
+      'control accepted: true',
     );
     return token;
   }
@@ -132,7 +128,7 @@ describe('verifyIngestTicket refuses', () => {
     const asStreamToken = jwt.sign(
       { ...CLAIMS, jti: 'x', purpose: INGEST_TICKET_PURPOSE },
       OTHER_SECRET,
-      { algorithm: 'HS256', expiresIn: 3600 }
+      { algorithm: 'HS256', expiresIn: 3600 },
     );
     expect(verifyIngestTicket(asStreamToken)).toBeNull();
   });
@@ -171,11 +167,10 @@ describe('verifyIngestTicket refuses', () => {
     // that can see it.
     accepted();
 
-    const token = jwt.sign(
-      { jti: '', ...CLAIMS, purpose: INGEST_TICKET_PURPOSE },
-      SECRET,
-      { algorithm: 'HS256', expiresIn: 3600 }
-    );
+    const token = jwt.sign({ jti: '', ...CLAIMS, purpose: INGEST_TICKET_PURPOSE }, SECRET, {
+      algorithm: 'HS256',
+      expiresIn: 3600,
+    });
     expect(verifyIngestTicket(token)).toBeNull();
   });
 

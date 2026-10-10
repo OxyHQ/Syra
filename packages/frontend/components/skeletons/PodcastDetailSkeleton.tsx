@@ -17,8 +17,8 @@ interface PodcastDetailSkeletonProps {
  * shared skeleton primitives rather than reusing `MediaHeaderSkeleton`, whose
  * hero (host avatar + play/control row) does not match the podcast header.
  */
-export const PodcastDetailSkeleton: React.FC<PodcastDetailSkeletonProps> =
-  React.memo(({ episodeCount = 6 }) => {
+export const PodcastDetailSkeleton: React.FC<PodcastDetailSkeletonProps> = React.memo(
+  ({ episodeCount = 6 }) => {
     const theme = useTheme();
     const gradientColors: readonly [string, string, string] = [
       theme.colors.backgroundSecondary,
@@ -28,7 +28,8 @@ export const PodcastDetailSkeleton: React.FC<PodcastDetailSkeletonProps> =
 
     return (
       <ScrollView
-        className="bg-surface" style={styles.container}
+        className="bg-surface"
+        style={styles.container}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
@@ -49,7 +50,8 @@ export const PodcastDetailSkeleton: React.FC<PodcastDetailSkeletonProps> =
         <LibraryListSkeleton count={episodeCount} />
       </ScrollView>
     );
-  });
+  },
+);
 PodcastDetailSkeleton.displayName = 'PodcastDetailSkeleton';
 
 const styles = StyleSheet.create({

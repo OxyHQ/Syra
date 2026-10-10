@@ -1,14 +1,14 @@
-import rateLimit, { ipKeyGenerator } from "express-rate-limit";
-import slowDown from "express-slow-down";
-import type { RequestHandler } from "express";
-import { Request, Response } from "express";
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
+import slowDown from 'express-slow-down';
+import type { RequestHandler } from 'express';
+import { Request, Response } from 'express';
 import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
-import { RedisStore } from "./rateLimitStore";
+import { RedisStore } from './rateLimitStore';
 
 // Create Redis store for distributed rate limiting
-const redisStore = new RedisStore({ 
+const redisStore = new RedisStore({
   prefix: 'rate-limit:api:',
-  windowMs: 15 * 60 * 1000 // 15 minutes
+  windowMs: 15 * 60 * 1000, // 15 minutes
 });
 
 /**
@@ -60,7 +60,7 @@ const rateLimiter = rateLimit({
     // ipKeyGenerator takes the IP string and properly handles IPv6 subnets
     return ipKeyGenerator(ip);
   },
-  message: "Too many requests, please try again later.",
+  message: 'Too many requests, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
   skip: isRateLimitExempt,

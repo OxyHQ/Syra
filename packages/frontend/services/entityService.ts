@@ -24,9 +24,11 @@ import {
  * (Syra-hosted `image`/`imageSizes` first, external `imageSourceUrl` last).
  */
 
-const entityProfileResponseSchema = z.object({
-  data: entityProfileSchema.passthrough(),
-}).passthrough();
+const entityProfileResponseSchema = z
+  .object({
+    data: entityProfileSchema.passthrough(),
+  })
+  .passthrough();
 
 export const entityService = {
   async getEntityProfile(id: string): Promise<EntityProfile> {

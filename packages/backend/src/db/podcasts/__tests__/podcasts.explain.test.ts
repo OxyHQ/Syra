@@ -166,8 +166,9 @@ function showEpisodesSql(viewerId: string | null): string {
     limit: 20,
   }).toSQL();
 
-  return query.sql.replace(/\$(\d+)/g, (_match, index) =>
-    `'${String(query.params[Number(index) - 1])}'`
+  return query.sql.replace(
+    /\$(\d+)/g,
+    (_match, index) => `'${String(query.params[Number(index) - 1])}'`,
   );
 }
 
@@ -178,8 +179,9 @@ function deepShowEpisodesSql(viewerId: string | null): string {
     limit: 20,
   }).toSQL();
 
-  return query.sql.replace(/\$(\d+)/g, (_match, index) =>
-    `'${String(query.params[Number(index) - 1])}'`
+  return query.sql.replace(
+    /\$(\d+)/g,
+    (_match, index) => `'${String(query.params[Number(index) - 1])}'`,
   );
 }
 
@@ -564,10 +566,13 @@ const PROBES: readonly Probe[] = [
 type Tx = Parameters<Parameters<ReturnType<typeof getDb>['transaction']>[0]>[0];
 
 async function seed(tx: Tx): Promise<void> {
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into genres (id, name, kind)
     select '${MARKER}-g-' || g, '${MARKER} Category ' || g, 'podcast'
-    from generate_series(1, 40) g`));
+    from generate_series(1, 40) g`),
+  );
 
   /**
    * One show in 50 is not `active`, one in 13 is `private`, one in 11 is
@@ -581,7 +586,9 @@ async function seed(tx: Tx): Promise<void> {
    * are pairwise coprime — and so that `${MARKER}-s-7`, the show the episode
    * probes target, stays `active` and `public`.
    */
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into podcasts (id, title, author, source, status, visibility, popularity,
                           subscriber_count, last_episode_at, last_refreshed_at,
                           owner_oxy_user_id, feed_url)
@@ -598,28 +605,38 @@ async function seed(tx: Tx): Promise<void> {
            case when g % 11 = 0 then null else now() - (g || ' hours')::interval end,
            '${MARKER}-u-' || (1 + (g % ${SEEDED_USERS})),
            'https://feeds.example/${MARKER}/' || g || '.xml'
-    from generate_series(1, ${SEEDED_SHOWS}) g`));
+    from generate_series(1, ${SEEDED_SHOWS}) g`),
+  );
 
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into podcast_categories (id, podcast_id, genre_id, "position", kind)
     select '${MARKER}-pc-' || g, '${MARKER}-s-' || g, '${MARKER}-g-' || (1 + (g % 40)), 0, 'podcast'
-    from generate_series(1, ${SEEDED_SHOWS}) g`));
+    from generate_series(1, ${SEEDED_SHOWS}) g`),
+  );
 
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into podcast_funding (id, podcast_id, "position", url, message)
     select '${MARKER}-pf-' || g, '${MARKER}-s-' || (1 + (g % ${SEEDED_SHOWS})),
            g / ${SEEDED_SHOWS}, 'https://fund.example/' || g, null
-    from generate_series(0, 9999) g`));
+    from generate_series(0, 9999) g`),
+  );
 
   /**
    * Credits: one show in 20 and one episode in 40 carry an Oxy-linked host, so
    * the `EXISTS` has both matching and non-matching parents to discriminate.
    */
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into podcast_persons (id, podcast_id, "position", name, linked_oxy_user_id)
     select '${MARKER}-pp-' || g, '${MARKER}-s-' || g, 0, 'Host ' || g,
            '${MARKER}-oxy-' || (1 + (g % 20))
-    from generate_series(1, ${SEEDED_SHOWS}) g`));
+    from generate_series(1, ${SEEDED_SHOWS}) g`),
+  );
 
   /**
    * One episode in 17 is not `ready` and one in 29 is an RSS episode with NO
@@ -627,7 +644,9 @@ async function seed(tx: Tx): Promise<void> {
    * gate occur. A seed where every episode is playable cannot tell the gate
    * from its absence.
    */
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into episodes (id, podcast_id, podcast_title, title, guid, pub_date, source,
                           enclosure_url, status, popularity)
     select '${MARKER}-e-' || g, '${MARKER}-s-' || (1 + (g % ${SEEDED_SHOWS})),
@@ -640,7 +659,8 @@ async function seed(tx: Tx): Promise<void> {
            case when g % 29 = 0 then null else 'https://cdn.example/' || g || '.mp3' end,
            case when g % 17 = 0 then 'processing' else 'ready' end,
            g % 101
-    from generate_series(1, ${SEEDED_EPISODES}) g`));
+    from generate_series(1, ${SEEDED_EPISODES}) g`),
+  );
 
   /**
    * The deep numbered show. One in 9 episodes carries NO number, so the
@@ -648,12 +668,17 @@ async function seed(tx: Tx): Promise<void> {
    * where every episode is numbered cannot tell `DESC NULLS LAST` from `DESC`
    * on that column, the same trap the `last_episode_at` nulls avoid above.
    */
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into podcasts (id, title, source, status, visibility, owner_oxy_user_id, feed_url)
     values ('${DEEP_SHOW}', '${MARKER} Deep Show', 'syra', 'active', 'public',
-            '${SEEDED_SHOW_OWNER}', 'https://feeds.example/${MARKER}/deep.xml')`));
+            '${SEEDED_SHOW_OWNER}', 'https://feeds.example/${MARKER}/deep.xml')`),
+  );
 
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into episodes (id, podcast_id, podcast_title, title, guid, pub_date, source,
                           enclosure_url, status, popularity, episode_number)
     select '${DEEP_SHOW}-e-' || g, '${DEEP_SHOW}', 'Deep', '${MARKER} Deep Episode ' || g,
@@ -663,60 +688,81 @@ async function seed(tx: Tx): Promise<void> {
            case when g % 17 = 0 then 'processing' else 'ready' end,
            g % 101,
            case when g % 9 = 0 then null else g end
-    from generate_series(1, ${DEEP_SHOW_EPISODES}) g`));
+    from generate_series(1, ${DEEP_SHOW_EPISODES}) g`),
+  );
 
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into episode_persons (id, episode_id, "position", name, linked_oxy_user_id)
     select '${MARKER}-ep-' || g, '${MARKER}-e-' || g, 0, 'Guest ' || g,
            '${MARKER}-oxy-' || (1 + (g % 40))
-    from generate_series(1, ${SEEDED_EPISODES}) g`));
+    from generate_series(1, ${SEEDED_EPISODES}) g`),
+  );
 
   /**
    * A PRIME modulus for the user index, the same trap `library.explain.test.ts`
    * records: with `(g % 2000, g % 5000)` the pair repeats every 10,000 rows and
    * the seed dies on `user_podcast_subscriptions_oxy_user_id_podcast_id_key`.
    */
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into user_podcast_subscriptions (id, oxy_user_id, podcast_id, created_at)
     select '${MARKER}-ups-' || g, '${MARKER}-u-' || (1 + ((g * 3) % 1999)),
            '${MARKER}-s-' || (1 + (g % ${SEEDED_SHOWS})), now() - (g || ' seconds')::interval
-    from generate_series(1, 20000) g`));
+    from generate_series(1, 20000) g`),
+  );
 
   // Same prime-modulus reason, against
   // `episode_progress_oxy_user_id_episode_id_key`. One row in three is
   // completed, so the partial index has rows on both sides of its predicate.
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into episode_progress (id, oxy_user_id, episode_id, position_sec, duration_sec,
                                   completed, updated_at)
     select '${MARKER}-prg-' || g, '${MARKER}-u-' || (1 + ((g * 3) % 1999)),
            '${MARKER}-e-' || (1 + (g % ${SEEDED_EPISODES})), 30, 1800,
            case when g % 3 = 0 then true else false end,
            now() - (g || ' seconds')::interval
-    from generate_series(1, 30000) g`));
+    from generate_series(1, 30000) g`),
+  );
 
-  await executeRows(tx, sql.raw(
-    'analyze genres, podcasts, podcast_categories, podcast_funding, podcast_persons, ' +
-    'episodes, episode_persons, user_podcast_subscriptions, episode_progress'
-  ));
+  await executeRows(
+    tx,
+    sql.raw(
+      'analyze genres, podcasts, podcast_categories, podcast_funding, podcast_persons, ' +
+        'episodes, episode_persons, user_podcast_subscriptions, episode_progress',
+    ),
+  );
 
   const [shows] = await executeRows<{ total: number }>(
-    tx, sql.raw(`select count(*)::int as total from podcasts where id like '${MARKER}-%'`));
+    tx,
+    sql.raw(`select count(*)::int as total from podcasts where id like '${MARKER}-%'`),
+  );
   seededShowCount = shows?.total ?? 0;
 
   const [eps] = await executeRows<{ total: number }>(
-    tx, sql.raw(`select count(*)::int as total from episodes where id like '${MARKER}-%'`));
+    tx,
+    sql.raw(`select count(*)::int as total from episodes where id like '${MARKER}-%'`),
+  );
   seededEpisodeCount = eps?.total ?? 0;
 
   const [deep] = await executeRows<{ total: number; unnumbered: number }>(
-    tx, sql.raw(`select count(*)::int as total,
+    tx,
+    sql.raw(`select count(*)::int as total,
                         count(*) filter (where episode_number is null)::int as unnumbered
-                 from episodes where podcast_id = '${DEEP_SHOW}'`));
+                 from episodes where podcast_id = '${DEEP_SHOW}'`),
+  );
   seededDeepShowEpisodeCount = deep?.total ?? 0;
   seededDeepShowUnnumbered = deep?.unnumbered ?? 0;
 
   const [hidden] = await executeRows<{ total: number }>(
-    tx, sql.raw(`select count(*)::int as total from podcasts
-                 where id like '${MARKER}-%' and visibility <> 'public'`));
+    tx,
+    sql.raw(`select count(*)::int as total from podcasts
+                 where id like '${MARKER}-%' and visibility <> 'public'`),
+  );
   seededNonPublicShowCount = hidden?.total ?? 0;
 }
 
@@ -749,7 +795,9 @@ beforeAll(async () => {
       for (const probe of PROBES) {
         const statement = typeof probe.sql === 'function' ? probe.sql() : probe.sql;
         const rows = await executeRows<{ 'QUERY PLAN': string }>(
-          tx, sql.raw(`explain (analyze, buffers) ${statement}`));
+          tx,
+          sql.raw(`explain (analyze, buffers) ${statement}`),
+        );
         plans.set(probe.name, rows.map((row) => row['QUERY PLAN']).join('\n'));
       }
 
@@ -758,7 +806,9 @@ beforeAll(async () => {
       for (const probe of PROBES.filter((candidate) => candidate.alsoAtDefaultCosting)) {
         const statement = typeof probe.sql === 'function' ? probe.sql() : probe.sql;
         const rows = await executeRows<{ 'QUERY PLAN': string }>(
-          tx, sql.raw(`explain (analyze, buffers) ${statement}`));
+          tx,
+          sql.raw(`explain (analyze, buffers) ${statement}`),
+        );
         plans.set(`${probe.name}:default`, rows.map((row) => row['QUERY PLAN']).join('\n'));
       }
 
@@ -774,8 +824,9 @@ afterAll(closePostgres);
 /** Index names the planner actually used, in the order they appear. */
 function indexesIn(probe: string): string {
   const plan = plans.get(probe) ?? '';
-  const names = [...plan.matchAll(/Index (?:Only )?Scan using (\w+)|Bitmap Index Scan on (\w+)/g)]
-    .map((match) => match[1] ?? match[2]);
+  const names = [
+    ...plan.matchAll(/Index (?:Only )?Scan using (\w+)|Bitmap Index Scan on (\w+)/g),
+  ].map((match) => match[1] ?? match[2]);
   return [...new Set(names)].join(', ');
 }
 
@@ -827,14 +878,14 @@ describe('the browse shelf reaches an index', () => {
   it('the popular sort reads the partial popularity index', () => {
     expect(plans.get('browsePopular')).not.toContain('Seq Scan on podcasts');
     expect(`browse popular: ${indexesIn('browsePopular')}`).toBe(
-      'browse popular: podcasts_active_popularity_idx'
+      'browse popular: podcasts_active_popularity_idx',
     );
   });
 
   it('the recent sort reads the partial last-episode index', () => {
     expect(plans.get('browseRecent')).not.toContain('Seq Scan on podcasts');
     expect(`browse recent: ${indexesIn('browseRecent')}`).toBe(
-      'browse recent: podcasts_active_last_episode_at_idx'
+      'browse recent: podcasts_active_last_episode_at_idx',
     );
   });
 
@@ -856,7 +907,7 @@ describe('the browse shelf reaches an index', () => {
   it('the category filter reaches both the genre name and the junction', () => {
     expect(plans.get('genreByName')).not.toContain('Seq Scan on genres');
     expect(`genre by name: ${indexesIn('genreByName')}`).toBe(
-      'genre by name: genres_lower_name_kind_key'
+      'genre by name: genres_lower_name_kind_key',
     );
     expect(plans.get('browseCategory')).not.toContain('Seq Scan on podcast_categories');
   });
@@ -902,14 +953,14 @@ describe('the search reads reach the GIN indexes', () => {
   it('podcasts_search_gin is reachable for a tsquery predicate', () => {
     expect(plans.get('ginReachablePodcasts')).not.toContain('Seq Scan on podcasts');
     expect(`podcast gin: ${indexesIn('ginReachablePodcasts')}`).toBe(
-      'podcast gin: podcasts_search_gin'
+      'podcast gin: podcasts_search_gin',
     );
   });
 
   it('episodes_search_gin is reachable for a tsquery predicate', () => {
     expect(plans.get('ginReachableEpisodes')).not.toContain('Seq Scan on episodes');
     expect(`episode gin: ${indexesIn('ginReachableEpisodes')}`).toBe(
-      'episode gin: episodes_search_gin'
+      'episode gin: episodes_search_gin',
     );
   });
 
@@ -926,14 +977,14 @@ describe('the search reads reach the GIN indexes', () => {
     expect(plan).not.toContain('Seq Scan on podcasts');
     // Whichever of the two plans the planner picked, it picked an index.
     expect(`podcast search index count: ${indexesIn('searchPodcasts').length > 0}`).toBe(
-      'podcast search index count: true'
+      'podcast search index count: true',
     );
   });
 
   it('the ordered episode search reaches an index, and the show gate is a probe', () => {
     expect(plans.get('searchEpisodes')).not.toContain('Seq Scan on episodes');
     expect(`episode search index count: ${indexesIn('searchEpisodes').length > 0}`).toBe(
-      'episode search index count: true'
+      'episode search index count: true',
     );
     // The hidden-show semi-join resolves against the primary key, one probe per
     // candidate — the whole argument for replacing the Mongo form's separate
@@ -943,17 +994,17 @@ describe('the search reads reach the GIN indexes', () => {
 });
 
 describe('the creator and scheduler reads reach an index', () => {
-  it('a creator\'s own shows come from the owner index', () => {
+  it("a creator's own shows come from the owner index", () => {
     expect(plans.get('myPodcasts')).not.toContain('Seq Scan on podcasts');
     expect(`my podcasts: ${indexesIn('myPodcasts')}`).toBe(
-      'my podcasts: podcasts_owner_oxy_user_id_created_at_idx'
+      'my podcasts: podcasts_owner_oxy_user_id_created_at_idx',
     );
   });
 
   it('the refresh batch reads its own compound partial index', () => {
     expect(plans.get('refreshCandidates')).not.toContain('Seq Scan on podcasts');
     expect(`refresh batch: ${indexesIn('refreshCandidates')}`).toBe(
-      'refresh batch: podcasts_rss_active_subscriber_count_idx'
+      'refresh batch: podcasts_rss_active_subscriber_count_idx',
     );
   });
 
@@ -997,7 +1048,7 @@ describe('the episode reads reach an index', () => {
     'episodes_podcast_id_guid_key',
   ];
 
-  it('a show\'s episodes are filtered through an index on the show, for both viewers', () => {
+  it("a show's episodes are filtered through an index on the show, for both viewers", () => {
     expect(plans.get('showEpisodes')).not.toContain('Seq Scan on episodes');
     expectIndexesWithin('owner view', indexesIn('showEpisodes'), SHOW_EPISODE_INDEXES);
     expect(plans.get('showEpisodesPublic')).not.toContain('Seq Scan on episodes');
@@ -1035,7 +1086,7 @@ describe('the episode reads reach an index', () => {
     for (const probe of ['showEpisodes', 'showEpisodesPublic']) {
       const plan = plans.get(probe) ?? '';
       expect(
-        `${probe}: ${plan.includes('Sort Key: episode_number DESC NULLS LAST, pub_date DESC NULLS LAST')}`
+        `${probe}: ${plan.includes('Sort Key: episode_number DESC NULLS LAST, pub_date DESC NULLS LAST')}`,
       ).toBe(`${probe}: true`);
     }
   });
@@ -1062,7 +1113,7 @@ describe('the episode reads reach an index', () => {
         const plan = plans.get(probe) ?? '';
         expect(plan).not.toContain('Seq Scan on episodes');
         expect(`${probe}: ${indexesIn(probe)}`).toBe(
-          `${probe}: episodes_podcast_id_episode_number_pub_date_idx`
+          `${probe}: episodes_podcast_id_episode_number_pub_date_idx`,
         );
         // The load-bearing half: NO sort node at all. Asserting the index alone
         // would pass on the plan that reaches it and then sorts 2,000 rows,
@@ -1081,7 +1132,7 @@ describe('the episode reads reach an index', () => {
        */
       const plan = plans.get('deepShowByPubDateOnly') ?? '';
       expect(`by date: ${indexesIn('deepShowByPubDateOnly')}`).toBe(
-        'by date: episodes_podcast_id_pub_date_idx'
+        'by date: episodes_podcast_id_pub_date_idx',
       );
       expect(`by date sorted: ${plan.includes('Sort Method:')}`).toBe('by date sorted: false');
     });
@@ -1091,7 +1142,7 @@ describe('the episode reads reach an index', () => {
     const plan = plans.get('newestEpisode') ?? '';
     expect(plan).not.toContain('Seq Scan on episodes');
     expect(`newest episode: ${indexesIn('newestEpisode')}`).toBe(
-      'newest episode: episodes_podcast_id_pub_date_idx'
+      'newest episode: episodes_podcast_id_pub_date_idx',
     );
     // Named rather than merely implied: the point of replacing `max(pub_date)`
     // was the driver mapping, and this is what says the replacement did not
@@ -1102,7 +1153,7 @@ describe('the episode reads reach an index', () => {
   it('the per-item existence check is a point lookup on the unique index', () => {
     expect(plans.get('episodeByGuid')).not.toContain('Seq Scan on episodes');
     expect(`episode by guid: ${indexesIn('episodeByGuid')}`).toBe(
-      'episode by guid: episodes_podcast_id_guid_key'
+      'episode by guid: episodes_podcast_id_guid_key',
     );
   });
 });
@@ -1111,23 +1162,23 @@ describe('the appears-in shelf reaches the credit indexes', () => {
   it('shows crediting a person come through podcast_persons_linked_oxy_user_id_idx', () => {
     expect(plans.get('showsCreditingPerson')).not.toContain('Seq Scan on podcast_persons');
     expect(`show credits: ${indexesIn('showsCreditingPerson')}`).toContain(
-      'podcast_persons_linked_oxy_user_id_idx'
+      'podcast_persons_linked_oxy_user_id_idx',
     );
   });
 
   it('episodes crediting a person come through episode_persons_linked_oxy_user_id_idx', () => {
     expect(plans.get('episodesCreditingPerson')).not.toContain('Seq Scan on episode_persons');
     expect(`episode credits: ${indexesIn('episodesCreditingPerson')}`).toContain(
-      'episode_persons_linked_oxy_user_id_idx'
+      'episode_persons_linked_oxy_user_id_idx',
     );
   });
 });
 
 describe('the subscription reads reach an index in BOTH directions', () => {
-  it('a user\'s subscriptions read the unique index', () => {
+  it("a user's subscriptions read the unique index", () => {
     expect(plans.get('subscriptions')).not.toContain('Seq Scan on user_podcast_subscriptions');
     expect(`subscriptions: ${indexesIn('subscriptions')}`).toBe(
-      'subscriptions: user_podcast_subscriptions_oxy_user_id_podcast_id_key'
+      'subscriptions: user_podcast_subscriptions_oxy_user_id_podcast_id_key',
     );
   });
 
@@ -1159,11 +1210,11 @@ describe('the subscription reads reach an index in BOTH directions', () => {
    */
   it('the library read drives from the subscriptions index and probes shows by primary key', () => {
     expect(plans.get('subscriptionsForLibrary')).not.toContain(
-      'Seq Scan on user_podcast_subscriptions'
+      'Seq Scan on user_podcast_subscriptions',
     );
     expect(plans.get('subscriptionsForLibrary')).not.toContain('Seq Scan on podcasts');
     expect(`library subscriptions: ${indexesIn('subscriptionsForLibrary')}`).toBe(
-      'library subscriptions: user_podcast_subscriptions_oxy_user_id_podcast_id_key, podcasts_pkey'
+      'library subscriptions: user_podcast_subscriptions_oxy_user_id_podcast_id_key, podcasts_pkey',
     );
   });
 
@@ -1173,10 +1224,10 @@ describe('the subscription reads reach an index in BOTH directions', () => {
    * `user_podcast_subscriptions_podcast_id_idx` exists; asserting the index by
    * NAME is what makes that claim checkable rather than decorative.
    */
-  it('a show\'s subscribers read the podcast_id index, not the unique one', () => {
+  it("a show's subscribers read the podcast_id index, not the unique one", () => {
     expect(plans.get('subscribers')).not.toContain('Seq Scan on user_podcast_subscriptions');
     expect(`subscribers: ${indexesIn('subscribers')}`).toBe(
-      'subscribers: user_podcast_subscriptions_podcast_id_idx'
+      'subscribers: user_podcast_subscriptions_podcast_id_idx',
     );
   });
 });
@@ -1185,7 +1236,7 @@ describe('the resume surface and the child loads reach an index', () => {
   it('continue-listening reads the partial completed = false index', () => {
     expect(plans.get('continueListening')).not.toContain('Seq Scan on episode_progress');
     expect(`continue listening: ${indexesIn('continueListening')}`).toBe(
-      'continue listening: episode_progress_oxy_user_id_updated_at_idx'
+      'continue listening: episode_progress_oxy_user_id_updated_at_idx',
     );
   });
 
@@ -1217,9 +1268,7 @@ describe('the visibility reads reach an index', () => {
     // the busiest read in the vertical into two index scans. It does not: `id =`
     // is the selective condition and the rest is a filter on one row.
     expect(plans.get('showForViewer')).not.toContain('Seq Scan on podcasts');
-    expect(`show for viewer: ${indexesIn('showForViewer')}`).toBe(
-      'show for viewer: podcasts_pkey'
-    );
+    expect(`show for viewer: ${indexesIn('showForViewer')}`).toBe('show for viewer: podcasts_pkey');
   });
 
   it('a single show for its OWNER is a primary-key lookup', () => {
@@ -1234,7 +1283,7 @@ describe('the visibility reads reach an index', () => {
     expect(plans.get('episodeWithShow')).not.toContain('Seq Scan on episodes');
     expect(plans.get('episodeWithShow')).not.toContain('Seq Scan on podcasts');
     expect(`episode with show: ${indexesIn('episodeWithShow')}`).toBe(
-      'episode with show: episodes_pkey, podcasts_pkey'
+      'episode with show: episodes_pkey, podcasts_pkey',
     );
   });
 
@@ -1245,7 +1294,7 @@ describe('the visibility reads reach an index', () => {
     expect(plans.get('episodesForViewer')).not.toContain('Seq Scan on episodes');
     expect(plans.get('episodesForViewer')).not.toContain('Seq Scan on podcasts');
     expect(`episodes for viewer: ${indexesIn('episodesForViewer')}`).toBe(
-      'episodes for viewer: episodes_pkey, podcasts_pkey'
+      'episodes for viewer: episodes_pkey, podcasts_pkey',
     );
   });
 

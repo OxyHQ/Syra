@@ -80,8 +80,12 @@ function makePlayer(url = 'https://cdn/master.m3u8') {
   const hls = new FakeHls();
 
   const deps = {
-    AudioCtor: function() { return audio; } as unknown as typeof Audio,
-    HlsCtor: function() { return hls; } as unknown as typeof Hls,
+    AudioCtor: function () {
+      return audio;
+    } as unknown as typeof Audio,
+    HlsCtor: function () {
+      return hls;
+    } as unknown as typeof Hls,
   };
 
   const player = createWebHlsPlayer(url, deps);

@@ -3,9 +3,7 @@
   "recipes": [
     {
       "name": "syra",
-      "services": [
-        "syra"
-      ],
+      "services": ["syra"],
       "ecrRepository": "oxy/syra",
       "dockerfile": "packages/backend/Dockerfile",
       "dockerfileSha256": "f018fd35b839fdb1e840ca1f0c2a679e80b47d5a209d9997d5e182652717a23f",

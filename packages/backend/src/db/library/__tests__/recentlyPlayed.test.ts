@@ -43,9 +43,14 @@ async function makeTrack(): Promise<string> {
     .values({ id: artistId, type: 'artist', name: 'Artist', nameKey: artistId, source: 'upload' });
 
   const id = uuidv7();
-  await getDb()
-    .insert(tracks)
-    .values({ id, title: 'Track', artistId, artistName: 'Artist', duration: 200, source: 'upload' });
+  await getDb().insert(tracks).values({
+    id,
+    title: 'Track',
+    artistId,
+    artistName: 'Artist',
+    duration: 200,
+    source: 'upload',
+  });
   return id;
 }
 
@@ -69,21 +74,25 @@ describe('findRecentTrackIds collapses plays to the most recent per track', () =
     // FIRST play per track would answer `[b, a]`; the correct one answers
     // `[a, b]`. Same set, different order — which is why the assertion is on
     // the array and not on membership.
-    await getDb().insert(recentlyPlayed).values([
-      { oxyUserId: USER, trackId: a, playedAt: at('2026-01-01T10:00:00Z') },
-      { oxyUserId: USER, trackId: b, playedAt: at('2026-01-01T11:00:00Z') },
-      { oxyUserId: USER, trackId: a, playedAt: at('2026-01-01T12:00:00Z') },
-    ]);
+    await getDb()
+      .insert(recentlyPlayed)
+      .values([
+        { oxyUserId: USER, trackId: a, playedAt: at('2026-01-01T10:00:00Z') },
+        { oxyUserId: USER, trackId: b, playedAt: at('2026-01-01T11:00:00Z') },
+        { oxyUserId: USER, trackId: a, playedAt: at('2026-01-01T12:00:00Z') },
+      ]);
 
     expect(await findRecentTrackIds(USER, 20)).toEqual([a, b]);
   });
 
-  it('answers only this user\'s plays', async () => {
+  it("answers only this user's plays", async () => {
     const [mine, theirs] = [await makeTrack(), await makeTrack()];
-    await getDb().insert(recentlyPlayed).values([
-      { oxyUserId: USER, trackId: mine, playedAt: at('2026-01-01T10:00:00Z') },
-      { oxyUserId: OTHER, trackId: theirs, playedAt: at('2026-01-01T11:00:00Z') },
-    ]);
+    await getDb()
+      .insert(recentlyPlayed)
+      .values([
+        { oxyUserId: USER, trackId: mine, playedAt: at('2026-01-01T10:00:00Z') },
+        { oxyUserId: OTHER, trackId: theirs, playedAt: at('2026-01-01T11:00:00Z') },
+      ]);
 
     expect(await findRecentTrackIds(USER, 20)).toEqual([mine]);
   });
@@ -92,11 +101,13 @@ describe('findRecentTrackIds collapses plays to the most recent per track', () =
     // Three rows, two tracks, limit 2. A limit applied before the collapse
     // would answer one track.
     const [a, b] = [await makeTrack(), await makeTrack()];
-    await getDb().insert(recentlyPlayed).values([
-      { oxyUserId: USER, trackId: a, playedAt: at('2026-01-01T10:00:00Z') },
-      { oxyUserId: USER, trackId: a, playedAt: at('2026-01-01T11:00:00Z') },
-      { oxyUserId: USER, trackId: b, playedAt: at('2026-01-01T09:00:00Z') },
-    ]);
+    await getDb()
+      .insert(recentlyPlayed)
+      .values([
+        { oxyUserId: USER, trackId: a, playedAt: at('2026-01-01T10:00:00Z') },
+        { oxyUserId: USER, trackId: a, playedAt: at('2026-01-01T11:00:00Z') },
+        { oxyUserId: USER, trackId: b, playedAt: at('2026-01-01T09:00:00Z') },
+      ]);
 
     expect(await findRecentTrackIds(USER, 2)).toEqual([a, b]);
   });
@@ -112,10 +123,12 @@ describe('touchRecentPlay refreshes at most one row', () => {
     // TWO rows inside the window. `findOneAndUpdate` updated exactly one, and a
     // bare `UPDATE … WHERE played_at >= …` would update both — which no fixture
     // with a single row in the window could tell apart.
-    await getDb().insert(recentlyPlayed).values([
-      { oxyUserId: USER, trackId, playedAt: at('2026-01-01T12:00:00Z') },
-      { oxyUserId: USER, trackId, playedAt: at('2026-01-01T12:00:10Z') },
-    ]);
+    await getDb()
+      .insert(recentlyPlayed)
+      .values([
+        { oxyUserId: USER, trackId, playedAt: at('2026-01-01T12:00:00Z') },
+        { oxyUserId: USER, trackId, playedAt: at('2026-01-01T12:00:10Z') },
+      ]);
 
     const now = at('2026-01-01T12:00:20Z');
     const since = at('2026-01-01T12:00:00Z');
@@ -137,7 +150,7 @@ describe('touchRecentPlay refreshes at most one row', () => {
       USER,
       trackId,
       at('2026-01-01T12:00:00Z'),
-      at('2026-01-01T12:00:30Z')
+      at('2026-01-01T12:00:30Z'),
     );
 
     expect(refreshed).toBe(false);
@@ -146,7 +159,7 @@ describe('touchRecentPlay refreshes at most one row', () => {
     ]);
   });
 
-  it('never refreshes another listener\'s play of the same track', async () => {
+  it("never refreshes another listener's play of the same track", async () => {
     const trackId = await makeTrack();
     await getDb()
       .insert(recentlyPlayed)
@@ -156,7 +169,7 @@ describe('touchRecentPlay refreshes at most one row', () => {
       USER,
       trackId,
       at('2026-01-01T12:00:00Z'),
-      at('2026-01-01T12:00:20Z')
+      at('2026-01-01T12:00:20Z'),
     );
 
     expect(refreshed).toBe(false);
@@ -175,7 +188,7 @@ describe('prunePlayHistory caps the log per listener', () => {
           oxyUserId,
           trackId,
           playedAt: new Date(Date.UTC(2026, 0, 1) + index * 1000),
-        }))
+        })),
       );
   }
 
@@ -205,12 +218,14 @@ describe('prunePlayHistory caps the log per listener', () => {
   it('drops rows that share the cutoff instant', async () => {
     const trackId = await makeTrack();
     const tied = at('2026-01-01T00:00:00Z');
-    await getDb().insert(recentlyPlayed).values([
-      { oxyUserId: USER, trackId, playedAt: tied },
-      { oxyUserId: USER, trackId, playedAt: tied },
-      { oxyUserId: USER, trackId, playedAt: at('2026-01-01T00:00:01Z') },
-      { oxyUserId: USER, trackId, playedAt: at('2026-01-01T00:00:02Z') },
-    ]);
+    await getDb()
+      .insert(recentlyPlayed)
+      .values([
+        { oxyUserId: USER, trackId, playedAt: tied },
+        { oxyUserId: USER, trackId, playedAt: tied },
+        { oxyUserId: USER, trackId, playedAt: at('2026-01-01T00:00:01Z') },
+        { oxyUserId: USER, trackId, playedAt: at('2026-01-01T00:00:02Z') },
+      ]);
 
     // Retention 3 → the cutoff row is the oldest, and its twin shares the
     // instant, so BOTH go and two rows are left rather than three.
@@ -222,7 +237,7 @@ describe('prunePlayHistory caps the log per listener', () => {
     ]);
   });
 
-  it('never prunes another listener\'s log', async () => {
+  it("never prunes another listener's log", async () => {
     const trackId = await makeTrack();
     await seedPlays(USER, 12, trackId);
     await seedPlays(OTHER, 12, trackId);

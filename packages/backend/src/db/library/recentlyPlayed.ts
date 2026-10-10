@@ -32,10 +32,7 @@ import { recentlyPlayed } from '../schema/library';
  * a track that has since been taken down simply resolves to nothing, the same
  * way the Mongo version's `$in` did.
  */
-export async function findRecentTrackIds(
-  oxyUserId: string,
-  limit: number
-): Promise<string[]> {
+export async function findRecentTrackIds(oxyUserId: string, limit: number): Promise<string[]> {
   const rows = await getDb()
     .select({ trackId: recentlyPlayed.trackId })
     .from(recentlyPlayed)
@@ -57,7 +54,7 @@ export async function touchRecentPlay(
   oxyUserId: string,
   trackId: string,
   since: Date,
-  now: Date
+  now: Date,
 ): Promise<boolean> {
   // The single most recent qualifying row, so this stays the one-document
   // update `findOneAndUpdate` was. See the file's doc comment.
@@ -68,8 +65,8 @@ export async function touchRecentPlay(
       and(
         eq(recentlyPlayed.oxyUserId, oxyUserId),
         eq(recentlyPlayed.trackId, trackId),
-        gte(recentlyPlayed.playedAt, since)
-      )
+        gte(recentlyPlayed.playedAt, since),
+      ),
     )
     .orderBy(descNullsLast(recentlyPlayed.playedAt))
     .limit(1);
@@ -87,7 +84,7 @@ export async function touchRecentPlay(
 export async function recordPlayEvent(
   oxyUserId: string,
   trackId: string,
-  playedAt: Date
+  playedAt: Date,
 ): Promise<void> {
   await getDb().insert(recentlyPlayed).values({ oxyUserId, trackId, playedAt });
 }
@@ -115,6 +112,6 @@ export async function prunePlayHistory(oxyUserId: string, retention: number): Pr
   await getDb()
     .delete(recentlyPlayed)
     .where(
-      and(eq(recentlyPlayed.oxyUserId, oxyUserId), lte(recentlyPlayed.playedAt, cutoff.playedAt))
+      and(eq(recentlyPlayed.oxyUserId, oxyUserId), lte(recentlyPlayed.playedAt, cutoff.playedAt)),
     );
 }

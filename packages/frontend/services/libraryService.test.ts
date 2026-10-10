@@ -12,7 +12,9 @@ jest.mock('@/utils/api', () => ({
 
 const mockApiGet = api.get as jest.MockedFunction<typeof api.get>;
 const mockApiPost = api.post as jest.MockedFunction<typeof api.post>;
-const mockClearCacheByPrefix = api.clearCacheByPrefix as jest.MockedFunction<typeof api.clearCacheByPrefix>;
+const mockClearCacheByPrefix = api.clearCacheByPrefix as jest.MockedFunction<
+  typeof api.clearCacheByPrefix
+>;
 
 const track: Track = {
   id: 'track-1',
@@ -89,7 +91,11 @@ describe('libraryService HTTP cache coherence', () => {
 
     const result = await libraryService.getLikedTracks({ limit: 20, offset: 0 });
 
-    expect(mockApiGet).toHaveBeenCalledWith('/library/tracks', { limit: 20, offset: 0 }, { cache: false });
+    expect(mockApiGet).toHaveBeenCalledWith(
+      '/library/tracks',
+      { limit: 20, offset: 0 },
+      { cache: false },
+    );
     expect(result.total).toBe(1);
     expect(result.tracks[0]).toEqual(track);
   });
@@ -107,7 +113,9 @@ describe('libraryService HTTP cache coherence', () => {
   it('rejects invalid mutation responses instead of reconciling stale cache state', async () => {
     mockApiPost.mockResolvedValueOnce({ data: { likedTracks: ['track-1'] } });
 
-    await expect(libraryService.likeTrack('track-1')).rejects.toThrow('Invalid library mutation response');
+    await expect(libraryService.likeTrack('track-1')).rejects.toThrow(
+      'Invalid library mutation response',
+    );
     expect(mockClearCacheByPrefix).not.toHaveBeenCalled();
   });
 });

@@ -193,7 +193,7 @@ function extractEmbeddedIpv4(ip: string): string | null {
   const lower = ip.toLowerCase();
   // Forms like "::ffff:1.2.3.4" already carry dotted-quad notation.
   const dotted = lower.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
-  if (dotted && (lower.startsWith('::ffff:') || lower.startsWith('::') )) {
+  if (dotted && (lower.startsWith('::ffff:') || lower.startsWith('::'))) {
     return dotted[1];
   }
   // Hex form "::ffff:0102:0304" → 1.2.3.4
@@ -282,9 +282,8 @@ export async function assertSafePublicUrl(rawUrl: string): Promise<SsrfCheckResu
 
   // If the hostname is already a literal IP, validate it directly (IPv6 hosts
   // arrive bracket-wrapped from the URL parser; strip the brackets).
-  const literalHost = hostname.startsWith('[') && hostname.endsWith(']')
-    ? hostname.slice(1, -1)
-    : hostname;
+  const literalHost =
+    hostname.startsWith('[') && hostname.endsWith(']') ? hostname.slice(1, -1) : hostname;
   const literalFamily = isIP(literalHost);
   if (literalFamily !== 0) {
     if (isBlockedIp(literalHost)) {

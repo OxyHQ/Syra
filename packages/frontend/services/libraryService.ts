@@ -7,24 +7,28 @@ import { normalizeTrackImages } from '@/utils/catalogImages';
 const logger = createScopedLogger('LibraryService');
 const FRESH_LIBRARY_READ = { cache: false } as const;
 const LIBRARY_HTTP_CACHE_PREFIX = 'GET:/library';
-const idArraySchema = z.array(z.unknown()).transform((ids) =>
-  ids.filter((id): id is string => typeof id === 'string'),
-);
-const libraryMembershipResponseSchema = z.object({
-  likedTracks: idArraySchema.optional(),
-  savedAlbums: idArraySchema.optional(),
-  followedArtists: idArraySchema.optional(),
-  savedPlaylists: idArraySchema.optional(),
-  playlists: idArraySchema.optional(),
-  subscribedPodcasts: idArraySchema.optional(),
-}).passthrough();
-const libraryMutationResultSchema = z.object({
-  ok: z.boolean(),
-  likedTracks: idArraySchema.optional(),
-  savedAlbums: idArraySchema.optional(),
-  followedArtists: idArraySchema.optional(),
-  savedPlaylists: idArraySchema.optional(),
-}).passthrough();
+const idArraySchema = z
+  .array(z.unknown())
+  .transform((ids) => ids.filter((id): id is string => typeof id === 'string'));
+const libraryMembershipResponseSchema = z
+  .object({
+    likedTracks: idArraySchema.optional(),
+    savedAlbums: idArraySchema.optional(),
+    followedArtists: idArraySchema.optional(),
+    savedPlaylists: idArraySchema.optional(),
+    playlists: idArraySchema.optional(),
+    subscribedPodcasts: idArraySchema.optional(),
+  })
+  .passthrough();
+const libraryMutationResultSchema = z
+  .object({
+    ok: z.boolean(),
+    likedTracks: idArraySchema.optional(),
+    savedAlbums: idArraySchema.optional(),
+    followedArtists: idArraySchema.optional(),
+    savedPlaylists: idArraySchema.optional(),
+  })
+  .passthrough();
 
 /**
  * Membership snapshot for the authenticated user's library.
@@ -154,16 +158,15 @@ async function postLibraryMutation(endpoint: string): Promise<LibraryMutationRes
 export const libraryService = {
   /** Membership source for ALL like/save/follow buttons. */
   async getLibrary(): Promise<LibraryMembership> {
-    const response = await api.get<unknown>(
-      '/library',
-      undefined,
-      FRESH_LIBRARY_READ,
-    );
+    const response = await api.get<unknown>('/library', undefined, FRESH_LIBRARY_READ);
     return normalizeMembership(response.data);
   },
 
   /** Full liked-track objects (used by the Liked Songs screen). */
-  async getLikedTracks(params?: { limit?: number; offset?: number }): Promise<{ tracks: Track[]; total: number }> {
+  async getLikedTracks(params?: {
+    limit?: number;
+    offset?: number;
+  }): Promise<{ tracks: Track[]; total: number }> {
     const response = await api.get<{ tracks: Track[]; total: number }>(
       '/library/tracks',
       params,

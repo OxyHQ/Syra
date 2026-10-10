@@ -3,7 +3,15 @@ import Svg, { Rect } from 'react-native-svg';
 import { ViewStyle } from 'react-native';
 import { useTheme } from '@oxy.so/bloom/theme';
 
-export const LogoIcon = ({ color: colorProp, size = 26, style }: { color?: string; size?: number; style?: ViewStyle }): ReactElement => {
+export const LogoIcon = ({
+  color: colorProp,
+  size = 26,
+  style,
+}: {
+  color?: string;
+  size?: number;
+  style?: ViewStyle;
+}): ReactElement => {
   const theme = useTheme();
   const color = colorProp ?? theme.colors.primary;
   return (

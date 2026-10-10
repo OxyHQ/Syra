@@ -17,8 +17,12 @@ import type { GeneratePreviewClipFromHlsOptions } from '../ingest/previewClip';
 
 const execFile = promisify(execFileCb);
 function hasBinary(name: string): boolean {
-  try { execFileSync('which', [name], { stdio: 'ignore' }); return true; }
-  catch { return false; }
+  try {
+    execFileSync('which', [name], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
 }
 const HLS_TOOLS_AVAILABLE = ['ffmpeg', 'ffprobe', 'mp42hls', 'mp4fragment'].every(hasBinary);
 
@@ -53,7 +57,13 @@ describe('buildWindowedHlsPlaylist', () => {
   it('start=0 keeps only segments covering [0,30] with seek 0 and unchanged media sequence', () => {
     const w = buildWindowedHlsPlaylist(makePlaylist(12), { startSec: 0, clipSec: 30 });
     // 6s segments: seg0..seg4 start at 0,6,12,18,24 (<30); seg5 starts at 30 → excluded.
-    expect(w.segmentNames).toEqual(['segment-0.ts', 'segment-1.ts', 'segment-2.ts', 'segment-3.ts', 'segment-4.ts']);
+    expect(w.segmentNames).toEqual([
+      'segment-0.ts',
+      'segment-1.ts',
+      'segment-2.ts',
+      'segment-3.ts',
+      'segment-4.ts',
+    ]);
     expect(w.seekSec).toBe(0);
     expect(w.playlist).toContain('#EXT-X-MEDIA-SEQUENCE:0');
     expect(w.playlist).toContain('URI="key.bin"');
@@ -66,7 +76,12 @@ describe('buildWindowedHlsPlaylist', () => {
     const w = buildWindowedHlsPlaylist(makePlaylist(12), { startSec: 30, clipSec: 30 });
     // start=30 is in seg5; lookback → startIdx=4; windowEnd=60 → seg4..seg9 (segStart 24..54 <60).
     expect(w.segmentNames).toEqual([
-      'segment-4.ts', 'segment-5.ts', 'segment-6.ts', 'segment-7.ts', 'segment-8.ts', 'segment-9.ts',
+      'segment-4.ts',
+      'segment-5.ts',
+      'segment-6.ts',
+      'segment-7.ts',
+      'segment-8.ts',
+      'segment-9.ts',
     ]);
     // seek = start - segStart[4] = 30 - 24 = 6 (the lookback segment is discarded by the seek).
     expect(w.seekSec).toBe(6);
@@ -83,7 +98,9 @@ describe('buildWindowedHlsPlaylist', () => {
 
   it('rejects an unsafe segment name (path traversal)', () => {
     const evil = '#EXTM3U\n#EXTINF:6.0,\n../../etc/passwd\n#EXT-X-ENDLIST\n';
-    expect(() => buildWindowedHlsPlaylist(evil, { startSec: 0, clipSec: 30 })).toThrow(/Unsafe HLS segment name/);
+    expect(() => buildWindowedHlsPlaylist(evil, { startSec: 0, clipSec: 30 })).toThrow(
+      /Unsafe HLS segment name/,
+    );
   });
 });
 
@@ -101,8 +118,14 @@ describe('storePreviewFromHls (hermetic, injected I/O)', () => {
 
     const deps: HlsPreviewDeps = {
       getKeyHex: async () => KEY_HEX,
-      fetchText: async (key) => { fetchTextKeys.push(key); return makePlaylist(2); },
-      fetchSegment: async (key) => { fetchSegmentKeys.push(key); return Buffer.from(`ts:${key}`); },
+      fetchText: async (key) => {
+        fetchTextKeys.push(key);
+        return makePlaylist(2);
+      },
+      fetchSegment: async (key) => {
+        fetchSegmentKeys.push(key);
+        return Buffer.from(`ts:${key}`);
+      },
       runClip: async (opts: GeneratePreviewClipFromHlsOptions) => {
         clipCalls += 1;
         const dir = path.dirname(opts.playlistPath);
@@ -145,15 +168,27 @@ describe('storePreviewFromHls (hermetic, injected I/O)', () => {
       {
         getKeyHex: async () => KEY_HEX,
         fetchText: async () => makePlaylist(12),
-        fetchSegment: async (key) => { fetchSegmentKeys.push(key); return Buffer.from('ts'); },
-        runClip: async (opts) => { capturedSeek = opts.startSec; fs.writeFileSync(opts.outPath, Buffer.from('x')); return opts.outPath; },
+        fetchSegment: async (key) => {
+          fetchSegmentKeys.push(key);
+          return Buffer.from('ts');
+        },
+        runClip: async (opts) => {
+          capturedSeek = opts.startSec;
+          fs.writeFileSync(opts.outPath, Buffer.from('x'));
+          return opts.outPath;
+        },
         upload: async () => {},
       },
     );
 
     // start=30 → seg4..seg9 only (6 of 12), NOT the whole track.
     expect(fetchSegmentKeys.map((k) => k.split('/').pop()).sort()).toEqual([
-      'segment-4.ts', 'segment-5.ts', 'segment-6.ts', 'segment-7.ts', 'segment-8.ts', 'segment-9.ts',
+      'segment-4.ts',
+      'segment-5.ts',
+      'segment-6.ts',
+      'segment-7.ts',
+      'segment-8.ts',
+      'segment-9.ts',
     ]);
     expect(capturedSeek).toBe(6);
   });
@@ -166,7 +201,10 @@ describe('storePreviewFromHls (hermetic, injected I/O)', () => {
         getKeyHex: async () => null,
         fetchText: async () => makePlaylist(2),
         fetchSegment: async () => Buffer.alloc(0),
-        runClip: async (opts) => { clipCalls += 1; return opts.outPath; },
+        runClip: async (opts) => {
+          clipCalls += 1;
+          return opts.outPath;
+        },
         upload: async () => {},
       },
     );
@@ -185,73 +223,127 @@ describe('storePreviewFromHls (hermetic, injected I/O)', () => {
 
 // ── Real end-to-end: encrypted HLS → windowed materialization → decrypt ─────────
 
-describe.skipIf(!HLS_TOOLS_AVAILABLE)('storePreviewFromHls real decrypt (requires ffmpeg + Bento4)', () => {
-  let renditionDir: string;
-  let keyHex: string;
+describe.skipIf(!HLS_TOOLS_AVAILABLE)(
+  'storePreviewFromHls real decrypt (requires ffmpeg + Bento4)',
+  () => {
+    let renditionDir: string;
+    let keyHex: string;
 
-  beforeAll(async () => {
-    if (!HLS_TOOLS_AVAILABLE) return;
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'preview-hls-e2e-'));
-    renditionDir = path.join(root, '96');
-    fs.mkdirSync(renditionDir, { recursive: true });
-    const srcMp4 = path.join(root, 'src.mp4');
-    const fragMp4 = path.join(root, 'frag.mp4');
+    beforeAll(async () => {
+      if (!HLS_TOOLS_AVAILABLE) return;
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'preview-hls-e2e-'));
+      renditionDir = path.join(root, '96');
+      fs.mkdirSync(renditionDir, { recursive: true });
+      const srcMp4 = path.join(root, 'src.mp4');
+      const fragMp4 = path.join(root, 'frag.mp4');
 
-    await execFile('ffmpeg', [
-      '-nostdin', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=40',
-      '-c:a', 'aac', '-b:a', '96k', '-movflags', '+faststart', srcMp4, '-y',
-    ], { maxBuffer: 8 * 1024 * 1024 });
-    await execFile('mp4fragment', [srcMp4, fragMp4]);
-    keyHex = crypto.randomBytes(16).toString('hex');
-    await execFile('mp42hls', [
-      '--encryption-mode', 'AES-128', '--encryption-key', keyHex, '--encryption-key-uri', 'key', fragMp4,
-    ], { cwd: renditionDir });
-  }, 120_000);
+      await execFile(
+        'ffmpeg',
+        [
+          '-nostdin',
+          '-f',
+          'lavfi',
+          '-i',
+          'sine=frequency=440:duration=40',
+          '-c:a',
+          'aac',
+          '-b:a',
+          '96k',
+          '-movflags',
+          '+faststart',
+          srcMp4,
+          '-y',
+        ],
+        { maxBuffer: 8 * 1024 * 1024 },
+      );
+      await execFile('mp4fragment', [srcMp4, fragMp4]);
+      keyHex = crypto.randomBytes(16).toString('hex');
+      await execFile(
+        'mp42hls',
+        [
+          '--encryption-mode',
+          'AES-128',
+          '--encryption-key',
+          keyHex,
+          '--encryption-key-uri',
+          'key',
+          fragMp4,
+        ],
+        { cwd: renditionDir },
+      );
+    }, 120_000);
 
-  afterAll(() => {
-    if (!HLS_TOOLS_AVAILABLE) return;
-    fs.rmSync(path.dirname(renditionDir), { recursive: true, force: true });
-  });
+    afterAll(() => {
+      if (!HLS_TOOLS_AVAILABLE) return;
+      fs.rmSync(path.dirname(renditionDir), { recursive: true, force: true });
+    });
 
-  it('produces a valid ~25s MP3 from start=15 using only the windowed segments', async () => {
-    const fetchedSegments: string[] = [];
-    let uploadedBody: Buffer | undefined;
+    it('produces a valid ~25s MP3 from start=15 using only the windowed segments', async () => {
+      const fetchedSegments: string[] = [];
+      let uploadedBody: Buffer | undefined;
 
-    const result = await storePreviewFromHls(
-      { trackId: 'e2e', hls: [{ manifestKey: 'hls/a/t/96/stream.m3u8', bitrateKbps: 96, encrypted: true }], startSec: 15 },
-      {
-        getKeyHex: async () => keyHex,
-        fetchText: async () => fs.readFileSync(path.join(renditionDir, 'stream.m3u8'), 'utf8'),
-        fetchSegment: async (key) => {
-          const name = key.split('/').pop() ?? '';
-          fetchedSegments.push(name);
-          return fs.readFileSync(path.join(renditionDir, name));
+      const result = await storePreviewFromHls(
+        {
+          trackId: 'e2e',
+          hls: [{ manifestKey: 'hls/a/t/96/stream.m3u8', bitrateKbps: 96, encrypted: true }],
+          startSec: 15,
         },
-        runClip: generatePreviewClipFromHls, // real ffmpeg decrypt
-        upload: async (_key, body) => { uploadedBody = Buffer.from(body); },
-      },
-    );
+        {
+          getKeyHex: async () => keyHex,
+          fetchText: async () => fs.readFileSync(path.join(renditionDir, 'stream.m3u8'), 'utf8'),
+          fetchSegment: async (key) => {
+            const name = key.split('/').pop() ?? '';
+            fetchedSegments.push(name);
+            return fs.readFileSync(path.join(renditionDir, name));
+          },
+          runClip: generatePreviewClipFromHls, // real ffmpeg decrypt
+          upload: async (_key, body) => {
+            uploadedBody = Buffer.from(body);
+          },
+        },
+      );
 
-    expect(result).toBe(getS3PreviewKey('e2e', 15));
-    // Windowed: a strict subset of the 7 segments (not the whole track).
-    expect(fetchedSegments.length).toBeLessThan(7);
-    expect(uploadedBody).toBeDefined();
+      expect(result).toBe(getS3PreviewKey('e2e', 15));
+      // Windowed: a strict subset of the 7 segments (not the whole track).
+      expect(fetchedSegments.length).toBeLessThan(7);
+      expect(uploadedBody).toBeDefined();
 
-    // Probe the decrypted clip: valid mp3, ~25s (40s source seeked to 15s).
-    const probe = path.join(os.tmpdir(), `e2e-clip-${Date.now()}.mp3`);
-    fs.writeFileSync(probe, uploadedBody ?? Buffer.alloc(0));
-    try {
-      const codec = (await execFile('ffprobe', [
-        '-v', 'error', '-select_streams', 'a:0', '-show_entries', 'stream=codec_name', '-of', 'csv=p=0', probe,
-      ])).stdout.trim();
-      const duration = Number((await execFile('ffprobe', [
-        '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', probe,
-      ])).stdout.trim());
-      expect(codec).toBe('mp3');
-      expect(duration).toBeGreaterThan(23);
-      expect(duration).toBeLessThan(27);
-    } finally {
-      fs.rmSync(probe, { force: true });
-    }
-  }, 60_000);
-});
+      // Probe the decrypted clip: valid mp3, ~25s (40s source seeked to 15s).
+      const probe = path.join(os.tmpdir(), `e2e-clip-${Date.now()}.mp3`);
+      fs.writeFileSync(probe, uploadedBody ?? Buffer.alloc(0));
+      try {
+        const codec = (
+          await execFile('ffprobe', [
+            '-v',
+            'error',
+            '-select_streams',
+            'a:0',
+            '-show_entries',
+            'stream=codec_name',
+            '-of',
+            'csv=p=0',
+            probe,
+          ])
+        ).stdout.trim();
+        const duration = Number(
+          (
+            await execFile('ffprobe', [
+              '-v',
+              'error',
+              '-show_entries',
+              'format=duration',
+              '-of',
+              'csv=p=0',
+              probe,
+            ])
+          ).stdout.trim(),
+        );
+        expect(codec).toBe('mp3');
+        expect(duration).toBeGreaterThan(23);
+        expect(duration).toBeLessThan(27);
+      } finally {
+        fs.rmSync(probe, { force: true });
+      }
+    }, 60_000);
+  },
+);

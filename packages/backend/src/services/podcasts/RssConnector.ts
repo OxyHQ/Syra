@@ -117,7 +117,9 @@ export interface RssFetchResult {
 // ── Low-level value helpers ─────────────────────────────────────────────────────
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined;
+  return typeof value === 'object' && value !== null
+    ? (value as Record<string, unknown>)
+    : undefined;
 }
 
 function asArray(value: unknown): unknown[] {
@@ -269,7 +271,9 @@ function normaliseShow(channel: Record<string, unknown>): ParsedShow {
     if (url) funding.push({ url, message: text(node) });
   }
 
-  const typeValue = (attr(channel['itunes:type'], 'text') ?? text(channel['itunes:type']))?.toLowerCase();
+  const typeValue = (
+    attr(channel['itunes:type'], 'text') ?? text(channel['itunes:type'])
+  )?.toLowerCase();
 
   return {
     title: text(channel['title']) ?? 'Untitled podcast',
@@ -384,7 +388,9 @@ export function parseFeedXml(xml: string): { show: ParsedShow; episodes: ParsedE
   const episodes: ParsedEpisode[] = [];
   for (const rawItem of asArray(channel['item'])) {
     if (episodes.length >= MAX_EPISODES_PER_FEED) {
-      logger.warn('[podcasts] feed exceeded episode cap; truncating', { cap: MAX_EPISODES_PER_FEED });
+      logger.warn('[podcasts] feed exceeded episode cap; truncating', {
+        cap: MAX_EPISODES_PER_FEED,
+      });
       break;
     }
     const record = asRecord(rawItem);
@@ -402,7 +408,9 @@ export async function fetchAndParse(
   deps: { fetch?: SafeFetchFn } = {},
 ): Promise<RssFetchResult> {
   const doFetch = deps.fetch ?? safeFetch;
-  const headers: Record<string, string> = { Accept: 'application/rss+xml, application/xml, text/xml' };
+  const headers: Record<string, string> = {
+    Accept: 'application/rss+xml, application/xml, text/xml',
+  };
   if (options.etag) headers['If-None-Match'] = options.etag;
   if (options.lastModified) headers['If-Modified-Since'] = options.lastModified;
 

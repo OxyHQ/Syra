@@ -98,7 +98,11 @@ beforeEach(async () => {
 
   const [podcast] = await db
     .insert(podcasts)
-    .values({ title: 'HLS Storage Show', feedUrl: `https://example.test/${seedCounter}.xml`, source: 'syra' })
+    .values({
+      title: 'HLS Storage Show',
+      feedUrl: `https://example.test/${seedCounter}.xml`,
+      source: 'syra',
+    })
     .returning({ id: podcasts.id });
   PODCAST_ID = podcast.id;
 
@@ -158,7 +162,7 @@ function buildSyntheticPackage(): PackageResult {
     const dir = path.join(packageDir, String(kbps));
     fs.mkdirSync(dir);
     fs.writeFileSync(path.join(dir, 'stream.m3u8'), `#EXTM3U\n#EXT-X-KEY:METHOD=AES-128\n`, 'utf8');
-    fs.writeFileSync(path.join(dir, 'segment-0.ts'), Buffer.alloc(8), );
+    fs.writeFileSync(path.join(dir, 'segment-0.ts'), Buffer.alloc(8));
   }
 
   return {
@@ -218,40 +222,28 @@ describe('storePackagedHls', () => {
 
   it('returns hls[] with 3 entries: correct manifestKey, bitrateKbps, encrypted:true', async () => {
     const result = buildSyntheticPackage();
-    const { hls } = await storePackagedHls(
-      result,
-      catalogTarget(),
-      { upload: async () => {} },
-    );
+    const { hls } = await storePackagedHls(result, catalogTarget(), { upload: async () => {} });
 
     expect(hls).toHaveLength(3);
     for (const [i, kbps] of BITRATES.entries()) {
       expect(hls[i].bitrateKbps).toBe(kbps);
       expect(hls[i].encrypted).toBe(true);
-      expect(hls[i].manifestKey).toBe(
-        `hls/${ARTIST_ID}/${TRACK_ID}/${kbps}/stream.m3u8`,
-      );
+      expect(hls[i].manifestKey).toBe(`hls/${ARTIST_ID}/${TRACK_ID}/${kbps}/stream.m3u8`);
     }
   });
 
   it('returns hlsMasterKey pointing at master.m3u8', async () => {
     const result = buildSyntheticPackage();
-    const { hlsMasterKey } = await storePackagedHls(
-      result,
-      catalogTarget(),
-      { upload: async () => {} },
-    );
+    const { hlsMasterKey } = await storePackagedHls(result, catalogTarget(), {
+      upload: async () => {},
+    });
 
     expect(hlsMasterKey).toBe(`hls/${ARTIST_ID}/${TRACK_ID}/master.m3u8`);
   });
 
   it('persists a TrackKey doc with the correct keyHex and keyUri', async () => {
     const result = buildSyntheticPackage();
-    await storePackagedHls(
-      result,
-      catalogTarget(),
-      { upload: async () => {} },
-    );
+    await storePackagedHls(result, catalogTarget(), { upload: async () => {} });
 
     const [row] = await catalogKeysFor(TRACK_ID);
     expect(row).toBeDefined();

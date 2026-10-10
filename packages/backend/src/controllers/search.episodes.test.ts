@@ -37,8 +37,14 @@ function makeRes(): CapturedRes {
   return {
     _status: 200,
     _body: undefined,
-    status(code) { this._status = code; return this; },
-    json(body) { this._body = body; return this; },
+    status(code) {
+      this._status = code;
+      return this;
+    },
+    json(body) {
+      this._body = body;
+      return this;
+    },
   };
 }
 
@@ -46,7 +52,9 @@ function makeReq(query: Record<string, string>): Request {
   return { query } as unknown as Request;
 }
 
-const failNext: NextFunction = (err) => { throw err; };
+const failNext: NextFunction = (err) => {
+  throw err;
+};
 
 /**
  * A show for the episodes to belong to.
@@ -58,7 +66,7 @@ const failNext: NextFunction = (err) => { throw err; };
  */
 async function makeShow(
   status: 'active' | 'unavailable' = 'active',
-  visibility: 'private' | 'unlisted' | 'public' = 'public'
+  visibility: 'private' | 'unlisted' | 'public' = 'public',
 ): Promise<string> {
   const id = uuidv7();
   await getDb().insert(podcasts).values({ id, title: 'Show', source: 'rss', status, visibility });
@@ -68,20 +76,69 @@ async function makeShow(
 describe('unified search — episodes category', () => {
   it('finds playable episodes by title and excludes non-ready / enclosure-less RSS', async () => {
     const podcastId = await makeShow();
-    await getDb().insert(episodes).values([
-      { podcastId, podcastTitle: 'Show', title: 'The Joe Rogan Experience #1', guid: 'g1', pubDate: new Date(), source: 'rss', enclosureUrl: 'https://x/1.mp3', status: 'ready' },
-      { podcastId, podcastTitle: 'Show', title: 'Unrelated Episode', guid: 'g2', pubDate: new Date(), source: 'rss', enclosureUrl: 'https://x/2.mp3', status: 'ready' },
-      { podcastId, podcastTitle: 'Show', title: 'Rogan processing', guid: 'g3', pubDate: new Date(), source: 'syra', status: 'processing' }, // excluded: not ready
-      { podcastId, podcastTitle: 'Show', title: 'Rogan no enclosure', guid: 'g4', pubDate: new Date(), source: 'rss', status: 'ready' }, // excluded: rss w/o enclosure
-      // Excluded: RSS with an EMPTY enclosure, not an absent one. Mongo needed
-      // three conditions (`$exists`, not null, not '') for this; Postgres needs
-      // two, and without a fixture on this side of it `is not null` alone would
-      // pass every other case in this block.
-      { podcastId, podcastTitle: 'Show', title: 'Rogan blank enclosure', guid: 'g5', pubDate: new Date(), source: 'rss', enclosureUrl: '', status: 'ready' },
-    ]);
+    await getDb()
+      .insert(episodes)
+      .values([
+        {
+          podcastId,
+          podcastTitle: 'Show',
+          title: 'The Joe Rogan Experience #1',
+          guid: 'g1',
+          pubDate: new Date(),
+          source: 'rss',
+          enclosureUrl: 'https://x/1.mp3',
+          status: 'ready',
+        },
+        {
+          podcastId,
+          podcastTitle: 'Show',
+          title: 'Unrelated Episode',
+          guid: 'g2',
+          pubDate: new Date(),
+          source: 'rss',
+          enclosureUrl: 'https://x/2.mp3',
+          status: 'ready',
+        },
+        {
+          podcastId,
+          podcastTitle: 'Show',
+          title: 'Rogan processing',
+          guid: 'g3',
+          pubDate: new Date(),
+          source: 'syra',
+          status: 'processing',
+        }, // excluded: not ready
+        {
+          podcastId,
+          podcastTitle: 'Show',
+          title: 'Rogan no enclosure',
+          guid: 'g4',
+          pubDate: new Date(),
+          source: 'rss',
+          status: 'ready',
+        }, // excluded: rss w/o enclosure
+        // Excluded: RSS with an EMPTY enclosure, not an absent one. Mongo needed
+        // three conditions (`$exists`, not null, not '') for this; Postgres needs
+        // two, and without a fixture on this side of it `is not null` alone would
+        // pass every other case in this block.
+        {
+          podcastId,
+          podcastTitle: 'Show',
+          title: 'Rogan blank enclosure',
+          guid: 'g5',
+          pubDate: new Date(),
+          source: 'rss',
+          enclosureUrl: '',
+          status: 'ready',
+        },
+      ]);
 
     const res = makeRes();
-    await search(makeReq({ q: 'rogan', category: 'episodes' }), res as unknown as Response, failNext);
+    await search(
+      makeReq({ q: 'rogan', category: 'episodes' }),
+      res as unknown as Response,
+      failNext,
+    );
 
     const body = res._body as SearchBody;
     expect(body.results.episodes).toHaveLength(1);
@@ -92,10 +149,23 @@ describe('unified search — episodes category', () => {
 
   it('returns no episodes when nothing matches the title', async () => {
     const podcastId = await makeShow();
-    await getDb().insert(episodes).values({ podcastId, podcastTitle: 'Show', title: 'Something else', guid: 'g1', pubDate: new Date(), source: 'rss', enclosureUrl: 'https://x/1.mp3', status: 'ready' });
+    await getDb().insert(episodes).values({
+      podcastId,
+      podcastTitle: 'Show',
+      title: 'Something else',
+      guid: 'g1',
+      pubDate: new Date(),
+      source: 'rss',
+      enclosureUrl: 'https://x/1.mp3',
+      status: 'ready',
+    });
 
     const res = makeRes();
-    await search(makeReq({ q: 'rogan', category: 'episodes' }), res as unknown as Response, failNext);
+    await search(
+      makeReq({ q: 'rogan', category: 'episodes' }),
+      res as unknown as Response,
+      failNext,
+    );
 
     const body = res._body as SearchBody;
     expect(body.results.episodes).toHaveLength(0);
@@ -112,13 +182,37 @@ describe('unified search — episodes category', () => {
      */
     const activeShow = await makeShow('active');
     const hiddenShow = await makeShow('unavailable');
-    await getDb().insert(episodes).values([
-      { podcastId: activeShow, podcastTitle: 'Show', title: 'Rogan on air', guid: 'h1', pubDate: new Date(), source: 'rss', enclosureUrl: 'https://x/1.mp3', status: 'ready' },
-      { podcastId: hiddenShow, podcastTitle: 'Show', title: 'Rogan pulled', guid: 'h2', pubDate: new Date(), source: 'rss', enclosureUrl: 'https://x/2.mp3', status: 'ready' },
-    ]);
+    await getDb()
+      .insert(episodes)
+      .values([
+        {
+          podcastId: activeShow,
+          podcastTitle: 'Show',
+          title: 'Rogan on air',
+          guid: 'h1',
+          pubDate: new Date(),
+          source: 'rss',
+          enclosureUrl: 'https://x/1.mp3',
+          status: 'ready',
+        },
+        {
+          podcastId: hiddenShow,
+          podcastTitle: 'Show',
+          title: 'Rogan pulled',
+          guid: 'h2',
+          pubDate: new Date(),
+          source: 'rss',
+          enclosureUrl: 'https://x/2.mp3',
+          status: 'ready',
+        },
+      ]);
 
     const res = makeRes();
-    await search(makeReq({ q: 'rogan', category: 'episodes' }), res as unknown as Response, failNext);
+    await search(
+      makeReq({ q: 'rogan', category: 'episodes' }),
+      res as unknown as Response,
+      failNext,
+    );
 
     const body = res._body as SearchBody;
     expect(body.results.episodes.map((episode) => episode.title)).toEqual(['Rogan on air']);
@@ -140,14 +234,47 @@ describe('unified search — episodes category', () => {
     const publicShow = await makeShow('active', 'public');
     const unlistedShow = await makeShow('active', 'unlisted');
     const privateShow = await makeShow('active', 'private');
-    await getDb().insert(episodes).values([
-      { podcastId: publicShow, podcastTitle: 'Show', title: 'Rogan in public', guid: 'v1', pubDate: new Date(), source: 'rss', enclosureUrl: 'https://x/1.mp3', status: 'ready' },
-      { podcastId: unlistedShow, podcastTitle: 'Show', title: 'Rogan unlisted', guid: 'v2', pubDate: new Date(), source: 'rss', enclosureUrl: 'https://x/2.mp3', status: 'ready' },
-      { podcastId: privateShow, podcastTitle: 'Show', title: 'Rogan private', guid: 'v3', pubDate: new Date(), source: 'rss', enclosureUrl: 'https://x/3.mp3', status: 'ready' },
-    ]);
+    await getDb()
+      .insert(episodes)
+      .values([
+        {
+          podcastId: publicShow,
+          podcastTitle: 'Show',
+          title: 'Rogan in public',
+          guid: 'v1',
+          pubDate: new Date(),
+          source: 'rss',
+          enclosureUrl: 'https://x/1.mp3',
+          status: 'ready',
+        },
+        {
+          podcastId: unlistedShow,
+          podcastTitle: 'Show',
+          title: 'Rogan unlisted',
+          guid: 'v2',
+          pubDate: new Date(),
+          source: 'rss',
+          enclosureUrl: 'https://x/2.mp3',
+          status: 'ready',
+        },
+        {
+          podcastId: privateShow,
+          podcastTitle: 'Show',
+          title: 'Rogan private',
+          guid: 'v3',
+          pubDate: new Date(),
+          source: 'rss',
+          enclosureUrl: 'https://x/3.mp3',
+          status: 'ready',
+        },
+      ]);
 
     const res = makeRes();
-    await search(makeReq({ q: 'rogan', category: 'episodes' }), res as unknown as Response, failNext);
+    await search(
+      makeReq({ q: 'rogan', category: 'episodes' }),
+      res as unknown as Response,
+      failNext,
+    );
 
     const body = res._body as SearchBody;
     expect(body.results.episodes.map((episode) => episode.title)).toEqual(['Rogan in public']);

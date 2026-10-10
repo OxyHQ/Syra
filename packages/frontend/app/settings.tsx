@@ -4,17 +4,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useMutation } from '@tanstack/react-query';
 import { getAccountDisplayName } from '@oxy.so/core';
 import { useOxy } from '@oxy.so/services';
-import {
-  SettingsListGroup,
-  SettingsListItem,
-} from '@oxy.so/bloom/settings-list';
+import { SettingsListGroup, SettingsListItem } from '@oxy.so/bloom/settings-list';
 import { Switch } from '@oxy.so/bloom/switch';
-import { SegmentedControl, SegmentedControlItem, SegmentedControlItemText } from '@oxy.so/bloom/segmented-control';
 import {
-  APP_COLOR_PRESETS,
-  useBloomTheme,
-  type AppColorName,
-} from '@oxy.so/bloom/theme';
+  SegmentedControl,
+  SegmentedControlItem,
+  SegmentedControlItemText,
+} from '@oxy.so/bloom/segmented-control';
+import { APP_COLOR_PRESETS, useBloomTheme, type AppColorName } from '@oxy.so/bloom/theme';
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import SEO from '@/components/SEO';
@@ -31,10 +28,7 @@ import {
   useUpdatePrivacySettingsCache,
   type PrivacySettings,
 } from '@/hooks/usePrivacySettings';
-import {
-  useMyAppearanceSettings,
-  useUpdateMyAppearanceSettings,
-} from '@/store/appearanceStore';
+import { useMyAppearanceSettings, useUpdateMyAppearanceSettings } from '@/store/appearanceStore';
 import { STORAGE_KEYS } from '@/lib/constants';
 import i18n from '@/lib/i18n';
 import { useTranslation } from 'react-i18next';
@@ -114,10 +108,8 @@ const SettingsScreen: React.FC = () => {
   // instead of parking this screen on "Loading account settings" forever.
   const gate = useAuthGate();
   const { canUsePrivateApi } = gate;
-  const {
-    preferences: musicPreferences,
-    updatePreferences: updateMusicPreferences,
-  } = useMusicPreferences();
+  const { preferences: musicPreferences, updatePreferences: updateMusicPreferences } =
+    useMusicPreferences();
   const privacySettings = useCurrentUserPrivacySettings();
   const updatePrivacySettingsCache = useUpdatePrivacySettingsCache();
   const { data: appearanceSettings } = useMyAppearanceSettings(canUsePrivateApi);
@@ -145,7 +137,10 @@ const SettingsScreen: React.FC = () => {
   const requirePrivateSession = useCallback((): boolean => {
     if (canUsePrivateApi) return true;
     openAccountDialog('signin');
-    Alert.alert(t('settings.alerts.signInRequired.title'), t('settings.alerts.signInRequired.message'));
+    Alert.alert(
+      t('settings.alerts.signInRequired.title'),
+      t('settings.alerts.signInRequired.message'),
+    );
     return false;
   }, [canUsePrivateApi, openAccountDialog]);
 
@@ -164,32 +159,51 @@ const SettingsScreen: React.FC = () => {
     });
   }, []);
 
-  const handleMusicPreferenceUpdate = useCallback((updates: Parameters<typeof updateMusicPreferences>[0]) => {
-    if (!requirePrivateSession()) return;
-    void updateMusicPreferences(updates);
-  }, [requirePrivateSession, updateMusicPreferences]);
+  const handleMusicPreferenceUpdate = useCallback(
+    (updates: Parameters<typeof updateMusicPreferences>[0]) => {
+      if (!requirePrivateSession()) return;
+      void updateMusicPreferences(updates);
+    },
+    [requirePrivateSession, updateMusicPreferences],
+  );
 
-  const handleThemeModeChange = useCallback((mode: 'system' | 'light' | 'dark') => {
-    if (!requirePrivateSession()) return;
-    setMode(mode);
-    void updateAppearanceSettings({
-      appearance: {
-        themeMode: mode,
-        primaryColor: appearanceSettings?.appearance?.primaryColor,
-      },
-    });
-  }, [appearanceSettings?.appearance?.primaryColor, requirePrivateSession, setMode, updateAppearanceSettings]);
+  const handleThemeModeChange = useCallback(
+    (mode: 'system' | 'light' | 'dark') => {
+      if (!requirePrivateSession()) return;
+      setMode(mode);
+      void updateAppearanceSettings({
+        appearance: {
+          themeMode: mode,
+          primaryColor: appearanceSettings?.appearance?.primaryColor,
+        },
+      });
+    },
+    [
+      appearanceSettings?.appearance?.primaryColor,
+      requirePrivateSession,
+      setMode,
+      updateAppearanceSettings,
+    ],
+  );
 
-  const handleColorChange = useCallback((name: AppColorName) => {
-    if (!requirePrivateSession()) return;
-    setColorPreset(name);
-    void updateAppearanceSettings({
-      appearance: {
-        themeMode: appearanceSettings?.appearance?.themeMode ?? 'system',
-        primaryColor: APP_COLOR_PRESETS[name].hex,
-      },
-    });
-  }, [appearanceSettings?.appearance?.themeMode, requirePrivateSession, setColorPreset, updateAppearanceSettings]);
+  const handleColorChange = useCallback(
+    (name: AppColorName) => {
+      if (!requirePrivateSession()) return;
+      setColorPreset(name);
+      void updateAppearanceSettings({
+        appearance: {
+          themeMode: appearanceSettings?.appearance?.themeMode ?? 'system',
+          primaryColor: APP_COLOR_PRESETS[name].hex,
+        },
+      });
+    },
+    [
+      appearanceSettings?.appearance?.themeMode,
+      requirePrivateSession,
+      setColorPreset,
+      updateAppearanceSettings,
+    ],
+  );
 
   const updatePrivacySettingsMutation = useMutation({
     mutationFn: async (updates: Partial<PrivacySettings>) => {
@@ -207,10 +221,13 @@ const SettingsScreen: React.FC = () => {
     },
   });
 
-  const handlePrivacyUpdate = useCallback((updates: Partial<PrivacySettings>) => {
-    if (!requirePrivateSession()) return;
-    updatePrivacySettingsMutation.mutate(updates);
-  }, [requirePrivateSession, updatePrivacySettingsMutation]);
+  const handlePrivacyUpdate = useCallback(
+    (updates: Partial<PrivacySettings>) => {
+      if (!requirePrivateSession()) return;
+      updatePrivacySettingsMutation.mutate(updates);
+    },
+    [requirePrivateSession, updatePrivacySettingsMutation],
+  );
 
   const handleLogout = useCallback(async () => {
     const confirmed = await confirmDialog({
@@ -240,14 +257,15 @@ const SettingsScreen: React.FC = () => {
     if (!confirmed) return;
     try {
       const keys = await AsyncStorage.getAllKeys();
-      const keysToClear = keys.filter((key) =>
-        key.includes('cache') ||
-        key.includes('_cache') ||
-        key.startsWith('@syra') ||
-        key.startsWith('@musico') ||
-        key.startsWith('oxy_appearance_settings') ||
-        key.startsWith('syra_music_preferences') ||
-        key.startsWith('musico_music_preferences'),
+      const keysToClear = keys.filter(
+        (key) =>
+          key.includes('cache') ||
+          key.includes('_cache') ||
+          key.startsWith('@syra') ||
+          key.startsWith('@musico') ||
+          key.startsWith('oxy_appearance_settings') ||
+          key.startsWith('syra_music_preferences') ||
+          key.startsWith('musico_music_preferences'),
       );
       await Promise.all(keysToClear.map((key) => AsyncStorage.removeItem(key)));
       Alert.alert(t('common.success'), t('settings.alerts.cacheCleared'));
@@ -325,7 +343,10 @@ const SettingsScreen: React.FC = () => {
 
             <View style={styles.accountHeader}>
               <Avatar source={user?.avatar ?? undefined} variant="thumb" size={80} />
-              <Text className="text-2xl font-bold text-foreground mt-2 text-center" numberOfLines={1}>
+              <Text
+                className="text-2xl font-bold text-foreground mt-2 text-center"
+                numberOfLines={1}
+              >
                 {userName}
               </Text>
               <Text className="text-base text-muted-foreground text-center" numberOfLines={1}>
@@ -372,13 +393,19 @@ const SettingsScreen: React.FC = () => {
                   onChange={handleThemeModeChange}
                 >
                   <SegmentedControlItem value="system">
-                    <SegmentedControlItemText numberOfLines={1}>{t('settings.options.system')}</SegmentedControlItemText>
+                    <SegmentedControlItemText numberOfLines={1}>
+                      {t('settings.options.system')}
+                    </SegmentedControlItemText>
                   </SegmentedControlItem>
                   <SegmentedControlItem value="light">
-                    <SegmentedControlItemText numberOfLines={1}>{t('settings.options.light')}</SegmentedControlItemText>
+                    <SegmentedControlItemText numberOfLines={1}>
+                      {t('settings.options.light')}
+                    </SegmentedControlItemText>
                   </SegmentedControlItem>
                   <SegmentedControlItem value="dark">
-                    <SegmentedControlItemText numberOfLines={1}>{t('settings.options.dark')}</SegmentedControlItemText>
+                    <SegmentedControlItemText numberOfLines={1}>
+                      {t('settings.options.dark')}
+                    </SegmentedControlItemText>
                   </SegmentedControlItem>
                 </SegmentedControl>
               </SettingsControlBlock>
@@ -435,7 +462,9 @@ const SettingsScreen: React.FC = () => {
                 rightElement={
                   <Switch
                     checked={musicPreferences?.gaplessPlayback ?? true}
-                    onCheckedChange={(value) => handleMusicPreferenceUpdate({ gaplessPlayback: value })}
+                    onCheckedChange={(value) =>
+                      handleMusicPreferenceUpdate({ gaplessPlayback: value })
+                    }
                   />
                 }
               />
@@ -447,7 +476,9 @@ const SettingsScreen: React.FC = () => {
                 rightElement={
                   <Switch
                     checked={musicPreferences?.normalizeVolume ?? true}
-                    onCheckedChange={(value) => handleMusicPreferenceUpdate({ normalizeVolume: value })}
+                    onCheckedChange={(value) =>
+                      handleMusicPreferenceUpdate({ normalizeVolume: value })
+                    }
                   />
                 }
               />
@@ -459,7 +490,9 @@ const SettingsScreen: React.FC = () => {
                 rightElement={
                   <Switch
                     checked={musicPreferences?.explicitContent ?? true}
-                    onCheckedChange={(value) => handleMusicPreferenceUpdate({ explicitContent: value })}
+                    onCheckedChange={(value) =>
+                      handleMusicPreferenceUpdate({ explicitContent: value })
+                    }
                   />
                 }
               />
@@ -474,7 +507,9 @@ const SettingsScreen: React.FC = () => {
                   minimumValue={0}
                   maximumValue={12}
                   step={1}
-                  formatValue={(value) => (value === 0 ? t('settings.playback.crossfadeOff') : `${value}s`)}
+                  formatValue={(value) =>
+                    value === 0 ? t('settings.playback.crossfadeOff') : `${value}s`
+                  }
                 />
               </SettingsControlBlock>
             </SettingsListGroup>
@@ -493,16 +528,24 @@ const SettingsScreen: React.FC = () => {
                   onChange={(value) => handleMusicPreferenceUpdate({ audioQuality: value })}
                 >
                   <SegmentedControlItem value="low">
-                    <SegmentedControlItemText numberOfLines={1}>{t('settings.options.low')}</SegmentedControlItemText>
+                    <SegmentedControlItemText numberOfLines={1}>
+                      {t('settings.options.low')}
+                    </SegmentedControlItemText>
                   </SegmentedControlItem>
                   <SegmentedControlItem value="normal">
-                    <SegmentedControlItemText numberOfLines={1}>{t('settings.options.normal')}</SegmentedControlItemText>
+                    <SegmentedControlItemText numberOfLines={1}>
+                      {t('settings.options.normal')}
+                    </SegmentedControlItemText>
                   </SegmentedControlItem>
                   <SegmentedControlItem value="high">
-                    <SegmentedControlItemText numberOfLines={1}>{t('settings.options.high')}</SegmentedControlItemText>
+                    <SegmentedControlItemText numberOfLines={1}>
+                      {t('settings.options.high')}
+                    </SegmentedControlItemText>
                   </SegmentedControlItem>
                   <SegmentedControlItem value="very_high">
-                    <SegmentedControlItemText numberOfLines={1}>{t('settings.options.veryHigh')}</SegmentedControlItemText>
+                    <SegmentedControlItemText numberOfLines={1}>
+                      {t('settings.options.veryHigh')}
+                    </SegmentedControlItemText>
                   </SegmentedControlItem>
                 </SegmentedControl>
               </SettingsControlBlock>
@@ -520,16 +563,24 @@ const SettingsScreen: React.FC = () => {
                   onChange={(value) => handleMusicPreferenceUpdate({ downloadQuality: value })}
                 >
                   <SegmentedControlItem value="low">
-                    <SegmentedControlItemText numberOfLines={1}>{t('settings.options.low')}</SegmentedControlItemText>
+                    <SegmentedControlItemText numberOfLines={1}>
+                      {t('settings.options.low')}
+                    </SegmentedControlItemText>
                   </SegmentedControlItem>
                   <SegmentedControlItem value="normal">
-                    <SegmentedControlItemText numberOfLines={1}>{t('settings.options.normal')}</SegmentedControlItemText>
+                    <SegmentedControlItemText numberOfLines={1}>
+                      {t('settings.options.normal')}
+                    </SegmentedControlItemText>
                   </SegmentedControlItem>
                   <SegmentedControlItem value="high">
-                    <SegmentedControlItemText numberOfLines={1}>{t('settings.options.high')}</SegmentedControlItemText>
+                    <SegmentedControlItemText numberOfLines={1}>
+                      {t('settings.options.high')}
+                    </SegmentedControlItemText>
                   </SegmentedControlItem>
                   <SegmentedControlItem value="very_high">
-                    <SegmentedControlItemText numberOfLines={1}>{t('settings.options.veryHigh')}</SegmentedControlItemText>
+                    <SegmentedControlItemText numberOfLines={1}>
+                      {t('settings.options.veryHigh')}
+                    </SegmentedControlItemText>
                   </SegmentedControlItem>
                 </SegmentedControl>
               </SettingsControlBlock>
@@ -563,13 +614,19 @@ const SettingsScreen: React.FC = () => {
                     onChange={(value) => handlePrivacyUpdate({ profileVisibility: value })}
                   >
                     <SegmentedControlItem value="public">
-                      <SegmentedControlItemText numberOfLines={1}>{t('common.public')}</SegmentedControlItemText>
+                      <SegmentedControlItemText numberOfLines={1}>
+                        {t('common.public')}
+                      </SegmentedControlItemText>
                     </SegmentedControlItem>
                     <SegmentedControlItem value="followers_only">
-                      <SegmentedControlItemText numberOfLines={1}>{t('settings.options.followers')}</SegmentedControlItemText>
+                      <SegmentedControlItemText numberOfLines={1}>
+                        {t('settings.options.followers')}
+                      </SegmentedControlItemText>
                     </SegmentedControlItem>
                     <SegmentedControlItem value="private">
-                      <SegmentedControlItemText numberOfLines={1}>{t('common.private')}</SegmentedControlItemText>
+                      <SegmentedControlItemText numberOfLines={1}>
+                        {t('common.private')}
+                      </SegmentedControlItemText>
                     </SegmentedControlItem>
                   </SegmentedControl>
                 </SettingsControlBlock>
@@ -621,12 +678,19 @@ const SettingsScreen: React.FC = () => {
               <SettingsListItem
                 icon={<RowIcon name="document-text-outline" />}
                 title={t('settings.about.terms')}
-                onPress={() => Alert.alert(t('settings.about.terms'), t('settings.alerts.termsSoon'))}
+                onPress={() =>
+                  Alert.alert(t('settings.about.terms'), t('settings.alerts.termsSoon'))
+                }
               />
               <SettingsListItem
                 icon={<RowIcon name="shield-checkmark-outline" />}
                 title={t('settings.about.privacyPolicy')}
-                onPress={() => Alert.alert(t('settings.about.privacyPolicy'), t('settings.alerts.privacyPolicySoon'))}
+                onPress={() =>
+                  Alert.alert(
+                    t('settings.about.privacyPolicy'),
+                    t('settings.alerts.privacyPolicySoon'),
+                  )
+                }
               />
               <SettingsListItem
                 icon={<RowIcon name="help-circle-outline" />}

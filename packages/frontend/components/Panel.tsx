@@ -39,23 +39,23 @@ export interface PanelProps {
 
 /**
  * Reusable Panel Component
- * 
+ *
  * A flexible panel component with configurable rounded corners,
  * background colors, and positioning. Used throughout the app
  * for consistent panel styling.
- * 
+ *
  * @example
  * ```tsx
  * // Top bar with rounded bottom corners
  * <Panel rounded="bottom" radius={12}>
  *   <TopBarContent />
  * </Panel>
- * 
+ *
  * // Sidebar with rounded right corners
  * <Panel rounded="right" radius={12}>
  *   <SidebarContent />
  * </Panel>
- * 
+ *
  * // Full rounded panel
  * <Panel rounded="all" radius={16}>
  *   <Content />
@@ -127,9 +127,5 @@ export const Panel: React.FC<PanelProps> = ({
     ...(shouldApplyOverflow ? { overflow: 'hidden' as const } : {}),
   };
 
-  return (
-    <View style={[baseStyle, style]}>
-      {children}
-    </View>
-  );
+  return <View style={[baseStyle, style]}>{children}</View>;
 };

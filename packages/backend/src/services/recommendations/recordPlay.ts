@@ -161,7 +161,7 @@ async function incrementGlobalCounters(
         getDb()
           .update(albums)
           .set({ playCount: sql`${albums.playCount} + 1` })
-          .where(eq(albums.id, albumId))
+          .where(eq(albums.id, albumId)),
       );
     }
 

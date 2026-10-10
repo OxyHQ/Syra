@@ -7,7 +7,11 @@ import { MonthlyListeners } from './MonthlyListeners';
 export function ArtistProfileHeading({ name, stats }: { name: string; stats?: ArtistStats }) {
   return (
     <View className="gap-2 min-w-0">
-      <Text accessibilityRole="header" className="text-white text-4xl sm:text-6xl lg:text-8xl font-black" numberOfLines={2}>
+      <Text
+        accessibilityRole="header"
+        className="text-white text-4xl sm:text-6xl lg:text-8xl font-black"
+        numberOfLines={2}
+      >
         {name}
       </Text>
       <MonthlyListeners stats={stats} />

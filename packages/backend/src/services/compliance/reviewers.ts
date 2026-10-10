@@ -43,7 +43,7 @@ export function isComplianceReviewer(oxyUserId: string): boolean {
   if (reviewers.size === 0) {
     logger.warn(
       `[Compliance] ${COMPLIANCE_REVIEWERS_ENV} is not configured — every review ` +
-      'endpoint refuses. Copyright reports and artist claims stay pending until it is set.',
+        'endpoint refuses. Copyright reports and artist claims stay pending until it is set.',
     );
     return false;
   }

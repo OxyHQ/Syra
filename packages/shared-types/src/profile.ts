@@ -1,10 +1,6 @@
 import { z } from 'zod';
 
-export const profileVisibilitySchema = z.enum([
-  'public',
-  'private',
-  'followers_only',
-]);
+export const profileVisibilitySchema = z.enum(['public', 'private', 'followers_only']);
 export type ProfileVisibility = z.infer<typeof profileVisibilitySchema>;
 export const ProfileVisibility = {
   PUBLIC: 'public' as const,
@@ -12,12 +8,7 @@ export const ProfileVisibility = {
   FOLLOWERS_ONLY: 'followers_only' as const,
 };
 
-export const profileTypeSchema = z.enum([
-  'personal',
-  'business',
-  'creator',
-  'verified',
-]);
+export const profileTypeSchema = z.enum(['personal', 'business', 'creator', 'verified']);
 export type ProfileType = z.infer<typeof profileTypeSchema>;
 export const ProfileType = {
   PERSONAL: 'personal' as const,

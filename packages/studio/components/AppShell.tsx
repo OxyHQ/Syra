@@ -74,7 +74,15 @@ function AccountButton({ expanded = true }: { expanded?: boolean }) {
   );
 }
 
-function NavButton({ item, active, onPress }: { item: NavItem; active: boolean; onPress: () => void }) {
+function NavButton({
+  item,
+  active,
+  onPress,
+}: {
+  item: NavItem;
+  active: boolean;
+  onPress: () => void;
+}) {
   const theme = useTheme();
   return (
     <Pressable
@@ -91,7 +99,9 @@ function NavButton({ item, active, onPress }: { item: NavItem; active: boolean; 
         size={20}
         color={active ? theme.colors.primary : theme.colors.text}
       />
-      <Text className={cn('text-sm flex-1', active ? 'text-primary font-semibold' : 'text-foreground')}>
+      <Text
+        className={cn('text-sm flex-1', active ? 'text-primary font-semibold' : 'text-foreground')}
+      >
         {item.label}
       </Text>
       {item.comingSoon ? (
@@ -194,13 +204,18 @@ export function ScreenContainer({
         <View className="flex-row items-center justify-between mb-6 gap-3">
           <View className="flex-row items-center gap-3 flex-1">
             {onBack ? (
-              <Pressable onPress={onBack} className="w-9 h-9 rounded-full items-center justify-center active:bg-surface">
+              <Pressable
+                onPress={onBack}
+                className="w-9 h-9 rounded-full items-center justify-center active:bg-surface"
+              >
                 <MaterialCommunityIcons name="arrow-left" size={22} color={theme.colors.text} />
               </Pressable>
             ) : null}
             <View className="flex-1">
               {title ? <Text className="text-2xl font-bold text-foreground">{title}</Text> : null}
-              {subtitle ? <Text className="text-sm text-muted-foreground mt-0.5">{subtitle}</Text> : null}
+              {subtitle ? (
+                <Text className="text-sm text-muted-foreground mt-0.5">{subtitle}</Text>
+              ) : null}
             </View>
           </View>
           {actions}

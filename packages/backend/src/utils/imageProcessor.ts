@@ -31,10 +31,7 @@ export async function processImage(
   // default `limitInputPixels` cap that guards against decompression bombs.
   const pipeline = sharp(input, { failOn: 'error' });
   const metadata = await pipeline.metadata();
-  if (
-    (metadata.width ?? 0) > MAX_INPUT_DIMENSION ||
-    (metadata.height ?? 0) > MAX_INPUT_DIMENSION
-  ) {
+  if ((metadata.width ?? 0) > MAX_INPUT_DIMENSION || (metadata.height ?? 0) > MAX_INPUT_DIMENSION) {
     throw new Error('Input image dimensions exceed the allowed maximum');
   }
 

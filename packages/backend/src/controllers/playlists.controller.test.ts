@@ -54,14 +54,27 @@ function makeRes(): CapturedRes {
   return {
     _status: 200,
     _body: undefined,
-    status(code) { this._status = code; return this; },
-    json(body) { this._body = body; return this; },
-    send() { return this; },
+    status(code) {
+      this._status = code;
+      return this;
+    },
+    json(body) {
+      this._body = body;
+      return this;
+    },
+    send() {
+      return this;
+    },
   };
 }
 
 function makeReq(
-  over: { params?: Record<string, string>; body?: unknown; userId?: string; username?: string } = {}
+  over: {
+    params?: Record<string, string>;
+    body?: unknown;
+    userId?: string;
+    username?: string;
+  } = {},
 ): AuthRequest {
   return {
     params: over.params ?? {},
@@ -82,23 +95,30 @@ async function makeTrack(): Promise<string> {
     .values({ id: artistId, type: 'artist', name: 'Artist', nameKey: artistId, source: 'upload' });
 
   const id = uuidv7();
-  await getDb()
-    .insert(tracks)
-    .values({ id, title: 'Track', artistId, artistName: 'Artist', duration: 200, source: 'upload' });
+  await getDb().insert(tracks).values({
+    id,
+    title: 'Track',
+    artistId,
+    artistName: 'Artist',
+    duration: 200,
+    source: 'upload',
+  });
   return id;
 }
 
 async function makeImageAsset(primaryColor?: string): Promise<string> {
   const id = uuidv7();
-  await getDb().insert(imageAssets).values({
-    id,
-    s3Key: `k/${id}`,
-    filename: 'c.jpg',
-    contentType: 'image/jpeg',
-    byteSize: 1,
-    ownerType: 'playlist',
-    primaryColor,
-  });
+  await getDb()
+    .insert(imageAssets)
+    .values({
+      id,
+      s3Key: `k/${id}`,
+      filename: 'c.jpg',
+      contentType: 'image/jpeg',
+      byteSize: 1,
+      ownerType: 'playlist',
+      primaryColor,
+    });
   return id;
 }
 
@@ -117,7 +137,8 @@ async function createThrough(body: Record<string, unknown>, userId = OWNER): Pro
 
 function bodyId(res: CapturedRes): string {
   const body = res._body as { id?: string } | undefined;
-  if (!body?.id) throw new Error(`expected an id in the response, got ${JSON.stringify(res._body)}`);
+  if (!body?.id)
+    throw new Error(`expected an id in the response, got ${JSON.stringify(res._body)}`);
   return body.id;
 }
 
@@ -155,7 +176,12 @@ describe('POST /api/playlists', () => {
   });
 
   it('rejects a URL where an image id belongs', async () => {
-    for (const coverArt of ['blob:whatever', 'http://x/y.jpg', 'https://x/y.jpg', '/api/images/x']) {
+    for (const coverArt of [
+      'blob:whatever',
+      'http://x/y.jpg',
+      'https://x/y.jpg',
+      '/api/images/x',
+    ]) {
       const res = await createThrough({ name: 'Bad art', coverArt });
       expect(`${coverArt} -> ${res._status}`).toBe(`${coverArt} -> 400`);
     }
@@ -199,7 +225,7 @@ describe('GET /api/playlists/:id', () => {
       await getPlaylistById(
         makeReq({ params: { id }, userId: viewer }),
         res as unknown as Response,
-        next
+        next,
       );
       expect(`${viewer ?? 'anon'}: ${res._status}`).toBe(`${viewer ?? 'anon'}: 200`);
     }
@@ -212,7 +238,7 @@ describe('GET /api/playlists/:id', () => {
     await getPlaylistById(
       makeReq({ params: { id }, userId: STRANGER }),
       forbidden as unknown as Response,
-      next
+      next,
     );
     expect(forbidden._status).toBe(403);
 
@@ -222,7 +248,7 @@ describe('GET /api/playlists/:id', () => {
     await getPlaylistById(
       makeReq({ params: { id: uuidv7() }, userId: STRANGER }),
       missing as unknown as Response,
-      next
+      next,
     );
     expect(missing._status).toBe(403);
   });
@@ -241,7 +267,7 @@ describe('GET /api/playlists/:id', () => {
     await getPlaylistById(
       makeReq({ params: { id }, userId: STRANGER }),
       res as unknown as Response,
-      next
+      next,
     );
 
     expect(res._status).toBe(200);
@@ -254,14 +280,14 @@ describe('GET /api/playlists/:id', () => {
 describe('PUT /api/playlists/:id', () => {
   it('clears the cover art and its colours together', async () => {
     const id = bodyId(
-      await createThrough({ name: 'Mix', coverArt: await makeImageAsset('#00ff00') })
+      await createThrough({ name: 'Mix', coverArt: await makeImageAsset('#00ff00') }),
     );
 
     const res = makeRes();
     await updatePlaylist(
       makeReq({ params: { id }, body: { coverArt: null }, userId: OWNER }),
       res as unknown as Response,
-      next
+      next,
     );
 
     expect(res._status).toBe(200);
@@ -278,7 +304,7 @@ describe('PUT /api/playlists/:id', () => {
     await updatePlaylist(
       makeReq({ params: { id }, body: {}, userId: OWNER }),
       res as unknown as Response,
-      next
+      next,
     );
 
     expect(res._status).toBe(200);
@@ -292,7 +318,7 @@ describe('PUT /api/playlists/:id', () => {
     await updatePlaylist(
       makeReq({ params: { id }, body: { name: 'Theirs' }, userId: STRANGER }),
       res as unknown as Response,
-      next
+      next,
     );
 
     expect(res._status).toBe(403);
@@ -302,11 +328,7 @@ describe('PUT /api/playlists/:id', () => {
 describe('POST /api/playlists/:id/tracks', () => {
   async function tracksOf(id: string, userId = OWNER): Promise<string[]> {
     const res = makeRes();
-    await getPlaylistTracks(
-      makeReq({ params: { id }, userId }),
-      res as unknown as Response,
-      next
-    );
+    await getPlaylistTracks(makeReq({ params: { id }, userId }), res as unknown as Response, next);
     const body = res._body as { tracks: { id: string }[] };
     return body.tracks.map((track) => track.id);
   }
@@ -319,7 +341,7 @@ describe('POST /api/playlists/:id/tracks', () => {
     await addTracksToPlaylist(
       makeReq({ params: { id }, body: { trackIds: [a, b] }, userId: OWNER }),
       res as unknown as Response,
-      next
+      next,
     );
 
     expect(res._status).toBe(201);
@@ -327,7 +349,11 @@ describe('POST /api/playlists/:id/tracks', () => {
     expect(await tracksOf(id)).toEqual([a, b]);
 
     const detail = makeRes();
-    await getPlaylistById(makeReq({ params: { id }, userId: OWNER }), detail as unknown as Response, next);
+    await getPlaylistById(
+      makeReq({ params: { id }, userId: OWNER }),
+      detail as unknown as Response,
+      next,
+    );
     expect(detail._body).toMatchObject({ trackCount: 2, totalDuration: 400 });
   });
 
@@ -337,7 +363,7 @@ describe('POST /api/playlists/:id/tracks', () => {
     await addTracksToPlaylist(
       makeReq({ params: { id }, body: { trackIds: [a, b] }, userId: OWNER }),
       makeRes() as unknown as Response,
-      next
+      next,
     );
 
     // Position 0 on a two-track playlist: the Mongo `$inc` shift this replaced
@@ -345,7 +371,7 @@ describe('POST /api/playlists/:id/tracks', () => {
     await addTracksToPlaylist(
       makeReq({ params: { id }, body: { trackIds: [c], position: 0 }, userId: OWNER }),
       makeRes() as unknown as Response,
-      next
+      next,
     );
 
     expect(await tracksOf(id)).toEqual([c, a, b]);
@@ -363,18 +389,18 @@ describe('POST /api/playlists/:id/tracks', () => {
     await addTracksToPlaylist(
       makeReq({ params: { id }, body: { trackIds: [a] }, userId: OWNER }),
       makeRes() as unknown as Response,
-      next
+      next,
     );
 
     await addTracksToPlaylist(
       makeReq({ params: { id }, body: { trackIds: [b], position: 999 }, userId: OWNER }),
       makeRes() as unknown as Response,
-      next
+      next,
     );
     await addTracksToPlaylist(
       makeReq({ params: { id }, body: { trackIds: [c], position: 'abc' }, userId: OWNER }),
       makeRes() as unknown as Response,
-      next
+      next,
     );
 
     expect(await tracksOf(id)).toEqual([a, b, c]);
@@ -388,7 +414,7 @@ describe('POST /api/playlists/:id/tracks', () => {
     await addTracksToPlaylist(
       makeReq({ params: { id }, body: { trackIds: [a, a] }, userId: OWNER }),
       res as unknown as Response,
-      next
+      next,
     );
 
     expect(res._body).toEqual({ added: 1, skipped: 1 });
@@ -403,20 +429,20 @@ describe('POST /api/playlists/:id/tracks', () => {
     await addTracksToPlaylist(
       makeReq({ params: { id }, body: { trackIds: [uuidv7()] }, userId: OWNER }),
       missing as unknown as Response,
-      next
+      next,
     );
     expect(missing._status).toBe(404);
 
     await addTracksToPlaylist(
       makeReq({ params: { id }, body: { trackIds: [a] }, userId: OWNER }),
       makeRes() as unknown as Response,
-      next
+      next,
     );
     const again = makeRes();
     await addTracksToPlaylist(
       makeReq({ params: { id }, body: { trackIds: [a] }, userId: OWNER }),
       again as unknown as Response,
-      next
+      next,
     );
     expect(again._status).toBe(400);
   });
@@ -429,14 +455,18 @@ describe('DELETE and reorder', () => {
     await addTracksToPlaylist(
       makeReq({ params: { id }, body: { trackIds: ids }, userId: OWNER }),
       makeRes() as unknown as Response,
-      next
+      next,
     );
     return { id, ids };
   }
 
   async function orderOf(id: string): Promise<number[]> {
     const res = makeRes();
-    await getPlaylistTracks(makeReq({ params: { id }, userId: OWNER }), res as unknown as Response, next);
+    await getPlaylistTracks(
+      makeReq({ params: { id }, userId: OWNER }),
+      res as unknown as Response,
+      next,
+    );
     const body = res._body as { playlistTracks: { order: number }[] };
     return body.playlistTracks.map((entry) => entry.order);
   }
@@ -448,7 +478,7 @@ describe('DELETE and reorder', () => {
     await removeTracksFromPlaylist(
       makeReq({ params: { id }, body: { trackIds: [ids[1]] }, userId: OWNER }),
       res as unknown as Response,
-      next
+      next,
     );
 
     expect(res._body).toEqual({ removed: 1 });
@@ -462,12 +492,16 @@ describe('DELETE and reorder', () => {
     await reorderPlaylistTracks(
       makeReq({ params: { id }, body: { trackIds: [...ids].reverse() }, userId: OWNER }),
       res as unknown as Response,
-      next
+      next,
     );
 
     expect(res._body).toEqual({ reordered: 3 });
     const detail = makeRes();
-    await getPlaylistTracks(makeReq({ params: { id }, userId: OWNER }), detail as unknown as Response, next);
+    await getPlaylistTracks(
+      makeReq({ params: { id }, userId: OWNER }),
+      detail as unknown as Response,
+      next,
+    );
     const body = detail._body as { tracks: { id: string }[] };
     expect(body.tracks.map((track) => track.id)).toEqual([...ids].reverse());
   });
@@ -483,11 +517,15 @@ describe('DELETE and reorder', () => {
     await reorderPlaylistTracks(
       makeReq({ params: { id }, body: { trackIds: [ids[2]] }, userId: OWNER }),
       makeRes() as unknown as Response,
-      next
+      next,
     );
 
     const detail = makeRes();
-    await getPlaylistTracks(makeReq({ params: { id }, userId: OWNER }), detail as unknown as Response, next);
+    await getPlaylistTracks(
+      makeReq({ params: { id }, userId: OWNER }),
+      detail as unknown as Response,
+      next,
+    );
     const body = detail._body as { tracks: { id: string }[] };
     expect(body.tracks.map((track) => track.id)).toEqual([ids[2], ids[0], ids[1]]);
   });
@@ -500,7 +538,7 @@ describe('DELETE and reorder', () => {
     await reorderPlaylistTracks(
       makeReq({ params: { id }, body: { trackIds: [...ids, outsider] }, userId: OWNER }),
       res as unknown as Response,
-      next
+      next,
     );
 
     expect(res._status).toBe(400);
@@ -518,7 +556,11 @@ describe('DELETE and reorder', () => {
     });
 
     const res = makeRes();
-    await deletePlaylist(makeReq({ params: { id }, userId: OWNER }), res as unknown as Response, next);
+    await deletePlaylist(
+      makeReq({ params: { id }, userId: OWNER }),
+      res as unknown as Response,
+      next,
+    );
     expect(res._status).toBe(204);
 
     expect(await getDb().select().from(playlists)).toEqual([]);
@@ -536,7 +578,11 @@ describe('DELETE and reorder', () => {
     });
 
     const res = makeRes();
-    await deletePlaylist(makeReq({ params: { id }, userId: STRANGER }), res as unknown as Response, next);
+    await deletePlaylist(
+      makeReq({ params: { id }, userId: STRANGER }),
+      res as unknown as Response,
+      next,
+    );
     expect(res._status).toBe(403);
   });
 });

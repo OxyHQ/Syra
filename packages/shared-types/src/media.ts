@@ -10,13 +10,7 @@ export const MediaType = {
   DOCUMENT: 'document' as const,
 };
 
-export const mediaStatusSchema = z.enum([
-  'uploading',
-  'processing',
-  'ready',
-  'failed',
-  'deleted',
-]);
+export const mediaStatusSchema = z.enum(['uploading', 'processing', 'ready', 'failed', 'deleted']);
 export type MediaStatus = z.infer<typeof mediaStatusSchema>;
 export const MediaStatus = {
   UPLOADING: 'uploading' as const,

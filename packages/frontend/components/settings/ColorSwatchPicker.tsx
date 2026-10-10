@@ -16,9 +16,7 @@ interface ColorSwatchPickerProps {
  * Mention's picker so the two apps stay visually consistent.
  */
 export function ColorSwatchPicker({ value, onChange, extraColors }: ColorSwatchPickerProps) {
-  const allColors = extraColors?.length
-    ? [...APP_COLOR_NAMES, ...extraColors]
-    : APP_COLOR_NAMES;
+  const allColors = extraColors?.length ? [...APP_COLOR_NAMES, ...extraColors] : APP_COLOR_NAMES;
 
   return (
     <View className="flex-row gap-3 flex-wrap">
@@ -26,11 +24,7 @@ export function ColorSwatchPicker({ value, onChange, extraColors }: ColorSwatchP
         const preset = APP_COLOR_PRESETS[name];
         const isSelected = value === name;
         return (
-          <Pressable
-            key={name}
-            onPress={() => onChange(name)}
-            className="items-center gap-1"
-          >
+          <Pressable key={name} onPress={() => onChange(name)} className="items-center gap-1">
             <View
               className={cn(
                 'w-9 h-9 rounded-full border-2 overflow-hidden',

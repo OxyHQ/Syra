@@ -13,7 +13,10 @@ export default function Root({ children }: PropsWithChildren) {
         {/* Google Cast CAF Web Sender SDK — loads `window.cast`/`window.chrome`
             so the web cast service (services/cast/castService.web.ts) can report
             cast support and drive Chromecast receivers. */}
-        <script defer src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1" />
+        <script
+          defer
+          src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1"
+        />
         <ScrollViewStyleReset />
       </head>
       <body>{children}</body>

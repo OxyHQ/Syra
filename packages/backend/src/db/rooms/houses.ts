@@ -116,10 +116,7 @@ export function getMemberRole(
 }
 
 /** Whether `userId` is a member at any role. */
-export function isMember(
-  members: readonly HouseMemberRow[],
-  userId: string | undefined,
-): boolean {
+export function isMember(members: readonly HouseMemberRow[], userId: string | undefined): boolean {
   return findMember(members, userId) !== undefined;
 }
 
@@ -270,7 +267,7 @@ export interface ListHousesOptions {
  * and should be.
  */
 const DISCOVERABLE_LEVELS = HOUSE_DISCOVERY_LEVELS.filter(
-  (level) => level !== HouseDiscovery.UNLISTED && level !== HouseDiscovery.HIDDEN
+  (level) => level !== HouseDiscovery.UNLISTED && level !== HouseDiscovery.HIDDEN,
 );
 
 /** Every house id `oxyUserId` belongs to, read through `house_members_oxy_user_id_idx`. */
@@ -428,7 +425,7 @@ export async function houseIdsWithRoomsHiddenFrom(
   const restricted: SQL[] = [
     or(
       eq(houses.visibilityDiscovery, HouseDiscovery.HIDDEN),
-      eq(houses.visibilityRooms, HouseRooms.MEMBERS)
+      eq(houses.visibilityRooms, HouseRooms.MEMBERS),
     ) as SQL,
   ];
 
@@ -436,7 +433,7 @@ export async function houseIdsWithRoomsHiddenFrom(
     restricted.push(
       sql`not exists (select 1 from ${houseMembers}
                       where ${houseMembers.houseId} = ${houses.id}
-                        and ${houseMembers.oxyUserId} = ${userId})`
+                        and ${houseMembers.oxyUserId} = ${userId})`,
     );
   }
 
@@ -575,10 +572,7 @@ export async function addHouseMember(
   role: HouseMemberRole,
   db: DbOrTransaction = getDb(),
 ): Promise<HouseMemberRow> {
-  const [member] = await db
-    .insert(houseMembers)
-    .values({ houseId, oxyUserId, role })
-    .returning();
+  const [member] = await db.insert(houseMembers).values({ houseId, oxyUserId, role }).returning();
   return member;
 }
 

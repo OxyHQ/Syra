@@ -173,7 +173,7 @@ export interface ImageSizeIds {
  */
 export function toImageSizes(
   ids: ImageSizeIds,
-  lookup: ImageVariantLookup
+  lookup: ImageVariantLookup,
 ): CatalogImageSizes | undefined {
   return compact({
     small: lookup(ids.small),
@@ -190,7 +190,7 @@ function toImageLicence(
   licence: string | null,
   licenceUrl: string | null,
   attribution: string | null,
-  sourceUrl: string | null
+  sourceUrl: string | null,
 ): ImageLicence | undefined {
   // `licence`, `attribution` and `sourceUrl` are all REQUIRED by
   // `imageLicenceSchema` — only `licenceUrl` is optional, because `PD` has no
@@ -240,7 +240,7 @@ export interface TrackDtoContext {
 export function toTrackDto(
   row: PublicTrackRow,
   lookup: ImageVariantLookup,
-  context: TrackDtoContext
+  context: TrackDtoContext,
 ): Track {
   const ownCoverArt = normalizeImageRef(row.coverArtId);
   const ownCoverArtSizes = toImageSizes(
@@ -252,7 +252,7 @@ export function toTrackDto(
       xxlarge: row.coverArtSizesXxlargeId,
       original: row.coverArtSizesOriginalId,
     },
-    lookup
+    lookup,
   );
 
   const audioSource: AudioSource | undefined =
@@ -366,7 +366,7 @@ export interface AlbumDtoContext {
 export function toAlbumDto(
   row: AlbumRow,
   lookup: ImageVariantLookup,
-  context: AlbumDtoContext = {}
+  context: AlbumDtoContext = {},
 ): Album {
   // `coverArt` is REQUIRED on the DTO and the column is `NOT NULL`, so the only
   // way `normalizeImageRef` returns undefined here is a malformed stored id.
@@ -390,13 +390,13 @@ export function toAlbumDto(
         xxlarge: row.coverArtSizesXxlargeId,
         original: row.coverArtSizesOriginalId,
       },
-      lookup
+      lookup,
     ),
     coverArtLicence: toImageLicence(
       row.coverArtLicenceLicence,
       row.coverArtLicenceLicenceUrl,
       row.coverArtLicenceAttribution,
-      row.coverArtLicenceSourceUrl
+      row.coverArtLicenceSourceUrl,
     ),
     genre: context.genres ? [...context.genres] : undefined,
     totalTracks: row.totalTracks,
@@ -465,7 +465,7 @@ export interface ArtistDtoContext {
 export function toArtistDto(
   row: PublicCatalogEntityRow,
   lookup: ImageVariantLookup,
-  context: ArtistDtoContext = {}
+  context: ArtistDtoContext = {},
 ): Artist {
   const stats: ArtistStats = {
     followers: row.statsFollowers ?? 0,
@@ -491,13 +491,13 @@ export function toArtistDto(
         xxlarge: row.imageSizesXxlargeId,
         original: row.imageSizesOriginalId,
       },
-      lookup
+      lookup,
     ),
     imageLicence: toImageLicence(
       row.imageLicenceLicence,
       row.imageLicenceLicenceUrl,
       row.imageLicenceAttribution,
-      row.imageLicenceSourceUrl
+      row.imageLicenceSourceUrl,
     ),
     genres: optional(row.genres),
     members: optional(row.members),
@@ -565,7 +565,7 @@ export interface PlaylistDtoContext {
 export function toPlaylistDto(
   row: PlaylistRow,
   lookup: ImageVariantLookup,
-  context: PlaylistDtoContext = {}
+  context: PlaylistDtoContext = {},
 ): Playlist {
   return {
     id: row.id,
@@ -583,7 +583,7 @@ export function toPlaylistDto(
         xxlarge: row.coverArtSizesXxlargeId,
         original: row.coverArtSizesOriginalId,
       },
-      lookup
+      lookup,
     ),
     visibility: row.visibility,
     trackCount: row.trackCount,

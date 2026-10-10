@@ -1,9 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type {
-  UpdateUserUploadRequest,
-  UploadOutcome,
-  UserUploadAsTrack,
-} from '@syra/shared-types';
+import type { UpdateUserUploadRequest, UploadOutcome, UserUploadAsTrack } from '@syra/shared-types';
 import {
   uploadsService,
   type UploadAlbumsResponse,
@@ -122,7 +118,11 @@ export function useCreateUpload() {
     onSuccess: (outcome) => {
       // `matched` stored nothing and `blocked` published nothing, so neither
       // changes the locker. The other three do.
-      if (outcome.outcome === 'stored' || outcome.outcome === 'published' || outcome.outcome === 'duplicate') {
+      if (
+        outcome.outcome === 'stored' ||
+        outcome.outcome === 'published' ||
+        outcome.outcome === 'duplicate'
+      ) {
         void invalidateUploads(queryClient);
       }
     },

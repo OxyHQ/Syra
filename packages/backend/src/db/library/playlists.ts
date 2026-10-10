@@ -58,7 +58,7 @@ export async function findPlaylistById(id: string): Promise<PlaylistRow | undefi
  * changes between two identical requests reads to a client as a change.
  */
 export async function findPlaylistCollaborators(
-  playlistId: string
+  playlistId: string,
 ): Promise<PlaylistCollaborator[]> {
   const rows = await getDb()
     .select({
@@ -88,7 +88,7 @@ export async function findPlaylistCollaborators(
  */
 export async function findCollaboratorRole(
   playlistId: string,
-  oxyUserId: string
+  oxyUserId: string,
 ): Promise<PlaylistCollaborator['role'] | undefined> {
   const [row] = await getDb()
     .select({ role: playlistCollaborators.role })
@@ -96,8 +96,8 @@ export async function findCollaboratorRole(
     .where(
       and(
         eq(playlistCollaborators.playlistId, playlistId),
-        eq(playlistCollaborators.oxyUserId, oxyUserId)
-      )
+        eq(playlistCollaborators.oxyUserId, oxyUserId),
+      ),
     )
     .limit(1);
 
@@ -114,7 +114,7 @@ export async function findCollaboratorRole(
  * case is answered without a query.
  */
 export async function findCollaboratorsForPlaylists(
-  playlistIds: readonly string[]
+  playlistIds: readonly string[],
 ): Promise<Map<string, PlaylistCollaborator[]>> {
   const byPlaylist = new Map<string, PlaylistCollaborator[]>();
   if (playlistIds.length === 0) return byPlaylist;
@@ -184,25 +184,27 @@ export async function findPlaylistsForUser(oxyUserId: string): Promise<PlaylistR
           getDb()
             .select({ id: playlistCollaborators.playlistId })
             .from(playlistCollaborators)
-            .where(eq(playlistCollaborators.oxyUserId, oxyUserId))
-        )
-      )
+            .where(eq(playlistCollaborators.oxyUserId, oxyUserId)),
+        ),
+      ),
   ).as('reachable');
 
-  return getDb()
-    .select()
-    .from(reachable)
-    // `is not null` rather than the Mongo helper's `{ coverArt: -1 }`, which
-    // also tie-broke by the lexical value of the image id and took precedence
-    // over the date the caller actually sorted by. See `db/catalog/
-    // containers.ts`'s `imageFirst`, which this is the inlined form of —
-    // inlined because it has to address the union's columns, not the table's.
-    .orderBy(sql`(${reachable.coverArtId} is not null) desc`, sql`${reachable.createdAt} desc`);
+  return (
+    getDb()
+      .select()
+      .from(reachable)
+      // `is not null` rather than the Mongo helper's `{ coverArt: -1 }`, which
+      // also tie-broke by the lexical value of the image id and took precedence
+      // over the date the caller actually sorted by. See `db/catalog/
+      // containers.ts`'s `imageFirst`, which this is the inlined form of —
+      // inlined because it has to address the union's columns, not the table's.
+      .orderBy(sql`(${reachable.coverArtId} is not null) desc`, sql`${reachable.createdAt} desc`)
+  );
 }
 
 /** One playlist's tracks, in playlist order. */
 export async function findPlaylistTracks(
-  playlistId: string
+  playlistId: string,
 ): Promise<{ trackId: string; addedAt: Date; addedBy: string | null; position: number }[]> {
   return getDb()
     .select({
@@ -230,10 +232,7 @@ export async function findPlaylistTracks(
  * a string silently concatenating into a total would look like a very long
  * playlist.
  */
-export async function refreshPlaylistStats(
-  db: DbOrTransaction,
-  playlistId: string
-): Promise<void> {
+export async function refreshPlaylistStats(db: DbOrTransaction, playlistId: string): Promise<void> {
   const [stats] = await db
     .select({ trackCount: count(), totalDuration: sum(tracks.duration) })
     .from(playlistTracks)
@@ -286,7 +285,7 @@ export async function refreshPlaylistStats(
 export async function assignPlaylistTrackPositions(
   tx: DbTransaction,
   playlistId: string,
-  ordered: readonly string[]
+  ordered: readonly string[],
 ): Promise<void> {
   if (ordered.length === 0) return;
 
@@ -345,7 +344,7 @@ export async function findPlayableTrackIds(ids: readonly string[]): Promise<stri
 /** Which of these tracks the playlist already holds. */
 export async function findExistingPlaylistTrackIds(
   playlistId: string,
-  trackIds: readonly string[]
+  trackIds: readonly string[],
 ): Promise<string[]> {
   if (trackIds.length === 0) return [];
 
@@ -353,7 +352,10 @@ export async function findExistingPlaylistTrackIds(
     .select({ trackId: playlistTracks.trackId })
     .from(playlistTracks)
     .where(
-      and(eq(playlistTracks.playlistId, playlistId), inArray(playlistTracks.trackId, [...trackIds]))
+      and(
+        eq(playlistTracks.playlistId, playlistId),
+        inArray(playlistTracks.trackId, [...trackIds]),
+      ),
     );
 
   return rows.map((row) => row.trackId);

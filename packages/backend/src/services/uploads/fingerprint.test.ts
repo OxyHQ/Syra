@@ -169,7 +169,7 @@ describe('parseFpcalcOutput', () => {
    * the suite below produces none — so a test that only ran the binary would
    * pass identically with the fold removed.
    */
-  it('folds fpcalc\'s UNSIGNED decimals onto the signed int32 the model stores', () => {
+  it("folds fpcalc's UNSIGNED decimals onto the signed int32 the model stores", () => {
     // Real fpcalc 1.5.1 output values, and the signed forms ffmpeg's chromaprint
     // muxer emits for the same audio.
     const parsed = parseFpcalcOutput(
@@ -177,13 +177,7 @@ describe('parseFpcalcOutput', () => {
     );
 
     expect(parsed.durationSec).toBe(30);
-    expect(parsed.values).toEqual([
-      1701698039,
-      -445777417,
-      -445785609,
-      -445654537,
-      -445777545,
-    ]);
+    expect(parsed.values).toEqual([1701698039, -445777417, -445785609, -445654537, -445777545]);
     for (const value of parsed.values) {
       expect(value).toBeGreaterThanOrEqual(-2147483648);
       expect(value).toBeLessThanOrEqual(2147483647);

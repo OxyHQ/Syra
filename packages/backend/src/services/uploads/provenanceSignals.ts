@@ -135,7 +135,8 @@ function verdictFor(markers: ReadonlyArray<ProvenanceMarker>, score: number): Pr
 const ITUNES_PURCHASE_ATOMS = ['apID', 'cnID', 'atID', 'sfID', 'purd', 'ownr', 'xid'] as const;
 
 /** Ripper signatures, matched against encoder strings. */
-const RIPPER_ENCODERS = /exact audio copy|\bEAC\b|dBpoweramp|\bXLD\b|whipper|rubyripper|cdparanoia|\bCDex\b|Morituri/i;
+const RIPPER_ENCODERS =
+  /exact audio copy|\bEAC\b|dBpoweramp|\bXLD\b|whipper|rubyripper|cdparanoia|\bCDex\b|Morituri/i;
 
 function tagId(tag: NativeTag): string {
   return tag.id.trim();

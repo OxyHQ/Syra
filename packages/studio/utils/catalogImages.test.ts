@@ -53,9 +53,9 @@ describe('resolveCatalogImageUrl — rejected forms', () => {
   });
 
   it('rejects strings that only resemble an ObjectId', () => {
-    expect(resolveCatalogImageUrl('507f1f77bcf86cd79943901')).toBeUndefined();   // 23 chars
+    expect(resolveCatalogImageUrl('507f1f77bcf86cd79943901')).toBeUndefined(); // 23 chars
     expect(resolveCatalogImageUrl('507f1f77bcf86cd7994390111')).toBeUndefined(); // 25 chars
-    expect(resolveCatalogImageUrl('zzzf1f77bcf86cd799439011')).toBeUndefined();  // non-hex
+    expect(resolveCatalogImageUrl('zzzf1f77bcf86cd799439011')).toBeUndefined(); // non-hex
   });
 
   it('rejects empty and absent values', () => {

@@ -1,6 +1,10 @@
 import { isPostgresConnected } from '../../db/postgres';
 import { forEachMinableEvent } from '../../db/user/listening';
-import { replaceRelationGraph, type RelationEdge, type RelationKind } from '../../db/user/relations';
+import {
+  replaceRelationGraph,
+  type RelationEdge,
+  type RelationKind,
+} from '../../db/user/relations';
 import { logger } from '../../utils/logger';
 import { PLAY_COMPLETION_THRESHOLD } from './engagement';
 
@@ -100,7 +104,7 @@ export async function runCoOccurrencePass(): Promise<CoOccurrenceResult> {
 
       session.push({ trackId: event.trackId, artistId: event.artistId });
       lastPlayedAt = playedAt;
-    }
+    },
   );
   flush();
 
@@ -122,7 +126,11 @@ export async function runCoOccurrencePass(): Promise<CoOccurrenceResult> {
  * session (so replays within a session don't double-count), then increment all
  * unordered pairs.
  */
-function foldSession(session: SessionItem[], artistGraph: MinedGraph, trackGraph: MinedGraph): void {
+function foldSession(
+  session: SessionItem[],
+  artistGraph: MinedGraph,
+  trackGraph: MinedGraph,
+): void {
   const artists = Array.from(new Set(session.map((i) => i.artistId).filter(Boolean)));
   const tracks = Array.from(new Set(session.map((i) => i.trackId).filter(Boolean)));
   foldItems(artists, artistGraph);

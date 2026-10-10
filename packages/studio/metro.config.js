@@ -12,10 +12,7 @@ config.projectRoot = projectRoot;
 
 // CRITICAL: Watch the studio package and shared-types so Metro can resolve
 // the workspace packages it imports.
-config.watchFolders = [
-  projectRoot,
-  path.join(monorepoRoot, 'packages/shared-types'),
-];
+config.watchFolders = [projectRoot, path.join(monorepoRoot, 'packages/shared-types')];
 
 // Helper to create block patterns
 const blockPath = (dir) => {

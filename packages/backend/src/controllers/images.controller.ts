@@ -27,17 +27,17 @@ export const uploadImage = async (req: AuthRequest, res: Response, next: NextFun
     const file = (req as ImageUploadRequest).file;
 
     if (!file) {
-      return res.status(400).json({ 
-        error: 'Missing file', 
-        message: 'Image file is required' 
+      return res.status(400).json({
+        error: 'Missing file',
+        message: 'Image file is required',
       });
     }
 
     // Validate file is an image
     if (!file.mimetype || !file.mimetype.startsWith('image/')) {
-      return res.status(400).json({ 
-        error: 'Invalid file type', 
-        message: 'Only image files are allowed' 
+      return res.status(400).json({
+        error: 'Invalid file type',
+        message: 'Only image files are allowed',
       });
     }
 
@@ -63,7 +63,9 @@ export const uploadImage = async (req: AuthRequest, res: Response, next: NextFun
 
     res.status(201).json({ id: imageId, ...colors });
   } catch (error: unknown) {
-    logger.error('[ImagesController] Error uploading image:', { error: describeErrorSafely(error) });
+    logger.error('[ImagesController] Error uploading image:', {
+      error: describeErrorSafely(error),
+    });
     next(error);
   }
 };
@@ -116,7 +118,7 @@ export const getImage = async (req: Request, res: Response, next: NextFunction) 
     if (!isLiveEntityId(id)) {
       return res.status(400).json({
         error: 'Invalid image ID',
-        message: 'Image ID is not a valid image identifier'
+        message: 'Image ID is not a valid image identifier',
       });
     }
 
@@ -126,7 +128,7 @@ export const getImage = async (req: Request, res: Response, next: NextFunction) 
       if (!asset) {
         return res.status(404).json({
           error: 'Image not found',
-          message: 'The requested image does not exist'
+          message: 'The requested image does not exist',
         });
       }
 
@@ -136,14 +138,14 @@ export const getImage = async (req: Request, res: Response, next: NextFunction) 
           logger.debug('[ImagesController] Image not found', { id });
           return res.status(404).json({
             error: 'Image not found',
-            message: 'The requested image does not exist'
+            message: 'The requested image does not exist',
           });
         }
         logger.error('[ImagesController] Error reading image stream:', streamError);
         if (!res.headersSent) {
           res.status(500).json({
             error: 'Internal server error',
-            message: 'Failed to read image'
+            message: 'Failed to read image',
           });
         }
       });
@@ -162,7 +164,7 @@ export const getImage = async (req: Request, res: Response, next: NextFunction) 
       if (msg.includes('not found') || code === 'ENOENT') {
         return res.status(404).json({
           error: 'Image not found',
-          message: 'The requested image does not exist'
+          message: 'The requested image does not exist',
         });
       }
       throw error;

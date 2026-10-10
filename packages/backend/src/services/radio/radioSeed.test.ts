@@ -52,10 +52,10 @@ describe('resolveRadioSeed — track', () => {
     const struck = await makeTrack({ copyrightRemoved: true });
 
     expect(await resolveRadioSeed({ seedType: 'track', seedId: MISSING_ID }, undefined)).toBeNull();
-    expect(await resolveRadioSeed({ seedType: 'track', seedId: 'not-an-id' }, undefined)).toBeNull();
     expect(
-      await resolveRadioSeed({ seedType: 'track', seedId: struck.id }, undefined)
+      await resolveRadioSeed({ seedType: 'track', seedId: 'not-an-id' }, undefined),
     ).toBeNull();
+    expect(await resolveRadioSeed({ seedType: 'track', seedId: struck.id }, undefined)).toBeNull();
   });
 });
 
@@ -84,14 +84,21 @@ describe('resolveRadioSeed — artist', () => {
   });
 
   it('returns null for a missing artist', async () => {
-    expect(await resolveRadioSeed({ seedType: 'artist', seedId: MISSING_ID }, undefined)).toBeNull();
+    expect(
+      await resolveRadioSeed({ seedType: 'artist', seedId: MISSING_ID }, undefined),
+    ).toBeNull();
   });
 });
 
 describe('resolveRadioSeed — album', () => {
   it('seeds from the album and its playable tracks', async () => {
     const artistId = await makeArtist({ name: 'Nova' });
-    const albumId = await makeAlbum({ title: 'Orbit', artistId, artistName: 'Nova', genre: ['house'] });
+    const albumId = await makeAlbum({
+      title: 'Orbit',
+      artistId,
+      artistName: 'Nova',
+      genre: ['house'],
+    });
     const first = await makeTrack({ albumId, artistId, trackNumber: 1, mood: 'calm' });
     await makeTrack({ albumId, artistId, trackNumber: 2, isAvailable: false });
 
@@ -117,11 +124,7 @@ describe('resolveRadioSeed — playlist', () => {
     const first = await makeTrack({ genre: 'house', title: 'A' });
     const struck = await makeTrack({ copyrightRemoved: true, title: 'B' });
     const third = await makeTrack({ genre: 'techno', title: 'C' });
-    await addPlaylistTracks(playlistId, [
-      first.id,
-      struck.id,
-      third.id,
-    ]);
+    await addPlaylistTracks(playlistId, [first.id, struck.id, third.id]);
 
     const seed = await resolveRadioSeed({ seedType: 'playlist', seedId: playlistId }, undefined);
 
@@ -136,12 +139,14 @@ describe('resolveRadioSeed — playlist', () => {
       visibility: PlaylistVisibility.PRIVATE,
     });
 
-    expect(await resolveRadioSeed({ seedType: 'playlist', seedId: playlistId }, undefined)).toBeNull();
     expect(
-      await resolveRadioSeed({ seedType: 'playlist', seedId: playlistId }, 'stranger')
+      await resolveRadioSeed({ seedType: 'playlist', seedId: playlistId }, undefined),
     ).toBeNull();
     expect(
-      await resolveRadioSeed({ seedType: 'playlist', seedId: playlistId }, 'owner-1')
+      await resolveRadioSeed({ seedType: 'playlist', seedId: playlistId }, 'stranger'),
+    ).toBeNull();
+    expect(
+      await resolveRadioSeed({ seedType: 'playlist', seedId: playlistId }, 'owner-1'),
     ).not.toBeNull();
   });
 });
@@ -150,7 +155,10 @@ describe('resolveRadioSeed — genre and mood', () => {
   it('lowercases the seed id and titles the station', async () => {
     await makeTrack({ genre: 'deep house', mood: 'chill' });
 
-    const genreSeed = await resolveRadioSeed({ seedType: 'genre', seedId: 'Deep House' }, undefined);
+    const genreSeed = await resolveRadioSeed(
+      { seedType: 'genre', seedId: 'Deep House' },
+      undefined,
+    );
     expect(genreSeed?.genres).toEqual(['deep house']);
     expect(genreSeed?.moods).toEqual([]);
     expect(genreSeed?.seedTrackIds).toEqual([]);
@@ -194,7 +202,10 @@ describe('resolveRadioSeed — user', () => {
     expect(guest?.genres).toEqual([]);
     expect(guest?.title).toBe('Your Daily Mix');
 
-    const coldStart = await resolveRadioSeed({ seedType: 'user', seedId: '' }, 'user-with-no-profile');
+    const coldStart = await resolveRadioSeed(
+      { seedType: 'user', seedId: '' },
+      'user-with-no-profile',
+    );
     expect(coldStart?.personalized).toBe(false);
   });
 
@@ -209,7 +220,7 @@ describe('resolveRadioSeed — user', () => {
 });
 
 describe('loadRadioTaste', () => {
-  it('normalises affinities against the listener\'s own strongest weight', async () => {
+  it("normalises affinities against the listener's own strongest weight", async () => {
     // A REAL artist id, not the string `'artist-a'` this fixture used to pass:
     // `user_taste_artists.artist_id` is a foreign key into `catalog_entities`
     // now, so an invented id is a `23503` where Mongo stored it verbatim.
@@ -221,7 +232,7 @@ describe('loadRadioTaste', () => {
         { key: 'house', weight: 10 },
         { key: 'techno', weight: 5 },
       ],
-      [{ key: artistId, weight: 4 }]
+      [{ key: artistId, weight: 4 }],
     );
 
     const taste = await loadRadioTaste('user-1');

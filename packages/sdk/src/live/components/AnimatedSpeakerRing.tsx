@@ -59,13 +59,7 @@ export const AnimatedSpeakerRing = React.memo(function AnimatedSpeakerRing({
 
   return (
     <View style={styles.container}>
-      <Animated.View
-        style={[
-          styles.pulseRing,
-          { borderColor: primaryColor },
-          pulseStyle,
-        ]}
-      />
+      <Animated.View style={[styles.pulseRing, { borderColor: primaryColor }, pulseStyle]} />
       <View
         style={[
           styles.avatarRing,

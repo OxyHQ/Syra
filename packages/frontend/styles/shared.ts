@@ -12,7 +12,7 @@ import { StyleSheet, ViewStyle, TextStyle, ImageStyle, StyleProp } from 'react-n
  * result (e.g. `flatStyle.position`).
  */
 export function flattenStyleArray<T extends ViewStyle | TextStyle | ImageStyle>(
-  styles: StyleProp<T> | (StyleProp<T> | undefined | null | false)[]
+  styles: StyleProp<T> | (StyleProp<T> | undefined | null | false)[],
 ): T {
   return StyleSheet.flatten(styles) as T;
 }

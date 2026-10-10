@@ -13,20 +13,41 @@ const CUTOFF = new Date('2026-09-15T12:00:00Z');
 const START = new Date('2026-08-18T12:00:00Z');
 
 async function artist(name: string): Promise<string> {
-  const [row] = await getDb().insert(catalogEntities).values({ type: 'artist', name, nameKey: name, source: 'upload' }).returning({ id: catalogEntities.id });
+  const [row] = await getDb()
+    .insert(catalogEntities)
+    .values({ type: 'artist', name, nameKey: name, source: 'upload' })
+    .returning({ id: catalogEntities.id });
   if (!row) throw new Error('Artist fixture was not inserted');
   return row.id;
 }
 async function recording(artistId: string): Promise<string> {
-  const [row] = await getDb().insert(tracks).values({ artistId, artistName: 'Artist', title: 'Recording', duration: 100, source: 'upload' }).returning({ id: tracks.id });
+  const [row] = await getDb()
+    .insert(tracks)
+    .values({ artistId, artistName: 'Artist', title: 'Recording', duration: 100, source: 'upload' })
+    .returning({ id: tracks.id });
   if (!row) throw new Error('Track fixture was not inserted');
   return row.id;
 }
-async function listen(artistId: string, trackId: string, oxyUserId: string, playedAt = START, completion = 1, skipped = false) {
-  await getDb().insert(listeningEvents).values({ artistId, trackId, oxyUserId, playedAt, completion, skipped });
+async function listen(
+  artistId: string,
+  trackId: string,
+  oxyUserId: string,
+  playedAt = START,
+  completion = 1,
+  skipped = false,
+) {
+  await getDb()
+    .insert(listeningEvents)
+    .values({ artistId, trackId, oxyUserId, playedAt, completion, skipped });
 }
 async function count(artistId: string) {
-  const [row] = await getDb().select({ value: catalogEntities.statsMonthlyListeners, computedAt: catalogEntities.statsMonthlyListenersComputedAt }).from(catalogEntities).where(eq(catalogEntities.id, artistId));
+  const [row] = await getDb()
+    .select({
+      value: catalogEntities.statsMonthlyListeners,
+      computedAt: catalogEntities.statsMonthlyListenersComputedAt,
+    })
+    .from(catalogEntities)
+    .where(eq(catalogEntities.id, artistId));
   return row;
 }
 describe('rolling public audience', () => {
@@ -61,12 +82,35 @@ describe('rolling public audience', () => {
     const guest = await artist('guest');
     const producer = await artist('producer');
     const track = await recording(principal);
-    await getDb().insert(trackCredits).values([
-      { trackId: track, position: 0, name: 'Guest', nameKey: 'guest', role: 'artist', catalogEntityId: guest },
-      { trackId: track, position: 1, name: 'Guest', nameKey: 'guest', role: 'vocalist', catalogEntityId: guest },
-      { trackId: track, position: 2, name: 'Producer', nameKey: 'producer', role: 'producer', catalogEntityId: producer },
-      { trackId: track, position: 3, name: 'Unknown', nameKey: 'unknown', role: 'artist' },
-    ]);
+    await getDb()
+      .insert(trackCredits)
+      .values([
+        {
+          trackId: track,
+          position: 0,
+          name: 'Guest',
+          nameKey: 'guest',
+          role: 'artist',
+          catalogEntityId: guest,
+        },
+        {
+          trackId: track,
+          position: 1,
+          name: 'Guest',
+          nameKey: 'guest',
+          role: 'vocalist',
+          catalogEntityId: guest,
+        },
+        {
+          trackId: track,
+          position: 2,
+          name: 'Producer',
+          nameKey: 'producer',
+          role: 'producer',
+          catalogEntityId: producer,
+        },
+        { trackId: track, position: 3, name: 'Unknown', nameKey: 'unknown', role: 'artist' },
+      ]);
     await listen(principal, track, 'listener');
     await refreshMonthlyListeners(CUTOFF);
     expect((await count(principal))?.value).toBe(1);
@@ -82,7 +126,6 @@ describe('rolling public audience', () => {
   });
 });
 
-
 it('never rolls a newer audience snapshot back to an older cutoff', async () => {
   const principal = await artist('monotonic');
   const track = await recording(principal);
@@ -97,12 +140,31 @@ it('never rolls a newer audience snapshot back to an older cutoff', async () => 
 it('accepts each performing role with case/whitespace normalization but excludes writing and production', async () => {
   const principal = await artist('roles');
   const track = await recording(principal);
-  const roles = ['artist', 'albumartist', 'performer', 'featured', 'vocalist', 'composer', 'writer', 'producer', 'remixer'];
+  const roles = [
+    'artist',
+    'albumartist',
+    'performer',
+    'featured',
+    'vocalist',
+    'composer',
+    'writer',
+    'producer',
+    'remixer',
+  ];
   const creditedArtists: string[] = [];
   for (const [position, role] of roles.entries()) {
     const contributor = await artist(role);
     creditedArtists.push(contributor);
-    await getDb().insert(trackCredits).values({ trackId: track, position, role: ` ${role.toUpperCase()} `, name: role, nameKey: role, catalogEntityId: contributor });
+    await getDb()
+      .insert(trackCredits)
+      .values({
+        trackId: track,
+        position,
+        role: ` ${role.toUpperCase()} `,
+        name: role,
+        nameKey: role,
+        catalogEntityId: contributor,
+      });
   }
   await listen(principal, track, 'listener');
   await refreshMonthlyListeners(CUTOFF);
@@ -114,6 +176,8 @@ it('accepts each performing role with case/whitespace normalization but excludes
 it('rejects an invalid cutoff without touching the previous snapshot', async () => {
   const principal = await artist('invalid');
   await refreshMonthlyListeners(CUTOFF);
-  await expect(refreshMonthlyListeners(new Date('invalid'))).rejects.toThrow('Invalid monthly-listener cutoff');
+  await expect(refreshMonthlyListeners(new Date('invalid'))).rejects.toThrow(
+    'Invalid monthly-listener cutoff',
+  );
   expect((await count(principal))?.computedAt).toEqual(CUTOFF);
 });

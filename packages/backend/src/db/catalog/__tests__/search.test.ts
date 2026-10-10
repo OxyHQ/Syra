@@ -63,15 +63,17 @@ afterEach(() => {
 
 async function seedTitles(...titles: string[]): Promise<void> {
   for (const title of titles) {
-    await getDb().insert(tracks).values({
-      title,
-      artistId: await theArtist(),
-      artistName: 'A Band',
-      duration: 180,
-      source: 'upload',
-      status: 'ready',
-      isAvailable: true,
-    });
+    await getDb()
+      .insert(tracks)
+      .values({
+        title,
+        artistId: await theArtist(),
+        artistName: 'A Band',
+        duration: 180,
+        source: 'upload',
+        status: 'ready',
+        isAvailable: true,
+      });
   }
 }
 
@@ -104,15 +106,17 @@ describe('what the ruling gained', () => {
   });
 
   it('matches the artist name, which is in the same stored vector', async () => {
-    await getDb().insert(tracks).values({
-      title: 'Untitled',
-      artistId: await theArtist(),
-      artistName: 'Portishead',
-      duration: 180,
-      source: 'upload',
-      status: 'ready',
-      isAvailable: true,
-    });
+    await getDb()
+      .insert(tracks)
+      .values({
+        title: 'Untitled',
+        artistId: await theArtist(),
+        artistName: 'Portishead',
+        duration: 180,
+        source: 'upload',
+        status: 'ready',
+        isAvailable: true,
+      });
 
     expect(await titlesMatching('portishead')).toEqual(['Untitled']);
   });
@@ -221,8 +225,8 @@ describe('the query and the stored columns use the same configuration', () => {
 
     const configs = files.flatMap((name) =>
       [...readFileSync(join(schemaDir, name), 'utf8').matchAll(/to_tsvector\('([^']+)'/g)].map(
-        (match) => `${name}: ${match[1]}`
-      )
+        (match) => `${name}: ${match[1]}`,
+      ),
     );
 
     expect(configs.length).toBeGreaterThanOrEqual(5);
@@ -230,7 +234,7 @@ describe('the query and the stored columns use the same configuration', () => {
   });
 });
 
-describe('no catalog read orders with drizzle\'s desc()', () => {
+describe("no catalog read orders with drizzle's desc()", () => {
   /**
    * `desc(col)` emits `ORDER BY col DESC`, which means `NULLS FIRST`; every
    * descending index in this schema is `DESC NULLS LAST`, because that is what

@@ -21,7 +21,9 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
       <Text className="text-sm text-muted-foreground text-center mb-5 max-w-[360px]">
         Create your first podcast to start uploading episodes and get a public RSS feed.
       </Text>
-      <Button onPress={onCreate} tone="accent" appearance="solid">Create your first podcast</Button>
+      <Button onPress={onCreate} tone="accent" appearance="solid">
+        Create your first podcast
+      </Button>
     </View>
   );
 }
@@ -41,7 +43,13 @@ function Dashboard() {
       title="Your podcasts"
       subtitle="Manage your podcasts and episodes"
       actions={
-        <Button size="sm" onPress={goToNew} icon={<MaterialCommunityIcons name="plus" size={18} color="#fff" />} tone="accent" appearance="solid">
+        <Button
+          size="sm"
+          onPress={goToNew}
+          icon={<MaterialCommunityIcons name="plus" size={18} color="#fff" />}
+          tone="accent"
+          appearance="solid"
+        >
           New podcast
         </Button>
       }
@@ -53,7 +61,9 @@ function Dashboard() {
       ) : isError ? (
         <View className="py-16 items-center px-6">
           <Text className="text-base text-foreground mb-3">Couldn&apos;t load your podcasts.</Text>
-          <Button onPress={() => refetch()} tone="neutral" appearance="outline">Retry</Button>
+          <Button onPress={() => refetch()} tone="neutral" appearance="outline">
+            Retry
+          </Button>
         </View>
       ) : !podcasts || podcasts.length === 0 ? (
         <EmptyState onCreate={goToNew} />

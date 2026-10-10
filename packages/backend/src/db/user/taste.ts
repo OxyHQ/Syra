@@ -72,8 +72,7 @@ const PRUNE_THRESHOLD = 0.05;
  * predicate on a bare column, where an index could serve it, instead of on a
  * computed expression where none ever could.
  */
-const MIN_DECAY_ELAPSED_SECONDS =
-  HALF_LIFE_DAYS * 24 * 60 * 60 * (Math.log(0.999) / Math.log(0.5));
+const MIN_DECAY_ELAPSED_SECONDS = HALF_LIFE_DAYS * 24 * 60 * 60 * (Math.log(0.999) / Math.log(0.5));
 
 /** One learned affinity. `key` is a genre string or a `catalog_entities` id. */
 export interface TasteWeight {
@@ -274,7 +273,10 @@ async function applyArtistDeltas(
       .update(userTasteArtists)
       .set({ weight: sql`greatest(0, ${userTasteArtists.weight} + ${delta})` })
       .where(
-        and(eq(userTasteArtists.tasteProfileId, tasteProfileId), eq(userTasteArtists.artistId, key)),
+        and(
+          eq(userTasteArtists.tasteProfileId, tasteProfileId),
+          eq(userTasteArtists.artistId, key),
+        ),
       );
   }
 
@@ -355,10 +357,7 @@ export async function decayDueTasteProfiles(): Promise<TasteDecayResult> {
       sql`now() - make_interval(secs => ${MIN_DECAY_ELAPSED_SECONDS})`,
     );
 
-    const dueProfiles = tx
-      .select({ id: userTasteProfiles.id })
-      .from(userTasteProfiles)
-      .where(due);
+    const dueProfiles = tx.select({ id: userTasteProfiles.id }).from(userTasteProfiles).where(due);
 
     /** `0.5 ^ (elapsed / halfLife)`, per profile, from its own `last_decay_at`. */
     const factor = sql`power(

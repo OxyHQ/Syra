@@ -40,7 +40,11 @@ function AudioPicker({ file, onPick }: { file: EpisodeAudioFile | null; onPick: 
         className="flex-row items-center gap-3 rounded-xl border border-dashed border-border bg-surface px-4 py-4 active:opacity-80"
       >
         <View className="w-10 h-10 rounded-lg bg-primary/10 items-center justify-center">
-          <MaterialCommunityIcons name={file ? 'music-box' : 'cloud-upload-outline'} size={22} color={theme.colors.primary} />
+          <MaterialCommunityIcons
+            name={file ? 'music-box' : 'cloud-upload-outline'}
+            size={22}
+            color={theme.colors.primary}
+          />
         </View>
         <View className="flex-1">
           <Text numberOfLines={1} className="text-sm font-medium text-foreground">
@@ -55,7 +59,13 @@ function AudioPicker({ file, onPick }: { file: EpisodeAudioFile | null; onPick: 
   );
 }
 
-function TypeSelector({ value, onChange }: { value: EpisodeType; onChange: (value: EpisodeType) => void }) {
+function TypeSelector({
+  value,
+  onChange,
+}: {
+  value: EpisodeType;
+  onChange: (value: EpisodeType) => void;
+}) {
   return (
     <View className="mb-4">
       <Text className="text-sm font-medium text-foreground mb-1.5">Episode type</Text>
@@ -71,7 +81,9 @@ function TypeSelector({ value, onChange }: { value: EpisodeType; onChange: (valu
                 active ? 'border-primary bg-primary/10' : 'border-border bg-surface',
               )}
             >
-              <Text className={cn('text-sm font-semibold', active ? 'text-primary' : 'text-foreground')}>
+              <Text
+                className={cn('text-sm font-semibold', active ? 'text-primary' : 'text-foreground')}
+              >
                 {option.label}
               </Text>
             </Pressable>
@@ -158,12 +170,26 @@ function UploadEpisodeForm({ id }: { id: string }) {
         toast.error('Upload failed. Please try again.');
       }
     }
-  }, [title, audioFile, description, season, episodeNumber, episodeType, explicit, hostsGuests, id, uploadEpisode, router]);
+  }, [
+    title,
+    audioFile,
+    description,
+    season,
+    episodeNumber,
+    episodeType,
+    explicit,
+    hostsGuests,
+    id,
+    uploadEpisode,
+    router,
+  ]);
 
   return (
     <ScreenContainer title="Upload episode" onBack={() => router.back()}>
       <AudioPicker file={audioFile} onPick={pickAudio} />
-      {audioError ? <Text className="text-xs text-destructive -mt-2 mb-3">{audioError}</Text> : null}
+      {audioError ? (
+        <Text className="text-xs text-destructive -mt-2 mb-3">{audioError}</Text>
+      ) : null}
 
       <FormField
         label="Title"
@@ -205,7 +231,9 @@ function UploadEpisodeForm({ id }: { id: string }) {
       <View className="flex-row items-center justify-between rounded-xl border border-border bg-surface px-4 py-3 mb-6">
         <View className="flex-1 pr-3">
           <Text className="text-sm font-medium text-foreground">Explicit content</Text>
-          <Text className="text-xs text-muted-foreground mt-0.5">Marks this episode as explicit.</Text>
+          <Text className="text-xs text-muted-foreground mt-0.5">
+            Marks this episode as explicit.
+          </Text>
         </View>
         <Switch checked={explicit} onCheckedChange={setExplicit} />
       </View>
@@ -213,7 +241,9 @@ function UploadEpisodeForm({ id }: { id: string }) {
         fullWidth
         onPress={onSubmit}
         loading={uploadEpisode.isPending}
-        disabled={uploadEpisode.isPending} tone="accent" appearance="solid"
+        disabled={uploadEpisode.isPending}
+        tone="accent"
+        appearance="solid"
       >
         Upload episode
       </Button>
@@ -223,9 +253,5 @@ function UploadEpisodeForm({ id }: { id: string }) {
 
 export default function UploadEpisodeScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  return (
-    <SignInGate>
-      {id ? <UploadEpisodeForm id={id} /> : null}
-    </SignInGate>
-  );
+  return <SignInGate>{id ? <UploadEpisodeForm id={id} /> : null}</SignInGate>;
 }

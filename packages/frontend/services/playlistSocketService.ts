@@ -7,13 +7,23 @@ import { Track, PlaylistTrack, Playlist } from '@syra/shared-types';
  * subset of {@link Playlist} that the playlist-edit flow can mutate.
  */
 export type PlaylistUpdatePayload = Partial<
-  Pick<Playlist, 'name' | 'description' | 'coverArt' | 'visibility' | 'primaryColor' | 'secondaryColor'>
+  Pick<
+    Playlist,
+    'name' | 'description' | 'coverArt' | 'visibility' | 'primaryColor' | 'secondaryColor'
+  >
 >;
 
-type PlaylistUpdateCallback = (data: { playlistId: string; tracks: Track[]; playlistTracks: PlaylistTrack[] }) => void;
+type PlaylistUpdateCallback = (data: {
+  playlistId: string;
+  tracks: Track[];
+  playlistTracks: PlaylistTrack[];
+}) => void;
 type PlaylistTrackRemovedCallback = (data: { playlistId: string; trackIds: string[] }) => void;
 type PlaylistTrackReorderedCallback = (data: { playlistId: string; trackIds: string[] }) => void;
-type PlaylistUpdatedCallback = (data: { playlistId: string; updates: PlaylistUpdatePayload }) => void;
+type PlaylistUpdatedCallback = (data: {
+  playlistId: string;
+  updates: PlaylistUpdatePayload;
+}) => void;
 
 class PlaylistSocketService {
   private socket: Socket | null = null;
@@ -66,7 +76,7 @@ class PlaylistSocketService {
       this.isConnected = true;
 
       // Rejoin previously joined playlists
-      this.joinedPlaylists.forEach(playlistId => {
+      this.joinedPlaylists.forEach((playlistId) => {
         this.socket?.emit('join:playlist', playlistId);
       });
     });
@@ -230,9 +240,3 @@ class PlaylistSocketService {
 
 // Export singleton instance
 export const playlistSocketService = new PlaylistSocketService();
-
-
-
-
-
-

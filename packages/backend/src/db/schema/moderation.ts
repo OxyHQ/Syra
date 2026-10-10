@@ -107,7 +107,10 @@ export const reports = pgTable(
   },
   (t) => [
     ...moderationReportTableExtras(REPORT_MODERATION)(t),
-    check('reports_status_check', sql`${t.status} in (${sql.raw(inList(Object.values(ReportStatus)))})`),
+    check(
+      'reports_status_check',
+      sql`${t.status} in (${sql.raw(inList(Object.values(ReportStatus)))})`,
+    ),
     /**
      * One report per reporter per object — the unique index that IS the rule,
      * rather than a check in the handler that two concurrent submissions race
@@ -142,8 +145,7 @@ const moderation: ModerationTables = moderationTables({
 
 export const moderationOutbox: ModerationTables['outbox'] = moderation.outbox;
 export const moderationEvents: ModerationTables['events'] = moderation.events;
-export const moderationEnforcements: ModerationTables['enforcements'] =
-  moderation.enforcements;
+export const moderationEnforcements: ModerationTables['enforcements'] = moderation.enforcements;
 
 /**
  * The three tables as the package's own registry fragments expect them.

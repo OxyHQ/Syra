@@ -16,17 +16,17 @@ import { Z_INDEX } from '@/lib/constants';
 
 /**
  * Portal Component
- * 
+ *
  * Allows rendering components outside the normal React tree hierarchy.
  * Useful for modals, overlays, and tooltips that need to appear above all other content.
- * 
+ *
  * @example
  * ```tsx
  * <PortalProvider>
  *   <App />
  *   <PortalOutlet />
  * </PortalProvider>
- * 
+ *
  * // Elsewhere in the tree:
  * <Portal>
  *   <ModalContent />
@@ -78,11 +78,7 @@ function createPortalGroup() {
       [outlet, append, remove],
     );
 
-    return (
-      <Context.Provider value={contextValue}>
-        {props.children}
-      </Context.Provider>
-    );
+    return <Context.Provider value={contextValue}>{props.children}</Context.Provider>;
   }
 
   function Outlet() {
@@ -91,11 +87,7 @@ function createPortalGroup() {
     // On web, wrap outlet in fixed-position container for full-screen rendering
     // This ensures Portal content appears above all other elements
     if (Platform.OS === 'web') {
-      return (
-        <View style={styles.portalOutlet}>
-          {ctx.outlet}
-        </View>
-      );
+      return <View style={styles.portalOutlet}>{ctx.outlet}</View>;
     }
 
     // On native platforms, Modal handles positioning automatically
@@ -136,4 +128,3 @@ const styles = StyleSheet.create({
     zIndex: Z_INDEX.PORTAL_OUTLET,
   }),
 });
-

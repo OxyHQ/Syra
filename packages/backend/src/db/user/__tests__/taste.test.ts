@@ -201,14 +201,12 @@ describe('the caps are enforced by a bounded delete', () => {
     expect(weightOf(taste?.genres ?? [], 'genre-4')).toBeUndefined();
     expect(weightOf(taste?.genres ?? [], 'genre-5')).toBe(6);
     expect(weightOf(taste?.genres ?? [], `genre-${MAX_TASTE_GENRES + 4}`)).toBe(
-      MAX_TASTE_GENRES + 5
+      MAX_TASTE_GENRES + 5,
     );
   });
 
   it('caps the artist side at MAX_TASTE_ARTISTS', async () => {
-    const artistIds = await Promise.all(
-      Array.from({ length: 5 }, () => makeArtist())
-    );
+    const artistIds = await Promise.all(Array.from({ length: 5 }, () => makeArtist()));
 
     await applyTasteSignal(USER, {
       genres: [],

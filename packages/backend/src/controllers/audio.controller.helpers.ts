@@ -126,4 +126,3 @@ export async function validateAudioFileExists(track: Track): Promise<TrackValida
 export function sendErrorResponse(res: Response, statusCode: number, error: string): void {
   res.status(statusCode).json({ error });
 }
-

@@ -15,7 +15,12 @@ describe('parseDeezerAlbumGenres', () => {
       parseDeezerAlbumGenres({
         id: 996677771,
         nb_tracks: 9,
-        genres: { data: [{ id: 132, name: 'Pop' }, { id: 152, name: 'Rock' }] },
+        genres: {
+          data: [
+            { id: 132, name: 'Pop' },
+            { id: 152, name: 'Rock' },
+          ],
+        },
       }),
     ).toEqual(['Pop', 'Rock']);
   });
@@ -23,7 +28,12 @@ describe('parseDeezerAlbumGenres', () => {
   it('collapses the repeats a release carries across its sub-entries', () => {
     expect(
       parseDeezerAlbumGenres({
-        genres: { data: [{ id: 132, name: 'Pop' }, { id: 132, name: 'Pop' }] },
+        genres: {
+          data: [
+            { id: 132, name: 'Pop' },
+            { id: 132, name: 'Pop' },
+          ],
+        },
       }),
     ).toEqual(['Pop']);
   });

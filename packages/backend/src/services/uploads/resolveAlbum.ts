@@ -31,11 +31,7 @@ export type AlbumType = Album['type'];
 
 export type AlbumConfidence = 'high' | 'medium' | 'none';
 
-export type AlbumSignal =
-  | 'upc'
-  | 'musicbrainz-release-id'
-  | 'album-key'
-  | 'none';
+export type AlbumSignal = 'upc' | 'musicbrainz-release-id' | 'album-key' | 'none';
 
 export interface AlbumResolution {
   confidence: AlbumConfidence;
@@ -164,7 +160,7 @@ export async function resolveAlbum(input: AlbumResolutionInput): Promise<AlbumRe
   // ── 2: MusicBrainz release id ──
   if (input.musicbrainzReleaseId) {
     const byRelease = await findAlbumIdBy(
-      eq(albums.externalMusicbrainzReleaseId, input.musicbrainzReleaseId)
+      eq(albums.externalMusicbrainzReleaseId, input.musicbrainzReleaseId),
     );
     if (byRelease) {
       const id = byRelease;
@@ -200,7 +196,8 @@ export async function resolveAlbum(input: AlbumResolutionInput): Promise<AlbumRe
 
   for (const candidate of candidates) {
     if (normalizeNameKey(candidate.title) !== titleKey) continue;
-    if (artistNameKey !== undefined && normalizeNameKey(candidate.artistName) !== artistNameKey) continue;
+    if (artistNameKey !== undefined && normalizeNameKey(candidate.artistName) !== artistNameKey)
+      continue;
     if (input.year !== undefined) {
       const candidateYear = Number(candidate.releaseDate.slice(0, 4));
       if (Number.isFinite(candidateYear) && candidateYear !== input.year) continue;
@@ -376,7 +373,7 @@ export async function ensureContributedAlbum(
       isUniqueViolation(err, 'albums_external_musicbrainz_release_id_key')
     ) {
       const winner = await findAlbumBy(
-        eq(albums.externalMusicbrainzReleaseId, input.musicbrainzReleaseId)
+        eq(albums.externalMusicbrainzReleaseId, input.musicbrainzReleaseId),
       );
       if (winner) return winner;
     }

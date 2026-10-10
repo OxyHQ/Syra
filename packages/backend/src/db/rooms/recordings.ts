@@ -87,13 +87,16 @@ export async function listPublicRecordings(
     .where(
       and(
         eq(recordings.status, RecordingStatus.READY),
-        eq(recordings.access, RecordingAccess.PUBLIC)
-      )
+        eq(recordings.access, RecordingAccess.PUBLIC),
+      ),
     );
 
   return sort === 'popular'
     ? query
-        .orderBy(sql`cardinality(${recordings.participantIds}) desc`, descNullsLast(recordings.createdAt))
+        .orderBy(
+          sql`cardinality(${recordings.participantIds}) desc`,
+          descNullsLast(recordings.createdAt),
+        )
         .limit(limit)
     : query.orderBy(descNullsLast(recordings.createdAt)).limit(limit);
 }
@@ -131,9 +134,9 @@ export async function listRoomRecordings(
             eq(recordings.access, RecordingAccess.PUBLIC),
             and(
               eq(recordings.access, RecordingAccess.PARTICIPANTS),
-              arrayContains(recordings.participantIds, [options.userId])
-            )
-          ) as SQL)
+              arrayContains(recordings.participantIds, [options.userId]),
+            ),
+          ) as SQL),
     );
   }
 

@@ -88,7 +88,11 @@ function walk(dir: string, out: string[] = []): string[] {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       if (entry.name !== '__fixtures__' && entry.name !== 'node_modules') walk(full, out);
-    } else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts') && !entry.name.endsWith('.d.ts')) {
+    } else if (
+      entry.name.endsWith('.ts') &&
+      !entry.name.endsWith('.test.ts') &&
+      !entry.name.endsWith('.d.ts')
+    ) {
       out.push(full);
     }
   }
@@ -130,7 +134,8 @@ function scanOptionalInputs(): OptionalInput[] {
            * itself. Detected rather than listed by hand, so the exemption
            * cannot outlive the `Omit` that justifies it.
            */
-          if (new RegExp(`Omit<\\s*${interfaceName}\\s*,[^>]*['"]${name}['"]`).test(source)) continue;
+          if (new RegExp(`Omit<\\s*${interfaceName}\\s*,[^>]*['"]${name}['"]`).test(source))
+            continue;
 
           found.push({ file, interfaceName, field: name, key: `${interfaceName}.${name}` });
         }
@@ -171,9 +176,11 @@ describe('optional service inputs are supplied by a production call site', () =>
     // `false` would report every input as unwired, and a search that always
     // returned `true` would report the whole feature as healthy.
     const wired = inputs.filter((input) =>
-      ['ArtistResolutionInput.isrc', 'AlbumResolutionInput.upc', 'MatchCandidate.fingerprint'].includes(
-        input.key,
-      ),
+      [
+        'ArtistResolutionInput.isrc',
+        'AlbumResolutionInput.upc',
+        'MatchCandidate.fingerprint',
+      ].includes(input.key),
     );
     expect(wired.length).toBeGreaterThan(0);
     for (const input of wired) {
@@ -206,7 +213,8 @@ describe('optional service inputs are supplied by a production call site', () =>
     );
 
     const fixed = EXPECTED_UNWIRED.filter((entry) => !stillUnwired.has(entry.key)).map(
-      (entry) => `${entry.key} is now supplied (owner: ${entry.owner}) — delete it from EXPECTED_UNWIRED.`,
+      (entry) =>
+        `${entry.key} is now supplied (owner: ${entry.owner}) — delete it from EXPECTED_UNWIRED.`,
     );
 
     expect(fixed).toEqual([]);

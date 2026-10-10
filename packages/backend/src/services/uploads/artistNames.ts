@@ -78,7 +78,12 @@ export function splitArtistCredit(raw: string): ArtistCredit {
       .split(FEATURED_SEPARATOR)
       // A bracketed feature carries its closing bracket into the remainder
       // (`Bb trickz)`), and a trailing `)`/`]` is never part of a name.
-      .map((name) => name.trim().replace(/[)\]]+$/, '').trim())
+      .map((name) =>
+        name
+          .trim()
+          .replace(/[)\]]+$/, '')
+          .trim(),
+      )
       .filter((name) => name.length > 0);
 
   // A credit that is nothing but a feature (`feat. Kofi Mensah`) has no

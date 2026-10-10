@@ -116,15 +116,16 @@ describe('notifySubscribersOfNewEpisode', () => {
     await subscribe('u2', PODCAST_ID);
 
     for (const visibility of ['private', 'unlisted'] as const) {
-      await getDb()
-        .update(podcasts)
-        .set({ visibility })
-        .where(eq(podcasts.id, PODCAST_ID));
+      await getDb().update(podcasts).set({ visibility }).where(eq(podcasts.id, PODCAST_ID));
 
-      const outcome = await notifySubscribersOfNewEpisode(episode(new Date()), Date.now(), testDeps);
+      const outcome = await notifySubscribersOfNewEpisode(
+        episode(new Date()),
+        Date.now(),
+        testDeps,
+      );
 
       expect(`${visibility}: ${JSON.stringify(outcome)}`).toBe(
-        `${visibility}: ${JSON.stringify({ notified: 0, skippedAsBackfill: false, skippedAsHidden: true })}`
+        `${visibility}: ${JSON.stringify({ notified: 0, skippedAsBackfill: false, skippedAsHidden: true })}`,
       );
       expect(`${visibility} posted: ${posted}`).toBe(`${visibility} posted: 0`);
     }

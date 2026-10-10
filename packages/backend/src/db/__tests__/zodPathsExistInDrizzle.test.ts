@@ -124,7 +124,8 @@ const TABLES_WITHOUT_DTO: Record<string, string> = {
   albumSources: 'child of albums — albumSchema.sources',
   catalogEntitySources: 'child of catalog_entities — artistSchema.sources',
   catalogEntityStrikes: 'child of catalog_entities — artistSchema.strikes',
-  contributionAttestationProvenanceMarkers: 'child — contributionAttestationSchema.provenanceReport.markers',
+  contributionAttestationProvenanceMarkers:
+    'child — contributionAttestationSchema.provenanceReport.markers',
   contributorStrikes: 'child of contributor_standings',
   episodeHlsRenditions: 'child of episodes — episodeSchema.hls',
   episodePersons: 'child of episodes — episodeSchema.persons',
@@ -167,7 +168,8 @@ const TABLES_WITHOUT_DTO: Record<string, string> = {
   imageAssets: 'server-internal — addressed by id through /api/images',
   isrcRegistry: 'server-internal — ISRC allocation',
   listeningEvents: 'server-internal — play telemetry',
-  playlistInvites: 'server-internal — stored bearer-grant digests; the creation response is a newly issued token, not a row DTO',
+  playlistInvites:
+    'server-internal — stored bearer-grant digests; the creation response is a newly issued token, not a row DTO',
   musicbrainzArtists: 'server-internal — enrichment mirror',
   musicbrainzArtistUrls: 'server-internal — enrichment mirror',
   notificationPreferences: 'server-internal — hand-built shape, no zod DTO',
@@ -185,7 +187,8 @@ const TABLES_WITHOUT_DTO: Record<string, string> = {
   // @crowdsource.you/core/outbox, which serialises none of them to a client at all.
   reports: 'moderation vertical — hand-built response literal in routes/reports.routes.ts',
   moderationOutbox: 'server-internal — @crowdsource.you/core/outbox work queue, never serialised',
-  moderationEvents: 'server-internal — @crowdsource.you/core/outbox inbound audit log and dedupe claim',
+  moderationEvents:
+    'server-internal — @crowdsource.you/core/outbox inbound audit log and dedupe claim',
   moderationEnforcements: 'server-internal — @crowdsource.you/core/outbox enforcement ledger',
 
   // Rooms vertical — DTOs are hand-built TypeScript in db/rooms/serialize.ts,
@@ -226,7 +229,8 @@ const CHILD_TABLE: Record<string, string> = {
   'episodeSchema.hls': 'episodeHlsRenditions',
   'userUploadSchema.hls': 'userUploadHlsRenditions',
   'userUploadSchema.provenance.markers': 'userUploadProvenanceMarkers',
-  'contributionAttestationSchema.provenanceReport.markers': 'contributionAttestationProvenanceMarkers',
+  'contributionAttestationSchema.provenanceReport.markers':
+    'contributionAttestationProvenanceMarkers',
   'lyricsSchema.lines': 'lyricsLines',
 };
 
@@ -281,9 +285,9 @@ function unwrapOptional(type: z.ZodTypeAny): z.ZodTypeAny {
   let current = type;
   for (let depth = 0; depth < 10; depth += 1) {
     if (
-      current instanceof z.ZodOptional
-      || current instanceof z.ZodNullable
-      || current instanceof z.ZodDefault
+      current instanceof z.ZodOptional ||
+      current instanceof z.ZodNullable ||
+      current instanceof z.ZodDefault
     ) {
       current = (current as unknown as { unwrap(): z.ZodTypeAny }).unwrap();
       continue;
@@ -384,8 +388,9 @@ function walk(
 // ── Fixtures ────────────────────────────────────────────────────────────────
 
 const TABLES: ReadonlyMap<string, PgTable> = new Map(
-  (Object.entries(schema) as [string, unknown][])
-    .filter((entry): entry is [string, PgTable] => isTable(entry[1])),
+  (Object.entries(schema) as [string, unknown][]).filter((entry): entry is [string, PgTable] =>
+    isTable(entry[1]),
+  ),
 );
 
 function columnsOf(exportName: string): ReadonlySet<string> {
@@ -424,9 +429,11 @@ describe('every zod DTO field resolves to drizzle storage', () => {
       .map((entry) => `${entry.dtoName} walked only ${entry.count} paths`);
     expect(tooFew).toEqual([]);
 
-    const totalResolved = Object.entries(DTO_FOR_TABLE)
-      .reduce((sum, [tableName, dtoName]) =>
-        sum + walk(dtoName, dtoOf(dtoName), columnsOf(tableName)).resolved.length, 0);
+    const totalResolved = Object.entries(DTO_FOR_TABLE).reduce(
+      (sum, [tableName, dtoName]) =>
+        sum + walk(dtoName, dtoOf(dtoName), columnsOf(tableName)).resolved.length,
+      0,
+    );
     expect(totalResolved).toBeGreaterThanOrEqual(350);
 
     // Flattening must actually be exercised, or the nested drift this gate
@@ -445,10 +452,12 @@ describe('every zod DTO field resolves to drizzle storage', () => {
     expect(artist.resolved.some((p) => p.startsWith('members.'))).toBe(false);
 
     // And the resolver must be capable of saying NO.
-    expect(resolvePath('artistSchema', 'definitelyNotAField', columnsOf('catalogEntities')))
-      .toBeUndefined();
-    expect(resolvePath('artistSchema', 'links.definitelyNotAField', columnsOf('catalogEntities')))
-      .toBeUndefined();
+    expect(
+      resolvePath('artistSchema', 'definitelyNotAField', columnsOf('catalogEntities')),
+    ).toBeUndefined();
+    expect(
+      resolvePath('artistSchema', 'links.definitelyNotAField', columnsOf('catalogEntities')),
+    ).toBeUndefined();
   });
 
   /**
@@ -463,8 +472,8 @@ describe('every zod DTO field resolves to drizzle storage', () => {
     const unclassified = [...TABLES.keys()].filter((t) => !paired.has(t) && !skipped.has(t));
     expect(
       unclassified,
-      'these tables are in the schema barrel but neither paired with a zod DTO nor listed '
-        + 'in TABLES_WITHOUT_DTO. Add the pairing, or say why the table has no DTO.',
+      'these tables are in the schema barrel but neither paired with a zod DTO nor listed ' +
+        'in TABLES_WITHOUT_DTO. Add the pairing, or say why the table has no DTO.',
     ).toEqual([]);
 
     const both = [...paired].filter((t) => skipped.has(t));
@@ -542,8 +551,8 @@ describe('every zod DTO field resolves to drizzle storage', () => {
 
     expect(
       stale,
-      'these registry entries no longer match anything. A stale entry silently stops '
-        + 'accounting for the field it names — remove it, or fix what it points at.',
+      'these registry entries no longer match anything. A stale entry silently stops ' +
+        'accounting for the field it names — remove it, or fix what it points at.',
     ).toEqual([]);
   });
 
@@ -553,11 +562,11 @@ describe('every zod DTO field resolves to drizzle storage', () => {
 
       expect(
         unresolved,
-        `${dtoName}: these fields are declared on the DTO and resolve to NO storage — not a `
-          + `column on ${tableName}, not a foreign key, not a child table, not a rename. A field `
-          + 'clients can read that the database never keeps is the `catalog_entities.members` '
-          + 'defect. Add the column, or register it in CHILD_TABLE / RENAMED_COLUMN / DERIVED '
-          + 'with a reason.',
+        `${dtoName}: these fields are declared on the DTO and resolve to NO storage — not a ` +
+          `column on ${tableName}, not a foreign key, not a child table, not a rename. A field ` +
+          'clients can read that the database never keeps is the `catalog_entities.members` ' +
+          'defect. Add the column, or register it in CHILD_TABLE / RENAMED_COLUMN / DERIVED ' +
+          'with a reason.',
       ).toEqual([]);
     });
   }

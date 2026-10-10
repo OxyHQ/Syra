@@ -26,7 +26,7 @@ const ROOT = new URL('..', import.meta.url).pathname;
 const LOCALES = readdirSync(join(ROOT, 'locales'))
   .filter((entry) => entry.endsWith('.json'))
   .map((entry) => entry.slice(0, -'.json'.length))
-  .sort((a, b) => a === 'en' ? -1 : b === 'en' ? 1 : a.localeCompare(b));
+  .sort((a, b) => (a === 'en' ? -1 : b === 'en' ? 1 : a.localeCompare(b)));
 const SOURCE_DIRS = ['app', 'components', 'lib', 'hooks', 'utils', 'stores', 'services'];
 const SOURCE_EXTENSIONS = ['.ts', '.tsx'];
 
@@ -54,7 +54,11 @@ function sourceFiles() {
       if (entry === 'node_modules' || entry.startsWith('.')) continue;
       const path = join(dir, entry);
       if (statSync(path).isDirectory()) walk(path);
-      else if (SOURCE_EXTENSIONS.some((ext) => entry.endsWith(ext)) && !entry.endsWith('.test.ts') && !entry.endsWith('.test.tsx')) {
+      else if (
+        SOURCE_EXTENSIONS.some((ext) => entry.endsWith(ext)) &&
+        !entry.endsWith('.test.ts') &&
+        !entry.endsWith('.test.tsx')
+      ) {
         found.push(path);
       }
     }
@@ -157,4 +161,6 @@ if (failed) {
 }
 
 const total = Object.keys(english).length;
-console.log(`i18n ok — ${total} keys, ${LOCALES.join('/')} in lockstep, every referenced key resolves`);
+console.log(
+  `i18n ok — ${total} keys, ${LOCALES.join('/')} in lockstep, every referenced key resolves`,
+);

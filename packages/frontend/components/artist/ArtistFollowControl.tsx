@@ -119,7 +119,9 @@ export const ArtistFollowControl = memo(function ArtistFollowControl({
       size={size}
       disabled={!gate.isResolved || gate.canUsePrivateApi}
       onPress={() => openAccountDialog('signin')}
-      accessibilityLabel={labels.idle} tone="accent" appearance="solid"
+      accessibilityLabel={labels.idle}
+      tone="accent"
+      appearance="solid"
     >
       {labels.idle}
     </Button>

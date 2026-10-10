@@ -15,23 +15,23 @@ import { Readable } from 'stream';
 import { describeErrorSafely } from '../utils/error';
 
 interface AwsSdkError {
-    name: string;
-    message: string;
-    Code?: string;
-    HostId?: string;
-    BucketName?: string;
-    $metadata?: {
-        httpStatusCode?: number;
-        requestId?: string;
-        extendedRequestId?: string;
-    };
+  name: string;
+  message: string;
+  Code?: string;
+  HostId?: string;
+  BucketName?: string;
+  $metadata?: {
+    httpStatusCode?: number;
+    requestId?: string;
+    extendedRequestId?: string;
+  };
 }
 
 function asAwsError(error: unknown): AwsSdkError {
-    if (error !== null && typeof error === 'object') {
-        return error as AwsSdkError;
-    }
-    return { name: 'UnknownError', message: String(error) };
+  if (error !== null && typeof error === 'object') {
+    return error as AwsSdkError;
+  }
+  return { name: 'UnknownError', message: String(error) };
 }
 
 /**
@@ -55,7 +55,7 @@ export interface S3StreamOptions {
 export async function uploadToS3(
   key: string,
   body: Buffer | Readable | string,
-  options: S3UploadOptions = {}
+  options: S3UploadOptions = {},
 ): Promise<void> {
   try {
     const command = new PutObjectCommand({
@@ -90,7 +90,9 @@ export async function uploadToS3(
       hostId: e.HostId ?? e.$metadata?.extendedRequestId,
       errorBucketName: e.BucketName,
     };
-    logger.error(`[S3Service] Error uploading to S3:`, errorDetails, { error: describeErrorSafely(error) });
+    logger.error(`[S3Service] Error uploading to S3:`, errorDetails, {
+      error: describeErrorSafely(error),
+    });
     throw error;
   }
 }
@@ -99,10 +101,7 @@ export async function uploadToS3(
  * Get a pre-signed URL for reading from S3
  * Expires after 1 hour by default
  */
-export async function getPresignedUrl(
-  key: string,
-  expiresIn: number = 3600
-): Promise<string> {
+export async function getPresignedUrl(key: string, expiresIn: number = 3600): Promise<string> {
   try {
     const command = new GetObjectCommand({
       Bucket: S3_BUCKET_NAME,
@@ -122,7 +121,9 @@ export async function getPresignedUrl(
       errorCode: e.Code ?? e.name,
       errorMessage: e.message,
     };
-    logger.error(`[S3Service] Error generating pre-signed URL:`, errorDetails, { error: describeErrorSafely(error) });
+    logger.error(`[S3Service] Error generating pre-signed URL:`, errorDetails, {
+      error: describeErrorSafely(error),
+    });
     throw error;
   }
 }
@@ -162,7 +163,9 @@ export async function getObjectMetadata(key: string): Promise<{
       errorCode: e.Code ?? e.name,
       errorMessage: e.message,
     };
-    logger.error(`[S3Service] Error getting object metadata:`, errorDetails, { error: describeErrorSafely(error) });
+    logger.error(`[S3Service] Error getting object metadata:`, errorDetails, {
+      error: describeErrorSafely(error),
+    });
     throw error;
   }
 }
@@ -172,7 +175,7 @@ export async function getObjectMetadata(key: string): Promise<{
  */
 export async function streamFromS3(
   key: string,
-  options: S3StreamOptions = {}
+  options: S3StreamOptions = {},
 ): Promise<{
   stream: Readable;
   contentLength: number;
@@ -183,13 +186,14 @@ export async function streamFromS3(
     const command = new GetObjectCommand({
       Bucket: S3_BUCKET_NAME,
       Key: key,
-      Range: options.start !== undefined && options.end !== undefined
-        ? `bytes=${options.start}-${options.end}`
-        : undefined,
+      Range:
+        options.start !== undefined && options.end !== undefined
+          ? `bytes=${options.start}-${options.end}`
+          : undefined,
     });
 
     const response = await s3Client.send(command);
-    
+
     if (!response.Body) {
       throw new Error('No body in S3 response');
     }
@@ -215,7 +219,9 @@ export async function streamFromS3(
       errorCode: e.Code ?? e.name,
       errorMessage: e.message,
     };
-    logger.error(`[S3Service] Error streaming from S3:`, errorDetails, { error: describeErrorSafely(error) });
+    logger.error(`[S3Service] Error streaming from S3:`, errorDetails, {
+      error: describeErrorSafely(error),
+    });
     throw error;
   }
 }
@@ -242,7 +248,9 @@ export async function deleteFromS3(key: string): Promise<void> {
       errorCode: e.Code ?? e.name,
       errorMessage: e.message,
     };
-    logger.error(`[S3Service] Error deleting from S3:`, errorDetails, { error: describeErrorSafely(error) });
+    logger.error(`[S3Service] Error deleting from S3:`, errorDetails, {
+      error: describeErrorSafely(error),
+    });
     throw error;
   }
 }
@@ -272,21 +280,25 @@ export async function deleteS3Prefix(prefix: string): Promise<number> {
 
   try {
     do {
-      const listed = await s3Client.send(new ListObjectsV2Command({
-        Bucket: S3_BUCKET_NAME,
-        Prefix: prefix,
-        ContinuationToken: continuationToken,
-      }));
+      const listed = await s3Client.send(
+        new ListObjectsV2Command({
+          Bucket: S3_BUCKET_NAME,
+          Prefix: prefix,
+          ContinuationToken: continuationToken,
+        }),
+      );
 
       const keys = (listed.Contents ?? [])
         .map((object) => object.Key)
         .filter((key): key is string => typeof key === 'string');
 
       if (keys.length > 0) {
-        await s3Client.send(new DeleteObjectsCommand({
-          Bucket: S3_BUCKET_NAME,
-          Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: true },
-        }));
+        await s3Client.send(
+          new DeleteObjectsCommand({
+            Bucket: S3_BUCKET_NAME,
+            Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: true },
+          }),
+        );
         deleted += keys.length;
       }
 
@@ -297,12 +309,16 @@ export async function deleteS3Prefix(prefix: string): Promise<number> {
     return deleted;
   } catch (error: unknown) {
     const e = asAwsError(error);
-    logger.error(`[S3Service] Error deleting prefix:`, {
-      prefix,
-      bucket: S3_BUCKET_NAME,
-      errorCode: e.Code ?? e.name,
-      errorMessage: e.message,
-    }, { error: describeErrorSafely(error) });
+    logger.error(
+      `[S3Service] Error deleting prefix:`,
+      {
+        prefix,
+        bucket: S3_BUCKET_NAME,
+        errorCode: e.Code ?? e.name,
+        errorMessage: e.message,
+      },
+      { error: describeErrorSafely(error) },
+    );
     throw error;
   }
 }
@@ -323,10 +339,12 @@ export async function deleteFromS3Batch(keys: readonly string[]): Promise<number
       const batch = keys.slice(start, start + BATCH_SIZE);
       if (batch.length === 0) continue;
 
-      await s3Client.send(new DeleteObjectsCommand({
-        Bucket: S3_BUCKET_NAME,
-        Delete: { Objects: batch.map((Key) => ({ Key })), Quiet: true },
-      }));
+      await s3Client.send(
+        new DeleteObjectsCommand({
+          Bucket: S3_BUCKET_NAME,
+          Delete: { Objects: batch.map((Key) => ({ Key })), Quiet: true },
+        }),
+      );
       deleted += batch.length;
     }
 
@@ -334,12 +352,16 @@ export async function deleteFromS3Batch(keys: readonly string[]): Promise<number
     return deleted;
   } catch (error: unknown) {
     const e = asAwsError(error);
-    logger.error(`[S3Service] Error deleting explicit key batch:`, {
-      keyCount: keys.length,
-      bucket: S3_BUCKET_NAME,
-      errorCode: e.Code ?? e.name,
-      errorMessage: e.message,
-    }, { error: describeErrorSafely(error) });
+    logger.error(
+      `[S3Service] Error deleting explicit key batch:`,
+      {
+        keyCount: keys.length,
+        bucket: S3_BUCKET_NAME,
+        errorCode: e.Code ?? e.name,
+        errorMessage: e.message,
+      },
+      { error: describeErrorSafely(error) },
+    );
     throw error;
   }
 }
@@ -355,4 +377,3 @@ export async function objectExists(key: string): Promise<boolean> {
     return false;
   }
 }
-

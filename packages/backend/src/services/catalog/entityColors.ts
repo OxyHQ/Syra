@@ -34,10 +34,7 @@ export function assignMissingColors(
  * which had exactly this defect and were fixed by Task 13. Corrected here too
  * rather than left as a trap for whoever wires it next.
  */
-export function replaceColors(
-  target: EntityColorTarget,
-  colors: EntityColors | undefined,
-): void {
+export function replaceColors(target: EntityColorTarget, colors: EntityColors | undefined): void {
   target.primaryColor = colors?.primaryColor ?? null;
   target.secondaryColor = colors?.secondaryColor ?? null;
 }
