@@ -1,6 +1,5 @@
 import { getRedisClient } from '../utils/redis';
-import { logger } from '../utils/logger';
-import { ensureRedisConnected, withRedisFallback } from '../utils/redisHelpers';
+import { withRedisFallback } from '../utils/redisHelpers';
 
 /**
  * Custom Redis store for express-rate-limit

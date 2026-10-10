@@ -12,14 +12,10 @@ import { uuidv7 } from '@oxy.so/db';
 import { normalizeNameKey } from '@syra/shared-types';
 import { getDb } from '../db/postgres';
 import { catalogEntities, tracks } from '../db/schema/catalog';
-import { toUploadTrackDto } from '../db/creators/serialize';
-import { getEntityProfile } from './entityProfile.controller';
 import {
   getMyImageSuggestions,
   acceptMyImageSuggestion,
   discardMyImageSuggestion,
-  getArtistById,
-  getMyContributions,
 } from './artists.controller';
 
 /**

@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { radioSeedSchema } from './radio';
-import { trackSchema } from './track';
 import { playableItemSchema, playableRefSchema } from './upload';
 
 export const audioQualitySchema = z.enum(['low', 'normal', 'high', 'very_high']);

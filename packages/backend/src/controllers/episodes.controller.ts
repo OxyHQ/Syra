@@ -21,7 +21,6 @@ import {
 import { deleteEpisodeCompletely } from '../services/podcasts/deletePodcast';
 import { loadEpisodePersons, loadShowContext, toEpisodeDtos } from '../db/podcasts/hydrate';
 import { viewerCanReadShow, viewerOwnsShow } from '../db/podcasts/visibility';
-import type { EpisodeRow } from '../db/podcasts/serialize';
 import { getParam, parseClampedLimit } from '../utils/reqParams';
 import { resolvePersons, makeOxyUsersFetcher } from '../services/podcasts/resolvePersons';
 import { oxy } from '../oxyClient';

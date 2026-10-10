@@ -28,7 +28,6 @@ import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
 import { getRequiredOxyUserId } from '@oxy.so/core/server';
 import { z } from 'zod';
 import {
-  createEpisodeDraftRequestSchema,
   createPodcastRequestSchema,
   episodeTypeSchema,
   importFeedRequestSchema,

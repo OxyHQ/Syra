@@ -14,7 +14,7 @@
  * `onPress` stops the touch reaching the row behind it, so tapping a name opens
  * the artist and tapping anywhere else still plays the track.
  */
-import React, { Fragment } from 'react';
+import { Fragment } from 'react';
 import { Text, type StyleProp, type TextStyle } from 'react-native';
 import { useRouter } from 'expo-router';
 import type { Track } from '@syra/shared-types';

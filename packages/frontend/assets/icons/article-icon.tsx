@@ -1,5 +1,4 @@
-import React from 'react';
-import Svg, { Path, Line, Polygon, Rect } from 'react-native-svg';
+import Svg, { Rect } from 'react-native-svg';
 import type { ViewStyle } from 'react-native';
 import { useTheme } from '@oxy.so/bloom/theme';
 

@@ -1,5 +1,5 @@
 import type React from 'react';
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef } from 'react';
+import { createContext, useCallback, useContext, useMemo, useRef } from 'react';
 import { Animated, Platform } from 'react-native';
 
 interface ScrollEventTarget {

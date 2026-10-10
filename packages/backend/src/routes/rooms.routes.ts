@@ -34,7 +34,6 @@ import {
   findTopHosts,
   finishRecording,
   listRoomRecordings,
-  updateRecording,
 } from '../db/rooms/recordings';
 import {
   findLiveVisibilities,

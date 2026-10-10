@@ -1,5 +1,4 @@
 import {
-  S3Client,
   GetObjectCommand,
   PutObjectCommand,
   HeadObjectCommand,
@@ -10,7 +9,6 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { s3Client, S3_BUCKET_NAME, S3_REGION, S3_ENDPOINT } from '../config/s3.config';
 import { logger } from '../utils/logger';
-import { getErrorMessage } from '../utils/error';
 import type { Readable } from 'node:stream';
 import { describeErrorSafely } from '../utils/error';
 

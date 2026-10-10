@@ -1,6 +1,6 @@
 import type React from 'react';
 import { createContext, useState, type ReactNode, useRef, useCallback, useMemo } from 'react';
-import { StyleSheet, ScrollView, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 import {
   BottomSheetModal,
   BottomSheetView,

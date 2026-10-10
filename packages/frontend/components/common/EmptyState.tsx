@@ -1,4 +1,4 @@
-import React, { memo, useState, type ReactNode } from 'react';
+import { memo, useState, type ReactNode } from 'react';
 import {
   View,
   Text,

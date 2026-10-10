@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll, beforeEach } from 'bun:test';
-import { count, eq } from 'drizzle-orm';
+import { count } from 'drizzle-orm';
 import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
 import { getDb } from '../../db/postgres';
 import { podcasts } from '../../db/schema/podcasts';

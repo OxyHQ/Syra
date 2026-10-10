@@ -1,4 +1,4 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import { isLiveEntityId } from '@oxy.so/db';
 import type { Response } from 'express';
 import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';

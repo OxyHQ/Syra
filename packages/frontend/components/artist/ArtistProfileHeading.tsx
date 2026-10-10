@@ -1,4 +1,3 @@
-import React from 'react';
 import { Text, View } from 'react-native';
 import type { ArtistStats } from '@syra/shared-types';
 import { MonthlyListeners } from './MonthlyListeners';

@@ -1,4 +1,3 @@
-import React from 'react';
 import { Pressable, ScrollView, Text } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useOxy } from '@oxy.so/services';

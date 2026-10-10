@@ -40,7 +40,7 @@
  * trusted once and left alone.
  */
 
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { eq, getTableColumns, inArray, isTable, sql } from 'drizzle-orm';

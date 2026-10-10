@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import {
   type Queue,
-  QueueWithMetadata,
   type PlayableItem,
   type PlayableRef,
   RepeatMode,

@@ -6,7 +6,6 @@ import {
   FREE_MAX_KBPS,
   DATASAVER_MAX_KBPS,
 } from './audioQuality';
-import type { AudioQuality } from '@syra/shared-types';
 
 const FREE = { isPremium: false };
 const PREMIUM = { isPremium: true };

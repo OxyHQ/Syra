@@ -1,4 +1,3 @@
-import React from 'react';
 import { View, StyleSheet, Pressable, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 

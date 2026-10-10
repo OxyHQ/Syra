@@ -1,4 +1,3 @@
-import React from 'react';
 import { Text } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { ArtistStats } from '@syra/shared-types';

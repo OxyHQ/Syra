@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useOxy } from '@oxy.so/services';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';

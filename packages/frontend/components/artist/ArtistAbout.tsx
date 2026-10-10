@@ -1,4 +1,3 @@
-import React from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { EntityProfile } from '@syra/shared-types';

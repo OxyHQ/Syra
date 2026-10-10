@@ -49,7 +49,7 @@
  */
 
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
-import { and, asc, desc, eq, inArray, isNotNull, ne, sql, type SQLWrapper } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, ne, sql, type SQLWrapper } from 'drizzle-orm';
 import { executeRows } from '@oxy.so/db';
 import { closePostgres, getDb } from '../../postgres';
 import { connectUnmanagedDb } from '../../../test/postgres';
@@ -60,7 +60,7 @@ import {
   expectIndexesWithin,
 } from '../../__tests__/explainIndexes';
 import { albums, catalogEntities, tracks } from '../../schema/catalog';
-import { playlistTracks, playlists } from '../../schema/library';
+import { playlists } from '../../schema/library';
 import {
   ALBUM_TRACK_ORDER,
   playableAlbumTracksWhere,

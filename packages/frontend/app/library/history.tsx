@@ -1,4 +1,3 @@
-import React from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text } from 'react-native';
 import { Stack } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';

@@ -41,7 +41,6 @@ import type {
 import { normalizeNameKey } from '@syra/shared-types';
 import { getDb, type DbOrTransaction } from '../../db/postgres';
 import {
-  albums,
   albumSources,
   catalogEntities,
   catalogEntitySources,

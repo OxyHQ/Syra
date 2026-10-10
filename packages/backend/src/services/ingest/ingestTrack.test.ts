@@ -13,7 +13,7 @@ import { ingestTrack } from './ingestTrack';
 import { LOCKER_HLS_BITRATES_KBPS } from './hlsPackager';
 import type { FingerprintResult } from '../uploads/fingerprint';
 import type { PackageOptions, PackageResult } from './hlsPackager';
-import type { StoreHlsTarget, StoredHls } from './hlsStorage';
+import type { StoredHls } from './hlsStorage';
 import type { ProbedAudio } from './probeAudio';
 
 beforeAll(connectDb);

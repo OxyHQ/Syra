@@ -1,4 +1,3 @@
-import React from 'react';
 import Svg, { Rect } from 'react-native-svg';
 import type { ViewStyle, ColorValue } from 'react-native';
 

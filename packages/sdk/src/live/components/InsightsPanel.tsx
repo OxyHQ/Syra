@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import MaterialCommunityIcons from '../icons/MaterialCommunityIcons';
 

@@ -1,4 +1,4 @@
-import { api, publicClient } from '@/utils/api';
+import { publicClient } from '@/utils/api';
 
 export interface ReportCopyrightViolationRequest {
   trackId: string;

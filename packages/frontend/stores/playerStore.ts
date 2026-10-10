@@ -15,7 +15,6 @@ import { createAudioPlayer } from 'expo-audio';
 import { Platform } from 'react-native';
 import {
   type Queue,
-  Track,
   type Episode,
   type PlayableItem,
   type PlaybackContext,

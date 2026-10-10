@@ -3,7 +3,7 @@ import { count, eq } from 'drizzle-orm';
 import { uuidv7 } from '@oxy.so/db';
 import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
 import { getDb } from '../../db/postgres';
-import { albums, albumSources, catalogEntities, imageAssets } from '../../db/schema/catalog';
+import { albums, catalogEntities, imageAssets } from '../../db/schema/catalog';
 import { albumGenreNames } from '../../db/catalog/genres';
 import { classifyAlbumType, ensureContributedAlbum, resolveAlbum } from './resolveAlbum';
 

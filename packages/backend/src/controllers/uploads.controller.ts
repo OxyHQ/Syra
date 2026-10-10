@@ -36,7 +36,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { and, eq, sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { describeDriverError, isLiveEntityId, isUniqueViolation, uuidv7 } from '@oxy.so/db';
 import multer from 'multer';
 import sharp from 'sharp';
@@ -52,7 +52,6 @@ import {
   type AudioFormat,
   type UploadBlockedReason,
   type UploadOutcome,
-  type UserUploadAsTrack,
   normalizeNameKey,
 } from '@syra/shared-types';
 
