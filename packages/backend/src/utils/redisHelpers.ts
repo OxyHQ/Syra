@@ -1,4 +1,4 @@
-import { RedisClientType } from 'redis';
+import type { RedisClientType } from 'redis';
 import { logger } from './logger';
 import { getErrorMessage } from './error';
 

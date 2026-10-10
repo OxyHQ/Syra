@@ -12,8 +12,16 @@
  * - Accessibility
  */
 
-import React, { useMemo, useCallback, memo } from 'react';
-import { TouchableOpacity, Text, ViewStyle, TextStyle, Platform, Pressable } from 'react-native';
+import type React from 'react';
+import { useMemo, useCallback, memo } from 'react';
+import {
+  TouchableOpacity,
+  Text,
+  type ViewStyle,
+  type TextStyle,
+  Platform,
+  Pressable,
+} from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import Ionicons from '@expo/vector-icons/Ionicons';

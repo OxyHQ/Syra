@@ -1,6 +1,6 @@
-import { Server as SocketIOServer, Socket } from 'socket.io';
+import type { Server as SocketIOServer, Socket } from 'socket.io';
 import { logger } from '../utils/logger';
-import { ConnectPlaybackState, Queue, PlaybackCommand } from '@syra/shared-types';
+import type { ConnectPlaybackState, Queue, PlaybackCommand } from '@syra/shared-types';
 import { getQueue, setCurrentIndex } from '../services/queueService';
 import { registerDevice, listDevices, heartbeat } from '../services/playback/deviceService';
 import {

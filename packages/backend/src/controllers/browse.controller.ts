@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import { and, eq, isNotNull, ne } from 'drizzle-orm';
 import { publicColumns } from '@oxy.so/db/assert';
 import { PlaylistVisibility } from '@syra/shared-types';

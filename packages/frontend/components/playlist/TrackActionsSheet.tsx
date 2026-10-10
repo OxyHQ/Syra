@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
+import type React from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import BottomSheet, { type BottomSheetRef } from '@oxy.so/bloom/bottom-sheet';
 import { useRouter } from 'expo-router';

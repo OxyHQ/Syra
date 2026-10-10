@@ -1,4 +1,4 @@
-import React from 'react';
+import type React from 'react';
 import { Platform } from 'react-native';
 import { usePathname } from 'expo-router';
 import { useTranslation } from 'react-i18next';

@@ -5,7 +5,7 @@ import express from 'express';
 import http from 'http';
 import compression from 'compression';
 import cors from 'cors';
-import { Server as SocketIOServer, Socket, Namespace } from 'socket.io';
+import { Server as SocketIOServer, type Socket, type Namespace } from 'socket.io';
 import { createOptionalOxyAuth, createOxyRateLimit } from '@oxy.so/core/server';
 import { oxy } from './src/oxyClient';
 

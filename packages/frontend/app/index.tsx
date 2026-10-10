@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import type React from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { StyleSheet, View, ScrollView, Text, Platform, Pressable } from 'react-native';
 import { useTheme, useAmbientTheme } from '@oxy.so/bloom/theme';
 import { useRouter } from 'expo-router';
@@ -13,7 +14,7 @@ import { ResponsiveGrid } from '@/components/ResponsiveGrid';
 import { EmptyState } from '@/components/common/EmptyState';
 import { QuickAccessGridSkeleton, MediaCardRowSkeleton } from '@/components/skeletons';
 import { musicService } from '@/services/musicService';
-import { Track, Album, Artist, Playlist, Podcast, PlaybackContext } from '@syra/shared-types';
+import type { Track, Album, Artist, Playlist, Podcast, PlaybackContext } from '@syra/shared-types';
 import { usePlayerStore } from '@/stores/playerStore';
 import { useQueueStore } from '@/stores/queueStore';
 import {

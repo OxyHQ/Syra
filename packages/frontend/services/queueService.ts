@@ -1,13 +1,13 @@
 import { api, authenticatedClient } from '@/utils/api';
 import {
-  Queue,
+  type Queue,
   queueSchema,
   queueWithMetadataSchema,
-  QueueWithMetadata,
-  AddToQueueRequest,
-  PlayableRef,
-  RemoveFromQueueRequest,
-  ReplaceQueueRequest,
+  type QueueWithMetadata,
+  type AddToQueueRequest,
+  type PlayableRef,
+  type RemoveFromQueueRequest,
+  type ReplaceQueueRequest,
 } from '@syra/shared-types';
 import { normalizeTrackImages } from '@/utils/catalogImages';
 

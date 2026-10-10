@@ -2,9 +2,9 @@
  * Button component types
  */
 
-import { ViewStyle, TextStyle, StyleProp } from 'react-native';
-import { SharedValue } from 'react-native-reanimated';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import type { ViewStyle, TextStyle, StyleProp } from 'react-native';
+import type { SharedValue } from 'react-native-reanimated';
+import type Ionicons from '@expo/vector-icons/Ionicons';
 import type { Href } from 'expo-router';
 
 export type ButtonVariant =

@@ -1,6 +1,6 @@
 import { API_URL_SOCKET } from '@/config';
-import { io, Socket } from 'socket.io-client';
-import { Track, PlaylistTrack, Playlist } from '@syra/shared-types';
+import { io, type Socket } from 'socket.io-client';
+import type { Track, PlaylistTrack, Playlist } from '@syra/shared-types';
 
 /**
  * Editable playlist-metadata fields broadcast on `playlist:updated`. Mirrors the

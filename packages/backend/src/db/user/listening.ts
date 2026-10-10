@@ -33,7 +33,7 @@
 
 import { and, asc, desc, eq, gte, sql, type SQL } from 'drizzle-orm';
 import { getDb, type DbOrTransaction } from '../postgres';
-import { LISTENING_SOURCES, listeningEvents } from '../schema/user';
+import { type LISTENING_SOURCES, listeningEvents } from '../schema/user';
 
 export type ListeningSource = (typeof LISTENING_SOURCES)[number];
 

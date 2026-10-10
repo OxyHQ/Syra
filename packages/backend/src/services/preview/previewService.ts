@@ -22,7 +22,7 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { Readable } from 'stream';
+import type { Readable } from 'stream';
 import { eq } from 'drizzle-orm';
 import type { AudioSource, HlsRendition } from '@syra/shared-types';
 import { getS3PreviewKey } from '../../config/s3.config';

@@ -1,11 +1,11 @@
-import { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import { and, asc, count, eq } from 'drizzle-orm';
 import { publicColumns } from '@oxy.so/db/assert';
 import {
   PlaylistVisibility,
   SearchCategory,
-  SearchResult,
-  SearchUser,
+  type SearchResult,
+  type SearchUser,
   type Album,
   type Artist,
   type Episode,

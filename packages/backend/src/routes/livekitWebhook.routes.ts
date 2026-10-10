@@ -1,4 +1,4 @@
-import express, { Router, Request, Response } from 'express';
+import express, { Router, type Request, type Response } from 'express';
 import { WebhookReceiver } from 'livekit-server-sdk';
 import { findRoomByIngressId } from '../db/rooms/rooms';
 import { describeErrorSafely } from '../utils/error';

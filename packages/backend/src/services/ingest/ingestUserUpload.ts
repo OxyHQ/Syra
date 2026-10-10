@@ -21,7 +21,7 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { Readable } from 'stream';
+import type { Readable } from 'stream';
 import { eq } from 'drizzle-orm';
 import { describeDriverError } from '@oxy.so/db';
 import { getDb, isDriverError } from '../../db/postgres';

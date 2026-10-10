@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import type React from 'react';
+import { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, ScrollView, Pressable, Platform } from 'react-native';
 import { webViewStyle, webDimension } from '@/utils/webStyles';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -13,7 +14,7 @@ import { useUIStore } from '@/stores/uiStore';
 import { Image as ExpoImage } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { musicService } from '@/services/musicService';
-import { Album, Artist } from '@syra/shared-types';
+import type { Album, Artist } from '@syra/shared-types';
 import Avatar from '@/components/Avatar';
 import { LyricsView } from '@/components/LyricsView';
 import { pickCatalogImageUrl } from '@/utils/pickImage';

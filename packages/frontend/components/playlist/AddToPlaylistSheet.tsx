@@ -1,4 +1,5 @@
-import React, { useEffect, useRef } from 'react';
+import type React from 'react';
+import { useEffect, useRef } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import BottomSheet, { type BottomSheetRef } from '@oxy.so/bloom/bottom-sheet';
 import { useTranslation } from 'react-i18next';

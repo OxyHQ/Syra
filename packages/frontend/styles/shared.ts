@@ -2,7 +2,13 @@
  * Shared Style Utilities
  */
 
-import { StyleSheet, ViewStyle, TextStyle, ImageStyle, StyleProp } from 'react-native';
+import {
+  StyleSheet,
+  type ViewStyle,
+  type TextStyle,
+  type ImageStyle,
+  type StyleProp,
+} from 'react-native';
 
 /**
  * Flatten an array of style props into a single resolved style object.

@@ -1,4 +1,4 @@
-import { Router, Response } from 'express';
+import { Router, type Response } from 'express';
 import multer from 'multer';
 import { isLiveEntityId, uuidv7 } from '@oxy.so/db';
 import {

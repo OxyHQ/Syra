@@ -1,4 +1,5 @@
-import React, { useMemo } from 'react';
+import type React from 'react';
+import { useMemo } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -11,7 +12,7 @@ import { useOxy } from '@oxy.so/services';
 import { useUploads } from '@/hooks/useUploads';
 import { useMyPodcasts, useSubscriptions } from '@/hooks/usePodcasts';
 import { Image } from 'expo-image';
-import { Playlist, Album, Artist } from '@syra/shared-types';
+import type { Playlist, Album, Artist } from '@syra/shared-types';
 import { pickCatalogImageUrl, resolvePodcastArtwork } from '@/utils/pickImage';
 import { ownedShowStateKey } from '@/utils/podcastFormat';
 import { EmptyState } from '@/components/common/EmptyState';

@@ -1,5 +1,5 @@
 import { api } from '@/utils/api';
-import { Track, Artist } from '@syra/shared-types';
+import type { Track, Artist } from '@syra/shared-types';
 import { normalizeTrackImages, normalizeArtistImages } from '@/utils/catalogImages';
 
 export interface RelatedArtistsResponse {

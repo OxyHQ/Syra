@@ -1,4 +1,4 @@
-import { Response, NextFunction } from 'express';
+import type { Response, NextFunction } from 'express';
 import { and, asc, count, eq, inArray } from 'drizzle-orm';
 import { isLiveEntityId } from '@oxy.so/db';
 import { z } from 'zod';

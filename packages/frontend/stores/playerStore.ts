@@ -14,14 +14,14 @@ import { create } from 'zustand';
 import { createAudioPlayer } from 'expo-audio';
 import { Platform } from 'react-native';
 import {
-  Queue,
+  type Queue,
   Track,
-  Episode,
-  PlayableItem,
-  PlaybackContext,
-  RadioSeed,
+  type Episode,
+  type PlayableItem,
+  type PlaybackContext,
+  type RadioSeed,
   RepeatMode,
-  ConnectPlaybackState,
+  type ConnectPlaybackState,
 } from '@syra/shared-types';
 import { toPlayableItem, type PlayableInput } from '@/utils/playableItem';
 import { createScopedLogger } from '@/utils/logger';
@@ -49,7 +49,7 @@ import {
   resolveStream,
   resolveEpisodeStream,
   resolveUploadStream,
-  StreamResolution,
+  type StreamResolution,
 } from '@/services/streamService';
 import { episodeService } from '@/services/episodeService';
 import { getApiOrigin } from '@/utils/api';

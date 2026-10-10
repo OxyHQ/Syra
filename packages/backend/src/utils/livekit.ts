@@ -4,7 +4,7 @@ import {
   TrackSource,
   IngressClient,
   IngressInput,
-  IngressInfo,
+  type IngressInfo,
   EgressClient,
   EncodedFileOutput,
   EncodedFileType,

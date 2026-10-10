@@ -67,7 +67,7 @@ import { eq } from 'drizzle-orm';
 import { publicColumns } from '@oxy.so/db/assert';
 import { getDb, type DbOrTransaction } from '../postgres';
 import { PROTECTED_COLUMNS_BY_TABLE } from '../schema/protectedColumns';
-import { PROFILE_VISIBILITIES, THEME_MODES, userSettings } from '../schema/user';
+import { type PROFILE_VISIBILITIES, type THEME_MODES, userSettings } from '../schema/user';
 
 export type ThemeMode = (typeof THEME_MODES)[number];
 export type ProfileVisibility = (typeof PROFILE_VISIBILITIES)[number];

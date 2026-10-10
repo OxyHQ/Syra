@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import { logger } from '../utils/logger';
 
 interface PerformanceMetrics {
@@ -24,7 +24,7 @@ export function performanceMiddleware(req: Request, res: Response, next: NextFun
 
   // Override res.end to capture response time
   const originalEnd = res.end.bind(res);
-  res.end = function (chunk?: any, encoding?: any, cb?: () => void): Response {
+  res.end = (chunk?: any, encoding?: any, cb?: () => void): Response => {
     const responseTime = Date.now() - startTime;
     const statusCode = res.statusCode;
 

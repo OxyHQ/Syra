@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test';
-import { encodeRadioCursor, decodeRadioCursor, RadioCursor } from './radioCursor';
+import { encodeRadioCursor, decodeRadioCursor, type RadioCursor } from './radioCursor';
 
 const b64url = (value: unknown): string =>
   Buffer.from(JSON.stringify(value), 'utf8').toString('base64url');

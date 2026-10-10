@@ -9,8 +9,16 @@
  * - Inline loading
  */
 
-import React, { useMemo, useEffect, memo } from 'react';
-import { View, Text, StyleSheet, ViewStyle, TextStyle, DimensionValue } from 'react-native';
+import type React from 'react';
+import { useMemo, useEffect, memo } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  type ViewStyle,
+  type TextStyle,
+  type DimensionValue,
+} from 'react-native';
 import Animated, {
   Easing,
   useAnimatedStyle,

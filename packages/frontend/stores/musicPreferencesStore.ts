@@ -55,9 +55,7 @@ export const DEFAULT_MUSIC_PREFERENCES: Omit<MusicPreferences, 'oxyUserId'> = {
 const STREAM_RELEVANT_PREFERENCES: Array<keyof MusicPreferences> = ['audioQuality', 'dataSaver'];
 
 function touchesStreamPreferences(partial: Partial<MusicPreferences>): boolean {
-  return STREAM_RELEVANT_PREFERENCES.some((key) =>
-    Object.prototype.hasOwnProperty.call(partial, key),
-  );
+  return STREAM_RELEVANT_PREFERENCES.some((key) => Object.hasOwn(partial, key));
 }
 
 export const musicPreferencesQueryKeys = {

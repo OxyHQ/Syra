@@ -1,4 +1,4 @@
-import React from 'react';
+import type React from 'react';
 import { Pressable, StyleSheet } from 'react-native';
 import { useTheme } from '@oxy.so/bloom/theme';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';

@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, StyleProp, ViewStyle } from 'react-native';
+import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { Avatar as BloomAvatar, type AvatarProps as BloomAvatarProps } from '@oxy.so/bloom/avatar';
 import { useTheme } from '@oxy.so/bloom/theme';

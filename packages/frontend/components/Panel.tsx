@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, ViewStyle } from 'react-native';
+import type React from 'react';
+import { View, type ViewStyle } from 'react-native';
 import { useTheme } from '@oxy.so/bloom/theme';
 import { useIsScreenNotMobile } from '@/hooks/useOptimizedMediaQuery';
 

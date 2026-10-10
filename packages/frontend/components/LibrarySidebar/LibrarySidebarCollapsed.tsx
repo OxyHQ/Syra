@@ -1,4 +1,4 @@
-import React from 'react';
+import type React from 'react';
 import { StyleSheet, View, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -6,7 +6,7 @@ import Octicons from '@expo/vector-icons/Octicons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxy.so/bloom/theme';
-import { Playlist, Album, Artist } from '@syra/shared-types';
+import type { Playlist, Album, Artist } from '@syra/shared-types';
 import { Image } from 'expo-image';
 import { useOxy } from '@oxy.so/services';
 import { useMyPodcasts, useSubscriptions } from '@/hooks/usePodcasts';

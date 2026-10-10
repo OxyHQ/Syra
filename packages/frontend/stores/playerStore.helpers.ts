@@ -3,7 +3,7 @@
  * Utility functions for the audio player store
  */
 
-import { Track } from '@syra/shared-types';
+import type { Track } from '@syra/shared-types';
 import { getApiOrigin, api } from '@/utils/api';
 import { AUDIO_URL_PATTERN } from './playerStore.config';
 

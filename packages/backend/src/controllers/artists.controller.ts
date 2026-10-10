@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import { and, count, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { isLiveEntityId, isUniqueViolation, sqlStateOf } from '@oxy.so/db';
 import { publicColumns } from '@oxy.so/db/assert';
@@ -39,9 +39,9 @@ import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
 import { getRequiredOxyUserId as getAuthenticatedUserId } from '@oxy.so/core/server';
 import { getParam, parseBoundedLimit, parseOffset } from '../utils/reqParams';
 import {
-  CreateArtistRequest,
-  ArtistInsights,
-  ArtistDashboard,
+  type CreateArtistRequest,
+  type ArtistInsights,
+  type ArtistDashboard,
   updateArtistRequestSchema,
   createArtistClaimRequestSchema,
   resolveArtistClaimRequestSchema,

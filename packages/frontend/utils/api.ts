@@ -195,7 +195,7 @@ export function getApiOrigin(): string {
     return apiBaseUrlObj.origin;
   } catch {
     // Fallback: extract origin manually, defaulting to port 4120 for localhost
-    const match = API_CONFIG.baseURL.match(/^(https?:\/\/)([^\/:]+)(:\d+)?/);
+    const match = API_CONFIG.baseURL.match(/^(https?:\/\/)([^/:]+)(:\d+)?/);
     if (match) {
       const [, protocol, hostname] = match;
       return hostname === 'localhost' || hostname === '127.0.0.1'

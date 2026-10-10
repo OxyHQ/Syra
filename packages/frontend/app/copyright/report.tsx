@@ -1,4 +1,5 @@
-import React, { useState, useCallback } from 'react';
+import type React from 'react';
+import { useState, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -17,7 +18,7 @@ import { useRouter } from 'expo-router';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { copyrightService } from '@/services/copyrightService';
 import { musicService } from '@/services/musicService';
-import { Track } from '@syra/shared-types';
+import type { Track } from '@syra/shared-types';
 import { toast } from '@oxy.so/bloom/toast';
 import SEO from '@/components/SEO';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';

@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import type React from 'react';
+import { useState } from 'react';
 import { View } from 'react-native';
 import { useMediaQuery } from 'react-responsive';
 import { useUIStore } from '@/stores/uiStore';

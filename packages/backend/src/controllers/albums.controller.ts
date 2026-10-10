@@ -1,9 +1,9 @@
-import { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import { eq, sql } from 'drizzle-orm';
 import { isLiveEntityId } from '@oxy.so/db';
 import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
 import { getRequiredOxyUserId as getAuthenticatedUserId } from '@oxy.so/core/server';
-import { CreateAlbumRequest, updateAlbumRequestSchema } from '@syra/shared-types';
+import { type CreateAlbumRequest, updateAlbumRequestSchema } from '@syra/shared-types';
 import { publicColumns } from '@oxy.so/db/assert';
 import { getDb, isPostgresConnected } from '../db/postgres';
 import { albums, catalogEntities, tracks } from '../db/schema/catalog';

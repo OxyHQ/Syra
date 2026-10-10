@@ -58,7 +58,7 @@ export const appearanceQueryKeys = {
 function buildAppearancePayload(partial: Partial<UserAppearance>): Partial<UserAppearance> {
   return {
     ...(partial.appearance && { appearance: partial.appearance }),
-    ...(Object.prototype.hasOwnProperty.call(partial, 'profileHeaderImage') && {
+    ...(Object.hasOwn(partial, 'profileHeaderImage') && {
       profileHeaderImage: partial.profileHeaderImage,
     }),
     ...(partial.profileCustomization && {

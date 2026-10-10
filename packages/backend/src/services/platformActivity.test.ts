@@ -49,7 +49,7 @@ describe('Syra ecosystem activity', () => {
         { headers: { 'content-type': 'application/json' } },
       );
     }) as typeof fetch;
-    let traffic: ReturnType<typeof startPlatformActivity> = undefined;
+    let traffic: ReturnType<typeof startPlatformActivity>;
     try {
       traffic = startPlatformActivity(() => true);
       expect(traffic).toBeDefined();

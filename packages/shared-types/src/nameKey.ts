@@ -67,7 +67,7 @@ const LATIN_COMBINING_MARKS = /([A-Za-z])[̀-ͯ]+/g;
  * ellipsis) and CJK Symbols and Punctuation. Full-width ASCII needs no range of
  * its own: NFKD has already folded it down to plain ASCII by this point.
  */
-const PUNCTUATION = /[!-\/:-@\[-`{-~ -⁯　-〿]/g;
+const PUNCTUATION = /[!-/:-@[-`{-~ -⁯　-〿]/g;
 
 const WHITESPACE_RUN = /\s+/g;
 

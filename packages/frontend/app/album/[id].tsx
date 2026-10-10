@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import type React from 'react';
+import { useState, useEffect } from 'react';
 import { StyleSheet, View, ScrollView, Text, Pressable, Image, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useTheme, useAmbientTheme } from '@oxy.so/bloom/theme';
 import { musicService } from '@/services/musicService';
-import { Track } from '@syra/shared-types';
+import type { Track } from '@syra/shared-types';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { usePlayerStore } from '@/stores/playerStore';
 import { useQueueStore } from '@/stores/queueStore';

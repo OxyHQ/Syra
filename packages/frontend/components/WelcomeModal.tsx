@@ -1,4 +1,5 @@
-import React, { useEffect, useCallback, useMemo, memo, useId } from 'react';
+import type React from 'react';
+import { useEffect, useCallback, useMemo, memo, useId } from 'react';
 import {
   View,
   Text,
@@ -7,7 +8,7 @@ import {
   Platform,
   Pressable,
   ImageBackground,
-  ImageSourcePropType,
+  type ImageSourcePropType,
   type StyleProp,
   type ViewStyle,
   type GestureResponderEvent,

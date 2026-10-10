@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { StyleSheet, Pressable, Platform, StyleProp, ViewStyle } from 'react-native';
+import { StyleSheet, Pressable, Platform, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useDerivedValue,

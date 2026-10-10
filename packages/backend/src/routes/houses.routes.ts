@@ -1,4 +1,4 @@
-import { Router, Response } from 'express';
+import { Router, type Response } from 'express';
 import multer from 'multer';
 import { isLiveEntityId } from '@oxy.so/db';
 import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';

@@ -1,7 +1,7 @@
 import { useOxy } from '@oxy.so/services';
 import {
   getMusicPreferencesErrorMessage,
-  MusicPreferences,
+  type MusicPreferences,
   useMusicPreferencesQuery,
   useUpdateMusicPreferences,
 } from '@/stores/musicPreferencesStore';

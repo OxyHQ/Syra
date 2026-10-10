@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import type React from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import BottomSheet, { type BottomSheetRef } from '@oxy.so/bloom/bottom-sheet';
 import { AlertDialog } from '@oxy.so/bloom/alert-dialog';

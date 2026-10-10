@@ -1,9 +1,9 @@
 import {
-  PlaybackContext,
-  PlayableItem,
-  Queue,
+  type PlaybackContext,
+  type PlayableItem,
+  type Queue,
   RepeatMode,
-  UserUploadAsTrack,
+  type UserUploadAsTrack,
 } from '@syra/shared-types';
 import { queueService } from '../services/queueService';
 import { useQueueStore } from './queueStore';

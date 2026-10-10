@@ -1,4 +1,4 @@
-import React from 'react';
+import type React from 'react';
 import { StyleSheet, View, Text, ScrollView } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';

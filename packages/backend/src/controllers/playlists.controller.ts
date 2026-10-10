@@ -1,4 +1,4 @@
-import { Response, NextFunction } from 'express';
+import type { Response, NextFunction } from 'express';
 import { lockPlaylistForEdit, PlaylistAccessError } from '../services/playlists/collaboration';
 import { playlistActivity } from '../db/schema/playlist-sharing';
 import { and, eq, inArray } from 'drizzle-orm';

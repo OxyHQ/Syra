@@ -1,4 +1,4 @@
-import React from 'react';
+import type React from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { createInstance } from 'i18next';
 import { I18nextProvider } from 'react-i18next';

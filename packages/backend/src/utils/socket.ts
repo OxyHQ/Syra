@@ -1,4 +1,4 @@
-import { Server as SocketIOServer } from 'socket.io';
+import type { Server as SocketIOServer } from 'socket.io';
 
 /**
  * Main-namespace (default) broadcast event names.

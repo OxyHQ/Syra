@@ -53,7 +53,7 @@ import type {
 import { isLiveEntityId } from '@oxy.so/db';
 import type { albums, catalogEntities, imageAssets, tracks } from '../schema/catalog';
 import type { playlists } from '../schema/library';
-import { PROTECTED_COLUMNS_BY_TABLE } from '../schema/protectedColumns';
+import type { PROTECTED_COLUMNS_BY_TABLE } from '../schema/protectedColumns';
 import { isPreviewEligibleTrack } from './visibility';
 
 // ── Row shapes ────────────────────────────────────────────────────────────

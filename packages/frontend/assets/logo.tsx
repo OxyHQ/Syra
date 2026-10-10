@@ -1,6 +1,6 @@
-import { ReactElement } from 'react';
+import type { ReactElement } from 'react';
 import Svg, { Rect } from 'react-native-svg';
-import { ViewStyle } from 'react-native';
+import type { ViewStyle } from 'react-native';
 import { useTheme } from '@oxy.so/bloom/theme';
 
 export const LogoIcon = ({

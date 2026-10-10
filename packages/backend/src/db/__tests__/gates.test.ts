@@ -44,7 +44,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { eq, getTableColumns, inArray, isTable, sql } from 'drizzle-orm';
-import { getTableConfig, PgTable, type UpdateDeleteAction } from 'drizzle-orm/pg-core';
+import { getTableConfig, type PgTable, type UpdateDeleteAction } from 'drizzle-orm/pg-core';
 import {
   constraintNameOf,
   executeRows,

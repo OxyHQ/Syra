@@ -40,11 +40,11 @@ import { getDb, type DbOrTransaction } from '../postgres';
 import { PROTECTED_COLUMNS_BY_TABLE } from '../schema/protectedColumns';
 import { roomMediaQueueItems, rooms } from '../schema/rooms';
 import {
-  BroadcastKind,
-  OwnerType,
+  type BroadcastKind,
+  type OwnerType,
   RoomStatus,
-  RoomType,
-  SpeakerPermission,
+  type RoomType,
+  type SpeakerPermission,
   type MediaQueueItem,
 } from './types';
 

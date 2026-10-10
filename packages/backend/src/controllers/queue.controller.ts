@@ -1,4 +1,4 @@
-import { Response, NextFunction } from 'express';
+import type { Response, NextFunction } from 'express';
 import { isLiveEntityId } from '@oxy.so/db';
 import {
   addToQueueRequestSchema,

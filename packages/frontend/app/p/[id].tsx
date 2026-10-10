@@ -22,7 +22,7 @@ import { useTranslation } from 'react-i18next';
 import { useTheme, useAmbientTheme } from '@oxy.so/bloom/theme';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { toast } from '@oxy.so/bloom/toast';
-import { Track } from '@syra/shared-types';
+import type { Track } from '@syra/shared-types';
 import { entityService } from '@/services/entityService';
 import { ArtistProfileHeading } from '@/components/artist/ArtistProfileHeading';
 import { ArtistAbout } from '@/components/artist/ArtistAbout';

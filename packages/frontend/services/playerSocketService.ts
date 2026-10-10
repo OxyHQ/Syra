@@ -1,6 +1,6 @@
 import { API_URL_SOCKET } from '@/config';
-import { io, Socket } from 'socket.io-client';
-import {
+import { io, type Socket } from 'socket.io-client';
+import type {
   ConnectPlaybackState,
   Queue,
   Device,

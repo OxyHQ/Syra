@@ -20,7 +20,7 @@ import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { descNullsLast } from '../catalog/containers';
 import { getDb, type DbOrTransaction } from '../postgres';
 import { series, seriesEpisodes } from '../schema/rooms';
-import { RecurrenceType, RoomType, SpeakerPermission } from './types';
+import type { RecurrenceType, RoomType, SpeakerPermission } from './types';
 
 export type SeriesRow = typeof series.$inferSelect;
 export type SeriesEpisodeRow = typeof seriesEpisodes.$inferSelect;

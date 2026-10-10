@@ -1,5 +1,12 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, StyleProp, ViewStyle } from 'react-native';
+import type React from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import MaterialCommunityIcons from '../icons/MaterialCommunityIcons';
 import { useAuth } from '@oxy.so/services/ui/client';
 

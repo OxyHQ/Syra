@@ -11,7 +11,7 @@ const googleServicesJson =
   process.env.GOOGLE_SERVICES_JSON || path.resolve(__dirname, '../../google-services.json');
 const hasGoogleServices = fs.existsSync(googleServicesJson);
 
-module.exports = function (_config) {
+module.exports = (_config) => {
   /**
    * App version number. Should be incremented as part of a release cycle.
    */

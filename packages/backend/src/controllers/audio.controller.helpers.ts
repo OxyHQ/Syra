@@ -6,13 +6,13 @@
 import { eq } from 'drizzle-orm';
 import { isLiveEntityId } from '@oxy.so/db';
 import { publicColumns } from '@oxy.so/db/assert';
-import { Response } from 'express';
+import type { Response } from 'express';
 import { getDb } from '../db/postgres';
 import { tracks } from '../db/schema/catalog';
 import { PROTECTED_COLUMNS_BY_TABLE } from '../db/schema/protectedColumns';
 import { toTrackDtos } from '../db/catalog/hydrate';
 import { getTrackAudioMetadata } from '../services/audioStorageService';
-import { Track } from '@syra/shared-types';
+import type { Track } from '@syra/shared-types';
 
 /**
  * Validation result for track operations

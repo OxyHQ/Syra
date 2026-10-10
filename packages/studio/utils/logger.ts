@@ -5,9 +5,7 @@
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
-interface LoggerFunction {
-  (message: string, ...args: unknown[]): void;
-}
+type LoggerFunction = (message: string, ...args: unknown[]) => void;
 
 export interface Logger {
   info: LoggerFunction;

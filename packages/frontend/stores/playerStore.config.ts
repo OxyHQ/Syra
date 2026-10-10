@@ -40,7 +40,7 @@ export const MAX_VOLUME = 1.0;
  * Audio URL endpoint path pattern
  * Used to extract track ID from audio source URLs
  */
-export const AUDIO_URL_PATTERN = /\/api\/audio\/([^\/]+)/;
+export const AUDIO_URL_PATTERN = /\/api\/audio\/([^/]+)/;
 
 /**
  * Pre-signed URL expiration time in seconds (1 hour)

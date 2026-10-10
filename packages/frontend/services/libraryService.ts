@@ -1,5 +1,5 @@
 import { api } from '@/utils/api';
-import { Track } from '@syra/shared-types';
+import type { Track } from '@syra/shared-types';
 import { z } from 'zod';
 import { createScopedLogger } from '@/utils/logger';
 import { normalizeTrackImages } from '@/utils/catalogImages';

@@ -1,5 +1,5 @@
 import { isPostgresConnected } from '../db/postgres';
-import { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import { isLiveEntityId } from '@oxy.so/db';
 import { logger } from '../utils/logger';
 import { getErrorMessage } from '../utils/error';

@@ -1,6 +1,6 @@
-import React from 'react';
+import type React from 'react';
 import Svg, { Path } from 'react-native-svg';
-import { View, ViewStyle, StyleProp } from 'react-native';
+import { View, type ViewStyle, type StyleProp } from 'react-native';
 import { useTheme } from '@oxy.so/bloom/theme';
 
 type Props = {

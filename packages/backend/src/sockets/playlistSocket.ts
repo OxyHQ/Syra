@@ -1,6 +1,6 @@
-import { Server as SocketIOServer, Socket } from 'socket.io';
+import type { Server as SocketIOServer, Socket } from 'socket.io';
 import { logger } from '../utils/logger';
-import { Track, PlaylistTrack } from '@syra/shared-types';
+import type { Track, PlaylistTrack } from '@syra/shared-types';
 import { oxy } from '../oxyClient';
 import { describeErrorSafely } from '../utils/error';
 

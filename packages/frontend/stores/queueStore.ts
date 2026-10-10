@@ -1,11 +1,11 @@
 import { create } from 'zustand';
 import {
-  Queue,
+  type Queue,
   QueueWithMetadata,
-  PlayableItem,
-  PlayableRef,
+  type PlayableItem,
+  type PlayableRef,
   RepeatMode,
-  ShuffleMode,
+  type ShuffleMode,
 } from '@syra/shared-types';
 import { queueService } from '../services/queueService';
 import { isUnauthorizedError } from '../utils/api';

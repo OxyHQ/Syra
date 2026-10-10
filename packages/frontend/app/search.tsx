@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import type React from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { StyleSheet, View, TextInput, Text, ScrollView, Pressable } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -7,7 +8,7 @@ import SEO from '@/components/SEO';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter, useLocalSearchParams, type Href } from 'expo-router';
 import { Image } from 'expo-image';
-import { SearchCategory, SearchUser, Track } from '@syra/shared-types';
+import { SearchCategory, type SearchUser, type Track } from '@syra/shared-types';
 import { searchService } from '@/services/searchService';
 import { resolvePodcastArtwork, resolveExternalImageUri } from '@/utils/pickImage';
 import { browseService } from '@/services/browseService';

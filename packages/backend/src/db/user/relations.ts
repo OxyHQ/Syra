@@ -30,7 +30,7 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { descNullsLast } from '../catalog/containers';
 import { getDb, type DbOrTransaction } from '../postgres';
-import { CATALOG_RELATION_KINDS, catalogRelations } from '../schema/user';
+import { type CATALOG_RELATION_KINDS, catalogRelations } from '../schema/user';
 
 export type RelationKind = (typeof CATALOG_RELATION_KINDS)[number];
 

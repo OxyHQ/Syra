@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react';
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Album, Artist, Playlist } from '@syra/shared-types';
+import type { Album, Artist, Playlist } from '@syra/shared-types';
 import { musicService } from '@/services/musicService';
 import { useAuthGate, type CatalogIdentity } from '@/hooks/useAuthGate';
 import { useLibrary, LIBRARY_QUERY_KEY } from '@/hooks/useLibrary';

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Room, RoomEvent, Participant } from 'livekit-client';
+import { type Room, RoomEvent, type Participant } from 'livekit-client';
 
 export function useActiveSpeakers(room: Room | null): Set<string> {
   const [activeSpeakerIds, setActiveSpeakerIds] = useState<Set<string>>(() => new Set());

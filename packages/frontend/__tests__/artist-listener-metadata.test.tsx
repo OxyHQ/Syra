@@ -1,4 +1,4 @@
-import React from 'react';
+import type React from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import type { ArtistStats, Track } from '@syra/shared-types';
 import { MonthlyListeners } from '@/components/artist/MonthlyListeners';

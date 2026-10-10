@@ -80,9 +80,11 @@ function makePlayer(url = 'https://cdn/master.m3u8') {
   const hls = new FakeHls();
 
   const deps = {
+    // biome-ignore lint/complexity/useArrowFunction: the player calls this with `new`, which an arrow function cannot be.
     AudioCtor: function () {
       return audio;
     } as unknown as typeof Audio,
+    // biome-ignore lint/complexity/useArrowFunction: the player calls this with `new`, which an arrow function cannot be.
     HlsCtor: function () {
       return hls;
     } as unknown as typeof Hls,

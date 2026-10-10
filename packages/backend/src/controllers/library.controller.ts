@@ -1,4 +1,4 @@
-import { Response, NextFunction } from 'express';
+import type { Response, NextFunction } from 'express';
 import { and, inArray } from 'drizzle-orm';
 import { isForeignKeyViolation, isLiveEntityId } from '@oxy.so/db';
 import { publicColumns } from '@oxy.so/db/assert';

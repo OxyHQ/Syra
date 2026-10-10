@@ -1,4 +1,4 @@
-import React from 'react';
+import type React from 'react';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '@oxy.so/bloom/theme';
 

@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import type React from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, runOnJS } from 'react-native-reanimated';

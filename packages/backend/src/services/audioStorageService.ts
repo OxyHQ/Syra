@@ -1,4 +1,4 @@
-import { Track } from '@syra/shared-types';
+import type { Track } from '@syra/shared-types';
 import { getS3AudioKey } from '../config/s3.config';
 import {
   uploadToS3,
@@ -7,10 +7,10 @@ import {
   getObjectMetadata,
   deleteFromS3,
   objectExists,
-  S3StreamOptions,
+  type S3StreamOptions,
 } from './s3Service';
 import { logger } from '../utils/logger';
-import { Readable } from 'stream';
+import type { Readable } from 'stream';
 
 /**
  * Audio Storage Service

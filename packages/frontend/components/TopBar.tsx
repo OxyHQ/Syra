@@ -1,15 +1,16 @@
-import React, { useState } from 'react';
+import type React from 'react';
+import { useState } from 'react';
 import {
   StyleSheet,
   View,
   Text,
   Pressable,
   Platform,
-  ViewStyle,
+  type ViewStyle,
   TextInput,
   Image,
   ScrollView,
-  GestureResponderEvent,
+  type GestureResponderEvent,
   type NativeSyntheticEvent,
   type TextInputKeyPressEventData,
 } from 'react-native';
@@ -28,7 +29,14 @@ import { searchService } from '@/services/searchService';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { usePlayEntity } from '@/hooks/usePlayEntity';
 import { pickCatalogImageUrl } from '@/utils/pickImage';
-import { Album, Artist, Playlist, SearchCategory, SearchUser, Track } from '@syra/shared-types';
+import {
+  type Album,
+  type Artist,
+  type Playlist,
+  SearchCategory,
+  type SearchUser,
+  type Track,
+} from '@syra/shared-types';
 import { usePlayerStore } from '@/stores/playerStore';
 
 type HeaderSearchItem = {

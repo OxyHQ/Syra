@@ -43,9 +43,12 @@ export const AUDIO_MIME_FORMATS: Readonly<Record<string, AudioFormat>> = {
   'audio/x-wav': 'wav',
 };
 
+const ALLOWED_AUDIO_MIMES: ReadonlySet<string> = new Set(Object.keys(AUDIO_MIME_FORMATS));
+
 /** Whether an upload's declared mime type is one Syra accepts. */
 export function isAllowedAudioMime(mimeType: string): boolean {
-  return Object.prototype.hasOwnProperty.call(AUDIO_MIME_FORMATS, mimeType);
+  // An own-key check, so an inherited name such as `constructor` is refused.
+  return ALLOWED_AUDIO_MIMES.has(mimeType);
 }
 
 /**

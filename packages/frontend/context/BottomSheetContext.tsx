@@ -1,10 +1,11 @@
-import React, { createContext, useState, ReactNode, useRef, useCallback, useMemo } from 'react';
+import type React from 'react';
+import { createContext, useState, type ReactNode, useRef, useCallback, useMemo } from 'react';
 import { StyleSheet, ScrollView, View } from 'react-native';
 import {
   BottomSheetModal,
   BottomSheetView,
   BottomSheetBackdrop,
-  BottomSheetBackdropProps,
+  type BottomSheetBackdropProps,
 } from '@gorhom/bottom-sheet';
 import { useTheme } from '@oxy.so/bloom/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';

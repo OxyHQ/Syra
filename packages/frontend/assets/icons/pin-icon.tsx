@@ -1,6 +1,6 @@
 import React from 'react';
 import Svg, { Path, G, Line } from 'react-native-svg';
-import { ViewStyle } from 'react-native';
+import type { ViewStyle } from 'react-native';
 import { useTheme } from '@oxy.so/bloom/theme';
 
 export const UnpinIcon = ({

@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import { and, asc, eq } from 'drizzle-orm';
 import { isLiveEntityId } from '@oxy.so/db';
 import { publicColumns } from '@oxy.so/db/assert';

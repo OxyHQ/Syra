@@ -1,6 +1,6 @@
 import React from 'react';
 import Svg, { Path } from 'react-native-svg';
-import { ViewStyle, type ColorValue } from 'react-native';
+import type { ViewStyle, ColorValue } from 'react-native';
 
 export const LiveRoomsIcon = ({
   color = 'currentColor',

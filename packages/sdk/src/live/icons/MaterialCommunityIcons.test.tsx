@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from 'bun:test';
-import React from 'react';
+import type React from 'react';
 
 // The real font component needs a React Native runtime; the wrapper's job is
 // only the props it hands it, so a stand-in that records them is enough.

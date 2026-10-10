@@ -1,5 +1,11 @@
 import React, { useMemo, useState } from 'react';
-import { LayoutChangeEvent, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
+import {
+  type LayoutChangeEvent,
+  type StyleProp,
+  StyleSheet,
+  View,
+  type ViewStyle,
+} from 'react-native';
 
 interface ResponsiveGridProps {
   children: React.ReactNode;

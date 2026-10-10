@@ -1,12 +1,12 @@
-import React, { memo, useState, ReactNode } from 'react';
+import React, { memo, useState, type ReactNode } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  ViewStyle,
-  TextStyle,
+  type ViewStyle,
+  type TextStyle,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxy.so/bloom/theme';

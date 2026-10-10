@@ -1,4 +1,4 @@
-import { Server, Socket, Namespace } from 'socket.io';
+import type { Server, Socket, Namespace } from 'socket.io';
 import { describeErrorSafely } from '../utils/error';
 import { logger } from '../utils/logger';
 import {

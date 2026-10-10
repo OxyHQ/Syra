@@ -1,4 +1,4 @@
-import { PlayableItem, PlayableRef, Queue } from '@syra/shared-types';
+import type { PlayableItem, PlayableRef, Queue } from '@syra/shared-types';
 import { getRedisClient } from '../utils/redis';
 import { logger } from '../utils/logger';
 import { describeErrorSafely } from '../utils/error';

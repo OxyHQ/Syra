@@ -6,7 +6,7 @@ import {
   Image,
   Pressable,
   Platform,
-  GestureResponderEvent,
+  type GestureResponderEvent,
 } from 'react-native';
 import { webViewStyle } from '@/utils/webStyles';
 import { useTranslation } from 'react-i18next';

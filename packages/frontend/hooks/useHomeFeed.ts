@@ -1,4 +1,4 @@
-import { QueryClient, useQuery, type UseQueryResult } from '@tanstack/react-query';
+import { type QueryClient, useQuery, type UseQueryResult } from '@tanstack/react-query';
 import type { Podcast, RadioPage, RadioSeed } from '@syra/shared-types';
 import { browseService } from '@/services/browseService';
 import { libraryService } from '@/services/libraryService';

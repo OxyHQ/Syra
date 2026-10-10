@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import type React from 'react';
+import { useState, useMemo } from 'react';
 import { StyleSheet, View, Text, Pressable, type ViewStyle } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
@@ -16,7 +17,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import Octicons from '@expo/vector-icons/Octicons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useRouter } from 'expo-router';
-import { Playlist, Album, Artist } from '@syra/shared-types';
+import type { Playlist, Album, Artist } from '@syra/shared-types';
 import { Image } from 'expo-image';
 import { pickCatalogImageUrl, resolvePodcastArtwork } from '@/utils/pickImage';
 import { ownedShowStateKey } from '@/utils/podcastFormat';

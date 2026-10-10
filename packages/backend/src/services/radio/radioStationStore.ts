@@ -1,4 +1,4 @@
-import { RadioSeedType, radioSeedTypeSchema } from '@syra/shared-types';
+import { type RadioSeedType, radioSeedTypeSchema } from '@syra/shared-types';
 import { getRedisClient } from '../../utils/redis';
 import { logger } from '../../utils/logger';
 import { describeErrorSafely } from '../../utils/error';

@@ -7,7 +7,7 @@ import {
   upsertDevice,
   type RegisterDeviceInput,
 } from '../../db/playback/devices';
-import { devices } from '../../db/schema/library';
+import type { devices } from '../../db/schema/library';
 
 export type { RegisterDeviceInput };
 

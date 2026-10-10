@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useMemo } from 'react';
+import type React from 'react';
+import { createContext, useContext, useMemo } from 'react';
 import type { ViewStyle } from 'react-native';
 import type { LiveTheme, UserEntity, HttpClient } from '../types';
 import { createRoomsService, type RoomsServiceInstance } from '../services/spacesService';

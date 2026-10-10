@@ -1,4 +1,4 @@
-import { radioSeedTypeSchema, RadioSeedType } from '@syra/shared-types';
+import { radioSeedTypeSchema, type RadioSeedType } from '@syra/shared-types';
 
 /**
  * The opaque pagination token handed to radio clients.
