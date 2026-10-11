@@ -2,9 +2,8 @@
 -- Purely additive: one new index, no drop, no narrowing. Safe while the previous
 -- image is still serving, and the new image wants it from its first request.
 --
--- The SECOND index Mongo had and the port dropped, found by the same method as
--- 0016's: running the planner over the shipped queries. `models/Track.ts:132`
--- declares `artistId: { type: String, index: true }`.
+-- Indexes `artist_id` on its own: the SECOND missing index found by the same
+-- method as 0016's, running the planner over the shipped queries.
 --
 -- NOT partial, unlike every other index on this table. Postgres uses a partial
 -- index only when the query's predicate implies the index's, and the two

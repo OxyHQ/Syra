@@ -14,10 +14,9 @@
 --           by name on a live response
 --
 -- Nothing gated it: the schema gates check `*_id`-shaped columns, protected
--- columns and identifier length, and `zodPathsExistInMongoose.test.ts` checks
--- the zod <-> MONGOOSE direction, not zod <-> drizzle. It surfaced only when a
--- service port hit the write, because drizzle refuses an unknown column key at
--- compile time where Mongoose dropped the `$set` in silence.
+-- columns and identifier length, and no test compared the zod schema against
+-- the drizzle columns. It surfaced only when a service hit the write, because
+-- drizzle refuses an unknown column key at compile time.
 --
 -- `jsonb`, not a child table: unlike `Track.credits[]`, nothing queries a member
 -- by element, so the evidence that justified `track_credits` does not apply.

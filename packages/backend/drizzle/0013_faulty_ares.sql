@@ -2,21 +2,19 @@
 -- NARROWING: adds two CHECK constraints to `rooms`, which already exists (0011).
 --
 -- `post`, not `pre`, because an ADD CONSTRAINT can reject a write the image
--- still serving considers legal. Both constraints port an invariant
--- `RoomSchema.pre('validate')` (`models/Room.ts:344-360`) enforces in
--- APPLICATION code on every save, so the previous image satisfies them for
--- rows it writes through Mongoose -- but nothing in the database held the line,
--- and the port must not quietly loosen validation the app still relies on.
+-- still serving considers legal. Both constraints hold an invariant the
+-- APPLICATION already enforces on every room write, so the previous image
+-- satisfies them for the rows it writes -- but nothing in the database held the
+-- line, and the database must not be looser than validation the app relies on.
 --
 --   rooms_broadcast_kind_requires_type_check
 --       type <> 'broadcast'  =>  broadcast_kind is null
---       (models/Room.ts:349-351 clears the field on every non-broadcast save)
+--       (a non-broadcast room carries no broadcast kind)
 --   rooms_broadcast_speaker_permission_check
 --       type = 'broadcast'   =>  speaker_permission = 'invited'
---       (models/Room.ts:357-359 forces it; a broadcast is not a room anyone
---        may speak in)
+--       (a broadcast is not a room anyone may speak in)
 --
--- The hook's THIRD invariant -- owner_type = 'house' => house_id is not null --
+-- The THIRD application invariant -- owner_type = 'house' => house_id is not null --
 -- is deliberately NOT here. It is in direct tension with 0011's ON DELETE SET
 -- NULL on rooms.house_id: deleting a house would leave surviving rows at
 -- owner_type = 'house', house_id = NULL, which such a CHECK forbids, and the

@@ -3,9 +3,8 @@
 -- previous image is still serving, and the new image wants it from its first
 -- request.
 --
--- Restores an index Mongo had and the port dropped. `models/Track.ts:134`
--- declares `albumId: { type: String, index: true }`; `schema/catalog.ts`'s first
--- pass folded it into `tracks_artist_id_album_id_idx` on the reasoning that
+-- Indexes `album_id` on its own. `schema/catalog.ts`'s first pass covered it
+-- only through `tracks_artist_id_album_id_idx`, on the reasoning that
 -- every real query carries the playability predicate — true, but those queries
 -- also carry `album_id` WITHOUT `artist_id`, and Postgres 17 has no index skip
 -- scan, so `(artist_id, album_id)` could serve them only as a full scan of the
