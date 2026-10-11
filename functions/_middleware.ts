@@ -1,15 +1,10 @@
-import { observeEdgeRequest } from '@oxy.so/telemetry/edge';
-
-type EdgeOptions = Parameters<typeof observeEdgeRequest>[0];
-type PagesContext = EdgeOptions['ctx'] & Pick<EdgeOptions, 'request' | 'env' | 'next'>;
+interface PagesContext {
+  next: () => Promise<Response>;
+}
 
 // Both Pages deployments run from the repository root, sharing this middleware.
-export function onRequest(context: PagesContext) {
-  return observeEdgeRequest({
-    service: 'syra',
-    request: context.request,
-    env: context.env,
-    ctx: context,
-    next: () => context.next(),
-  });
+// It is a pure pass-through: the asset or navigation response, and any failure,
+// reach the visitor exactly as Pages produced them.
+export function onRequest(context: PagesContext): Promise<Response> {
+  return context.next();
 }
