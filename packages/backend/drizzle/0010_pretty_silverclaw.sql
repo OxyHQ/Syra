@@ -18,7 +18,7 @@
 -- no production Postgres deploy exists yet (migrate.ts, "THE GENESIS
 -- BOOTSTRAP WINDOW", whose boundary this migration advances to). Against a
 -- populated table the same statement takes a lock while it verifies every
--- existing row, and any pre-existing `copyright_report_id` pointing at a
--- Mongo ObjectId would fail it outright. Re-derive both if this shape is
+-- existing row, and any pre-existing `copyright_report_id` with no matching
+-- `copyright_reports` row would fail it outright. Re-derive both if this shape is
 -- ever replayed against a database that already holds tracks.
 ALTER TABLE "tracks" ADD CONSTRAINT "tracks_copyright_report_id_copyright_reports_id_fk" FOREIGN KEY ("copyright_report_id") REFERENCES "public"."copyright_reports"("id") ON DELETE set null ON UPDATE no action;

@@ -11,8 +11,7 @@
 --
 -- TWO OF THESE INDEXES ARE NOT AN OPTIMISATION. `listening_events_played_at_idx`
 -- and `notification_suppressions_expires_at_idx` are what the expiry sweep
--- (`src/db/expiry.ts`, the replacement for the two Mongo TTL indexes this
--- vertical had) range-scans on every run. Dropping either turns a bounded
+-- (`src/db/expiry.ts`) range-scans on every run. Dropping either turns a bounded
 -- delete into a full scan of the largest table in this schema;
 -- `findUnsupportedExpiryColumns` fails the gate if either goes missing.
 CREATE TABLE "catalog_relations" (

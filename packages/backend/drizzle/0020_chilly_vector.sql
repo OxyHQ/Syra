@@ -2,9 +2,9 @@
 -- Additive: five nullable-free columns with a server-side DEFAULT, so an image
 -- that does not know about them keeps inserting successfully while this runs.
 --
--- WHAT IT IS FOR. Each of the five junction tables replaces one ORDERED Mongo
--- array on `UserLibrary`, and `$addToSet` appended — so the array position was
--- the record of when a membership was added. Two surfaces read it:
+-- WHAT IT IS FOR. Each of the five junction tables is an ORDERED list in the
+-- product: the order is the record of when a membership was added. Two
+-- surfaces read it:
 -- `services/radio/radioSeed.ts` seeds a station from the freshest likes and
 -- `controllers/library.controller.ts` returns each list in insertion order.
 -- A junction table has no intrinsic order, and the uuid v7 primary key is
