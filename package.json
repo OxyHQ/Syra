@@ -44,9 +44,6 @@
   "engines": {
     "node": ">=18.0.0"
   },
-  "dependencies": {
-    "@oxy.so/telemetry": "1.2.0"
-  },
   "overrides": {
     "@oxy.so/bloom": "6.2.1",
     "@oxy.so/core": "4.2.0",

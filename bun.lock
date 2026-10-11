@@ -4,9 +4,6 @@
   "workspaces": {
     "": {
       "name": "syra",
-      "dependencies": {
-        "@oxy.so/telemetry": "1.2.0",
-      },
       "devDependencies": {
         "@biomejs/biome": "2.5.15",
         "@oxy.so/doctor": "1.1.0",

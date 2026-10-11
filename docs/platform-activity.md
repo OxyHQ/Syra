@@ -30,10 +30,13 @@ party runtime internals require instrumentation at their owning services.
 
 ## Static edge requests
 
-Both frontend and Studio Pages deployments use the root `functions/_middleware.ts`; their `_routes.json` includes static assets and navigations. Enable each production project with private bindings `OXY_EDGE_ACTIVITY_ENABLED=true`, `OXY_EDGE_ACTIVITY_API_KEY`, `OXY_EDGE_ACTIVITY_API_SECRET`, and optional `OXY_EDGE_ACTIVITY_API_URL`. Never expose these through frontend public environment prefixes. Publication runs in `waitUntil` and preserves streaming responses.
-
-The serving Cloudflare PoP appears as a pulse for external edge activity. It does not fabricate an arc to a visitor location. Verified internal peers may supply a known source region.
+This app's web traffic (both Pages projects) is measured keylessly by Oxy from
+Cloudflare analytics — see OxyHQ/oxy `docs/operations/cloudflare-web-activity.md`.
+The app holds no Oxy activity secret and runs no activity code; the root
+`functions/_middleware.ts` is a plain pass-through. The `OXY_EDGE_ACTIVITY_*`
+bindings were never provisioned and nothing reads them now, so if one is ever
+found on a deployment it can simply be deleted.
 
 ## Package versions
 
-Core and contracts are aligned through workspace overrides so browser and server packages share one version. Edge activity uses the published telemetry package; the lockfile records registry artifacts. Run the edge observer checks in `scripts/edge-activity.test.ts` alongside the existing package checks.
+Core and contracts are aligned through workspace overrides so browser and server packages share one version. Run the Pages middleware check in `scripts/pages-middleware.test.ts` alongside the existing package checks.
