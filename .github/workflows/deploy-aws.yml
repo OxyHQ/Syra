@@ -260,8 +260,10 @@ jobs:
       # commands. `src/db/__tests__/deployWorkflow.test.ts` reads this file and
       # fails if the conditions stop being complements.
       #
-      # `node`, not `bun`: the runtime stage of packages/backend/Dockerfile is
-      # node:22-alpine and never copies bun in.
+      # `bun`: the runtime packages/backend/Dockerfile's runner stage ships
+      # (oven/bun:1.4.3-alpine). The one-shots run on the revision this deploy
+      # registers, i.e. on the image just built, so the command and the image
+      # always change together; reverting to a Node image reverts these too.
       # `dist/src/db/migrate.js`: tsconfig sets `rootDir: "./"`, so `src/` is
       # preserved inside `dist/`.
       # `--target-database=syra`: the migrator refuses to run without it, because
@@ -285,7 +287,7 @@ jobs:
         if: github.event.inputs.migration_phase == 'all'
         run: |
           {
-            echo 'PRE_DEPLOY_TASK_COMMAND_JSON=["node","packages/backend/dist/src/db/migrate.js","--phase=all","--target-database=syra"]'
+            echo 'PRE_DEPLOY_TASK_COMMAND_JSON=["bun","packages/backend/dist/src/db/migrate.js","--phase=all","--target-database=syra"]'
             echo 'POST_DEPLOY_TASK_COMMAND_JSON='
           } >>"$GITHUB_ENV"
 
@@ -297,8 +299,8 @@ jobs:
         if: github.event.inputs.migration_phase != 'all'
         run: |
           {
-            echo 'PRE_DEPLOY_TASK_COMMAND_JSON=["node","packages/backend/dist/src/db/migrate.js","--phase=pre","--target-database=syra"]'
-            echo 'POST_DEPLOY_TASK_COMMAND_JSON=["node","packages/backend/dist/src/db/migrate.js","--phase=post","--target-database=syra"]'
+            echo 'PRE_DEPLOY_TASK_COMMAND_JSON=["bun","packages/backend/dist/src/db/migrate.js","--phase=pre","--target-database=syra"]'
+            echo 'POST_DEPLOY_TASK_COMMAND_JSON=["bun","packages/backend/dist/src/db/migrate.js","--phase=post","--target-database=syra"]'
           } >>"$GITHUB_ENV"
 
       - name: Register immutable task definition and deploy
