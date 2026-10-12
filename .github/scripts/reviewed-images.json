@@ -6,7 +6,7 @@
       "services": ["syra"],
       "ecrRepository": "oxy/syra",
       "dockerfile": "packages/backend/Dockerfile",
-      "dockerfileSha256": "f018fd35b839fdb1e840ca1f0c2a679e80b47d5a209d9997d5e182652717a23f",
+      "dockerfileSha256": "b2775f09fb215bdb171d1845851bfd9da762994aa0a4df124f31b1607586abdc",
       "target": null,
       "tagSuffix": "",
       "cacheScope": "syra-backend"

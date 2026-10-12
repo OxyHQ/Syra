@@ -62,7 +62,7 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.source=https://github.com/OxyHQ/Syra
             io.oxy.source.tree=${{ steps.guard.outputs.source_tree }}
-            io.oxy.dockerfile.sha256=f018fd35b839fdb1e840ca1f0c2a679e80b47d5a209d9997d5e182652717a23f
+            io.oxy.dockerfile.sha256=b2775f09fb215bdb171d1845851bfd9da762994aa0a4df124f31b1607586abdc
           cache-from: type=gha,scope=syra-backend
           cache-to: type=gha,mode=max,scope=syra-backend
       - name: Verify authenticated ECR bytes
