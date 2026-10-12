@@ -104,9 +104,12 @@ jobs:
           esac
           echo "path=$path" >>"$GITHUB_OUTPUT"
 
+      # `bun`: the runtime the deployed image ships (packages/backend/Dockerfile).
+      # This runs against the image LIVE in production, not one this workflow
+      # builds; the deploy that ships a Bun image is what makes `bun` valid here.
       - name: Run as a one-off ECS task
         env:
-          COMMAND_JSON: ${{ format('["node","{0}"]', steps.script.outputs.path) }}
+          COMMAND_JSON: ${{ format('["bun","{0}"]', steps.script.outputs.path) }}
           ARGS_JSON: ${{ steps.args.outputs.json }}
           SCRIPT_NAME: ${{ inputs.script }}
           SCRIPT_ARGS: ${{ inputs.args }}

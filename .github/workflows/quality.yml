@@ -31,6 +31,77 @@ jobs:
           bash .github/scripts/test-deploy-ecs-image.sh
           bash .github/scripts/test-run-one-shot-ecs-task.sh
 
+  # The backend image as ECS runs it. Production runs the backend on Bun
+  # (packages/backend/Dockerfile's runner stage is oven/bun:1.4.3-alpine), and
+  # what that depends on is a property of the IMAGE, not of this runner: sharp's
+  # musl prebuild, require() of the ESM-only livekit-server-sdk, firebase-admin's
+  # gRPC stack, the apk ffmpeg/chromaprint and the Bento4 binaries, dumb-init
+  # forwarding SIGTERM, and a failed boot exiting non-zero.
+  # .github/scripts/smoke-backend-image.sh boots the built image against the
+  # throwaway Postgres below and asserts all of it.
+  #
+  # arm64, natively, because production is linux/arm64 (deploy-aws.yml) and
+  # sharp/Bento4 are per-architecture. It READS the deploy's buildx cache scope
+  # and writes none: only main-branch workflows write a scope (see
+  # refresh-build-cache.yml).
+  backend-image-smoke:
+    name: Backend Image Smoke
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: syra
+          POSTGRES_PASSWORD: syra
+          # `syra`: the migrator's --target-database, as the deploy passes it.
+          POSTGRES_DB: syra
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U syra -d syra"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      # `--cache-from type=gha` needs the Actions runtime token and cache URL,
+      # which GitHub gives to JavaScript actions and NOT to `run:` steps.
+      - name: Expose the Actions cache to buildx
+        uses: crazy-max/ghaction-github-runtime@v4
+
+      # The same guard deploy-aws.yml runs before its build, so this smoke
+      # builds exactly the Dockerfile and context production would.
+      - name: Refuse unreviewed image build inputs
+        id: reviewed
+        run: python3 -B .github/scripts/reviewed-image.py guard --recipe syra
+
+      - name: Build the backend image (linux/arm64)
+        env:
+          DOCKERFILE: ${{ steps.reviewed.outputs.dockerfile }}
+          CONTEXT: ${{ steps.reviewed.outputs.context }}
+        run: |
+          docker buildx build \
+            --platform linux/arm64 \
+            --cache-from type=gha,scope=syra-backend \
+            -f "$DOCKERFILE" \
+            -t syra-backend:ci \
+            --load \
+            "$CONTEXT"
+
+      - name: Smoke the backend image under its Bun runtime
+        env:
+          IMAGE: syra-backend:ci
+          DATABASE_URL: postgres://syra:syra@127.0.0.1:5432/syra
+        run: |
+          EXPECTED_BUN_VERSION="$(jq -r '.packageManager | sub("^bun@"; "")' package.json)"
+          export EXPECTED_BUN_VERSION
+          bash .github/scripts/smoke-backend-image.sh
+
   quality:
     runs-on: ubuntu-latest
     # `postgres:17`, not a PostGIS image — see `src/db/extensions.ts`:

@@ -137,7 +137,7 @@ assert_output_contains() {
 # ── Happy path: the poll loop actually polls, then reports success ─────────
 TEST_SERVICE_STATUS=ACTIVE TEST_TASK_EXIT_CODE=0 TEST_STOPS_AFTER=2 \
   run_case success 0 \
-    env COMMAND_JSON='["node","packages/backend/dist/src/scripts/backfillEpisodeImages.js","--dry-run"]' \
+    env COMMAND_JSON='["bun","packages/backend/dist/src/scripts/backfillEpisodeImages.js","--dry-run"]' \
     MAX_WAIT_SECS=30 POLL_INTERVAL=1
 assert_output_contains success "task status=RUNNING"
 assert_output_contains success "task status=STOPPED"
@@ -147,20 +147,20 @@ assert_output_contains success "Task completed successfully"
 # ── Refuses an inactive service, before ever calling run-task ──────────────
 TEST_SERVICE_STATUS=DRAINING \
   run_case inactive-service 1 \
-    env COMMAND_JSON='["node","x.js"]' MAX_WAIT_SECS=30 POLL_INTERVAL=1
+    env COMMAND_JSON='["bun","x.js"]' MAX_WAIT_SECS=30 POLL_INTERVAL=1
 assert_output_contains inactive-service "not ACTIVE"
 
 # ── A non-zero container exit is a failure, and the logs still print ───────
 TEST_SERVICE_STATUS=ACTIVE TEST_TASK_EXIT_CODE=1 TEST_STOPS_AFTER=1 \
   run_case task-failed 1 \
-    env COMMAND_JSON='["node","x.js"]' MAX_WAIT_SECS=30 POLL_INTERVAL=1
+    env COMMAND_JSON='["bun","x.js"]' MAX_WAIT_SECS=30 POLL_INTERVAL=1
 assert_output_contains task-failed "exit=1"
 assert_output_contains task-failed "line one"
 
 # ── ECS itself refuses to start the task (e.g. no capacity) ────────────────
 TEST_SERVICE_STATUS=ACTIVE TEST_RUN_TASK_FAILS=true \
   run_case run-task-refused 1 \
-    env COMMAND_JSON='["node","x.js"]' MAX_WAIT_SECS=30 POLL_INTERVAL=1
+    env COMMAND_JSON='["bun","x.js"]' MAX_WAIT_SECS=30 POLL_INTERVAL=1
 assert_output_contains run-task-refused "refused to start"
 
 # ── A malformed command is refused before any aws call is made ─────────────
@@ -172,7 +172,7 @@ assert_output_contains bad-command "must be a non-empty JSON string array"
 # ── Never reaches STOPPED: times out loudly instead of hanging ─────────────
 TEST_SERVICE_STATUS=ACTIVE TEST_STOPS_AFTER=999999 \
   run_case timeout 1 \
-    env COMMAND_JSON='["node","x.js"]' MAX_WAIT_SECS=2 POLL_INTERVAL=1
+    env COMMAND_JSON='["bun","x.js"]' MAX_WAIT_SECS=2 POLL_INTERVAL=1
 assert_output_contains timeout "did not stop within"
 
 echo "All run-one-shot-ecs-task.sh cases passed."

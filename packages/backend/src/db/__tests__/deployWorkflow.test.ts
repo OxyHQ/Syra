@@ -113,13 +113,13 @@ describe('the deploy workflow and the migrator agree', () => {
   });
 
   it('runs the built migrator by the path the runtime image actually contains', () => {
-    // `dist/src/db/migrate.js` under `node`: the runtime stage of the Dockerfile
-    // is node:22-alpine and never copies bun in, and tsconfig's `rootDir: "./"`
+    // `dist/src/db/migrate.js` under `bun`: the runner stage of the Dockerfile is
+    // oven/bun:1.4.3-alpine and has no Node in it, and tsconfig's `rootDir: "./"`
     // preserves `src/` inside `dist/`. And `--target-database=`, which the
     // migrator refuses to run without — a migration aimed at the wrong database
     // reports success over an untouched one rather than failing.
     for (const selector of selectorSteps) {
-      expect(selector.run).toContain('"node","packages/backend/dist/src/db/migrate.js"');
+      expect(selector.run).toContain('"bun","packages/backend/dist/src/db/migrate.js"');
       expect(selector.run).toContain('--target-database=syra"');
     }
   });
@@ -348,5 +348,66 @@ describe('runtime secrets come from SSM, and no workflow writes one', () => {
     for (const name of removals) {
       expect(Object.keys(overrides), `${name} is both injected and removed`).not.toContain(name);
     }
+  });
+});
+
+/**
+ * Every command that runs inside the backend image names the runtime the image
+ * ships.
+ *
+ * The one-shots (the migrator this workflow brackets a rollout with, and
+ * run-backend-script.yml's backfills) override the image's CMD with an argv of
+ * their own, so nothing ties their first word to the Dockerfile. The failure is
+ * asymmetric, which is why a test rather than care: oven/bun images put a
+ * `node` symlink to bun on PATH, so a stale `node` against the Bun image still
+ * runs (on Bun, while claiming Node), but a `bun` against a Node image dies at
+ * task start, in the middle of a deploy. The runtime is read from the runner
+ * stage's CMD, so switching the image back to Node fails here until every
+ * command follows.
+ */
+describe('the image and the commands run in it agree on the runtime', () => {
+  const dockerfile = fs.readFileSync(
+    path.join(REPO_ROOT, 'packages', 'backend', 'Dockerfile'),
+    'utf8',
+  );
+  const instructions = dockerfile.split('\n').filter((line) => /^[A-Z]+\s/.test(line));
+  const runnerFrom = instructions.filter((line) => line.startsWith('FROM ')).at(-1) ?? '';
+  const cmdLine = instructions.filter((line) => line.startsWith('CMD ')).at(-1) ?? '';
+  const cmd = JSON.parse(cmdLine.slice('CMD '.length)) as string[];
+  const runtime = cmd[0];
+
+  it('runs the server on Bun, from the oven/bun runner stage', () => {
+    expect(runnerFrom).toMatch(/^FROM oven\/bun:\S+ AS runner$/);
+    expect(cmd).toEqual(['bun', 'packages/backend/dist/server.js']);
+  });
+
+  it('runs both the cutover and the phased migrator on that runtime', () => {
+    const commands = selectorSteps
+      .flatMap((step) => [...(step.run ?? '').matchAll(/_COMMAND_JSON=(\[.*\])'$/gm)])
+      .map((match) => JSON.parse(match[1]) as string[]);
+    // all, pre and post: an empty list would pass any runtime.
+    expect(commands).toHaveLength(3);
+    for (const command of commands) {
+      expect(command[0]).toBe(runtime);
+    }
+  });
+
+  it('runs the one-off backend scripts on that runtime', () => {
+    const scripts = Bun.YAML.parse(
+      fs.readFileSync(
+        path.join(REPO_ROOT, '.github', 'workflows', 'run-backend-script.yml'),
+        'utf8',
+      ),
+    ) as WorkflowFile;
+    const step = scripts.jobs['run-script'].steps.find(
+      (candidate) => candidate.name === 'Run as a one-off ECS task',
+    );
+    const template = /format\('(\[.*\])'/.exec(step?.env?.COMMAND_JSON ?? '')?.[1];
+    expect(template, 'the one-off command template moved').toBeDefined();
+    expect((JSON.parse(template?.replace('{0}', 'x') ?? '[]') as string[])[0]).toBe(runtime);
+  });
+
+  it('health-checks the container with that runtime', () => {
+    expect(dockerfile).toMatch(new RegExp(`^\\s+CMD ${runtime} -e `, 'm'));
   });
 });
