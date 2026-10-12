@@ -19,11 +19,12 @@ import { join } from 'node:path';
  */
 
 /**
- * `__dirname`, not `import.meta.dir`: this package builds with
- * `"module": "commonjs"` and `tsc` compiles `src/**` wholesale — test files
- * included, which is why `dist/` already carries `nameKey.test.js`. So
- * `import.meta` here is a TS1343 that fails `bun run build` while `bun test`
- * passes, since bun accepts it. The build is the check that catches it.
+ * `__dirname`, not `import.meta.dir`: this package builds to CommonJS
+ * (`"module": "node16"`, no `"type": "module"`) and `tsc` compiles `src/**`
+ * wholesale — test files included, which is why `dist/` already carries
+ * `nameKey.test.js`. So `import.meta` here is a TS1470 that fails
+ * `bun run build` and `bun run typecheck` while `bun test` passes, since bun
+ * accepts it.
  */
 const SRC = __dirname;
 

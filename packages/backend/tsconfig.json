@@ -11,7 +11,7 @@
     "skipLibCheck": true,
     "allowSyntheticDefaultImports": true,
     "composite": true,
-    "baseUrl": ".",
+    "types": ["bun", "node"],
     "paths": {
       "@syra/shared-types": ["../shared-types/dist"],
       "@syra/shared-types/*": ["../shared-types/dist/*"]

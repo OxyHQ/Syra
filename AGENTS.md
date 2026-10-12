@@ -32,7 +32,7 @@ one TS2345 and running all three:
 |---------|--------|
 | `bun test` | **passes** — bun strips types, it never checks them |
 | `bun run build` | **passes** — `tsconfig.build.json` excludes `**/*.test.ts` and `src/test/**` |
-| `bun run typecheck` | **1 error** — `tsc --noEmit` over the whole project |
+| `bun run typecheck` | **1 error** — `bun check` over the whole project |
 
 So after ANY change to a test file or a test-only helper, run `bun run
 typecheck`; a green suite and a green build together still prove nothing about
