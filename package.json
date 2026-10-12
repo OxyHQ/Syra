@@ -7,6 +7,7 @@
   "workspaces": [
     "packages/*"
   ],
+  "packageManager": "bun@1.4.3",
   "scripts": {
     "dev": "bun run --filter '*' dev",
     "dev:frontend": "bun run --filter '@syra/frontend' dev",
@@ -27,6 +28,7 @@
     "format": "biome format --write .",
     "validate:ai-architecture": "bun ./scripts/validate-ai-architecture.mjs && bun ./scripts/test-validate-ai-architecture.mjs",
     "validate:agents-md": "bun ./scripts/check-agents-md-size.mjs && bun ./scripts/test-check-agents-md-size.mjs",
+    "check:bun-pin": "bun ./scripts/check-bun-pin.mjs && bun ./scripts/test-check-bun-pin.mjs",
     "doctor:oxy": "oxy-doctor --ci",
     "clean": "bun run --filter '*' clean && rm -rf node_modules",
     "install:all": "bun install",

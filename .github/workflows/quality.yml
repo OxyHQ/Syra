@@ -61,7 +61,9 @@ jobs:
       - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: '1.4.3'
+          # The one pin is package.json's `packageManager`; check:bun-pin holds
+          # the backend image's literal oven/bun tag to it.
+          bun-version-file: package.json
       - run: bun install --frozen-lockfile
 
       - name: Check Oxy dependency health
@@ -81,6 +83,12 @@ jobs:
       # why a gate rather than a convention. Reads the tracked file listing only.
       - name: Guard the AGENTS.md budget
         run: bun run validate:agents-md
+
+      # Every workflow reads bun from `packageManager`, but the backend image's
+      # `COPY --from=oven/bun:<tag>` is a literal. A bump that missed it would
+      # build the image with a bun that neither wrote bun.lock nor ran CI.
+      - name: Guard the bun pin
+        run: bun run check:bun-pin
 
       # shared-types and the SDK are consumed as built output (dist/lib) by the
       # apps, so their typechecks — and the apps' — need them built first, same
