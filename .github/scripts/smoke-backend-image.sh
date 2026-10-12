@@ -122,9 +122,13 @@ echo "ok: / 200"
 pid1=$(docker exec "$NAME" cat /proc/1/cmdline | tr '\0' ' ')
 [ "$pid1" = "dumb-init -- bun packages/backend/dist/server.js " ] ||
   fail "PID 1 is '$pid1', expected 'dumb-init -- bun packages/backend/dist/server.js'"
-child=$(docker exec "$NAME" sh -c 'pid=$(pgrep -P 1) && tr "\0" " " </proc/$pid/cmdline && echo && readlink /proc/$pid/exe')
-[ "$child" = "bun packages/backend/dist/server.js
-/usr/local/bin/bun" ] || fail "dumb-init's child is '$child', expected bun packages/backend/dist/server.js running /usr/local/bin/bun"
+child_pid=$(docker exec "$NAME" pgrep -P 1)
+child_cmd=$(docker exec "$NAME" sh -c "tr '\\0' ' ' </proc/$child_pid/cmdline")
+child_exe=$(docker exec "$NAME" readlink "/proc/$child_pid/exe")
+[ "$child_cmd" = "bun packages/backend/dist/server.js " ] ||
+  fail "dumb-init's child is '$child_cmd', expected 'bun packages/backend/dist/server.js'"
+[ "$child_exe" = /usr/local/bin/bun ] ||
+  fail "dumb-init's child runs '$child_exe', expected /usr/local/bin/bun"
 user=$(docker exec "$NAME" id -un)
 [ "$user" = bun ] || fail "the server runs as '$user', expected the image's unprivileged bun user"
 echo "ok: dumb-init -> bun packages/backend/dist/server.js as $user"
