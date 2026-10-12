@@ -35,7 +35,6 @@ import os from 'os';
 import path from 'path';
 import { pipeline } from 'stream/promises';
 import { and, asc, gt, inArray, isNotNull } from 'drizzle-orm';
-import dotenv from 'dotenv';
 import { describeDriverError, isForeignKeyViolation } from '@oxy.so/db';
 import { closePostgres, connectPostgres, getDb, isDriverError } from '../db/postgres';
 import { indexTrackAcoustically } from '../db/catalog/fingerprints';
@@ -44,8 +43,6 @@ import { logger } from '../utils/logger';
 import { streamTrackAudio } from '../services/audioStorageService';
 import { fingerprintFile } from '../services/uploads/fingerprint';
 import { describeErrorSafely } from '../utils/error';
-
-dotenv.config();
 
 /**
  * Keyset page size. Small, because each row costs an S3 read plus an `fpcalc`

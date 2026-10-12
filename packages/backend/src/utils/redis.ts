@@ -82,10 +82,10 @@ export function getRedisClient(): RedisClientType {
   const config = getRedisConfig();
 
   // If we have an existing client, check if config matches
-  // This handles the case where dotenv loads after the first call to getRedisClient()
+  // This handles the case where the Redis environment changes after the first call to getRedisClient()
   if (redisClient) {
     // Check if we need to recreate the client due to config change
-    // This can happen if dotenv loads after the first call
+    // This can happen if the environment is changed after the first call
     const wasCreatedWithUrl = redisClientUrlMode.get(redisClient);
     const shouldUseUrl = !!config.redisUrl;
 
@@ -96,7 +96,7 @@ export function getRedisClient(): RedisClientType {
         logger.warn(
           `Redis config changed (was ${wasCreatedWithUrl ? 'URL' : 'host/port'}, now ${shouldUseUrl ? 'URL' : 'host/port'}) - recreating client`,
         );
-        logger.info('This can happen if dotenv loads after Redis client initialization');
+        logger.info('This can happen if the environment changes after Redis client initialization');
       }
       // Close and reset the old client
       if (redisClient.isOpen) {

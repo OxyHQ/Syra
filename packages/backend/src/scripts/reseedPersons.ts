@@ -18,7 +18,6 @@
  * page. `generatedId()` mints uuid v7, which is k-sortable, so `id > $last` is
  * both a stable cursor and an index-ordered one.
  */
-import dotenv from 'dotenv';
 import { and, asc, eq, gt, isNull } from 'drizzle-orm';
 import type { EpisodePerson } from '@syra/shared-types';
 import { closePostgres, connectPostgres, getDb } from '../db/postgres';
@@ -132,7 +131,6 @@ export async function reseedPersons(): Promise<ReseedPersonsStats> {
 }
 
 async function main(): Promise<void> {
-  dotenv.config();
   await connectPostgres();
   logger.info('[reseed-persons] starting clean person reseed');
   const stats = await reseedPersons();
