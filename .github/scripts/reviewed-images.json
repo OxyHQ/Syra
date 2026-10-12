@@ -3,13 +3,11 @@
   "recipes": [
     {
       "name": "syra",
-      "services": ["syra"],
       "ecrRepository": "oxy/syra",
       "dockerfile": "packages/backend/Dockerfile",
-      "dockerfileSha256": "b2775f09fb215bdb171d1845851bfd9da762994aa0a4df124f31b1607586abdc",
+      "context": ".",
       "target": null,
-      "tagSuffix": "",
-      "cacheScope": "syra-backend"
+      "buildInputsSha256": "95e94330b9604a10951f209f6c96fe75f78dc44ba11111cbe0099e70e1b025e9"
     }
   ]
 }
