@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
 #
 # Production image for the @syra/backend service.
 #
@@ -21,6 +21,15 @@
 #           && bun run build:sdk
 #           && bun run build:backend
 #   run:    node packages/backend/dist/server.js
+#
+# Every base image, and the `syntax` frontend on line 1, is pinned by its
+# multi-arch index digest after the tag (`tag@sha256:...`). A tag is mutable:
+# a re-pushed `node:22.23-alpine` would change what this file builds without
+# changing one byte of it, and this file's bytes are what
+# .github/scripts/reviewed-images.json pins. The tag stays for readers and for
+# scripts/check-bun-pin.mjs; the digest is what the build uses. Bumping a base
+# image means a new tag AND its index digest
+# (`docker buildx imagetools inspect <image>:<tag>`), and a re-review.
 
 # ---------------------------------------------------------------------------
 # Stage 0: bento4 — compile Bento4 media tools from source.
@@ -32,12 +41,17 @@
 #   mp4fragment  — fragments an MP4 file (required input for mp42hls)
 #   mp4encrypt   — low-level AES encryption helper (used in testing)
 # ---------------------------------------------------------------------------
-FROM alpine:3.20 AS bento4
+FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc AS bento4
 
 RUN apk add --no-cache git cmake make g++
 
+# A git tag is mutable, so the clone is checked against the commit
+# v1.6.0-641 peels to (`git ls-remote ... 'refs/tags/v1.6.0-641^{}'`); a
+# moved tag fails the build instead of compiling someone else's source.
+# A literal, not an ARG, so no --build-arg can move it.
 RUN git clone --depth 1 --branch v1.6.0-641 \
       https://github.com/axiomatic-systems/Bento4.git /src \
+ && test "$(git -C /src rev-parse HEAD)" = dc264854d1f76c370b65b18d9f303a95f7f21ab1 \
  && cmake -S /src -B /src/build -DCMAKE_BUILD_TYPE=Release \
  && cmake --build /src/build --target mp42hls mp4fragment mp4encrypt -j "$(nproc)"
 
@@ -49,7 +63,7 @@ RUN git clone --depth 1 --branch v1.6.0-641 \
 # held at a Node line that supports `require(<ESM>)` — the backend runtime
 # require()s the ESM-only `livekit-server-sdk`. Kept identical here so the
 # build and runtime toolchains never drift.
-FROM node:22.23-alpine AS base
+FROM node:22.23-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS base
 
 # Toolchain for any dependency that needs a node-gyp fallback (e.g. if a prebuilt
 # binary is unavailable for the target arch). Confined to the builder stage so it
@@ -59,7 +73,7 @@ RUN apk add --no-cache python3 make g++ libc6-compat
 # Bun is only used as the package manager / script runner at build time; the
 # runtime stays Node. The musl build from the matching alpine image works on
 # both amd64 and arm64.
-COPY --from=oven/bun:1.4.3-alpine /usr/local/bin/bun /usr/local/bin/bun
+COPY --from=oven/bun:1.4.3-alpine@sha256:629e17411f1f129dbec3af78d5af9c9f2a937435c80349437206c6b0b7422373 /usr/local/bin/bun /usr/local/bin/bun
 
 WORKDIR /app
 
@@ -147,7 +161,7 @@ RUN test -f packages/backend/dist/server.js \
 # is enabled by default from 22.12.0 onward. The floating `node:22-alpine` tag
 # would satisfy this today, but pin the minor so a future base-image roll can
 # never drop below the require(ESM) threshold.
-FROM node:22.23-alpine AS runner
+FROM node:22.23-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS runner
 
 ENV NODE_ENV=production \
     PORT=3000
