@@ -35,12 +35,13 @@ import { logger } from '../utils/logger';
  * of the client wrapper and could swap that copy for the call.
  *
  * Syra never had a copy: `createModerationIntegration()` builds the client, and
- * at 1.3.0 the outbox half still builds it from `crowdSource.serviceKey` and
- * offers no seam through which a client could be injected. So the key stays
- * until the package's own provider takes the same path — and it is NOT the Oxy
- * service credential, which Syra has stopped carrying (`src/oxyClient.ts`).
- * Removing it here before then would disable delivery, silently, in the one
- * direction nothing fails on.
+ * the outbox half builds it from `crowdSource.serviceKey` unless the connection
+ * config says `auth: 'oxy-service'` (added in `@crowdsource.you/core` 1.4.0).
+ * Syra does not say so yet, so the key stays — and it is NOT the Oxy service
+ * credential, which Syra has stopped carrying (`src/oxyClient.ts`). Switching is
+ * its own change (this file's `enabled` still requires the key); removing the
+ * key without it would disable delivery, silently, in the one direction nothing
+ * fails on.
  */
 
 const ENFORCEMENT_MODES: readonly ModerationEnforcementMode[] = ['observe', 'manual', 'automatic'];
