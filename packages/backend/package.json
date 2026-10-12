@@ -9,7 +9,7 @@
     "start": "bun server.ts",
     "dev": "bun --watch server.ts",
     "build": "tsc -p tsconfig.build.json",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "bun check",
     "backfill:fingerprints": "bun src/scripts/backfillTrackFingerprints.ts",
     "backfill:episode-images": "bun src/scripts/backfillEpisodeImages.ts",
     "backfill:podcast-covers": "bun src/scripts/backfillPodcastCovers.ts",

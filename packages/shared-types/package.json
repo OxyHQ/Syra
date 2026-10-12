@@ -8,7 +8,7 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc -b tsconfig.build.json && node scripts/mark-browser-module.mjs",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "bun check",
     "dev": "node scripts/mark-browser-module.mjs && tsc -b tsconfig.build.json --watch",
     "clean": "rm -rf dist",
     "test": "bun test src",
