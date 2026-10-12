@@ -56,13 +56,10 @@
  */
 
 import { sql } from 'drizzle-orm';
-import dotenv from 'dotenv';
 import { closePostgres, connectPostgres, getDb } from '../db/postgres';
 import { deleteFromS3Batch } from '../services/s3Service';
 import { logger } from '../utils/logger';
 import { describeErrorSafely } from '../utils/error';
-
-dotenv.config();
 
 /** Duplicate content hashes resolved (and, per hash, rewritten) per transaction. */
 const HASH_BATCH_SIZE = 200;

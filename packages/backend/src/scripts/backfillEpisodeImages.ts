@@ -43,7 +43,6 @@
  */
 
 import { and, asc, eq, gt, isNull } from 'drizzle-orm';
-import dotenv from 'dotenv';
 import { closePostgres, connectPostgres, getDb } from '../db/postgres';
 import { updateEpisode } from '../db/podcasts/episodes';
 import { episodes, podcasts } from '../db/schema/podcasts';
@@ -56,8 +55,6 @@ import { rehostPodcastImage } from '../services/podcasts/podcastMedia';
 import { artworkColumns } from '../services/podcasts/podcastImportService';
 import { logger } from '../utils/logger';
 import { describeErrorSafely } from '../utils/error';
-
-dotenv.config();
 
 /** Keyset page size over `podcasts` — cheap per-row work, unlike the fingerprints backfill. */
 const BATCH_SIZE = 50;

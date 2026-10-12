@@ -50,15 +50,12 @@
  */
 
 import { and, asc, eq, gt, isNotNull, isNull } from 'drizzle-orm';
-import dotenv from 'dotenv';
 import { closePostgres, connectPostgres, getDb } from '../db/postgres';
 import { podcasts } from '../db/schema/podcasts';
 import { importFeed } from '../services/podcasts/podcastImportService';
 import type { SafeFetchFn } from '../services/podcasts/RssConnector';
 import { logger } from '../utils/logger';
 import { describeErrorSafely } from '../utils/error';
-
-dotenv.config();
 
 /** Keyset page size over `podcasts` — cheap per-row work, same as `backfillEpisodeImages.ts`. */
 const BATCH_SIZE = 50;
