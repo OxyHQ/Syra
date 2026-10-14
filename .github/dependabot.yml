@@ -1,16 +1,29 @@
 # Dependabot configuration for Syra.
 #
 # This repo uses bun (bun.lock) and does NOT track any package-lock.json.
-# Dependabot's npm/npm_and_yarn updater only understands package-lock.json /
-# yarn.lock, so enabling it produces invalid PRs that add stray, unused,
-# out-of-sync npm lockfiles. It is intentionally NOT enabled here.
-# JavaScript dependency updates are applied natively via `bun update`. The
-# read-only `bun run doctor:oxy` CI gate reports stale Oxy packages and duplicate
-# lockfile resolutions; updates remain normal reviewed commits.
-#
-# Only the github-actions ecosystem is managed by Dependabot.
+# The npm/npm_and_yarn ecosystem is intentionally NOT enabled: it produces
+# invalid PRs with stray npm lockfiles. The native `bun` ecosystem is used, and
+# only for first-party SDKs (`allow`); third-party updates stay manual
+# (`bun update`). The `oxy` group auto-merges via
+# .github/workflows/automerge-first-party.yml.
 version: 2
 updates:
+  - package-ecosystem: bun
+    directory: /
+    schedule:
+      interval: daily
+    open-pull-requests-limit: 5
+    allow:
+      - dependency-name: "@oxy.so/*"
+      - dependency-name: "@alia.onl/*"
+      - dependency-name: "@clarity.surf/*"
+    groups:
+      oxy:
+        patterns:
+          - "@oxy.so/*"
+          - "@alia.onl/*"
+          - "@clarity.surf/*"
+
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
