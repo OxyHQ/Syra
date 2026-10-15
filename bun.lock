@@ -193,6 +193,7 @@
         "@oxy.so/services": "^11.2.0",
         "@types/node": "^20.0.0",
         "@types/react": "~19.2.14",
+        "esbuild": "0.25.12",
         "expo-audio": "~56.0.12",
         "expo-blur": "~56.0.3",
         "expo-image-picker": "~56.0.18",

@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 
 /**
  * Accept a payload whose identity arrives as `_id` and present it as `id`.

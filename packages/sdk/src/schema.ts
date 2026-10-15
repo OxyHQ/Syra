@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 
 /**
  * Minimal, self-contained schemas for the public Syra API response shapes this
