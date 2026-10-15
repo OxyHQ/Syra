@@ -372,7 +372,15 @@
   },
   "topbar": {
     "live": "Live",
-    "viewAllResults": "View all results"
+    "viewAllResults": "View all results",
+    "askAlia": "Alia'ya sor",
+    "aliaClientContext": "Kişi, kataloğu aradığı; parça, albüm, çalma listesi, podcast ve canlı radyo dinlediği ve kütüphanesini yönettiği bir müzik ve podcast akış uygulaması olan Syra'yı kullanıyor.",
+    "aliaNowPlaying": "Şu an çalıyor: {{artist}} - {{title}}.",
+    "aliaSuggestion": {
+      "discover": "Dinlemek için yeni bir şey bul",
+      "playlist": "Bir çalma listesi oluşturmama yardım et",
+      "similar": "Favori sanatçılarıma benzeyen sanatçılar kimler?"
+    }
   },
   "nowPlaying": {
     "empty": {

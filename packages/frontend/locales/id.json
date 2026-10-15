@@ -372,7 +372,15 @@
   },
   "topbar": {
     "live": "Live",
-    "viewAllResults": "View all results"
+    "viewAllResults": "View all results",
+    "askAlia": "Tanya Alia",
+    "aliaClientContext": "Pengguna memakai Syra, aplikasi streaming musik dan podcast tempat mereka mencari katalog, memutar lagu, album, playlist, podcast, dan radio langsung, serta mengelola pustaka mereka.",
+    "aliaNowPlaying": "Sedang diputar: {{title}} oleh {{artist}}.",
+    "aliaSuggestion": {
+      "discover": "Carikan sesuatu yang baru untuk didengarkan",
+      "playlist": "Bantu aku membuat playlist",
+      "similar": "Artis mana yang mirip dengan favoritku?"
+    }
   },
   "nowPlaying": {
     "empty": {

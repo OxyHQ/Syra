@@ -372,7 +372,15 @@
   },
   "topbar": {
     "live": "Live",
-    "viewAllResults": "View all results"
+    "viewAllResults": "View all results",
+    "askAlia": "আলিয়াকে জিজ্ঞাসা করুন",
+    "aliaClientContext": "ব্যক্তিটি Syra ব্যবহার করছেন, একটি সংগীত ও পডকাস্ট স্ট্রিমিং অ্যাপ, যেখানে তিনি ক্যাটালগ খোঁজেন, গান, অ্যালবাম, প্লেলিস্ট, পডকাস্ট ও লাইভ রেডিও চালান এবং নিজের লাইব্রেরি পরিচালনা করেন।",
+    "aliaNowPlaying": "এখন বাজছে: {{artist}}-এর {{title}}।",
+    "aliaSuggestion": {
+      "discover": "শোনার মতো নতুন কিছু খুঁজে দাও",
+      "playlist": "একটি প্লেলিস্ট বানাতে সাহায্য করো",
+      "similar": "আমার প্রিয় শিল্পীদের মতো আর কারা আছেন?"
+    }
   },
   "nowPlaying": {
     "empty": {

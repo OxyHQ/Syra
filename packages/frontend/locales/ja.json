@@ -372,7 +372,15 @@
   },
   "topbar": {
     "live": "Live",
-    "viewAllResults": "View all results"
+    "viewAllResults": "View all results",
+    "askAlia": "Aliaに聞く",
+    "aliaClientContext": "ユーザーは音楽とポッドキャストのストリーミングアプリ Syra を使っていて、カタログの検索、曲・アルバム・プレイリスト・ポッドキャスト・ライブラジオの再生、ライブラリの管理ができます。",
+    "aliaNowPlaying": "再生中: {{artist}} の {{title}}。",
+    "aliaSuggestion": {
+      "discover": "新しく聴ける曲を見つけて",
+      "playlist": "プレイリスト作りを手伝って",
+      "similar": "お気に入りのアーティストに似たアーティストは?"
+    }
   },
   "nowPlaying": {
     "empty": {

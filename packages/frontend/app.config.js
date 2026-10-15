@@ -133,6 +133,17 @@ module.exports = function (_config) {
           'expo-image-picker',
           'expo-video',
           'expo-audio',
+          // Dictation and voice calls with Alia (`@alia.onl/sdk`) recognise speech
+          // on the device; the plugin writes the two iOS purpose strings and the
+          // Android RECORD_AUDIO permission.
+          [
+            'expo-speech-recognition',
+            {
+              microphonePermission:
+                'Allow $(PRODUCT_NAME) to hear what you dictate and say to Alia.',
+              speechRecognitionPermission: 'Allow $(PRODUCT_NAME) to turn your speech into text.',
+            },
+          ],
           [
             'expo-secure-store',
             {

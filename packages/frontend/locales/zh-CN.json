@@ -372,7 +372,15 @@
   },
   "topbar": {
     "live": "Live",
-    "viewAllResults": "View all results"
+    "viewAllResults": "View all results",
+    "askAlia": "问问 Alia",
+    "aliaClientContext": "用户正在使用 Syra，这是一款音乐和播客流媒体应用，可以在其中搜索曲库、播放歌曲、专辑、播放列表、播客和直播电台，并管理自己的资料库。",
+    "aliaNowPlaying": "正在播放：{{artist}} 的 {{title}}。",
+    "aliaSuggestion": {
+      "discover": "帮我找点新的歌来听",
+      "playlist": "帮我创建一个播放列表",
+      "similar": "哪些艺人和我喜欢的艺人相似？"
+    }
   },
   "nowPlaying": {
     "empty": {

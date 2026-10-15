@@ -279,12 +279,12 @@ describe('the show screen delete affordance', () => {
   it('asks before it deletes — pressing delete opens a confirmation and calls nothing', async () => {
     const tree = await renderScreen();
 
-    expect(lastDialog().visible).toBe(false);
+    expect(lastDialog().open).toBe(false);
     pressDelete(tree);
     await flush();
 
     expect(mockDeletePodcast).not.toHaveBeenCalled();
-    expect(lastDialog().visible).toBe(true);
+    expect(lastDialog().open).toBe(true);
   });
 
   it('names the show and the number of episodes going with it', async () => {
@@ -325,13 +325,13 @@ describe('the show screen delete affordance', () => {
     pressDelete(tree);
 
     act(() => {
-      (lastDialog().onClose as () => void)();
+      (lastDialog().onOpenChange as (open: boolean) => void)(false);
     });
     await flush();
 
     expect(mockDeletePodcast).not.toHaveBeenCalled();
     expect(mockReplace).not.toHaveBeenCalled();
-    expect(lastDialog().visible).toBe(false);
+    expect(lastDialog().open).toBe(false);
   });
 
   it('deletes exactly this show, exactly once, when the confirmation is confirmed', async () => {

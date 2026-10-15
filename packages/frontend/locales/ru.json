@@ -372,7 +372,15 @@
   },
   "topbar": {
     "live": "Live",
-    "viewAllResults": "View all results"
+    "viewAllResults": "View all results",
+    "askAlia": "Спросить Алию",
+    "aliaClientContext": "Человек пользуется Syra — приложением для стриминга музыки и подкастов, где он ищет по каталогу, слушает треки, альбомы, плейлисты, подкасты и прямой эфир и управляет своей библиотекой.",
+    "aliaNowPlaying": "Сейчас играет: {{title}}, исполнитель — {{artist}}.",
+    "aliaSuggestion": {
+      "discover": "Найди мне что-нибудь новое послушать",
+      "playlist": "Помоги составить плейлист",
+      "similar": "Какие исполнители похожи на моих любимых?"
+    }
   },
   "nowPlaying": {
     "empty": {

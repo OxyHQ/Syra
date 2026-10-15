@@ -372,7 +372,15 @@
   },
   "topbar": {
     "live": "Live",
-    "viewAllResults": "View all results"
+    "viewAllResults": "View all results",
+    "askAlia": "عالیہ سے پوچھیں",
+    "aliaClientContext": "یہ شخص Syra استعمال کر رہا ہے، جو موسیقی اور پوڈکاسٹ اسٹریمنگ ایپ ہے، جہاں وہ کیٹلاگ تلاش کرتا ہے، گانے، البم، پلے لسٹس، پوڈکاسٹ اور لائیو ریڈیو چلاتا ہے اور اپنی لائبریری سنبھالتا ہے۔",
+    "aliaNowPlaying": "ابھی چل رہا ہے: {{artist}} کا {{title}}۔",
+    "aliaSuggestion": {
+      "discover": "میرے لیے سننے کو کچھ نیا ڈھونڈو",
+      "playlist": "پلے لسٹ بنانے میں میری مدد کریں",
+      "similar": "میرے پسندیدہ فنکاروں جیسے اور کون سے فنکار ہیں؟"
+    }
   },
   "nowPlaying": {
     "empty": {

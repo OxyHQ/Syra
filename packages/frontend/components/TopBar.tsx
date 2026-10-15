@@ -22,6 +22,7 @@ import { useOxy, ProfileButton } from '@oxy.so/services';
 import { useQuery } from '@tanstack/react-query';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import Avatar from './Avatar';
+import { AskAlia } from './AskAlia';
 import { Logo } from './Logo';
 import { useMediaQuery } from 'react-responsive';
 import { searchService } from '@/services/searchService';
@@ -495,7 +496,10 @@ export const TopBar: React.FC = () => {
             <Logo color={navIconColor} />
           </View>
         </Pressable>
-        <View style={styles.mobileRightSection}>{renderProfileAction()}</View>
+        <View style={styles.mobileRightSection}>
+          <AskAlia />
+          {renderProfileAction()}
+        </View>
       </View>
     );
   }
@@ -568,6 +572,7 @@ export const TopBar: React.FC = () => {
         <Pressable style={styles.iconButton}>
           <MaterialCommunityIcons name="bell-outline" size={24} color={theme.colors.text} />
         </Pressable>
+        <AskAlia />
         {renderProfileAction()}
       </View>
     </View>
@@ -612,6 +617,9 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   mobileRightSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     flexShrink: 0,
   },
   centerSection: {

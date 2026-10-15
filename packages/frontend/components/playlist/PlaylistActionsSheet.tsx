@@ -202,8 +202,8 @@ export const PlaylistActionsSheet: React.FC<PlaylistActionsSheetProps> = ({
       </BottomSheet>
 
       <AlertDialog
-        visible={confirmingDelete}
-        onClose={() => setConfirmingDelete(false)}
+        open={confirmingDelete}
+        onOpenChange={setConfirmingDelete}
         title={`Delete "${playlist.name}"?`}
         description={t('playlistActions.deleteDescription')}
         confirmLabel="Delete"
