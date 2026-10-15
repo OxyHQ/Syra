@@ -235,7 +235,6 @@ describe('the deploy workflow can actually run its own gate', () => {
 describe('runtime secrets come from SSM, and no workflow writes one', () => {
   /** What CI itself spends. Nothing here is read by the running service. */
   const CI_ONLY_SECRETS = [
-    'ADD_TO_PROJECT_TOKEN',
     'CLOUDFLARE_ACCOUNT_ID',
     'CLOUDFLARE_API_TOKEN',
     'GITHUB_TOKEN',
