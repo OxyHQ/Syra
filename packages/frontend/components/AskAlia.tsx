@@ -1,13 +1,14 @@
-import React, { useCallback, useMemo, useRef } from 'react';
+import type React from 'react';
+import { Suspense, lazy, useCallback, useMemo, useState } from 'react';
 import { Pressable } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { AliaChatSheet, type AliaChatSheetRef } from '@alia.onl/sdk';
-import { VoiceSession } from '@alia.onl/sdk/voice';
 import { RiSparklingLine } from '@oxy.so/bloom/icons/RiSparklingLine';
 import { useTheme } from '@oxy.so/bloom/theme';
 import { useOxy } from '@oxy.so/services';
 import { useAuthGate } from '@/hooks/useAuthGate';
 import { usePlayerStore } from '@/stores/playerStore';
+
+const AskAliaSheet = lazy(() => import('./AskAliaSheet'));
 
 /**
  * The "Ask Alia" entry point: a sparkle button for the top bar and the chat
@@ -17,6 +18,9 @@ import { usePlayerStore } from '@/stores/playerStore';
  * and a signed-out press opens the Oxy sign-in dialog instead. What the person
  * is listening to rides along in `clientContext`, so "who is this?" needs no
  * explanation.
+ *
+ * The sheet (and the Alia SDK behind it) loads on the first press, not with the
+ * entry bundle.
  */
 export const AskAlia: React.FC = () => {
   const { t } = useTranslation();
@@ -24,7 +28,7 @@ export const AskAlia: React.FC = () => {
   const { openAccountDialog } = useOxy();
   const { canUsePrivateApi } = useAuthGate();
   const currentTrack = usePlayerStore((state) => state.currentTrack);
-  const aliaChatRef = useRef<AliaChatSheetRef>(null);
+  const [presentSignal, setPresentSignal] = useState(0);
 
   const clientContext = useMemo(() => {
     const base = t('topbar.aliaClientContext');
@@ -49,7 +53,7 @@ export const AskAlia: React.FC = () => {
       openAccountDialog('signin');
       return;
     }
-    aliaChatRef.current?.present();
+    setPresentSignal((signal) => signal + 1);
   }, [canUsePrivateApi, openAccountDialog]);
 
   return (
@@ -62,13 +66,14 @@ export const AskAlia: React.FC = () => {
       >
         <RiSparklingLine width={24} height={24} fill={theme.colors.text} />
       </Pressable>
-      {canUsePrivateApi && (
-        <AliaChatSheet
-          ref={aliaChatRef}
-          voiceSession={VoiceSession}
-          clientContext={clientContext}
-          welcomeSuggestions={welcomeSuggestions}
-        />
+      {canUsePrivateApi && presentSignal > 0 && (
+        <Suspense fallback={null}>
+          <AskAliaSheet
+            presentSignal={presentSignal}
+            clientContext={clientContext}
+            welcomeSuggestions={welcomeSuggestions}
+          />
+        </Suspense>
       )}
     </>
   );
