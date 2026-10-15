@@ -99,6 +99,7 @@ COPY packages/shared-types/package.json ./packages/shared-types/package.json
 COPY packages/frontend/package.json ./packages/frontend/package.json
 COPY packages/studio/package.json ./packages/studio/package.json
 COPY packages/sdk/package.json ./packages/sdk/package.json
+COPY packages/contracts/package.json ./packages/contracts/package.json
 
 # ---------------------------------------------------------------------------
 # Stage 1b: prod-deps — the production dependency tree the runner ships.
@@ -136,6 +137,7 @@ RUN bun install --frozen-lockfile --ignore-scripts
 COPY tsconfig.json ./tsconfig.json
 COPY packages/shared-types ./packages/shared-types
 COPY packages/sdk ./packages/sdk
+COPY packages/contracts ./packages/contracts
 COPY packages/backend ./packages/backend
 
 # Build order is load-bearing: shared-types, then the sdk, then the backend.
@@ -215,6 +217,8 @@ COPY --from=builder --chown=bun:bun /app/packages/sdk/package.json ./packages/sd
 COPY --from=builder --chown=bun:bun /app/packages/backend/dist ./packages/backend/dist
 COPY --from=builder --chown=bun:bun /app/packages/shared-types/dist ./packages/shared-types/dist
 COPY --from=builder --chown=bun:bun /app/packages/sdk/lib ./packages/sdk/lib
+COPY --from=builder --chown=bun:bun /app/packages/contracts/package.json ./packages/contracts/package.json
+COPY --from=builder --chown=bun:bun /app/packages/contracts/dist ./packages/contracts/dist
 
 # i18n locale files and other runtime assets shipped with the backend source.
 COPY --from=builder --chown=bun:bun /app/packages/backend/assets ./packages/backend/assets

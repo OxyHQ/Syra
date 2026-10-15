@@ -177,6 +177,7 @@ jobs:
       # order the deploy workflows use.
       - run: bun run build:shared-types
       - run: bun run build:sdk
+      - run: bun run check:public-openapi
       - name: Typecheck all packages
         run: bun run --filter '*' typecheck
       # The SDK suite ran nowhere in CI: its live-rooms UI tests (the icon glyphs

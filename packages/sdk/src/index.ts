@@ -58,3 +58,5 @@ export type {
   ArtworkSize,
 } from './schema';
 export { SyraApiError } from './errors';
+
+export type { PublicPodcastCard, PublicPodcastCardsResponse } from '@syra.fm/contracts';
