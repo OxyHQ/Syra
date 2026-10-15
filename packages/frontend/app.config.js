@@ -137,11 +137,13 @@ module.exports = function (_config) {
           // on the device; the plugin writes the two iOS purpose strings and the
           // Android RECORD_AUDIO permission.
           [
-            'expo-speech-recognition',
+            'react-native-audio-api',
             {
-              microphonePermission:
+              iosMicrophonePermission:
                 'Allow $(PRODUCT_NAME) to hear what you dictate and say to Alia.',
-              speechRecognitionPermission: 'Allow $(PRODUCT_NAME) to turn your speech into text.',
+              iosBackgroundMode: false,
+              androidForegroundService: false,
+              androidPermissions: ['android.permission.RECORD_AUDIO'],
             },
           ],
           [

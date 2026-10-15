@@ -2,7 +2,7 @@ import type React from 'react';
 import { Suspense, lazy, useCallback, useMemo, useState } from 'react';
 import { Pressable } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { RiSparklingLine } from '@oxy.so/bloom/icons/RiSparklingLine';
+import { AliaAvatarIcon } from '@alia.onl/sdk/avatar';
 import { useTheme } from '@oxy.so/bloom/theme';
 import { useOxy } from '@oxy.so/services';
 import { useAuthGate } from '@/hooks/useAuthGate';
@@ -64,7 +64,7 @@ export const AskAlia: React.FC = () => {
         accessibilityLabel={t('topbar.askAlia')}
         className="h-10 w-10 items-center justify-center rounded-full"
       >
-        <RiSparklingLine width={24} height={24} fill={theme.colors.text} />
+        <AliaAvatarIcon width={24} height={24} fill={theme.colors.text} />
       </Pressable>
       {canUsePrivateApi && presentSignal > 0 && (
         <Suspense fallback={null}>
