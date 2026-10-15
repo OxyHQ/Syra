@@ -18,15 +18,13 @@ export function createPublicPodcastCardsRouter(store?: Store, limit = 120) {
       legacyHeaders: false,
       handler: (_req, res) => {
         const retryAfterSeconds = Number(res.getHeader('Retry-After')) || 60;
-        res
-          .status(429)
-          .json({
-            error: {
-              code: 'rate_limited',
-              message: 'Too many requests',
-              details: { retryAfterSeconds },
-            },
-          });
+        res.status(429).json({
+          error: {
+            code: 'rate_limited',
+            message: 'Too many requests',
+            details: { retryAfterSeconds },
+          },
+        });
       },
     }),
   );
