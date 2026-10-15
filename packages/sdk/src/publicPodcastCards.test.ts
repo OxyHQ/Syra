@@ -8,7 +8,7 @@ function client(body: unknown, inspect?: (init?: RequestInit) => void) {
     fetch: (async (_url, init) => {
       inspect?.(init);
       return Response.json(body);
-    }) as typeof fetch,
+    }) as unknown as typeof fetch,
   });
 }
 describe('public podcast reference batches', () => {
@@ -35,7 +35,7 @@ describe('public podcast reference batches', () => {
     const noFetch = createSyraClient({
       fetch: (() => {
         throw new Error('must not fetch');
-      }) as typeof fetch,
+      }) as unknown as typeof fetch,
     });
     for (const ids of [[], Array.from({ length: 101 }, (_, i) => String(i))]) {
       await expect(noFetch.getPublicPodcastCards(ids)).rejects.not.toThrow('must not fetch');
