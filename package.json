@@ -47,12 +47,12 @@
     "node": ">=18.0.0"
   },
   "overrides": {
-    "@oxy.so/bloom": "10.4.0",
+    "@oxy.so/bloom": "10.7.0",
     "@oxy.so/core": "4.5.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.0",
-    "react-native-css": "3.0.7",
+    "react-native-css": "3.1.0-rc.0",
     "nativewind": "5.0.0-preview.3",
     "tailwindcss": "4.2.2",
     "lightningcss": "1.30.1",
