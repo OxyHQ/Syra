@@ -372,7 +372,15 @@
   },
   "topbar": {
     "live": "Live",
-    "viewAllResults": "View all results"
+    "viewAllResults": "View all results",
+    "askAlia": "Pregunta a l'Alia",
+    "aliaClientContext": "La persona fa servir Syra, una aplicació de música i pòdcasts en streaming on cerca al catàleg, reprodueix cançons, àlbums, llistes, pòdcasts i ràdio en directe, i gestiona la seva biblioteca.",
+    "aliaNowPlaying": "Ara sona: {{title}} de {{artist}}.",
+    "aliaSuggestion": {
+      "discover": "Troba'm alguna cosa nova per escoltar",
+      "playlist": "Ajuda'm a crear una llista de reproducció",
+      "similar": "Quins artistes s'assemblen als meus preferits?"
+    }
   },
   "nowPlaying": {
     "empty": {

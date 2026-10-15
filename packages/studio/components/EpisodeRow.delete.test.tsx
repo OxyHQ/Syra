@@ -180,13 +180,13 @@ describe('EpisodeRow delete affordance', () => {
   it('asks before it deletes — pressing delete opens a confirmation and calls nothing', async () => {
     const tree = renderRow(true);
 
-    expect(lastDialog().visible).toBe(false);
+    expect(lastDialog().open).toBe(false);
 
     pressDelete(tree);
     await flush();
 
     expect(mockDeleteEpisode).not.toHaveBeenCalled();
-    expect(lastDialog().visible).toBe(true);
+    expect(lastDialog().open).toBe(true);
   });
 
   it('names the episode it is about to destroy, and says the loss is permanent', () => {
@@ -203,13 +203,13 @@ describe('EpisodeRow delete affordance', () => {
     pressDelete(tree);
 
     act(() => {
-      (lastDialog().onClose as () => void)();
+      (lastDialog().onOpenChange as (open: boolean) => void)(false);
     });
     await flush();
 
     expect(mockDeleteEpisode).not.toHaveBeenCalled();
     expect(invalidateQueries).not.toHaveBeenCalled();
-    expect(lastDialog().visible).toBe(false);
+    expect(lastDialog().open).toBe(false);
   });
 
   it('deletes exactly this episode, exactly once, when the confirmation is confirmed', async () => {
@@ -224,7 +224,7 @@ describe('EpisodeRow delete affordance', () => {
     expect(mockDeleteEpisode).toHaveBeenCalledWith('ep-1');
     // The dialog closes on confirm too: leaving it open would let a second
     // press fire a second DELETE at a row that is already gone.
-    expect(lastDialog().visible).toBe(false);
+    expect(lastDialog().open).toBe(false);
   });
 
   it('refreshes the lists that showed the episode once the delete succeeds', async () => {

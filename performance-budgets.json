@@ -2,11 +2,11 @@
   "frontendWeb": {
     "initialJavaScriptBytes": 8992580,
     "initialJavaScriptGzipBytes": 2188949,
-    "translationBytes": 1028965,
-    "translationGzipBytes": 352661,
-    "otherJavaScriptBytes": 683469,
-    "otherJavaScriptGzipBytes": 205136,
-    "nonJavaScriptBytes": 2479740,
+    "translationBytes": 1241425,
+    "translationGzipBytes": 423917,
+    "otherJavaScriptBytes": 1680984,
+    "otherJavaScriptGzipBytes": 497172,
+    "nonJavaScriptBytes": 2513891,
     "fontBytes": 2105000
   }
 }

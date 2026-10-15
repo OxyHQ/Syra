@@ -191,8 +191,8 @@ function ShowDetail({ id }: { id: string }) {
           </View>
 
           <AlertDialog
-            visible={confirmingDelete}
-            onClose={() => setConfirmingDelete(false)}
+            open={confirmingDelete}
+            onOpenChange={setConfirmingDelete}
             title={`Delete “${podcast.title}”?`}
             description={`This permanently removes ${destroys}, every subscription and every listener's saved position. The RSS feed stops working, and none of it can be restored.`}
             confirmLabel="Delete forever"

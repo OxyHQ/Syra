@@ -82,8 +82,8 @@ export function EpisodeRow({
       */}
       {deletable ? (
         <AlertDialog
-          visible={confirming}
-          onClose={() => setConfirming(false)}
+          open={confirming}
+          onOpenChange={setConfirming}
           title={`Delete “${episode.title}”?`}
           description="This permanently removes the episode, its audio and every listener's saved position in it. It disappears from the show's RSS feed, and it cannot be restored."
           confirmLabel="Delete forever"

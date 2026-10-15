@@ -372,7 +372,15 @@
   },
   "topbar": {
     "live": "In diretta",
-    "viewAllResults": "Vedi tutti i risultati"
+    "viewAllResults": "Vedi tutti i risultati",
+    "askAlia": "Chiedi ad Alia",
+    "aliaClientContext": "La persona usa Syra, un'app di streaming di musica e podcast in cui cerca nel catalogo, riproduce brani, album, playlist, podcast e radio dal vivo e gestisce la propria libreria.",
+    "aliaNowPlaying": "In riproduzione: {{title}} di {{artist}}.",
+    "aliaSuggestion": {
+      "discover": "Trovami qualcosa di nuovo da ascoltare",
+      "playlist": "Aiutami a creare una playlist",
+      "similar": "Quali artisti somigliano ai miei preferiti?"
+    }
   },
   "nowPlaying": {
     "empty": {

@@ -372,7 +372,15 @@
   },
   "topbar": {
     "live": "Live",
-    "viewAllResults": "View all results"
+    "viewAllResults": "View all results",
+    "askAlia": "اسأل أليا",
+    "aliaClientContext": "يستخدم الشخص Syra، تطبيق بث الموسيقى والبودكاست الذي يبحث فيه في الكتالوج ويشغّل الأغاني والألبومات وقوائم التشغيل والبودكاست والراديو المباشر ويدير مكتبته.",
+    "aliaNowPlaying": "قيد التشغيل: {{title}} لـ {{artist}}.",
+    "aliaSuggestion": {
+      "discover": "اقترح لي شيئًا جديدًا للاستماع إليه",
+      "playlist": "ساعدني في إنشاء قائمة تشغيل",
+      "similar": "ما الفنانون المشابهون لفنانيّ المفضلين؟"
+    }
   },
   "nowPlaying": {
     "empty": {
