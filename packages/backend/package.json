@@ -26,7 +26,7 @@
     "@crowdsource.you/contracts": "1.1.0",
     "@crowdsource.you/core": "3.0.0",
     "@oxy.so/core": "4.5.0",
-    "@oxy.so/db": "^1.0.0",
+    "@oxy.so/db": "^1.1.0",
     "@socket.io/redis-adapter": "^8.2.0",
     "@syra.fm/sdk": "workspace:*",
     "@syra/shared-types": "workspace:*",
