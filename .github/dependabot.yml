@@ -6,12 +6,17 @@
 # only for first-party SDKs (`allow`); third-party updates stay manual
 # (`bun update`). The `oxy` group auto-merges via
 # .github/workflows/automerge-first-party.yml.
+#
+# Weekly, on Mondays, rather than daily: every bump PR runs the full Quality
+# workflow, and the org shares one 20-job Actions concurrency cap across every
+# repository. Security updates do not run on this schedule.
 version: 2
 updates:
   - package-ecosystem: bun
     directory: /
     schedule:
-      interval: daily
+      interval: weekly
+      day: "monday"
     open-pull-requests-limit: 5
     allow:
       - dependency-name: "@oxy.so/*"
@@ -23,6 +28,17 @@ updates:
           - "@oxy.so/*"
           - "@alia.onl/*"
           - "@clarity.surf/*"
+      # Today `allow` admits only the first-party scopes, so this stays empty;
+      # it is here so that widening `allow` lands minor and patch bumps as ONE
+      # weekly PR instead of one per package. A dependency joins the first
+      # group it matches, so the first-party SDKs stay in `oxy`, whose branch
+      # name the auto-merge workflow keys on.
+      minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
 
   - package-ecosystem: "github-actions"
     directory: "/"

@@ -53,6 +53,9 @@ env:
 jobs:
   run-script:
     runs-on: ubuntu-latest
+    # run-one-shot-ecs-task.sh waits up to MAX_WAIT_SECS (3600) for the task to
+    # stop; this only stops a hang holding a runner for the 6-hour default.
+    timeout-minutes: 75
     # workflow_dispatch runs the workflow FILE AS IT EXISTS on whatever ref is
     # selected, not necessarily main — so without this, dispatching against a
     # branch that has edited run-one-shot-ecs-task.sh would still assume the
