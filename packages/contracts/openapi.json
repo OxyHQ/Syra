@@ -27,9 +27,7 @@
                     }
                   }
                 },
-                "required": [
-                  "ids"
-                ],
+                "required": ["ids"],
                 "additionalProperties": false
               }
             }
@@ -70,11 +68,7 @@
                             "format": "uri"
                           }
                         },
-                        "required": [
-                          "id",
-                          "title",
-                          "showUrl"
-                        ],
+                        "required": ["id", "title", "showUrl"],
                         "additionalProperties": false
                       }
                     },
@@ -88,10 +82,7 @@
                       }
                     }
                   },
-                  "required": [
-                    "items",
-                    "unavailableIds"
-                  ],
+                  "required": ["items", "unavailableIds"],
                   "additionalProperties": false
                 }
               }
@@ -127,25 +118,15 @@
                             "type": "string"
                           },
                           "additionalProperties": {
-                            "type": [
-                              "string",
-                              "number",
-                              "boolean",
-                              "null"
-                            ]
+                            "type": ["string", "number", "boolean", "null"]
                           }
                         }
                       },
-                      "required": [
-                        "code",
-                        "message"
-                      ],
+                      "required": ["code", "message"],
                       "additionalProperties": false
                     }
                   },
-                  "required": [
-                    "error"
-                  ],
+                  "required": ["error"],
                   "additionalProperties": false
                 }
               }
@@ -181,25 +162,15 @@
                             "type": "string"
                           },
                           "additionalProperties": {
-                            "type": [
-                              "string",
-                              "number",
-                              "boolean",
-                              "null"
-                            ]
+                            "type": ["string", "number", "boolean", "null"]
                           }
                         }
                       },
-                      "required": [
-                        "code",
-                        "message"
-                      ],
+                      "required": ["code", "message"],
                       "additionalProperties": false
                     }
                   },
-                  "required": [
-                    "error"
-                  ],
+                  "required": ["error"],
                   "additionalProperties": false
                 }
               }
@@ -235,25 +206,15 @@
                             "type": "string"
                           },
                           "additionalProperties": {
-                            "type": [
-                              "string",
-                              "number",
-                              "boolean",
-                              "null"
-                            ]
+                            "type": ["string", "number", "boolean", "null"]
                           }
                         }
                       },
-                      "required": [
-                        "code",
-                        "message"
-                      ],
+                      "required": ["code", "message"],
                       "additionalProperties": false
                     }
                   },
-                  "required": [
-                    "error"
-                  ],
+                  "required": ["error"],
                   "additionalProperties": false
                 }
               }
