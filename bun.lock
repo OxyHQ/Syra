@@ -67,7 +67,7 @@
       "name": "@syra/frontend",
       "version": "2.0.0",
       "dependencies": {
-        "@alia.onl/sdk": "^15.4.0",
+        "@alia.onl/sdk": "^15.6.0",
         "@babel/plugin-proposal-export-namespace-from": "^7.18.9",
         "@babel/plugin-syntax-dynamic-import": "^7.8.3",
         "@babel/plugin-syntax-import-meta": "^7.10.4",
@@ -356,7 +356,7 @@
     "tailwindcss": "4.2.2",
   },
   "packages": {
-    "@alia.onl/sdk": ["@alia.onl/sdk@15.4.0", "", { "dependencies": { "clsx": "^2.1.1", "react-native-markdown-display": "^7.0.2", "socket.io-client": "^4.8.3", "tailwind-merge": "^3.7.0", "zustand": "^5.0.15" }, "peerDependencies": { "@expo/vector-icons": "^15.1.1", "@oxy.so/bloom": ">=10.6.0", "@oxy.so/core": ">=3.0.0", "@oxy.so/services": ">=8.0.0", "@react-native-async-storage/async-storage": "^2.2.0", "expo-audio": "^57.0.0", "expo-blur": "^57.0.0", "expo-clipboard": "^57.0.0", "expo-document-picker": "^57.0.0", "expo-file-system": "^57.0.0", "expo-haptics": "^57.0.0", "expo-image": "^57.0.0", "expo-image-picker": "^57.0.2", "nativewind": "^5.0.0-preview.3", "react": "^19.2.3", "react-native": "^0.86.0", "react-native-audio-api": "^0.13.6", "react-native-gesture-handler": "^2.32.0", "react-native-keyboard-controller": "^1.21.9", "react-native-reanimated": "^4.5.0", "react-native-safe-area-context": "^5.8.0", "react-native-svg": "^15.15.5" }, "optionalPeers": ["expo-clipboard", "nativewind", "react-native-audio-api"] }, "sha512-yDMXKKJSy8O2amVT6V0yZ2WcMscxXblOc/uhS1Baw12MXcjWzucy1aE/bLXqemaHX6oVXFCxW5pcARnn3jtbgg=="],
+    "@alia.onl/sdk": ["@alia.onl/sdk@15.6.0", "", { "dependencies": { "clsx": "^2.1.1", "socket.io-client": "^4.8.3", "tailwind-merge": "^3.7.0", "zustand": "^5.0.15" }, "peerDependencies": { "@expo/vector-icons": "^15.1.1", "@oxy.so/bloom": ">=10.7.0", "@oxy.so/core": ">=3.0.0", "@oxy.so/services": ">=8.0.0", "@react-native-async-storage/async-storage": "^2.2.0", "expo-audio": "^57.0.0", "expo-blur": "^57.0.0", "expo-clipboard": "^57.0.0", "expo-document-picker": "^57.0.0", "expo-file-system": "^57.0.0", "expo-haptics": "^57.0.0", "expo-image": "^57.0.0", "expo-image-picker": "^57.0.2", "nativewind": "^5.0.0-preview.3", "react": "^19.2.3", "react-native": "^0.86.0", "react-native-audio-api": "^0.13.6", "react-native-gesture-handler": "^2.32.0", "react-native-keyboard-controller": "^1.21.9", "react-native-reanimated": "^4.5.0", "react-native-safe-area-context": "^5.8.0", "react-native-svg": "^15.15.5" }, "optionalPeers": ["expo-clipboard", "nativewind", "react-native-audio-api"] }, "sha512-ppYq05SmhEcfbc1D20imqPnxLpJR6j8x08jm0Mg4MPG6kjIxpWEtcr5H9WqXLOyuV7nDg36lamqxmc4gqaLFYA=="],
 
     "@alloc/quick-lru": ["@alloc/quick-lru@5.3.0", "", {}, "sha512-U4+70Pc5ZS9osnCBCE5Jha/ciHM+Yp+CNMNC/7HvYbNRk1Ldd+f7qO65W5qfhu/TCv+/ozljlXXe9Nj8419DMA=="],
 
