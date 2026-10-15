@@ -5,8 +5,7 @@ resolves per platform via export conditions:
 
 - **Node / bundlers** (`require`/`import`) get the **headless catalog client** —
   runs on Node 18+ and browsers, no React, React Native, or DOM dependencies;
-  the only runtime dependency is [`zod`](https://zod.dev). **Public reads only**
-  (no authentication in this version).
+  runtime schemas come from [`zod`](https://zod.dev) and `@syra.fm/contracts`.
 - **React Native** (Metro) and **Expo web** (`browser`) additionally get the
   **live-rooms engine** (audio rooms over LiveKit) and the `SyraIcon` brand mark.
   Its React Native / LiveKit / Expo dependencies are declared as **optional peer
@@ -34,6 +33,15 @@ const page = await syra.searchTracks('lofi beats', { limit: 10, offset: 0 });
 if (page.hasMore) {
   const next = await syra.searchTracks('lofi beats', { limit: 10, offset: 10 });
 }
+
+// Resolve visible podcast cards in one cancellable public-only batch.
+// Persist only show IDs in your app. Keep these facts outside durable caches.
+const cards = await syra.getPublicPodcastCards(['show-1', 'show-2'], {
+  signal: AbortSignal.timeout(8000),
+});
+// items: current active PUBLIC shows; unavailableIds: missing/private/unlisted/
+// withdrawn shows. 1–100 distinct IDs, no user credentials, no stale fallback.
+// The wire contract is /api/podcasts/openapi.json (generated from contracts).
 
 // Fetch a single track
 const track = await syra.getTrack(page.items[0].id);

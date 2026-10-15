@@ -1,4 +1,10 @@
 import {
+  publicApiErrorSchema,
+  publicPodcastCardsRequestSchema,
+  publicPodcastCardsResponseSchema,
+  type PublicPodcastCardsResponse,
+} from '@syra.fm/contracts';
+import {
   trackSummarySchema,
   podcastSummarySchema,
   podcastSubscriptionSchema,
@@ -244,6 +250,11 @@ export interface SyraClient {
    * returns just the show summary needed to render a card.
    */
   getPodcast(id: string): Promise<PodcastSummary>;
+  /** Current public-only show cards. Never sends credentials; no stale response cache. */
+  getPublicPodcastCards(
+    ids: readonly string[],
+    options?: { signal?: AbortSignal },
+  ): Promise<PublicPodcastCardsResponse>;
   /** Build the Syra web app deep link for a podcast show (`/podcasts/:id`). */
   podcastUrl(id: string): string;
   /**
@@ -566,8 +577,14 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
   /** Raise the API's own error, preferring the message it sent over the status text. */
   async function raiseFor(response: Response, path: string): Promise<never> {
     let detail = `${response.status} ${response.statusText}`;
+    let code: SyraApiError['code'];
     try {
       const body: unknown = await response.json();
+      const structured = publicApiErrorSchema.safeParse(body);
+      if (structured.success) {
+        code = structured.data.error.code;
+        detail = `${response.status} ${structured.data.error.message}`;
+      }
       if (body && typeof body === 'object' && 'error' in body && typeof body.error === 'string') {
         detail = `${response.status} ${body.error}`;
       }
@@ -575,10 +592,11 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
       // A non-JSON error body is not itself an error worth reporting; the status
       // is what the caller acts on.
     }
-    throw new SyraApiError(response.status, `Syra API request failed: ${detail} (${path})`);
+    throw new SyraApiError(response.status, `Syra API request failed: ${detail} (${path})`, code);
   }
 
   interface RequestInit_ {
+    signal?: AbortSignal;
     method?: string;
     body?: BodyInit;
     /** Extra headers. `Authorization` is added here, never by a caller. */
@@ -612,6 +630,7 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
 
     const response = await doFetch(`${baseURL}${path}`, {
       method: init.method ?? 'GET',
+      signal: init.signal,
       headers,
       ...(init.body === undefined ? {} : { body: init.body }),
     });
@@ -779,6 +798,28 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
         limit: numberOr(json?.limit, searchOptions.limit ?? rawPodcasts.length),
         offset: numberOr(json?.offset, searchOptions.offset ?? 0),
       };
+    },
+
+    async getPublicPodcastCards(ids, options = {}) {
+      const body = publicPodcastCardsRequestSchema.parse({ ids: [...new Set(ids)] });
+      const result = publicPodcastCardsResponseSchema.parse(
+        await request('/api/podcasts/public-cards', {
+          method: 'POST',
+          anonymous: true,
+          signal: options.signal,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        }),
+      );
+      const accounted = [...result.items.map((item) => item.id), ...result.unavailableIds];
+      if (
+        accounted.length !== body.ids.length ||
+        new Set(accounted).size !== body.ids.length ||
+        accounted.some((id) => !body.ids.includes(id))
+      ) {
+        throw new Error('Invalid public podcast batch: unaccounted or unexpected ID');
+      }
+      return result;
     },
 
     async getPodcast(id) {
