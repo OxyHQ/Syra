@@ -13,3 +13,5 @@
  * in normal flow below the panels; on mobile it floats above the bottom nav.
  */
 export const PLAYER_BAR_HEIGHT = 92;
+
+// probe: frontend-only change (CI path-filter check; not for merge)
