@@ -17,7 +17,9 @@ name: Refresh build cache
 
 on:
   schedule:
-    - cron: '7 4 * * 1'
+    # Tuesday, not Monday: most of the fleet's weekly cache and digest jobs
+    # fire on Monday morning against the org's 20 concurrent job slots.
+    - cron: '7 4 * * 2'
   workflow_dispatch:
 
 permissions:
