@@ -131,7 +131,7 @@ import { createSyraClient } from '@syra.fm/sdk/client';
 
 ## Changelog
 
-### 0.17.0
+### 0.18.0
 
 - **Breaking:** the Zod schemas moved off the root, `./client` and live-rooms
   entries to **`@syra.fm/sdk/schemas`** — `trackSummarySchema`,
