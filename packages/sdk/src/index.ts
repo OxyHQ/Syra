@@ -1,4 +1,4 @@
-// Base entrypoint: the platform-agnostic API client + schemas. The live-rooms
+// Base entrypoint: the platform-agnostic API client and its types. The live-rooms
 // engine is intentionally NOT re-exported here — it needs react-native peers, so it
 // ships from `./index.native`, which the `exports` map serves to the `react-native`
 // and `browser` conditions. A Node consumer resolving `@syra.fm/sdk` gets THIS file
@@ -24,22 +24,6 @@ export type {
   IngestEpisodeInput,
   UploadPayload,
 } from './client';
-export {
-  trackSummarySchema,
-  podcastSummarySchema,
-  podcastSubscriptionSchema,
-  podcastVisibilitySchema,
-  episodeSummarySchema,
-  episodeAudioSourceSchema,
-  episodeStatusSchema,
-  episodeDraftSchema,
-  episodeStreamSchema,
-  podcastDeletedSchema,
-  episodeDeletedSchema,
-  uploadedImageSchema,
-  coverArtSizesSchema,
-  coverArtVariantSchema,
-} from './schema';
 export type {
   TrackSummary,
   PodcastSummary,
@@ -56,5 +40,8 @@ export type {
   CoverArtSizes,
   CoverArtVariant,
   ArtworkSize,
-} from './schema';
-export { SyraApiError } from './errors';
+} from './types';
+// The Zod schemas are NOT exported here: this entry is what apps bundle, and
+// Zod (with its locales) is ~500 KiB of JavaScript for a check the client does
+// in plain TypeScript. Server consumers import them from `@syra.fm/sdk/schemas`.
+export { SyraApiError, SyraResponseError } from './errors';

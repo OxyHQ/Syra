@@ -13,3 +13,23 @@ export class SyraApiError extends Error {
     Object.setPrototypeOf(this, SyraApiError.prototype);
   }
 }
+
+/**
+ * Error thrown when a 2xx response from the Syra API does not have the shape
+ * this SDK promises its caller — a required field missing, a field of the wrong
+ * type. It is not an `SyraApiError`: the request succeeded, the payload did not.
+ */
+export class SyraResponseError extends Error {
+  /** The SDK method whose response failed, e.g. `getPodcast`. */
+  readonly method: string;
+  /** Where in the response the check failed (`['coverArtSizes', 'small', 'url']`). */
+  readonly path: (string | number)[];
+
+  constructor(method: string, path: (string | number)[], message: string) {
+    super(message);
+    this.name = 'SyraResponseError';
+    this.method = method;
+    this.path = path;
+    Object.setPrototypeOf(this, SyraResponseError.prototype);
+  }
+}

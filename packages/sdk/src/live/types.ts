@@ -17,8 +17,8 @@ export type {
 /**
  * The "now playing" stream surfaced in the live room. Derived from the
  * `room:stream:started` socket payload (and the room's persisted stream fields);
- * it is NOT parsed through zod, so it stays a plain structural type rather than
- * `z.infer<typeof ZStreamInfo>`. `startedAt` / `durationSec` are present for
+ * it is NOT checked at runtime, so it stays a plain structural type rather than
+ * the `ZStreamInfo` schema's shape. `startedAt` / `durationSec` are present for
  * length-known streams (e.g. a podcast episode) and drive the progress bar;
  * manual URL/RTMP streams omit them and render no progress UI.
  */

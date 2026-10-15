@@ -5,8 +5,9 @@ import {
   validateRecordings,
   validateRecording,
   validateHouse,
-  ZStartStreamResponse,
-  ZGenerateStreamKeyResponse,
+  validateResponse,
+  startStreamResponseCheck,
+  generateStreamKeyResponseCheck,
 } from '../validation';
 
 export interface CreateRoomData {
@@ -297,12 +298,11 @@ export function createRoomsService(httpClient: HttpClient) {
       if (!id) return null;
       try {
         const res = await httpClient.post(`/rooms/${id}/stream`, data);
-        const parsed = ZStartStreamResponse.safeParse(res);
-        if (!parsed.success) {
-          console.warn('[live] Invalid startStream response:', parsed.error.issues[0]);
-          return null;
-        }
-        return parsed.data;
+        return validateResponse(
+          startStreamResponseCheck,
+          res,
+          '[live] Invalid startStream response:',
+        );
       } catch (error) {
         console.warn('Failed to start stream', error);
         return null;
@@ -316,12 +316,11 @@ export function createRoomsService(httpClient: HttpClient) {
       if (!id) return null;
       try {
         const res = await httpClient.post(`/rooms/${id}/stream/rtmp`, data || {});
-        const parsed = ZGenerateStreamKeyResponse.safeParse(res);
-        if (!parsed.success) {
-          console.warn('[live] Invalid generateStreamKey response:', parsed.error.issues[0]);
-          return null;
-        }
-        return parsed.data;
+        return validateResponse(
+          generateStreamKeyResponseCheck,
+          res,
+          '[live] Invalid generateStreamKey response:',
+        );
       } catch (error) {
         console.warn('Failed to generate stream key', error);
         return null;
@@ -395,12 +394,11 @@ export function createRoomsService(httpClient: HttpClient) {
       if (!roomId) return null;
       try {
         const res = await httpClient.post(`/rooms/${roomId}/stream/podcast`, body);
-        const parsed = ZStartStreamResponse.safeParse(res);
-        if (!parsed.success) {
-          console.warn('[live] Invalid startPodcastStream response:', parsed.error.issues[0]);
-          return null;
-        }
-        return parsed.data;
+        return validateResponse(
+          startStreamResponseCheck,
+          res,
+          '[live] Invalid startPodcastStream response:',
+        );
       } catch (error) {
         console.warn('Failed to start podcast stream', error);
         return null;
@@ -418,10 +416,12 @@ export function createRoomsService(httpClient: HttpClient) {
       try {
         const res = await httpClient.post(`/rooms/${roomId}/stream/podcast/next`);
         if (res.ended === true) return { ended: true };
-        const parsed = ZStartStreamResponse.safeParse(res);
-        if (parsed.success) return { ended: false };
-        console.warn('[live] Invalid skipPodcastNext response:', parsed.error.issues[0]);
-        return null;
+        const parsed = validateResponse(
+          startStreamResponseCheck,
+          res,
+          '[live] Invalid skipPodcastNext response:',
+        );
+        return parsed ? { ended: false } : null;
       } catch (error) {
         console.warn('Failed to skip to next podcast episode', error);
         return null;
@@ -461,12 +461,11 @@ export function createRoomsService(httpClient: HttpClient) {
       if (!roomId) return null;
       try {
         const res = await httpClient.post(`/rooms/${roomId}/stream/track`, body);
-        const parsed = ZStartStreamResponse.safeParse(res);
-        if (!parsed.success) {
-          console.warn('[live] Invalid startTrackStream response:', parsed.error.issues[0]);
-          return null;
-        }
-        return parsed.data;
+        return validateResponse(
+          startStreamResponseCheck,
+          res,
+          '[live] Invalid startTrackStream response:',
+        );
       } catch (error) {
         console.warn('Failed to start track stream', error);
         return null;
