@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'bun:test';
-import { ZRoom, validateRooms } from './validation';
+import { roomCheck, validateRooms } from './validation';
 
 /**
  * The Live screen went empty in production, and this is the test that would have
  * caught it.
  *
- * `id` is REQUIRED on `ZRoom`, correct against the current backend. But `deploy-frontends.yml` fires on `packages/frontend` and
+ * `id` is REQUIRED on a room, correct against the current backend. But `deploy-frontends.yml` fires on `packages/frontend` and
  * `packages/shared-types` while the backend deploy is gated on approval — so
  * merging shipped the client half ALONE against a backend still answering `_id`.
  * `validateRooms` DROPS what it cannot parse, so every room vanished and the only
@@ -19,7 +19,7 @@ import { ZRoom, validateRooms } from './validation';
  * the strict and tolerant versions disagree is the one with `_id` and no `id`.
  */
 
-/** The minimum a room needs to satisfy every other required field in `ZRoom`. */
+/** The minimum a room needs to satisfy every other required field of a room. */
 function roomBody(): Record<string, unknown> {
   return {
     title: 'This is another test',
@@ -29,31 +29,34 @@ function roomBody(): Record<string, unknown> {
   };
 }
 
-describe('ZRoom accepts the `_id`-only wire shape', () => {
+describe('the room check accepts the `_id`-only wire shape', () => {
   it('reads `_id` as `id` when the payload carries no `id`', () => {
-    const parsed = ZRoom.safeParse({ ...roomBody(), _id: '6a47e96948842c36b38f8267' });
+    const parsed = roomCheck({ ...roomBody(), _id: '6a47e96948842c36b38f8267' }, []);
 
-    expect(parsed.success).toBe(true);
+    expect(parsed.ok).toBe(true);
     // Not just "it parsed" — the id has to be the value a caller can join with.
-    expect(parsed.success && parsed.data.id).toBe('6a47e96948842c36b38f8267');
+    expect(parsed.ok && parsed.value.id).toBe('6a47e96948842c36b38f8267');
   });
 
   it('leaves a payload that already carries `id` untouched', () => {
-    const parsed = ZRoom.safeParse({
-      ...roomBody(),
-      id: 'the-real-id',
-      _id: 'the-legacy-id',
-    });
+    const parsed = roomCheck(
+      {
+        ...roomBody(),
+        id: 'the-real-id',
+        _id: 'the-legacy-id',
+      },
+      [],
+    );
 
     // The ported backend is the authority once it ships; a stray `_id` must never
     // win over the field the contract actually names.
-    expect(parsed.success && parsed.data.id).toBe('the-real-id');
+    expect(parsed.ok && parsed.value.id).toBe('the-real-id');
   });
 
   it('still rejects a room with no identity at all', () => {
     // The fallback must not become a way for an unidentified room to pass — that
     // would trade an empty list for rooms nobody can join.
-    expect(ZRoom.safeParse(roomBody()).success).toBe(false);
+    expect(roomCheck(roomBody(), []).ok).toBe(false);
   });
 
   it('keeps `_id`-only rooms in the list instead of silently dropping them', () => {

@@ -585,7 +585,11 @@ describe('DELETE /api/episodes/:id', () => {
  * parses what it was told to expect and nothing about whether that is what Syra
  * sends. This is the only place both halves are in one process.
  *
- * Imported from the PACKAGE, `@syra.fm/sdk`, not by a relative path into its
+ * The client checks responses without Zod (so apps bundling it do not ship
+ * Zod); `@syra.fm/sdk/schemas` states the same contract as Zod schemas, and the
+ * SDK's `responses.parity.test.ts` holds the two to identical answers.
+ *
+ * Imported from the PACKAGE, `@syra.fm/sdk/schemas`, not by a relative path into its
  * `src/`. Two reasons, and the second is the one that bites: a relative deep
  * import crosses this package's `rootDir`, which `bun test` resolves happily and
  * `bun run typecheck` refuses (TS6059/TS6307) — the trap `AGENTS.md` records for
@@ -593,7 +597,7 @@ describe('DELETE /api/episodes/:id', () => {
  * so this validates the shape Alia will receive rather than one that only exists
  * inside this monorepo.
  */
-import { episodeDeletedSchema, podcastDeletedSchema } from '@syra.fm/sdk';
+import { episodeDeletedSchema, podcastDeletedSchema } from '@syra.fm/sdk/schemas';
 
 describe('the delete responses match the schemas @syra.fm/sdk parses them with', () => {
   it('DELETE /api/podcasts/:id returns exactly what podcastDeletedSchema expects', async () => {

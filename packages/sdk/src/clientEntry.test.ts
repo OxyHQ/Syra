@@ -22,3 +22,13 @@ describe('@syra.fm/sdk/client', () => {
     expect(source).not.toMatch(/from ['"]\.\/live/);
   });
 });
+
+describe('@syra.fm/sdk/schemas', () => {
+  it('resolves to the Zod schemas entry under every condition', () => {
+    const entry = pkg.exports['./schemas'];
+    expect(entry['react-native']).toBe('./src/schemas.ts');
+    expect(entry.import.default).toBe('./lib/module/schemas.js');
+    expect(entry.require.default).toBe('./lib/commonjs/schemas.js');
+    expect(entry.default).toBe('./lib/module/schemas.js');
+  });
+});

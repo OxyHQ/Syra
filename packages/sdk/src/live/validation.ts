@@ -1,14 +1,268 @@
-import { z } from 'zod';
+import {
+  array,
+  boolean,
+  formatPath,
+  looseObject,
+  nullish,
+  number,
+  object,
+  oneOf,
+  optional,
+  preprocess,
+  refine,
+  string,
+  type ValidationIssue,
+  type Validator,
+  withDefault,
+} from '../validate';
+
+/**
+ * The live-rooms wire types and the runtime checks the rooms service runs on
+ * them. Every object here KEEPS keys it does not name (the backend adds fields
+ * faster than the SDK ships), fills the documented defaults, and drops a whole
+ * row it cannot read rather than handing the UI half of one.
+ *
+ * These checks used to be Zod schemas; they are plain TypeScript now so that an
+ * app rendering a room does not ship Zod for it. The Zod versions remain, for
+ * server consumers, at `@syra.fm/sdk/schemas` (`./schema`), and
+ * `validation.parity.test.ts` holds the two to the same answers.
+ */
+
+/** Keys the backend may add that the SDK does not name are kept as sent. */
+type Open = { [key: string]: unknown };
+
+export const ROOM_OWNER_TYPES = ['profile', 'house', 'agora'] as const;
+export const ROOM_TYPES = ['talk', 'stage', 'broadcast'] as const;
+export const BROADCAST_KINDS = ['user', 'agora'] as const;
+export const ROOM_STATUSES = ['scheduled', 'live', 'ended'] as const;
+export const SPEAKER_PERMISSIONS = ['everyone', 'followers', 'invited'] as const;
+export const PARTICIPANT_ROLES = ['host', 'speaker', 'listener'] as const;
+export const HOUSE_ROLES = ['owner', 'admin', 'host', 'member'] as const;
+export const HOUSE_DISCOVERY = ['listed', 'unlisted', 'hidden'] as const;
+export const HOUSE_ROOM_ACCESS = ['anyone', 'members'] as const;
+export const HOUSE_JOIN = ['anyone', 'invite'] as const;
+export const RECURRENCE_TYPES = ['daily', 'weekly', 'biweekly', 'monthly'] as const;
+export const RECORDING_STATUSES = [
+  'recording',
+  'processing',
+  'ready',
+  'failed',
+  'deleted',
+] as const;
+export const RECORDING_ACCESS = ['public', 'participants'] as const;
+
+export type RoomType = (typeof ROOM_TYPES)[number];
+export type RoomStatus = (typeof ROOM_STATUSES)[number];
+export type SpeakerPermission = (typeof SPEAKER_PERMISSIONS)[number];
+
+// --- Types ---
+
+/**
+ * One podcast episode queued behind the current stream. `episodeId` is the
+ * opaque Syra episode handle; `syraPodcastId` (when present) identifies its show.
+ * The playable audio URL is never carried here — it is resolved server-side at
+ * play-time.
+ */
+export interface PodcastQueueItem extends Open {
+  syraPodcastId?: string;
+  episodeId: string;
+}
+
+export interface Room extends Open {
+  id: string;
+  title: string;
+  description?: string | null;
+
+  // Ownership
+  ownerType: (typeof ROOM_OWNER_TYPES)[number];
+  host: string;
+  houseId?: string | null;
+  createdByAdmin?: string | null;
+
+  // Classification
+  type: RoomType;
+  broadcastKind?: (typeof BROADCAST_KINDS)[number] | null;
+
+  // Lifecycle
+  status: RoomStatus;
+  scheduledStart?: string | null;
+  startedAt?: string | null;
+  endedAt?: string | null;
+
+  // Participation
+  speakerPermission?: SpeakerPermission | null;
+  participants: string[];
+  speakers: string[];
+  maxParticipants: number;
+
+  // Content
+  topic?: string | null;
+  tags?: string[];
+  archived: boolean;
+  seriesId?: string | null;
+
+  // Stats
+  stats?: { peakListeners: number; totalJoined: number };
+
+  // Streaming
+  activeIngressId?: string | null;
+  activeStreamUrl?: string | null;
+  streamTitle?: string | null;
+  streamImage?: string | null;
+  streamDescription?: string | null;
+  rtmpUrl?: string | null;
+  rtmpStreamKey?: string | null;
+  /**
+   * Stream progress + podcast lifecycle (shared contract with the backend).
+   * `streamStartedAt` is an ISO timestamp; `streamDurationSec` is the current
+   * stream's total length in seconds when known (e.g. a podcast episode);
+   * `podcastQueue` holds the episodes queued behind the current one.
+   */
+  streamStartedAt?: string | null;
+  streamDurationSec?: number | null;
+  podcastQueue?: PodcastQueueItem[] | null;
+
+  // Recording
+  recordingEnabled: boolean;
+  recordingEgressId?: string | null;
+
+  createdAt: string;
+}
+
+export interface RoomParticipant extends Open {
+  userId: string;
+  role: (typeof PARTICIPANT_ROLES)[number];
+  isMuted: boolean;
+  joinedAt: string;
+}
+
+export interface HouseMember extends Open {
+  userId: string;
+  role: (typeof HOUSE_ROLES)[number];
+  joinedAt: string;
+}
+
+/**
+ * House visibility as three orthogonal axes — mirrors the backend `House`
+ * model. `discovery` (who can find it), `rooms` (who can see/enter its rooms),
+ * `join` (how one becomes a member). See the backend model for the full
+ * contract.
+ */
+export interface HouseVisibility extends Open {
+  discovery: (typeof HOUSE_DISCOVERY)[number];
+  rooms: (typeof HOUSE_ROOM_ACCESS)[number];
+  join: (typeof HOUSE_JOIN)[number];
+}
+
+export interface House extends Open {
+  id: string;
+  name: string;
+  description?: string;
+  avatar?: string | null;
+  coverImage?: string | null;
+  /**
+   * Withheld from non-members of a `rooms: members` house; `memberCount` is sent
+   * in its place.
+   */
+  members: HouseMember[];
+  memberCount?: number;
+  createdBy: string;
+  visibility: HouseVisibility;
+  tags?: string[];
+  createdAt: string;
+}
+
+export interface Recurrence extends Open {
+  type: (typeof RECURRENCE_TYPES)[number];
+  /** 0–6. */
+  dayOfWeek?: number;
+  /** 1–31. */
+  dayOfMonth?: number;
+  /** `HH:MM`. */
+  time: string;
+  timezone: string;
+}
+
+export interface RoomTemplate extends Open {
+  titlePattern: string;
+  type: RoomType;
+  description?: string;
+  maxParticipants: number;
+  speakerPermission: SpeakerPermission;
+  tags?: string[];
+}
+
+export interface SeriesEpisode extends Open {
+  roomId: string;
+  scheduledStart: string;
+  episodeNumber: number;
+}
+
+export interface Series extends Open {
+  id: string;
+  title: string;
+  description?: string;
+  coverImage?: string | null;
+  houseId?: string | null;
+  createdBy: string;
+  recurrence: Recurrence;
+  roomTemplate: RoomTemplate;
+  episodes: SeriesEpisode[];
+  nextEpisodeNumber: number;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface Recording extends Open {
+  id: string;
+  roomId: string;
+  roomTitle: string;
+  host: string;
+  status: (typeof RECORDING_STATUSES)[number];
+  egressId: string;
+  objectKey: string;
+  fileSize?: number | null;
+  durationMs?: number | null;
+  startedAt: string;
+  stoppedAt?: string | null;
+  access: (typeof RECORDING_ACCESS)[number];
+  participantIds: string[];
+  expiresAt: string;
+  createdAt: string;
+}
+
+export interface StartStreamResponse extends Open {
+  ingressId: string;
+  url: string;
+}
+
+export interface GenerateStreamKeyResponse extends Open {
+  rtmpUrl: string;
+  streamKey: string;
+}
+
+/** Room attachment for posts. */
+export interface RoomAttachment extends Open {
+  roomId: string;
+  title: string;
+  status?: RoomStatus;
+  type?: RoomType;
+  topic?: string;
+  host?: string;
+}
+
+// --- Checks ---
 
 /**
  * Accept a payload whose identity arrives as `_id` and present it as `id`.
  *
- * `id` is REQUIRED on the four schemas below, which is correct against the current
+ * `id` is REQUIRED on the four types below, which is correct against the current
  * backend — `_id` is not part of the wire contract. But the frontend deploys on its own path (`deploy-frontends.yml`, on `packages/frontend`
  * and `packages/shared-types`) while the backend deploy is gated, so a merge to
  * `main` can ship the client half ALONE. It did once: `GET /rooms` answered `_id`,
- * every room failed `ZRoom`, and `validateRooms` DROPS what it cannot parse — so
- * the Live screen went empty in production with only a `console.warn` to say so.
+ * every room failed the room check, and `validateRooms` DROPS what it cannot
+ * read — so the Live screen went empty in production with only a `console.warn`
+ * to say so.
  *
  * Normalising here rather than teaching call sites to read `room.id ?? room._id`
  * is the architecture this repo already states: parse once at the API boundary and
@@ -18,346 +272,222 @@ import { z } from 'zod';
  * It can be deleted once no deployed Syra backend serves `_id`. Nothing breaks if
  * it outlives that: a payload carrying only `id` passes through untouched.
  */
-function withUnderscoreIdFallback<T extends z.ZodTypeAny>(schema: T) {
-  return z.preprocess((value) => {
-    if (value === null || typeof value !== 'object') return value;
-    const doc = value as Record<string, unknown>;
-    if (typeof doc['id'] === 'string' || typeof doc['_id'] !== 'string') return value;
-    return { ...doc, id: doc['_id'] };
-  }, schema);
+export function underscoreIdAsId(value: unknown): unknown {
+  if (value === null || typeof value !== 'object') return value;
+  const doc = value as Record<string, unknown>;
+  if (typeof doc.id === 'string' || typeof doc._id !== 'string') return value;
+  return { ...doc, id: doc._id };
 }
 
-// --- Podcast queue ---
+const strings = array(string);
 
-/**
- * One podcast episode queued behind the current stream. `episodeId` is the
- * opaque Syra episode handle; `syraPodcastId` (when present) identifies its show.
- * The playable audio URL is never carried here — it is resolved server-side at
- * play-time.
- */
-export const ZPodcastQueueItem = z
-  .object({
-    syraPodcastId: z.string().optional(),
-    episodeId: z.string(),
-  })
-  .passthrough();
+const podcastQueueItem = looseObject<PodcastQueueItem>({
+  syraPodcastId: optional(string),
+  episodeId: string,
+});
 
-export type PodcastQueueItem = z.infer<typeof ZPodcastQueueItem>;
-
-// --- Room (replaces Space) ---
-
-export const ZRoom = withUnderscoreIdFallback(
-  z
-    .object({
-      id: z.string(),
-      title: z.string(),
-      description: z.string().nullish(),
-
-      // Ownership
-      ownerType: z.enum(['profile', 'house', 'agora']).default('profile'),
-      host: z.string(),
-      houseId: z.string().optional().nullable(),
-      createdByAdmin: z.string().optional().nullable(),
-
-      // Classification
-      type: z.enum(['talk', 'stage', 'broadcast']).default('talk'),
-      broadcastKind: z.enum(['user', 'agora']).optional().nullable(),
-
-      // Lifecycle
-      status: z.enum(['scheduled', 'live', 'ended']),
-      scheduledStart: z.string().nullish(),
-      startedAt: z.string().nullish(),
-      endedAt: z.string().nullish(),
-
-      // Participation
-      speakerPermission: z.enum(['everyone', 'followers', 'invited']).nullish(),
-      participants: z.array(z.string()).default([]),
-      speakers: z.array(z.string()).default([]),
-      maxParticipants: z.number().default(100),
-
-      // Content
-      topic: z.string().nullish(),
-      tags: z.array(z.string()).optional(),
-      archived: z.boolean().optional().default(false),
-      seriesId: z.string().nullish(),
-
-      // Stats
-      stats: z
-        .object({
-          peakListeners: z.number(),
-          totalJoined: z.number(),
-        })
-        .optional(),
-
-      // Streaming
-      activeIngressId: z.string().nullish(),
-      activeStreamUrl: z.string().nullish(),
-      streamTitle: z.string().nullish(),
-      streamImage: z.string().nullish(),
-      streamDescription: z.string().nullish(),
-      rtmpUrl: z.string().nullish(),
-      rtmpStreamKey: z.string().nullish(),
-      // Stream progress + podcast lifecycle (shared contract with the backend).
-      // `streamStartedAt` is an ISO timestamp; `streamDurationSec` is the current
-      // stream's total length in seconds when known (e.g. a podcast episode);
-      // `podcastQueue` holds the episodes queued behind the current one.
-      streamStartedAt: z.string().nullish(),
-      streamDurationSec: z.number().nullish(),
-      podcastQueue: z.array(ZPodcastQueueItem).nullish(),
-
-      // Recording
-      recordingEnabled: z.boolean().optional().default(true),
-      recordingEgressId: z.string().nullish(),
-
-      createdAt: z.string(),
-    })
-    .passthrough(),
-);
-
-export type Room = z.infer<typeof ZRoom>;
-
-// --- Room Participant ---
-
-export const ZRoomParticipant = z
-  .object({
-    userId: z.string(),
-    role: z.enum(['host', 'speaker', 'listener']),
-    isMuted: z.boolean(),
-    joinedAt: z.string(),
-  })
-  .passthrough();
-
-export type RoomParticipant = z.infer<typeof ZRoomParticipant>;
-
-// --- House ---
-
-export const ZHouseMember = z
-  .object({
-    userId: z.string(),
-    role: z.enum(['owner', 'admin', 'host', 'member']),
-    joinedAt: z.string(),
-  })
-  .passthrough();
-
-export type HouseMember = z.infer<typeof ZHouseMember>;
-
-/**
- * House visibility as three orthogonal axes — mirrors the backend `House`
- * model. `discovery` (who can find it), `rooms` (who can see/enter its rooms),
- * `join` (how one becomes a member). See the backend model for the full
- * contract.
- */
-export const ZHouseVisibility = z
-  .object({
-    discovery: z.enum(['listed', 'unlisted', 'hidden']).default('listed'),
-    rooms: z.enum(['anyone', 'members']).default('anyone'),
-    join: z.enum(['anyone', 'invite']).default('invite'),
-  })
-  .passthrough();
-
-export type HouseVisibility = z.infer<typeof ZHouseVisibility>;
-
-export const ZHouse = withUnderscoreIdFallback(
-  z
-    .object({
-      id: z.string(),
-      name: z.string(),
-      description: z.string().optional(),
-      avatar: z.string().optional().nullable(),
-      coverImage: z.string().optional().nullable(),
-      // Withheld from non-members of a `rooms: members` house; `memberCount` is sent
-      // in its place. Both survive `.passthrough()`.
-      members: z.array(ZHouseMember).default([]),
-      memberCount: z.number().optional(),
-      createdBy: z.string(),
-      visibility: ZHouseVisibility.default({
-        discovery: 'listed',
-        rooms: 'anyone',
-        join: 'invite',
+export const roomCheck = preprocess(
+  underscoreIdAsId,
+  looseObject<Room>({
+    id: string,
+    title: string,
+    description: nullish(string),
+    ownerType: withDefault(oneOf(ROOM_OWNER_TYPES), () => 'profile'),
+    host: string,
+    houseId: nullish(string),
+    createdByAdmin: nullish(string),
+    type: withDefault(oneOf(ROOM_TYPES), () => 'talk'),
+    broadcastKind: nullish(oneOf(BROADCAST_KINDS)),
+    status: oneOf(ROOM_STATUSES),
+    scheduledStart: nullish(string),
+    startedAt: nullish(string),
+    endedAt: nullish(string),
+    speakerPermission: nullish(oneOf(SPEAKER_PERMISSIONS)),
+    participants: withDefault(strings, () => []),
+    speakers: withDefault(strings, () => []),
+    maxParticipants: withDefault(number, () => 100),
+    topic: nullish(string),
+    tags: optional(strings),
+    archived: withDefault(boolean, () => false),
+    seriesId: nullish(string),
+    // The one nested object here that drops unknown keys, as its schema always has.
+    stats: optional(
+      object<{ peakListeners: number; totalJoined: number }>({
+        peakListeners: number,
+        totalJoined: number,
       }),
-      tags: z.array(z.string()).optional(),
-      createdAt: z.string(),
-    })
-    .passthrough(),
+    ),
+    activeIngressId: nullish(string),
+    activeStreamUrl: nullish(string),
+    streamTitle: nullish(string),
+    streamImage: nullish(string),
+    streamDescription: nullish(string),
+    rtmpUrl: nullish(string),
+    rtmpStreamKey: nullish(string),
+    streamStartedAt: nullish(string),
+    streamDurationSec: nullish(number),
+    podcastQueue: nullish(array(podcastQueueItem)),
+    recordingEnabled: withDefault(boolean, () => true),
+    recordingEgressId: nullish(string),
+    createdAt: string,
+  }),
 );
 
-export type House = z.infer<typeof ZHouse>;
+const houseMember = looseObject<HouseMember>({
+  userId: string,
+  role: oneOf(HOUSE_ROLES),
+  joinedAt: string,
+});
 
-// --- Series ---
+const houseVisibility = looseObject<HouseVisibility>({
+  discovery: withDefault(oneOf(HOUSE_DISCOVERY), () => 'listed'),
+  rooms: withDefault(oneOf(HOUSE_ROOM_ACCESS), () => 'anyone'),
+  join: withDefault(oneOf(HOUSE_JOIN), () => 'invite'),
+});
 
-export const ZRecurrence = z
-  .object({
-    type: z.enum(['daily', 'weekly', 'biweekly', 'monthly']),
-    dayOfWeek: z.number().min(0).max(6).optional(),
-    dayOfMonth: z.number().min(1).max(31).optional(),
-    time: z.string().regex(/^\d{2}:\d{2}$/),
-    timezone: z.string().default('UTC'),
-  })
-  .passthrough();
-
-export type Recurrence = z.infer<typeof ZRecurrence>;
-
-export const ZRoomTemplate = z
-  .object({
-    titlePattern: z.string(),
-    type: z.enum(['talk', 'stage', 'broadcast']).default('talk'),
-    description: z.string().optional(),
-    maxParticipants: z.number().default(100),
-    speakerPermission: z.enum(['everyone', 'followers', 'invited']).default('invited'),
-    tags: z.array(z.string()).optional(),
-  })
-  .passthrough();
-
-export type RoomTemplate = z.infer<typeof ZRoomTemplate>;
-
-export const ZSeriesEpisode = z
-  .object({
-    roomId: z.string(),
-    scheduledStart: z.string(),
-    episodeNumber: z.number(),
-  })
-  .passthrough();
-
-export type SeriesEpisode = z.infer<typeof ZSeriesEpisode>;
-
-export const ZSeries = withUnderscoreIdFallback(
-  z
-    .object({
-      id: z.string(),
-      title: z.string(),
-      description: z.string().optional(),
-      coverImage: z.string().optional().nullable(),
-      houseId: z.string().optional().nullable(),
-      createdBy: z.string(),
-      recurrence: ZRecurrence,
-      roomTemplate: ZRoomTemplate,
-      episodes: z.array(ZSeriesEpisode).default([]),
-      nextEpisodeNumber: z.number().default(1),
-      isActive: z.boolean().default(true),
-      createdAt: z.string(),
-    })
-    .passthrough(),
+export const houseCheck = preprocess(
+  underscoreIdAsId,
+  looseObject<House>({
+    id: string,
+    name: string,
+    description: optional(string),
+    avatar: nullish(string),
+    coverImage: nullish(string),
+    members: withDefault(array(houseMember), () => []),
+    memberCount: optional(number),
+    createdBy: string,
+    visibility: withDefault(houseVisibility, () => ({
+      discovery: 'listed',
+      rooms: 'anyone',
+      join: 'invite',
+    })),
+    tags: optional(strings),
+    createdAt: string,
+  }),
 );
 
-export type Series = z.infer<typeof ZSeries>;
+const numberBetween = (min: number, max: number): Validator<number> =>
+  refine(number, (n) => n >= min && n <= max, `expected a number from ${min} to ${max}`);
 
-// --- Recording ---
+const recurrence = looseObject<Recurrence>({
+  type: oneOf(RECURRENCE_TYPES),
+  dayOfWeek: optional(numberBetween(0, 6)),
+  dayOfMonth: optional(numberBetween(1, 31)),
+  time: refine(string, (time) => /^\d{2}:\d{2}$/.test(time), 'expected HH:MM'),
+  timezone: withDefault(string, () => 'UTC'),
+});
 
-export const ZRecording = withUnderscoreIdFallback(
-  z
-    .object({
-      id: z.string(),
-      roomId: z.string(),
-      roomTitle: z.string(),
-      host: z.string(),
-      status: z.enum(['recording', 'processing', 'ready', 'failed', 'deleted']),
-      egressId: z.string(),
-      objectKey: z.string(),
-      fileSize: z.number().nullish(),
-      durationMs: z.number().nullish(),
-      startedAt: z.string(),
-      stoppedAt: z.string().nullish(),
-      access: z.enum(['public', 'participants']).default('public'),
-      participantIds: z.array(z.string()).default([]),
-      expiresAt: z.string(),
-      createdAt: z.string(),
-    })
-    .passthrough(),
+const roomTemplate = looseObject<RoomTemplate>({
+  titlePattern: string,
+  type: withDefault(oneOf(ROOM_TYPES), () => 'talk'),
+  description: optional(string),
+  maxParticipants: withDefault(number, () => 100),
+  speakerPermission: withDefault(oneOf(SPEAKER_PERMISSIONS), () => 'invited'),
+  tags: optional(strings),
+});
+
+const seriesEpisode = looseObject<SeriesEpisode>({
+  roomId: string,
+  scheduledStart: string,
+  episodeNumber: number,
+});
+
+export const seriesCheck = preprocess(
+  underscoreIdAsId,
+  looseObject<Series>({
+    id: string,
+    title: string,
+    description: optional(string),
+    coverImage: nullish(string),
+    houseId: nullish(string),
+    createdBy: string,
+    recurrence,
+    roomTemplate,
+    episodes: withDefault(array(seriesEpisode), () => []),
+    nextEpisodeNumber: withDefault(number, () => 1),
+    isActive: withDefault(boolean, () => true),
+    createdAt: string,
+  }),
 );
 
-export type Recording = z.infer<typeof ZRecording>;
+export const recordingCheck = preprocess(
+  underscoreIdAsId,
+  looseObject<Recording>({
+    id: string,
+    roomId: string,
+    roomTitle: string,
+    host: string,
+    status: oneOf(RECORDING_STATUSES),
+    egressId: string,
+    objectKey: string,
+    fileSize: nullish(number),
+    durationMs: nullish(number),
+    startedAt: string,
+    stoppedAt: nullish(string),
+    access: withDefault(oneOf(RECORDING_ACCESS), () => 'public'),
+    participantIds: withDefault(strings, () => []),
+    expiresAt: string,
+    createdAt: string,
+  }),
+);
 
-// --- Stream responses ---
+export const startStreamResponseCheck = looseObject<StartStreamResponse>({
+  ingressId: string,
+  url: string,
+});
 
-export const ZStartStreamResponse = z
-  .object({
-    ingressId: z.string(),
-    url: z.string(),
-  })
-  .passthrough();
-
-export const ZGenerateStreamKeyResponse = z
-  .object({
-    rtmpUrl: z.string(),
-    streamKey: z.string(),
-  })
-  .passthrough();
-
-export const ZStreamInfo = z
-  .object({
-    title: z.string().optional(),
-    image: z.string().optional(),
-    description: z.string().optional(),
-  })
-  .passthrough();
-
-export type StreamInfo = z.infer<typeof ZStreamInfo>;
-
-// --- Room attachment for posts ---
-
-export const ZRoomAttachment = z
-  .object({
-    roomId: z.string(),
-    title: z.string(),
-    status: z.enum(['scheduled', 'live', 'ended']).optional(),
-    type: z.enum(['talk', 'stage', 'broadcast']).optional(),
-    topic: z.string().optional(),
-    host: z.string().optional(),
-  })
-  .passthrough();
-
-export type RoomAttachment = z.infer<typeof ZRoomAttachment>;
+export const generateStreamKeyResponseCheck = looseObject<GenerateStreamKeyResponse>({
+  rtmpUrl: string,
+  streamKey: string,
+});
 
 // --- Validators ---
 
-export function validateRoom(data: unknown): Room | null {
-  const result = ZRoom.safeParse(data);
-  if (result.success) return result.data;
-  console.warn('[live] Invalid Room:', result.error.issues[0]);
+function warnIssue(label: string, issue: ValidationIssue): void {
+  console.warn(label, `${formatPath(issue.path)}: ${issue.message}`);
+}
+
+/** The checked value, or `null` after a `console.warn` naming the failing field. */
+export function validateResponse<T>(check: Validator<T>, data: unknown, label: string): T | null {
+  const checked = check(data, []);
+  if (checked.ok) return checked.value;
+  warnIssue(label, checked.issue);
   return null;
+}
+
+export function validateRoom(data: unknown): Room | null {
+  return validateResponse(roomCheck, data, '[live] Invalid Room:');
 }
 
 export function validateRooms(items: unknown[]): Room[] {
   if (!Array.isArray(items)) return [];
   const valid: Room[] = [];
   for (const item of items) {
-    const parsed = ZRoom.safeParse(item);
-    if (parsed.success) {
-      valid.push(parsed.data);
-    } else {
-      console.warn('[live] Dropping invalid room:', parsed.error.issues[0]);
-    }
+    const checked = roomCheck(item, []);
+    if (checked.ok) valid.push(checked.value);
+    else warnIssue('[live] Dropping invalid room:', checked.issue);
   }
   return valid;
 }
 
 export function validateHouse(data: unknown): House | null {
-  const result = ZHouse.safeParse(data);
-  if (result.success) return result.data;
-  console.warn('[live] Invalid House:', result.error.issues[0]);
-  return null;
+  return validateResponse(houseCheck, data, '[live] Invalid House:');
 }
 
 export function validateRecording(data: unknown): Recording | null {
-  const result = ZRecording.safeParse(data);
-  if (result.success) return result.data;
-  console.warn('[live] Invalid Recording:', result.error.issues[0]);
-  return null;
+  return validateResponse(recordingCheck, data, '[live] Invalid Recording:');
 }
 
 export function validateRecordings(items: unknown[]): Recording[] {
   if (!Array.isArray(items)) return [];
   const valid: Recording[] = [];
   for (const item of items) {
-    const parsed = ZRecording.safeParse(item);
-    if (parsed.success) valid.push(parsed.data);
+    const checked = recordingCheck(item, []);
+    if (checked.ok) valid.push(checked.value);
   }
   return valid;
 }
 
 export function validateSeries(data: unknown): Series | null {
-  const result = ZSeries.safeParse(data);
-  if (result.success) return result.data;
-  console.warn('[live] Invalid Series:', result.error.issues[0]);
-  return null;
+  return validateResponse(seriesCheck, data, '[live] Invalid Series:');
 }

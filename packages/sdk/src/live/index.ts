@@ -35,21 +35,9 @@ export {
   type RoomTypeMeta,
 } from './colors';
 
-// Validation
+// Validation — plain checks, no Zod. The Zod schemas (`ZRoom`, …) are served to
+// server consumers from `@syra.fm/sdk/schemas`.
 export {
-  ZRoom,
-  ZRoomParticipant,
-  ZHouse,
-  ZHouseMember,
-  ZSeries,
-  ZRecurrence,
-  ZRoomTemplate,
-  ZSeriesEpisode,
-  ZRoomAttachment,
-  ZStartStreamResponse,
-  ZGenerateStreamKeyResponse,
-  ZStreamInfo,
-  ZRecording,
   validateRoom,
   validateRooms,
   validateHouse,

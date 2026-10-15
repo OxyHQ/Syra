@@ -4,9 +4,9 @@ Isomorphic client for the public [Syra](https://syra.fm) API. The package
 resolves per platform via export conditions:
 
 - **Node / bundlers** (`require`/`import`) get the **headless catalog client** —
-  runs on Node 18+ and browsers, no React, React Native, or DOM dependencies;
-  the only runtime dependency is [`zod`](https://zod.dev). **Public reads only**
-  (no authentication in this version).
+  runs on Node 18+ and browsers, no React, React Native, or DOM dependencies,
+  and no Zod: responses are checked in plain TypeScript.
+  [`zod`](https://zod.dev) is a dependency only of `@syra.fm/sdk/schemas`.
 - **React Native** (Metro) and **Expo web** (`browser`) additionally get the
   **live-rooms engine** (audio rooms over LiveKit) and the `SyraIcon` brand mark.
   Its React Native / LiveKit / Expo dependencies are declared as **optional peer
@@ -78,9 +78,26 @@ authenticated transport can be layered in a future version.
 not affected by the client-side preview filter on `searchTracks` — paginate by
 advancing `offset` by `limit`, never by `items.length`.
 
-Responses are validated at runtime with the package's own self-contained Zod
-schemas (`trackSummarySchema`), so there are no shared internal dependencies.
-`SyraApiError` (with a `status`) is thrown on non-2xx responses.
+Responses are checked at runtime against the package's own self-contained
+types, so there are no shared internal dependencies. A single-object method
+throws `SyraApiError` (with a `status`) on a non-2xx response and
+`SyraResponseError` (with the `method` and the failing field's `path`) on a 2xx
+response that does not have its shape; a list method drops a malformed row and
+keeps the rest. Fields the type does not name are dropped.
+
+## Schemas (server-side)
+
+The same response contract as [Zod](https://zod.dev) schemas — for a server
+that wants to hold a Syra response to exactly what this SDK accepts:
+
+```ts
+import { podcastDeletedSchema, ZRoom } from '@syra.fm/sdk/schemas';
+```
+
+It is a separate entry so that an app bundling the client or the live-rooms
+engine does not ship Zod (and Zod 4's error locales) for them. A test runs the
+schemas and the SDK's own checks over the same fixtures and requires the same
+answers.
 
 ## Live rooms (React Native)
 
@@ -104,10 +121,29 @@ Expo/React Native app, absent from headless Node consumers.
 ### The client alone in an app
 
 An Expo or React Native app that only needs the API client — no rooms — imports
-`@syra.fm/sdk/client`. It is the same client, schemas and `SyraApiError` as the
+`@syra.fm/sdk/client`. It is the same client, types and errors as the
 root export, under every resolution condition, without the live-rooms engine,
 so the app's bundle does not carry LiveKit for it:
 
 ```ts
 import { createSyraClient } from '@syra.fm/sdk/client';
 ```
+
+## Changelog
+
+### 0.17.0
+
+- **Breaking:** the Zod schemas moved off the root, `./client` and live-rooms
+  entries to **`@syra.fm/sdk/schemas`** — `trackSummarySchema`,
+  `podcastSummarySchema`, `podcastDeletedSchema`, … and the live-rooms `ZRoom`,
+  `ZHouse`, `ZSeries`, `ZRecording`, …. Change the import path; the schemas
+  themselves are unchanged.
+- The client and the live-rooms engine check responses in plain TypeScript, so
+  an app bundling them no longer ships Zod (~240 KiB) and Zod 4's locales
+  (~270 KiB). Same verdicts, defaults and key handling as the schemas, held
+  together by a parity test.
+- A 2xx response that fails its check now throws `SyraResponseError` (exported;
+  `method`, `path`) instead of a `ZodError`. Both are `Error`s; `SyraApiError`
+  is still the non-2xx error.
+- Response types (`TrackSummary`, `Room`, …) are plain interfaces instead of
+  `z.infer<…>` aliases, with the same shapes.

@@ -1,26 +1,30 @@
 import {
-  trackSummarySchema,
-  podcastSummarySchema,
-  podcastSubscriptionSchema,
-  episodeSummarySchema,
-  episodeDraftSchema,
-  episodeStreamSchema,
-  uploadedImageSchema,
-  podcastDeletedSchema,
-  episodeDeletedSchema,
-  type TrackSummary,
-  type PodcastSummary,
-  type PodcastSubscription,
-  type EpisodeSummary,
-  type EpisodeDraft,
-  type EpisodeStream,
-  type UploadedImage,
-  type PodcastDeleted,
-  type EpisodeDeleted,
-  type PodcastVisibility,
-  type CoverArtSizes,
-  type ArtworkSize,
-} from './schema';
+  checkResponse,
+  checkRow,
+  episodeDeleted,
+  episodeDraft,
+  episodeStream,
+  episodeSummary,
+  podcastDeleted,
+  podcastSubscription,
+  podcastSummary,
+  trackSummary,
+  uploadedImage,
+} from './responses';
+import type {
+  TrackSummary,
+  PodcastSummary,
+  PodcastSubscription,
+  EpisodeSummary,
+  EpisodeDraft,
+  EpisodeStream,
+  UploadedImage,
+  PodcastDeleted,
+  EpisodeDeleted,
+  PodcastVisibility,
+  CoverArtSizes,
+  ArtworkSize,
+} from './types';
 import { SyraApiError } from './errors';
 
 /** Default base URL of the public Syra API. */
@@ -215,12 +219,16 @@ export type UploadPayload = Blob | { uri: string; name?: string; type?: string }
 export interface SyraClient {
   /**
    * Search the public catalog for tracks. Returns one paginated page: rows are
-   * validated against the track-summary schema and filtered to those that expose
+   * validated against the track-summary shape and filtered to those that expose
    * a public preview. `hasMore` comes from the backend's pagination, so it is
    * unaffected by the client-side preview filter (see {@link SearchPage}).
    */
   searchTracks(query: string, options?: SearchTracksOptions): Promise<SearchPage<TrackSummary>>;
-  /** Fetch a single track by id, validated against the track-summary schema. */
+  /**
+   * Fetch a single track by id, validated against the track-summary shape. Every
+   * single-object method here throws a `SyraResponseError` when the response
+   * does not have its shape, and a `SyraApiError` on a non-2xx status.
+   */
   getTrack(id: string): Promise<TrackSummary>;
   /** Build the public 30s preview URL for a track at the given start offset. */
   previewUrl(id: string, startSec?: number): string;
@@ -231,7 +239,7 @@ export interface SyraClient {
   artworkUrl(source: string | ArtworkSource, size?: ArtworkSize): string | undefined;
   /**
    * Search the public catalog for podcast SHOWS (not episodes). Returns one
-   * paginated page: rows are validated against the podcast-summary schema and
+   * paginated page: rows are validated against the podcast-summary shape and
    * malformed rows are dropped. `hasMore` comes from the backend's pagination.
    */
   searchPodcasts(
@@ -240,7 +248,7 @@ export interface SyraClient {
   ): Promise<SearchPage<PodcastSummary>>;
   /**
    * Fetch a single podcast show by id, validated against the podcast-summary
-   * schema. The by-id endpoint also returns episodes and resolved persons; this
+   * shape. The by-id endpoint also returns episodes and resolved persons; this
    * returns just the show summary needed to render a card.
    */
   getPodcast(id: string): Promise<PodcastSummary>;
@@ -255,8 +263,8 @@ export interface SyraClient {
   /**
    * List a podcast show's EPISODES (newest first, as the backend orders them).
    * Returns one paginated page: rows are validated against the episode-summary
-   * schema and malformed rows are dropped — including any without a playable
-   * `enclosureUrl`, which the schema requires. The backend paginates by 1-based
+   * shape and malformed rows are dropped (one without an `enclosureUrl` is NOT
+   * malformed — see {@link EpisodeSummary}). The backend paginates by 1-based
    * `page`, but this keeps the uniform offset-based {@link SearchPage} for parity
    * with {@link SyraClient.searchPodcasts}; paginate by advancing `offset` by
    * `limit` (the page size), never by `items.length`.
@@ -266,7 +274,7 @@ export interface SyraClient {
     options?: PodcastEpisodesOptions,
   ): Promise<SearchPage<EpisodeSummary>>;
   /**
-   * Fetch a single episode by id, validated against the episode-summary schema.
+   * Fetch a single episode by id, validated against the episode-summary shape.
    * The by-id endpoint nests the episode under `data.episode` alongside resolved
    * persons; this returns just the episode summary needed to stream its audio.
    */
@@ -692,9 +700,9 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
       const items: TrackSummary[] = [];
       for (const raw of rawTracks) {
         // A single malformed catalog row must not fail the whole search.
-        const parsed = trackSummarySchema.safeParse(raw);
-        if (parsed.success && parsed.data.previewAvailable === true) {
-          items.push(parsed.data);
+        const track = checkRow(trackSummary, raw);
+        if (track?.previewAvailable === true) {
+          items.push(track);
         }
       }
 
@@ -712,7 +720,7 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
 
     async getTrack(id) {
       const json = await getJson(`/api/tracks/${encodeURIComponent(id)}`);
-      return trackSummarySchema.parse(json);
+      return checkResponse(trackSummary, json, 'getTrack');
     },
 
     previewUrl(id, startSec = 0) {
@@ -766,9 +774,9 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
       const items: PodcastSummary[] = [];
       for (const raw of rawPodcasts) {
         // A single malformed catalog row must not fail the whole search.
-        const parsed = podcastSummarySchema.safeParse(raw);
-        if (parsed.success) {
-          items.push(parsed.data);
+        const podcast = checkRow(podcastSummary, raw);
+        if (podcast) {
+          items.push(podcast);
         }
       }
 
@@ -785,7 +793,7 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
       const json = (await getJson(
         `/api/podcasts/${encodeURIComponent(id)}`,
       )) as PodcastDetailResponseShape;
-      return podcastSummarySchema.parse(json?.data?.podcast);
+      return checkResponse(podcastSummary, json?.data?.podcast, 'getPodcast');
     },
 
     podcastUrl(id) {
@@ -836,19 +844,19 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
          * A single malformed episode row must not fail the whole listing — but
          * "has no enclosure" is no longer malformed. It used to be, and that is
          * what made every SYRA-HOSTED episode disappear from this method: their
-         * audio is `audioSource.url`, not an enclosure. The schema now validates
+         * audio is `audioSource.url`, not an enclosure. The check now validates
          * IDENTITY and leaves playability to `episodeAudioUrl`, which is also
          * the only honest answer for a drafted episode whose audio has not
          * arrived yet.
          */
-        const parsed = episodeSummarySchema.safeParse(raw);
-        if (parsed.success) {
-          items.push(parsed.data);
+        const episode = checkRow(episodeSummary, raw);
+        if (episode) {
+          items.push(episode);
         }
       }
 
       // `total` is the backend's full count over the show; derive `hasMore` from
-      // it rather than `items.length`, which the schema/enclosure filter above may
+      // it rather than `items.length`, which the row check above may
       // shrink below `limit` on a page that is NOT the last one. Absent a count,
       // fall back to what we have (this page ends the listing).
       const total = numberOr(json?.total, offset + items.length);
@@ -864,7 +872,7 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
       const json = (await getJson(
         `/api/episodes/${encodeURIComponent(episodeId)}`,
       )) as EpisodeDetailResponseShape;
-      return episodeSummarySchema.parse(json?.data?.episode);
+      return checkResponse(episodeSummary, json?.data?.episode, 'getEpisode');
     },
 
     episodeImageUrl(source, size) {
@@ -929,8 +937,8 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
 
       const items: PodcastSubscription[] = [];
       for (const raw of rows) {
-        const parsed = podcastSubscriptionSchema.safeParse(raw);
-        if (parsed.success) items.push(parsed.data);
+        const subscription = checkRow(podcastSubscription, raw);
+        if (subscription) items.push(subscription);
       }
       return items;
     },
@@ -943,8 +951,8 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
 
       const items: PodcastSummary[] = [];
       for (const raw of rows) {
-        const parsed = podcastSummarySchema.safeParse(raw);
-        if (parsed.success) items.push(parsed.data);
+        const podcast = checkRow(podcastSummary, raw);
+        if (podcast) items.push(podcast);
       }
       return items;
     },
@@ -953,7 +961,7 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
       const json = (await postJson('/api/podcasts', defined({ ...input }), 'createPodcast')) as {
         data?: unknown;
       };
-      return podcastSummarySchema.parse(json?.data);
+      return checkResponse(podcastSummary, json?.data, 'createPodcast');
     },
 
     async updatePodcast(podcastId, input) {
@@ -963,7 +971,7 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(defined({ ...input })),
       })) as { data?: unknown };
-      return podcastSummarySchema.parse(json?.data);
+      return checkResponse(podcastSummary, json?.data, 'updatePodcast');
     },
 
     async setPodcastVisibility(podcastId, visibility) {
@@ -975,7 +983,7 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
         method: 'DELETE',
         requires: 'deletePodcast',
       })) as { data?: unknown };
-      return podcastDeletedSchema.parse(json?.data);
+      return checkResponse(podcastDeleted, json?.data, 'deletePodcast');
     },
 
     async deleteEpisode(episodeId) {
@@ -986,7 +994,7 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
         method: 'DELETE',
         requires: 'deleteEpisode',
       })) as { data?: unknown };
-      return episodeDeletedSchema.parse(json?.data);
+      return checkResponse(episodeDeleted, json?.data, 'deleteEpisode');
     },
 
     async uploadPodcastImage(image, filename) {
@@ -1002,7 +1010,7 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
         requires: 'uploadPodcastImage',
         body: form,
       })) as unknown;
-      return uploadedImageSchema.parse(json);
+      return checkResponse(uploadedImage, json, 'uploadPodcastImage');
     },
 
     async createEpisodeDraft(podcastId, input) {
@@ -1011,7 +1019,7 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
         defined({ ...input }),
         'createEpisodeDraft',
       )) as { data?: unknown };
-      return episodeDraftSchema.parse(json?.data);
+      return checkResponse(episodeDraft, json?.data, 'createEpisodeDraft');
     },
 
     async ingestEpisode(draft, audio, input = {}, filename) {
@@ -1039,7 +1047,7 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
           body: form,
         },
       )) as { data?: unknown };
-      return episodeSummarySchema.parse(json?.data);
+      return checkResponse(episodeSummary, json?.data, 'ingestEpisode');
     },
 
     async abandonEpisodeIngest(draft, reason) {
@@ -1063,14 +1071,14 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
           body: JSON.stringify(defined({ reason })),
         },
       )) as { data?: unknown };
-      return episodeSummarySchema.parse(json?.data);
+      return checkResponse(episodeSummary, json?.data, 'abandonEpisodeIngest');
     },
 
     async getEpisodeStream(episodeId) {
       const json = await request(`/api/podcasts/episodes/${encodeURIComponent(episodeId)}/stream`, {
         requires: 'getEpisodeStream',
       });
-      return episodeStreamSchema.parse(json);
+      return checkResponse(episodeStream, json, 'getEpisodeStream');
     },
   };
 }
