@@ -47,7 +47,7 @@ describe('public podcast reference batches', () => {
         Response.json(
           { error: { code: 'service_unavailable', message: 'Try later' } },
           { status: 503 },
-        )) as typeof fetch,
+        )) as unknown as typeof fetch,
     });
     await expect(api.getPublicPodcastCards(['show'])).rejects.toMatchObject({
       status: 503,
