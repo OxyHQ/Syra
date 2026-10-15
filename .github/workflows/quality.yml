@@ -14,13 +14,71 @@ concurrency:
   group: quality-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
+  # Pull requests skip the two side jobs whose inputs they do not touch: the
+  # org shares one 20-job Actions concurrency cap across every repository, and
+  # Backend Image Smoke holds an arm64 runner for up to 45 minutes. Anything
+  # that is not a pull request (push to main) skips THIS job, and a skipped
+  # `changes` makes both run, so main always gets the full set. A `changes`
+  # that fails also makes both run rather than skip. `quality` (the required
+  # check) never depends on it and always runs.
+  changes:
+    name: Detect affected inputs
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      image: ${{ steps.filter.outputs.image }}
+      deploy-scripts: ${{ steps.filter.outputs.deploy-scripts }}
+    steps:
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            # What packages/backend/Dockerfile copies (root manifests, every
+            # workspace package.json, shared-types, the SDK, the backend), the
+            # .dockerignore files, the reviewed-image pin and smoke harness
+            # under .github/scripts, and this workflow.
+            image:
+              - 'packages/backend/**'
+              - 'packages/shared-types/**'
+              - 'packages/sdk/**'
+              - 'packages/*/package.json'
+              - 'package.json'
+              - 'bun.lock'
+              - 'bunfig.toml'
+              - 'tsconfig.json'
+              - '**/.dockerignore'
+              - '**/*.dockerignore'
+              - '.github/scripts/**'
+              - '.github/workflows/quality.yml'
+            # The release scripts and their harnesses, the workflow they read
+            # their commands and scope from, and the migrator entry point
+            # test-deploy-ecs-image.sh checks exists.
+            deploy-scripts:
+              - '.github/scripts/**'
+              - '.github/workflows/deploy-aws.yml'
+              - '.github/workflows/quality.yml'
+              - 'packages/backend/src/db/**'
+              - 'packages/backend/package.json'
+              - 'packages/backend/tsconfig*.json'
+
   # Gates the rollout logic deploy-aws.yml runs against production. The script
   # and this harness are byte-identical copies of Mention's, so they share its
   # test rather than growing a second, drifting one. Separate job: it needs no
   # bun install and no workspace build, so it should not queue behind them.
   deploy-script-test:
     name: Deploy Script Tests
+    needs: changes
+    if: >-
+      ${{ !cancelled() && (github.event_name != 'pull_request' ||
+      needs.changes.result != 'success' || needs.changes.outputs.deploy-scripts == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -30,6 +88,7 @@ jobs:
           bash -n .github/scripts/*.sh
           bash .github/scripts/test-deploy-ecs-image.sh
           bash .github/scripts/test-run-one-shot-ecs-task.sh
+          bash .github/scripts/test-deploy-scope.sh
 
   # The backend image as ECS runs it. Production runs the backend on Bun
   # (packages/backend/Dockerfile's runner stage is oven/bun:1.4.3-alpine), and
@@ -46,6 +105,10 @@ jobs:
   # refresh-build-cache.yml).
   backend-image-smoke:
     name: Backend Image Smoke
+    needs: changes
+    if: >-
+      ${{ !cancelled() && (github.event_name != 'pull_request' ||
+      needs.changes.result != 'success' || needs.changes.outputs.image == 'true') }}
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 45
     services:
@@ -104,6 +167,9 @@ jobs:
 
   quality:
     runs-on: ubuntu-latest
+    # About 8 minutes warm; the bound only stops a hang holding a runner for
+    # GitHub's 6-hour default.
+    timeout-minutes: 40
     # `postgres:17`, not a PostGIS image — see `src/db/extensions.ts`:
     # `REQUIRED_EXTENSIONS` is deliberately empty, Syra has no `2dsphere`
     # index and no geospatial query to port, and `docker-compose.postgres.yml`
@@ -282,6 +348,14 @@ jobs:
       # change is still a proposal.
       - name: Studio tests
         run: bun run --filter @syra/studio test
+
+      # i18n key integrity. tsc cannot see this: i18next renders the raw key
+      # when it cannot resolve one, so a renamed key ships as dotted identifiers
+      # on screen in every language rather than failing anything. Moved here
+      # from deploy-aws.yml's former `test` job, which was the only thing that
+      # ran it on a push to main; deploy-frontends.yml still runs it too.
+      - name: Check i18n keys
+        run: cd packages/frontend && bun run check-i18n
 
       - name: Guard bundle imports
         run: bun run check:bundle-imports

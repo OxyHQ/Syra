@@ -46,19 +46,25 @@ import { MIGRATION_RUNS } from '@oxy.so/db/migrate';
 
 /** Only the shape these assertions read — not a schema for GitHub Actions. */
 interface WorkflowFile {
+  name?: string;
   on: {
     workflow_dispatch?: {
       inputs?: Record<string, { default?: string; options?: string[] }>;
     };
+    workflow_run?: { workflows?: string[]; types?: string[]; branches?: string[] };
   };
   jobs: Record<
     string,
     {
       'runs-on': string;
+      if?: string;
+      needs?: string | string[];
+      concurrency?: { group?: string; 'cancel-in-progress'?: boolean };
       env?: Record<string, string>;
       services?: Record<string, unknown>;
       steps: {
         name?: string;
+        id?: string;
         if?: string;
         run?: string;
         uses?: string;
@@ -99,14 +105,15 @@ describe('the deploy workflow and the migrator agree', () => {
   it('passes only phase values the migrator accepts', () => {
     // Vacuity floor on both sides: an empty MIGRATION_RUNS would make the
     // membership check unfalsifiable, and a regex that matched nothing would
-    // make it vacuous. The workflow spells `--phase=` four times — three
-    // migration runs plus the CI migrate step.
+    // make it vacuous. The workflow spells `--phase=` at least three times —
+    // the three migration runs (all, pre, post). The CI migrate step that used
+    // to be a fourth now lives only in quality.yml, which is checked below.
     // Widened to `string[]` on purpose: the whole point is to compare values the
     // migrator has NOT been told about, which a `MigrationRun[]` cannot express.
     const accepted: readonly string[] = MIGRATION_RUNS;
     expect(accepted.length).toBeGreaterThan(0);
     const phases = [...workflowSource.matchAll(/--phase=([a-z-]+)/g)].map((match) => match[1]);
-    expect(phases.length).toBeGreaterThanOrEqual(4);
+    expect(phases.length).toBeGreaterThanOrEqual(3);
     for (const phase of phases) {
       expect(accepted).toContain(phase);
     }
@@ -167,36 +174,85 @@ describe('the deploy workflow and the migrator agree', () => {
   });
 });
 
-describe('the deploy workflow can actually run its own gate', () => {
-  it('gives the Postgres-backed suite the same database quality.yml gives it', () => {
-    // 92 backend test files reach `src/test/postgres.ts`, whose `beforeAll`
-    // throws without this. Compared against quality.yml rather than restated:
-    // two hand-maintained copies of a service definition drift, and the drift
-    // shows up as a suite that passes in one workflow and fails in the other.
-    expect(workflow.jobs.test.services?.postgres).toEqual(quality.jobs.quality.services?.postgres);
-    expect(workflow.jobs.test.env?.TEST_DATABASE_URL).toBe(
-      quality.jobs.quality.env?.TEST_DATABASE_URL,
-    );
-    expect(workflow.jobs.test.env?.TEST_DATABASE_URL).toContain('postgres://');
+/**
+ * The deploy releases only what Quality passed, and no longer re-tests.
+ *
+ * Until 2026-10 this workflow ran on `push` with a `test` job of its own (the
+ * Postgres-backed suite, migrated first, compared field-by-field with
+ * quality.yml's). That job repeated Quality's work on the same push; now the
+ * deploy runs on `workflow_run` of Quality, so the gate IS Quality, for the
+ * exact commit released. What these assertions hold is that the chain cannot
+ * quietly come apart: a renamed workflow, a dropped guard, or a deploy that
+ * builds a different commit than the one Quality tested would each release
+ * untested code with every check green.
+ */
+describe('the deploy workflow releases only what Quality passed', () => {
+  it('runs after the Quality workflow, on main', () => {
+    // `workflows:` matches by NAME; a rename of quality.yml would leave this
+    // trigger listening for a workflow that never runs again — no deploys, and
+    // no error anywhere.
+    expect(quality.name).toBe('Quality');
+    expect(workflow.on.workflow_run?.workflows).toEqual([quality.name ?? '']);
+    expect(workflow.on.workflow_run?.types).toEqual(['completed']);
+    expect(workflow.on.workflow_run?.branches).toEqual(['main']);
+    expect(Object.keys(workflow.on)).not.toContain('push');
   });
 
-  it('migrates that database BEFORE running the suite against it', () => {
-    // `src/test/postgres.ts` opens the schema, it does not create it.
-    const steps = workflow.jobs.test.steps;
+  it('admits only a successful push run on main of this repository', () => {
+    // `completed` fires for failures and cancellations too, and for runs from
+    // forks' branches named main; every guard is load-bearing.
+    const guard = (workflow.jobs.scope?.if ?? '').replace(/\s+/g, ' ');
+    for (const condition of [
+      "github.event.workflow_run.conclusion == 'success'",
+      "github.event.workflow_run.event == 'push'",
+      'github.event.workflow_run.head_repository.full_name == github.repository',
+      "github.event.workflow_run.head_branch == 'main'",
+    ]) {
+      expect(guard).toContain(condition);
+    }
+    expect(workflow.jobs.deploy.needs).toBe('scope');
+    expect(workflow.jobs.deploy.if).toContain("needs.scope.outputs.backend == 'true'");
+    expect(workflow.jobs.deploy.if).toContain("github.ref == 'refs/heads/main'");
+  });
+
+  it('builds and tags the commit Quality tested, not main as it is now', () => {
+    // On `workflow_run`, `github.sha` is main's head when the event was
+    // created, which may be a newer commit nothing tested yet.
+    expect(workflowSource).toMatch(
+      /^\s*RELEASE_SHA: \$\{\{ github\.event\.workflow_run\.head_sha \|\| github\.sha \}\}$/m,
+    );
+    const checkout = workflow.jobs.deploy.steps.find((step) =>
+      step.uses?.startsWith('actions/checkout@'),
+    );
+    expect(checkout?.with?.ref).toBe('${{ env.RELEASE_SHA }}');
+    const build = workflow.jobs.deploy.steps.find((step) => step.id === 'build');
+    expect(build?.env?.COMMIT_TAG).toBe('${{ env.RELEASE_SHA }}');
+    expect(build?.run).not.toContain('GITHUB_SHA');
+  });
+
+  it('serializes rollouts on the deploy job and never cancels one', () => {
+    const lane = workflow.jobs.deploy.concurrency;
+    expect(lane?.group).toBe('deploy-syra-backend');
+    expect(lane?.['cancel-in-progress']).toBe(false);
+  });
+
+  it('leaves Quality migrating its database BEFORE the backend suite runs', () => {
+    // The check the deleted `test` job held for itself. `src/test/postgres.ts`
+    // opens the schema, it does not create it.
+    const steps = quality.jobs.quality.steps;
     const migrateAt = steps.findIndex((step) => step.run?.includes('db:migrate'));
     const suiteAt = steps.findIndex((step) =>
-      step.run?.includes('cd packages/backend && bun run test'),
+      step.run?.includes('bun run --filter @syra/backend test'),
     );
     expect(migrateAt).toBeGreaterThanOrEqual(0);
     expect(suiteAt).toBeGreaterThanOrEqual(0);
     expect(migrateAt).toBeLessThan(suiteAt);
+    expect(quality.jobs.quality.env?.TEST_DATABASE_URL).toContain('postgres://');
   });
 
-  it('runs the suite on the same architecture quality.yml runs it on', () => {
-    // The two jobs are compared field-by-field above, which is only worth
-    // anything if they run the same way. This is NOT a claim that the ARM label
-    // is broken — it is not; see the note on `deploy`'s `runs-on`.
-    expect(workflow.jobs.test['runs-on']).toBe(quality.jobs.quality['runs-on']);
+  it('keeps the i18n key check the deleted `test` job was the only one to run on main', () => {
+    const steps = quality.jobs.quality.steps;
+    expect(steps.some((step) => step.run?.includes('bun run check-i18n'))).toBe(true);
   });
 
   it('builds the arm64 image on an arm64 host, without an emulator', () => {

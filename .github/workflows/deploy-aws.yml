@@ -3,11 +3,21 @@
 name: Deploy to AWS
 
 on:
-  push:
+  # After Quality passes on a push to main, never alongside it. Until 2026-10
+  # this ran on `push` with a `test` job of its own that repeated what Quality
+  # already runs on that push (install, builds, typecheck, migrate, the backend
+  # and frontend suites, i18n), holding a second runner for the copy while
+  # Quality ran in parallel. Quality on push to main runs every job (its
+  # `changes` filter only narrows pull requests), so the gate is now the whole
+  # of Quality for the exact commit released. The `scope` job below owns the
+  # guards and the path scope `push` used to give.
+  workflow_run:
+    workflows: [Quality]
+    types: [completed]
     branches: [main]
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
+  # Releases main's head on demand, and still only once Quality succeeded on a
+  # push for it (`deploy-scope.sh gate` checks that, once, and refuses
+  # otherwise).
   workflow_dispatch:
     inputs:
       migration_phase:
@@ -26,122 +36,94 @@ permissions:
   id-token: write
   contents: read
 
-concurrency:
-  # Serialize production rollouts. Two overlapping runs each register a task
-  # definition revision and then call update-service; interleaved, the older
-  # image wins and the newer run still reports success. Never cancel in
-  # progress: an interrupted run leaves an unmonitored rollout in ECS.
-  group: deploy-syra-backend
-  cancel-in-progress: false
-
 env:
   AWS_REGION: us-west-2
   ECR_REGISTRY: 237343248947.dkr.ecr.us-west-2.amazonaws.com
   APP: syra
   CLUSTER: oxy-cluster
+  # The commit under release: the one Quality tested on `workflow_run`, main's
+  # head on a dispatch. Not `github.sha`, which on `workflow_run` is whatever
+  # main's head was when Quality finished. Not named DEPLOY_SHA:
+  # deploy-ecs-image.sh reads that name to arm a head guard script this
+  # repository does not carry.
+  RELEASE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
 
 jobs:
-  test:
-    # x86, matching `quality.yml`'s job rather than the `deploy` job below. This
-    # job now runs the SAME Postgres service container quality.yml runs, and the
-    # two are compared field-by-field by
-    # `src/db/__tests__/deployWorkflow.test.ts`; running them on the same
-    # architecture is part of keeping that comparison meaningful. Nothing here is
-    # architecture-sensitive anyway — it typechecks, migrates and runs test
-    # suites. Only `deploy` needs ARM, to build the arm64 image natively.
-    #
-    # NOT a workaround for the runner-label outage story: that theory was tested
-    # and is FALSE. See the note on `deploy`'s `runs-on` before changing either.
+  # Decides, OUTSIDE the release lane, whether `deploy` runs at all: the
+  # trigger guards, which commit to release, and the path scope. See
+  # .github/scripts/deploy-scope.sh for why each is needed once the trigger is
+  # `workflow_run`. It must sit outside the concurrency group: GitHub cancels a
+  # PENDING run when another queues behind it in the same group, so a run for
+  # an older commit whose Quality finished late could displace a pending
+  # release of a newer one and then hold itself, leaving neither deployed.
+  scope:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_repository.full_name == github.repository &&
+       github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
-
-    # `postgres:17`, not a PostGIS image — the same image `quality.yml` and
-    # `docker-compose.postgres.yml` pin, on the same version. `src/db/extensions.ts`
-    # keeps `REQUIRED_EXTENSIONS` deliberately EMPTY: Syra has no `2dsphere` index
-    # and no geospatial query to port. Keep this bare, and keep all three in
-    # agreement — a schema task that starts needing an extension adds it to
-    # `REQUIRED_EXTENSIONS` first, and only then to every image that serves a
-    # database this suite runs against.
-    services:
-      postgres:
-        image: postgres:17
-        env:
-          POSTGRES_USER: syra
-          POSTGRES_PASSWORD: syra
-          POSTGRES_DB: syra_ci
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U syra -d syra_ci"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-
-    # The backend suite is Postgres-backed: 92 of its files reach
-    # `src/test/postgres.ts`, whose `beforeAll` throws
-    # `TEST_DATABASE_URL (or DATABASE_URL) must point at a migrated Postgres.`
-    # when this is unset. Without it every deploy fails in its first job, on a
-    # missing environment variable rather than a bad assertion.
-    env:
-      TEST_DATABASE_URL: postgres://syra:syra@127.0.0.1:5432/syra_ci
-
+    timeout-minutes: 10
+    # Job level: no OIDC token here, and `actions: read` (Quality's runs, the
+    # release marker) reaches no other job.
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      backend: ${{ steps.backend.outputs.backend }}
     steps:
       - uses: actions/checkout@v7
-
-      - uses: oven-sh/setup-bun@v2
         with:
-          # The one pin is package.json's `packageManager`; check:bun-pin holds
-          # the backend image's literal oven/bun tag to it.
-          bun-version-file: package.json
-
-      - run: bun install --frozen-lockfile
-
-      - run: bun run build:shared-types
-
-      # The backend imports @syra.fm/sdk (workspace); build its dist so tsc/tests resolve it.
-      - run: bun run build:sdk
-
-      # Typecheck before tests: it is faster and covers strictly more files. It runs
-      # against tsconfig.json (NOT tsconfig.build.json), because the build config
-      # excludes **/*.test.ts — and test files are exactly where type errors hide when
-      # nothing checks them. Depends on the shared-types/sdk dists built above.
-      - run: cd packages/backend && bun run typecheck
-
-      # The upload screening suite shells out to real binaries: ffprobe for a
-      # fixture's true duration/codec, ffmpeg to build fixtures and drive the HLS
-      # packager, fpcalc for the Chromaprint fingerprints the dedup tiers match on.
-      # Without them 43 tests fail in under a millisecond each — a missing
-      # executable, not a bad assertion. `libchromaprint-tools` provides fpcalc on
-      # Ubuntu; the runtime image uses Alpine's `chromaprint` for the same binary.
-      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg libchromaprint-tools
-
-      # The suite runs against a MIGRATED database — `src/test/postgres.ts` opens
-      # the schema, it does not create it. `DATABASE_URL` here, not
-      # `TEST_DATABASE_URL`: the migrator always reads the former, the same
-      # variable it reads in every other environment, while the latter is only
-      # the name the suite falls back to. `--phase=all` because CI's database is
-      # empty every run, with no live image to protect — the same call
-      # `quality.yml` makes, deliberately identical so the two cannot disagree
-      # about what the suite is tested against.
-      - name: Migrate Postgres (CI service)
-        working-directory: packages/backend
-        run: bun run db:migrate --phase=all --target-database=syra_ci
+          ref: ${{ env.RELEASE_SHA }}
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+      - name: Release only the newest Quality-green main commit
+        id: gate
         env:
-          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
-
-      - run: cd packages/backend && bun run test
-
-      - run: cd packages/frontend && bunx jest --ci
-
-      # i18n key integrity. tsc cannot see this: i18next renders the raw key when it
-      # cannot resolve one, so a renamed key ships as dotted identifiers on screen in
-      # every language rather than failing anything.
-      - run: cd packages/frontend && bun run check-i18n
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/deploy-scope.sh gate
+      # What goes into the backend image or its rollout, diffed against the
+      # last commit this workflow actually released, so a frontend- or
+      # studio-only merge (deploy-frontends.yml / deploy-studio.yml ship those)
+      # does not roll the API. packages/backend/Dockerfile copies the root
+      # manifests, every workspace package.json, shared-types, the SDK and the
+      # backend; `.dockerignore` files and the release scripts change what is
+      # built or how it rolls out. test-deploy-scope.sh reads this line.
+      - name: Decide whether anything the backend ships changed
+        id: backend
+        if: steps.gate.outputs.current == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BACKEND_PATHS: '^(packages/(backend|shared-types|sdk)/|packages/[^/]+/package\.json$|package\.json$|bun\.lock$|bunfig\.toml$|tsconfig\.json$|\.github/workflows/deploy-aws\.yml$|\.github/scripts/)|\.dockerignore$'
+        run: bash .github/scripts/deploy-scope.sh target backend include "$BACKEND_PATHS" syra-release-backend-
 
   deploy:
-    needs: test
-    # workflow_dispatch can be run against arbitrary refs; only deploys from the
-    # protected main branch may assume the AWS deploy role.
-    if: github.ref == 'refs/heads/main'
+    needs: scope
+    # `scope` admits only a commit Quality passed on a push to main in this
+    # repository, the newest such commit, with something backend to release.
+    # The ref check stays as well: only the protected main branch may assume
+    # the AWS deploy role.
+    if: github.ref == 'refs/heads/main' && needs.scope.outputs.backend == 'true'
+    # On the JOB, not the workflow, so only a run `scope` judged releasable
+    # ever enters the lane.
+    #
+    # Serialize production rollouts. Two overlapping runs each register a task
+    # definition revision and then call update-service; interleaved, the older
+    # image wins and the newer run still reports success. Never cancel in
+    # progress: an interrupted run leaves an unmonitored rollout in ECS. A newer
+    # pending run may replace an older pending one, which is safe: its scope
+    # diffs from the last commit actually released, so it carries the older.
+    # run-backend-script.yml shares this group deliberately.
+    concurrency:
+      group: deploy-syra-backend
+      cancel-in-progress: false
+    # The image build, then the pre-migration task, the rollout and the
+    # post-migration task, each bounded by deploy-ecs-image.sh's MAX_WAIT_SECS
+    # (20 min), plus a rollback window; recent runs took 15-35 min end to end.
+    # Without a bound a hung step holds a runner for GitHub's 6-hour default.
+    timeout-minutes: 120
     # ARM, so buildx builds the linux/arm64 image NATIVELY. Do not "fix" this by
     # moving to x86 + `docker/setup-qemu-action`: emulated arm64 builds are far
     # slower, and the outage that change was meant to answer had a different
@@ -162,6 +144,8 @@ jobs:
     runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.RELEASE_SHA }}
 
       - name: Configure AWS credentials (OIDC, no stored keys)
         uses: aws-actions/configure-aws-credentials@v6
@@ -210,7 +194,7 @@ jobs:
       - name: Build and push (linux/arm64)
         id: build
         env:
-          COMMIT_TAG: ${{ github.sha }}
+          COMMIT_TAG: ${{ env.RELEASE_SHA }}
           DOCKERFILE: ${{ steps.reviewed.outputs.dockerfile }}
           CONTEXT: ${{ steps.reviewed.outputs.context }}
           SOURCE_TREE: ${{ steps.reviewed.outputs.source_tree }}
@@ -228,7 +212,7 @@ jobs:
             --cache-from type=gha,scope=$APP-backend \
             --cache-to type=gha,scope=$APP-backend,mode=max \
             -f "$DOCKERFILE" \
-            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --label "org.opencontainers.image.revision=$RELEASE_SHA" \
             --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
             --label "io.oxy.source.tree=$SOURCE_TREE" \
             --label "io.oxy.build-inputs.sha256=$BUILD_INPUTS_SHA256" \
@@ -361,3 +345,16 @@ jobs:
             exit 0
           fi
           bash .github/scripts/deploy-ecs-image.sh
+
+      # The scope job's base for the next release: the last commit this
+      # workflow actually rolled out, as an Actions cache key (its content is
+      # irrelevant). Only a successful rollout reaches this step, and it runs on
+      # main only, so no pull request can move it. Lost or evicted, the next run
+      # releases.
+      - name: Write the release marker
+        run: printf '%s\n' "$RELEASE_SHA" >"$RUNNER_TEMP/release-marker"
+      - name: Record this release for the next scope decision
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/release-marker
+          key: syra-release-backend-${{ env.RELEASE_SHA }}

@@ -19,9 +19,23 @@ on:
       - 'package.json'
       - 'bun.lock'
 
+# Builds and uploads with a Cloudflare token from secrets; the repository
+# token only needs to read the checkout.
+permissions:
+  contents: read
+
+# One Pages upload at a time, never cancelled half-way. A newer pending run
+# replaces an older pending one, which is safe: it builds a newer main.
+concurrency:
+  group: deploy-syra-frontend
+  cancel-in-progress: false
+
 jobs:
   deploy-frontend:
     runs-on: ubuntu-latest
+    # The build step alone is bounded at 60 minutes; this bounds install, the
+    # gates and the upload around it.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
