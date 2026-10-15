@@ -35,7 +35,7 @@
     "start:frontend": "bun run --filter '@syra/frontend' start",
     "start:studio": "bun run --filter '@syra/studio' start",
     "start:backend": "bun run --filter '@syra/backend' start",
-    "postinstall": "bun run build:contracts && bun run --filter '@syra/shared-types' build",
+    "postinstall": "bun run build:contracts && bun run --filter '@syra/shared-types' build && bun run --filter '@syra.fm/sdk' build",
     "build:contracts": "bun run --cwd packages/contracts build",
     "check:public-openapi": "bun scripts/check-public-openapi.ts"
   },
