@@ -11,6 +11,10 @@
 
 ## Monorepo Structure
 
+npm releases: only Actions → Release packages (`release-packages.yml`, Oxy's shared
+workflow, OIDC); a package's gates are its `prepublishOnly`. Never publish from a laptop —
+`~/Oxy/docs/npm-releases.md`.
+
 | Package | Path | Role |
 |---------|------|------|
 | `@syra/frontend` | `packages/frontend/` | Expo app — syra.fm |

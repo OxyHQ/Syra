@@ -8,7 +8,8 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "bun test src"
+    "test": "bun test src",
+    "prepublishOnly": "bun run build"
   },
   "dependencies": {
     "zod": "^4.4.3"
