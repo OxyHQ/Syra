@@ -17,7 +17,7 @@
 import fs from 'fs';
 import path from 'path';
 import type { HlsRendition } from '@syra/shared-types';
-import { uploadToS3 } from '../s3Service';
+import { putDerivedAudio } from '../oxyFiles/audioStorage';
 import { getDb } from '../../db/postgres';
 import { trackKeys } from '../../db/schema/trackKeys';
 import type { PackageResult } from './hlsPackager';
@@ -115,7 +115,7 @@ export async function storePackagedHls(
   deps?: StoreHlsDeps,
 ): Promise<StoredHls> {
   const { kind, recordId, buildKey } = target;
-  const doUpload = deps?.upload ?? ((key, body, opts) => uploadToS3(key, body, opts));
+  const doUpload = deps?.upload ?? ((key, body, opts) => putDerivedAudio(key, body, opts));
 
   // Upload every file in outputDir to S3
   const allFiles = collectFiles(result.outputDir);

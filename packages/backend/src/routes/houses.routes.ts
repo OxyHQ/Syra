@@ -1,4 +1,4 @@
-import { Router, Response } from 'express';
+import { Router, type Response } from 'express';
 import multer from 'multer';
 import { isLiveEntityId } from '@oxy.so/db';
 import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
@@ -39,13 +39,9 @@ import { describeErrorSafely } from '../utils/error';
 import { getParam } from '../utils/reqParams';
 import { logger } from '../utils/logger';
 import { processImage } from '../utils/imageProcessor';
-import {
-  uploadObject,
-  deleteObject,
-  getAgoraHouseAvatarKey,
-  getAgoraHouseCoverKey,
-  cdnUrlToKey,
-} from '../utils/spaces';
+import { deleteObject, cdnUrlToKey } from '../utils/spaces';
+import { oxyFileUrl } from '../services/oxyFiles/client';
+import { uploadSpaceImage } from '../services/oxyFiles/spaceImages';
 
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 const upload = multer({
@@ -769,19 +765,17 @@ router.post('/:id/avatar', upload.single('file'), async (req: AuthRequest, res: 
       return res.status(403).json({ message: 'Only admins or owner can update the house' });
     }
 
-    const { buffer, contentType } = await processImage(req.file.buffer, 'avatar');
-    const objectKey = getAgoraHouseAvatarKey(id as string);
+    const image = await processImage(req.file.buffer, 'avatar');
+    // The house owner's file (see `services/oxyFiles/spaceImages.ts`).
+    const file = await uploadSpaceImage(found.house.createdBy, image, 'house-avatar');
+    await updateHouse(found.house.id, { avatarFileId: file.id });
 
-    // Delete old object if it was on our CDN
+    // The legacy bucket copy, if the previous avatar was one, is no longer
+    // anybody's: removed only now that the new one is in place.
     const oldAvatarKey = cdnUrlToKey(found.house.avatar);
-    if (oldAvatarKey && oldAvatarKey !== objectKey) {
-      deleteObject(oldAvatarKey).catch(() => {});
-    }
+    if (oldAvatarKey) deleteObject(oldAvatarKey).catch(() => {});
 
-    const cdnUrl = await uploadObject(objectKey, buffer, contentType, 'public-read');
-    await updateHouse(found.house.id, { avatar: cdnUrl });
-
-    res.json({ avatar: cdnUrl });
+    res.json({ avatar: oxyFileUrl(file.id), avatarFileId: file.id });
   } catch (error) {
     logger.error('Error uploading house avatar:', {
       houseId: req.params.id,
@@ -809,18 +803,14 @@ router.post('/:id/cover', upload.single('file'), async (req: AuthRequest, res: R
       return res.status(403).json({ message: 'Only admins or owner can update the house' });
     }
 
-    const { buffer, contentType } = await processImage(req.file.buffer, 'cover');
-    const objectKey = getAgoraHouseCoverKey(id as string);
+    const image = await processImage(req.file.buffer, 'cover');
+    const file = await uploadSpaceImage(found.house.createdBy, image, 'house-cover');
+    await updateHouse(found.house.id, { coverImageFileId: file.id });
 
     const oldCoverKey = cdnUrlToKey(found.house.coverImage);
-    if (oldCoverKey && oldCoverKey !== objectKey) {
-      deleteObject(oldCoverKey).catch(() => {});
-    }
+    if (oldCoverKey) deleteObject(oldCoverKey).catch(() => {});
 
-    const cdnUrl = await uploadObject(objectKey, buffer, contentType, 'public-read');
-    await updateHouse(found.house.id, { coverImage: cdnUrl });
-
-    res.json({ coverImage: cdnUrl });
+    res.json({ coverImage: oxyFileUrl(file.id), coverImageFileId: file.id });
   } catch (error) {
     logger.error('Error uploading house cover:', {
       houseId: req.params.id,

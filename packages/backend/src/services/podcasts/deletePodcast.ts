@@ -40,10 +40,12 @@
  */
 
 import {
+  deleteAudioObject,
+  deleteAudioPrefix,
   getS3PodcastEpisodeAudioKey,
   getS3PodcastEpisodeHlsPrefix,
   getS3PodcastShowPrefixes,
-} from '../../config/s3.config';
+} from '../oxyFiles/audioStorage';
 import {
   deleteEpisodeRow,
   deletePodcastRow,
@@ -52,7 +54,6 @@ import {
   type EpisodeStorageRef,
 } from '../../db/podcasts/delete';
 import { updatePodcast as updatePodcastRow } from '../../db/podcasts/podcasts';
-import { deleteFromS3, deleteS3Prefix } from '../s3Service';
 import { logger } from '../../utils/logger';
 
 /**
@@ -122,7 +123,7 @@ export async function deleteEpisodeStoredObjects(
   episode: EpisodeStorageRef,
   deps: PodcastPurgeDeps = {},
 ): Promise<number> {
-  const deletePrefix = deps.deletePrefix ?? deleteS3Prefix;
+  const deletePrefix = deps.deletePrefix ?? deleteAudioPrefix;
   const prefix = getS3PodcastEpisodeHlsPrefix(episode.podcastId, episode.id);
 
   const deleted = await deletePrefix(prefix);
@@ -142,7 +143,7 @@ async function deleteRecordedKeysOutside(
   sweptPrefixes: readonly string[],
   deps: PodcastPurgeDeps,
 ): Promise<number> {
-  const deleteObject = deps.deleteObject ?? deleteFromS3;
+  const deleteObject = deps.deleteObject ?? deleteAudioObject;
   let deleted = 0;
 
   for (const key of recordedObjectKeys(episode)) {
@@ -208,7 +209,7 @@ export async function deletePodcastCompletely(
   podcastId: string,
   deps: PodcastPurgeDeps = {},
 ): Promise<PodcastDeleteResult | undefined> {
-  const deletePrefix = deps.deletePrefix ?? deleteS3Prefix;
+  const deletePrefix = deps.deletePrefix ?? deleteAudioPrefix;
 
   /**
    * Off the shelves before anything is destroyed. If the purge below dies

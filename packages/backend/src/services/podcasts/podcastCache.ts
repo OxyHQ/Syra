@@ -12,8 +12,7 @@
 import type { IncomingMessage } from 'node:http';
 import { safeFetch, SsrfRejection, UpstreamError } from '@oxy.so/core/server';
 import { findEpisodeById, setEpisodeCache } from '../../db/podcasts/episodes';
-import { getS3PodcastEpisodeCacheKey } from '../../config/s3.config';
-import { uploadToS3 } from '../s3Service';
+import { getS3PodcastEpisodeCacheKey, putSourceAudio } from '../oxyFiles/audioStorage';
 import { logger } from '../../utils/logger';
 import { describeErrorSafely } from '../../utils/error';
 
@@ -100,7 +99,8 @@ export async function cacheEpisode(episodeId: string): Promise<string | null> {
       : (episode.enclosureType ?? 'audio/mpeg');
 
   const buffer = await readCapped(result.response, MAX_CACHE_BYTES);
-  await uploadToS3(s3Key, buffer, { contentType });
+  // A mirrored RSS enclosure is Syra's copy, not anybody's upload.
+  await putSourceAudio(s3Key, buffer, { contentType, owner: { kind: 'application' } });
 
   await setEpisodeCache(episodeId, { status: 'cached', objectKey: s3Key, cachedAt: new Date() });
 

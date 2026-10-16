@@ -1,12 +1,11 @@
 import { isPostgresConnected } from '../db/postgres';
-import { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import { isLiveEntityId } from '@oxy.so/db';
 import { logger } from '../utils/logger';
 import { getErrorMessage } from '../utils/error';
 import { getParam } from '../utils/reqParams';
 import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
-import { extractPredominantColorsFromBuffer } from '../services/colorExtractionService';
-import { getImageAssetStream, storeImageAsset } from '../services/imageAssetService';
+import { resolveImageAsset, storeImageAsset } from '../services/imageAssetService';
 import { describeErrorSafely } from '../utils/error';
 
 interface ImageUploadRequest extends AuthRequest {
@@ -41,27 +40,29 @@ export const uploadImage = async (req: AuthRequest, res: Response, next: NextFun
       });
     }
 
-    const extractedColors = await extractPredominantColorsFromBuffer(file.buffer);
-    const colors = {
-      primaryColor: extractedColors.primary,
-      secondaryColor: extractedColors.secondary,
-    };
+    const uploaderId = req.user?.id;
+    if (!uploaderId) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
 
+    // The uploader's own file, in their Oxy account (ADR 0041): a person's
+    // upload stays theirs, and Syra only references it where it is used.
     const result = await storeImageAsset({
       buffer: file.buffer,
       filename: file.originalname || 'image',
       contentType: file.mimetype,
       ownerType: 'upload',
-      uploadedBy: req.user?.id,
-      primaryColor: colors.primaryColor,
-      secondaryColor: colors.secondaryColor,
+      uploadedBy: uploaderId,
     });
 
-    const imageId = result.id;
+    logger.debug('[ImagesController] Image uploaded successfully', { imageId: result.id });
 
-    logger.debug('[ImagesController] Image uploaded successfully', { imageId });
-
-    res.status(201).json({ id: imageId, ...colors });
+    res.status(201).json({
+      id: result.id,
+      fileId: result.fileId,
+      ...(result.pixels.primaryColor ? { primaryColor: result.pixels.primaryColor } : {}),
+      ...(result.pixels.secondaryColor ? { secondaryColor: result.pixels.secondaryColor } : {}),
+    });
   } catch (error: unknown) {
     logger.error('[ImagesController] Error uploading image:', {
       error: describeErrorSafely(error),
@@ -123,14 +124,28 @@ export const getImage = async (req: Request, res: Response, next: NextFunction) 
     }
 
     try {
-      const asset = await getImageAssetStream(id);
+      const resolved = await resolveImageAsset(id);
 
-      if (!asset) {
+      if (!resolved || resolved.kind === 'unavailable') {
         return res.status(404).json({
           error: 'Image not found',
           message: 'The requested image does not exist',
         });
       }
+
+      /**
+       * Stored in Oxy Files: send the client to Oxy's CDN rather than proxying
+       * the bytes through Syra. The redirect is cacheable for a day, not a year:
+       * the row is Syra's id and the file behind it can change (a re-import, a
+       * takedown), so the answer must be allowed to change too — the bytes at
+       * the target carry their own long cache.
+       */
+      if (resolved.kind === 'oxy') {
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        return res.redirect(302, resolved.url);
+      }
+
+      const asset = resolved;
 
       asset.stream.on('error', (streamError: Error) => {
         const code = (streamError as NodeJS.ErrnoException).code;

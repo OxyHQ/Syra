@@ -209,6 +209,18 @@ const PROBES: readonly { readonly name: string; readonly sql: string }[] = [
           where expires_at <= now() - make_interval(secs => 0) limit 1000`,
   },
   {
+    // ADR 0041's two: 30 days after a file event arrived, and 30 days after the
+    // reference outbox gave up on a row (live rows have no dead_at).
+    name: 'sweep_oxy_file_events',
+    sql: `select ctid from oxy_file_events
+          where received_at <= now() - make_interval(secs => ${30 * 24 * 60 * 60}) limit 1000`,
+  },
+  {
+    name: 'sweep_oxy_file_reference_ops',
+    sql: `select ctid from oxy_file_reference_ops
+          where dead_at <= now() - make_interval(secs => ${30 * 24 * 60 * 60}) limit 1000`,
+  },
+  {
     /**
      * The control. `listening_events.listened_sec` carries no index, so this
      * MUST still report a Seq Scan under `enable_seqscan = off` — otherwise
@@ -510,6 +522,9 @@ describe('the expiry sweep is a range scan on every registered target', () => {
     // Task A2. Same reasoning as the two above: another vertical's table, swept
     // from Syra's registry against Syra's index.
     episode_ingest_tickets: 'episode_ingest_tickets_expires_at_idx',
+    // ADR 0041: the file-event dedupe log and the reference outbox's dead letters.
+    oxy_file_events: 'oxy_file_events_received_at_idx',
+    oxy_file_reference_ops: 'oxy_file_reference_ops_dead_at_idx',
   };
 
   it('probed every registered target', () => {

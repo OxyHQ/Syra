@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import fs from 'fs';
 import os from 'os';
 import multer from 'multer';
@@ -431,6 +431,8 @@ export const uploadTrack = async (req: AuthRequest, res: Response, next: NextFun
           },
         },
         fs.createReadStream(file.path),
+        // The creator's upload: theirs once audio moves to Oxy Files.
+        { kind: 'account', oxyUserId: userId },
       );
       logger.debug('[TracksController] S3 upload completed, saving track to database...');
 

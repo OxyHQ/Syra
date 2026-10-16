@@ -10,7 +10,7 @@ import {
   findUploadsMatchedToTrack,
   type UploadStorageRef,
 } from '../../db/creators/uploads';
-import { deleteFromS3, deleteS3Prefix } from '../s3Service';
+import { deleteAudioObject, deleteAudioPrefix } from '../oxyFiles/audioStorage';
 import { addStrike } from '../strikeService';
 import { recordContributorStrike } from './contributorStrikes';
 import { compareFingerprints } from '../uploads/fingerprint';
@@ -246,8 +246,8 @@ export async function deleteUploadStoredObjects(
   upload: UploadStorageRef,
   deps: LockerPurgeDeps = {},
 ): Promise<number> {
-  const deleteObject = deps.deleteObject ?? deleteFromS3;
-  const deletePrefix = deps.deletePrefix ?? deleteS3Prefix;
+  const deleteObject = deps.deleteObject ?? deleteAudioObject;
+  const deletePrefix = deps.deletePrefix ?? deleteAudioPrefix;
   const prefix = hlsDirectoryPrefix(upload);
   let deleted = 0;
 

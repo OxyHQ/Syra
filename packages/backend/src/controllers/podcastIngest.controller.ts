@@ -52,8 +52,7 @@ import { viewerOwnsShow } from '../db/podcasts/visibility';
 import { mintIngestTicket, verifyIngestTicket } from '../services/podcasts/ingestToken';
 import { enqueueEpisodeIngest } from '../services/podcasts/ingestEpisode';
 import { buildCreatorPersons, makeOxyUsersFetcher } from '../services/podcasts/resolvePersons';
-import { getS3PodcastEpisodeAudioKey } from '../config/s3.config';
-import { uploadToS3 } from '../services/s3Service';
+import { getS3PodcastEpisodeAudioKey, putSourceAudio } from '../services/oxyFiles/audioStorage';
 import { getParam } from '../utils/reqParams';
 import { logger } from '../utils/logger';
 import { describeErrorSafely } from '../utils/error';
@@ -254,7 +253,10 @@ type IngestRefusal =
 async function authorizeTicket(
   req: AuthRequest,
   episodeId: string,
-): Promise<{ ok: true; jti: string; podcastId: string } | { ok: false; refusal: IngestRefusal }> {
+): Promise<
+  | { ok: true; jti: string; podcastId: string; ownerOxyUserId: string }
+  | { ok: false; refusal: IngestRefusal }
+> {
   const raw = req.headers[INGEST_TICKET_HEADER];
   const token = typeof raw === 'string' ? raw : undefined;
   if (!token) {
@@ -313,7 +315,7 @@ async function authorizeTicket(
     return { ok: false, refusal: { status: 409, error: 'Episode already has audio' } };
   }
 
-  return { ok: true, jti: claims.jti, podcastId: show.id };
+  return { ok: true, jti: claims.jti, podcastId: show.id, ownerOxyUserId: claims.ownerOxyUserId };
 }
 
 /**
@@ -331,6 +333,7 @@ async function authorizeIngest(
       ok: true;
       jti: string;
       podcastId: string;
+      ownerOxyUserId: string;
       format: AudioSource['format'];
       file: Express.Multer.File;
     }
@@ -348,7 +351,14 @@ async function authorizeIngest(
     return { ok: false, refusal: { status: 400, error: 'Unsupported audio format' } };
   }
 
-  return { ok: true, jti: authorized.jti, podcastId: authorized.podcastId, format, file };
+  return {
+    ok: true,
+    jti: authorized.jti,
+    podcastId: authorized.podcastId,
+    ownerOxyUserId: authorized.ownerOxyUserId,
+    format,
+    file,
+  };
 }
 
 /**
@@ -407,7 +417,12 @@ export async function ingestEpisodeAudio(req: AuthRequest, res: Response): Promi
         authorized.podcastId,
         authorized.format,
       );
-      await uploadToS3(audioKey, authorized.file.buffer, { contentType: authorized.file.mimetype });
+      await putSourceAudio(audioKey, authorized.file.buffer, {
+        contentType: authorized.file.mimetype,
+        // A hosted show's episode belongs to the show's owner — the ticket was
+        // minted by them, and their show is what it is ingested into.
+        owner: { kind: 'account', oxyUserId: authorized.ownerOxyUserId },
+      });
 
       /**
        * The field allowlist, assigned one by one and never spread — the same

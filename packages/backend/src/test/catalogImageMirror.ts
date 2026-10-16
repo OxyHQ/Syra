@@ -1,10 +1,10 @@
 /**
  * The catalog image-mirror test double, and the reason it is its own module.
  *
- * `mirrorCatalogImage` is the backend's single chokepoint for fetching an
- * external image: it does DNS and IP-range validation, caps the download, and
- * produces the size variants. No test wants any of that, so every suite that
- * touches enrichment replaces it.
+ * `mirrorCatalogImage` is the backend's single chokepoint for an external image:
+ * it has Oxy import the URL and builds the size rows. No test wants a network
+ * call, so every suite that touches enrichment replaces it (or installs
+ * `test/fakeOxyFiles.ts` to exercise the real one).
  *
  * It is its own module, installed explicitly, rather than a side effect of a
  * database hook: that coupling is invisible, and a suite that dropped the hook
@@ -34,13 +34,17 @@ const VARIANT_WIDTHS = {
   original: 1000,
 } as const;
 
-/** Insert a real asset row and return the variant DTO pointing at it. */
+/**
+ * Insert a real asset row and return the variant DTO pointing at it — stored the
+ * way the real mirror stores catalogue artwork now, as an Oxy file (ADR 0041).
+ */
 async function makeVariant(width: number, id = uuidv7()) {
+  const fileId = `test-mirror-file-${id}`;
   await getDb()
     .insert(imageAssets)
     .values({
       id,
-      s3Key: `test-mirror/${id}.webp`,
+      oxyFileId: fileId,
       filename: `${id}.webp`,
       contentType: 'image/webp',
       byteSize: 1024,
@@ -50,7 +54,7 @@ async function makeVariant(width: number, id = uuidv7()) {
     })
     .onConflictDoNothing();
 
-  return { id, url: `/api/images/${id}`, width, height: width };
+  return { id, url: `/api/images/${id}`, width, height: width, fileId };
 }
 
 /**

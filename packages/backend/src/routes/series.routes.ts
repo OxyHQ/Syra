@@ -1,4 +1,4 @@
-import { Router, Response } from 'express';
+import { Router, type Response } from 'express';
 import multer from 'multer';
 import { isLiveEntityId } from '@oxy.so/db';
 import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
@@ -27,7 +27,9 @@ import { describeErrorSafely } from '../utils/error';
 import { getParam } from '../utils/reqParams';
 import { logger } from '../utils/logger';
 import { processImage } from '../utils/imageProcessor';
-import { uploadObject, deleteObject, getAgoraSeriesCoverKey, cdnUrlToKey } from '../utils/spaces';
+import { deleteObject, cdnUrlToKey } from '../utils/spaces';
+import { oxyFileUrl } from '../services/oxyFiles/client';
+import { uploadSpaceImage } from '../services/oxyFiles/spaceImages';
 
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 const upload = multer({
@@ -512,18 +514,15 @@ router.post('/:id/cover', upload.single('file'), async (req: AuthRequest, res: R
       return res.status(403).json({ message: 'You do not have permission to update this series' });
     }
 
-    const { buffer, contentType } = await processImage(req.file.buffer, 'cover');
-    const objectKey = getAgoraSeriesCoverKey(id as string);
+    const image = await processImage(req.file.buffer, 'cover');
+    // The series creator's file (see `services/oxyFiles/spaceImages.ts`).
+    const file = await uploadSpaceImage(series.createdBy, image, 'series-cover');
+    await updateSeries(series.id, { coverImageFileId: file.id });
 
     const oldCoverKey = cdnUrlToKey(series.coverImage);
-    if (oldCoverKey && oldCoverKey !== objectKey) {
-      deleteObject(oldCoverKey).catch(() => {});
-    }
+    if (oldCoverKey) deleteObject(oldCoverKey).catch(() => {});
 
-    const cdnUrl = await uploadObject(objectKey, buffer, contentType, 'public-read');
-    await updateSeries(series.id, { coverImage: cdnUrl });
-
-    res.json({ coverImage: cdnUrl });
+    res.json({ coverImage: oxyFileUrl(file.id), coverImageFileId: file.id });
   } catch (error) {
     logger.error('Error uploading series cover:', {
       seriesId: req.params.id,

@@ -1,13 +1,14 @@
 import { S3_BUCKET_NAME, S3_REGION, S3_ENDPOINT } from '../config/s3.config';
-import { uploadToS3, getPresignedUrl, deleteFromS3 } from '../services/s3Service';
+import { deleteFromS3 } from '../services/s3Service';
 
 /**
- * Object-storage helpers for the live-rooms slice (room / house / series images
- * and room recordings). Thin adapters over Syra's canonical S3 layer
- * (`config/s3.config` + `services/s3Service`) so the room routes and the LiveKit
- * egress client share one storage authority. Public read access to the
- * `agora/*` prefixes is governed by the bucket policy, not per-object ACLs
- * (matching Syra's other S3 objects).
+ * The LEGACY house / room / series images in Syra's bucket.
+ *
+ * New space images are Oxy files (`services/oxyFiles/spaceImages.ts`); nothing
+ * writes under `agora/houses|rooms|series/` any more. What is left here
+ * recognises and deletes the old objects until `scripts/retireLegacyImageStorage.ts`
+ * retires the prefixes. Room recordings are audio, and live in
+ * `services/oxyFiles/audioStorage.ts`.
  */
 
 /**
@@ -19,25 +20,10 @@ import { uploadToS3, getPresignedUrl, deleteFromS3 } from '../services/s3Service
 const S3_PUBLIC_BASE_URL = process.env.S3_PUBLIC_BASE_URL?.replace(/\/+$/, '');
 
 /**
- * Build a public, directly-servable URL for a stored object key. Prefers
- * `S3_PUBLIC_BASE_URL`, then a custom S3 endpoint (`AWS_ENDPOINT_URL`, e.g.
- * LocalStack / MinIO / Spaces), else the standard AWS virtual-hosted URL.
- */
-export function getCdnUrl(objectKey: string): string {
-  if (S3_PUBLIC_BASE_URL) {
-    return `${S3_PUBLIC_BASE_URL}/${objectKey}`;
-  }
-  if (S3_ENDPOINT) {
-    return `${S3_ENDPOINT.replace(/\/+$/, '')}/${S3_BUCKET_NAME}/${objectKey}`;
-  }
-  return `https://${S3_BUCKET_NAME}.s3.${S3_REGION}.amazonaws.com/${objectKey}`;
-}
-
-/**
- * Reverse of {@link getCdnUrl}: extract the stored object key from a public CDN
- * URL this module previously produced, or `null` when the URL is not one of
- * ours (external / legacy host). Used to clean up a superseded image on
- * re-upload without a hardcoded host.
+ * Extract the stored object key from a public bucket URL Syra produced before
+ * its images moved to Oxy Files (ADR 0041), or `null` when the URL is not one of
+ * ours (an external host). Used to recognise a LEGACY house/room/series image —
+ * to count reads of it and to delete it once replaced — without a hardcoded host.
  */
 export function cdnUrlToKey(url: string | undefined | null): string | null {
   if (!url) return null;
@@ -60,82 +46,4 @@ export function cdnUrlToKey(url: string | undefined | null): string | null {
 
 export async function deleteObject(objectKey: string): Promise<void> {
   return deleteFromS3(objectKey);
-}
-
-/**
- * Upload a buffer to object storage. Returns the public CDN URL for a
- * `'public-read'` upload (callers store it as an image URL) and the raw object
- * key for a `'private'` upload (fetched later via a presigned URL). Public vs
- * private access is governed by the bucket policy, not per-object ACLs.
- */
-export async function uploadObject(
-  objectKey: string,
-  body: Buffer | Uint8Array | string,
-  contentType: string,
-  acl: 'private' | 'public-read' = 'private',
-): Promise<string> {
-  await uploadToS3(objectKey, Buffer.isBuffer(body) ? body : Buffer.from(body), { contentType });
-  return acl === 'public-read' ? getCdnUrl(objectKey) : objectKey;
-}
-
-// ---------------------------------------------------------------------------
-// Agora media key helpers
-// ---------------------------------------------------------------------------
-
-export function getAgoraHouseAvatarKey(houseId: string): string {
-  return `agora/houses/${houseId}/avatar.webp`;
-}
-
-export function getAgoraHouseCoverKey(houseId: string): string {
-  return `agora/houses/${houseId}/cover.webp`;
-}
-
-export function getAgoraRoomImageKey(roomId: string): string {
-  return `agora/rooms/${roomId}/image.webp`;
-}
-
-export function getAgoraSeriesCoverKey(seriesId: string): string {
-  return `agora/series/${seriesId}/cover.webp`;
-}
-
-// ---------------------------------------------------------------------------
-// Recording-specific helpers
-// ---------------------------------------------------------------------------
-
-export function getRecordingObjectKey(roomId: string, recordingId: string): string {
-  return `agora/recordings/${roomId}/${recordingId}.ogg`;
-}
-
-export async function getRecordingPresignedUrl(
-  objectKey: string,
-  expiresInSeconds: number = 3600,
-): Promise<string> {
-  return getPresignedUrl(objectKey, expiresInSeconds);
-}
-
-export async function deleteRecordingFromSpaces(objectKey: string): Promise<void> {
-  return deleteFromS3(objectKey);
-}
-
-/**
- * S3 upload config handed to the LiveKit EgressClient so it writes the room
- * recording directly to the same bucket. Like `config/s3.config`, it passes
- * the `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` pair only when both are set
- * (local MinIO). Production sets neither: with no credentials in the request,
- * LiveKit's S3 uploader uses the AWS default chain on the LiveKit host, whose
- * instance role (`oxy-livekit` in oxy-infra) may put only under
- * `agora/recordings/`. Bucket / region / endpoint are the canonical S3 config
- * values.
- */
-export function getS3UploadConfig(objectKey: string) {
-  const accessKey = process.env.AWS_ACCESS_KEY_ID;
-  const secret = process.env.AWS_SECRET_ACCESS_KEY;
-  return {
-    ...(accessKey && secret ? { accessKey, secret } : {}),
-    bucket: S3_BUCKET_NAME,
-    region: S3_REGION,
-    endpoint: S3_ENDPOINT,
-    filepath: objectKey,
-    forcePathStyle: Boolean(S3_ENDPOINT),
-  };
 }

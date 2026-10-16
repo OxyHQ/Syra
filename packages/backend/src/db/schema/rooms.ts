@@ -283,6 +283,13 @@ export const houses = pgTable(
      */
     avatar: text(),
     coverImage: text(),
+    /**
+     * The avatar and cover as Oxy files owned by the house's creator (ADR 0041).
+     * `avatar`/`coverImage` above are the LEGACY bucket URLs, read only while a
+     * house has no file here; an upload writes the file and clears the URL.
+     */
+    avatarFileId: text(),
+    coverImageFileId: text(),
     /** An Oxy account id — no foreign key. Not `*_id`-suffixed. */
     createdBy: text().notNull(),
     // `visibility` is a single subdocument, flattened — see the file-level doc
@@ -390,6 +397,8 @@ export const series = pgTable(
     description: text(),
     /** A raw S3 CDN URL string, not an `image_assets` reference — see `houses.avatar`. */
     coverImage: text(),
+    /** The cover as an Oxy file owned by the series' creator — see `houses.avatarFileId`. */
+    coverImageFileId: text(),
     houseId: text().references(() => houses.id, { onDelete: 'set null' }),
     /** An Oxy account id — no foreign key. Not `*_id`-suffixed. */
     createdBy: text().notNull(),
@@ -591,6 +600,8 @@ export const rooms = pgTable(
     activeStreamUrl: text(),
     streamTitle: text(),
     streamImage: text(),
+    /** The stream image as an Oxy file owned by the host — see `houses.avatarFileId`. */
+    streamImageFileId: text(),
     streamDescription: text(),
     /** Internal stream credential — see `activeIngressId`. */
     rtmpUrl: text(),

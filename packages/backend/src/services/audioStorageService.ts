@@ -1,16 +1,17 @@
-import { Track } from '@syra/shared-types';
-import { getS3AudioKey } from '../config/s3.config';
+import type { Track } from '@syra/shared-types';
 import {
-  uploadToS3,
-  getPresignedUrl,
-  streamFromS3,
-  getObjectMetadata,
-  deleteFromS3,
-  objectExists,
-  S3StreamOptions,
-} from './s3Service';
+  audioObjectExists,
+  deleteAudioObject,
+  getS3AudioKey,
+  openAudioObject,
+  presignAudioObject,
+  putSourceAudio,
+  statAudioObject,
+  type AudioOwner,
+  type AudioRange,
+} from './oxyFiles/audioStorage';
 import { logger } from '../utils/logger';
-import { Readable } from 'stream';
+import type { Readable } from 'stream';
 
 /**
  * Audio Storage Service
@@ -42,6 +43,8 @@ export function getTrackS3Key(track: TrackAudioRef): string {
 export async function uploadTrackAudio(
   track: TrackAudioRef,
   audioFile: Buffer | Readable | string,
+  /** Whose upload this is — the owner the audio gets once it moves to Oxy Files. */
+  owner: AudioOwner,
 ): Promise<string> {
   if (!track.audioSource) {
     throw new Error(`Track ${track.id} has no audio source`);
@@ -49,7 +52,8 @@ export async function uploadTrackAudio(
   const key = getTrackS3Key(track);
   const contentType = `audio/${track.audioSource.format || 'mpeg'}`;
 
-  await uploadToS3(key, audioFile, {
+  await putSourceAudio(key, audioFile, {
+    owner,
     contentType,
     metadata: {
       trackId: track.id,
@@ -80,7 +84,7 @@ export async function getTrackStreamUrl(track: TrackAudioRef): Promise<string> {
   }
 
   // Generate new pre-signed URL (1 hour expiration)
-  const url = await getPresignedUrl(key, 3600);
+  const url = await presignAudioObject(key, 3600);
 
   // Cache it
   presignedUrlCache.set(key, {
@@ -96,7 +100,7 @@ export async function getTrackStreamUrl(track: TrackAudioRef): Promise<string> {
  */
 export async function streamTrackAudio(
   track: Track,
-  options: S3StreamOptions = {},
+  options: AudioRange = {},
 ): Promise<{
   stream: Readable;
   contentLength: number;
@@ -104,7 +108,7 @@ export async function streamTrackAudio(
   contentRange?: string;
 }> {
   const key = getTrackS3Key(track);
-  return streamFromS3(key, options);
+  return openAudioObject(key, options);
 }
 
 /**
@@ -112,7 +116,7 @@ export async function streamTrackAudio(
  */
 export async function getTrackAudioMetadata(track: Track) {
   const key = getTrackS3Key(track);
-  return getObjectMetadata(key);
+  return statAudioObject(key);
 }
 
 /**
@@ -120,7 +124,7 @@ export async function getTrackAudioMetadata(track: Track) {
  */
 export async function trackAudioExists(track: Track): Promise<boolean> {
   const key = getTrackS3Key(track);
-  return objectExists(key);
+  return audioObjectExists(key);
 }
 
 /**
@@ -128,7 +132,7 @@ export async function trackAudioExists(track: Track): Promise<boolean> {
  */
 export async function deleteTrackAudio(track: Track): Promise<void> {
   const key = getTrackS3Key(track);
-  await deleteFromS3(key);
+  await deleteAudioObject(key);
   logger.info(`[AudioStorageService] Deleted audio for track: ${track.id}`);
 }
 

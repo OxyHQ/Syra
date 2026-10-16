@@ -449,7 +449,7 @@ export const podcasts = pgTable(
      * indexes a foreign key column on its own, but `ON DELETE SET NULL` still
      * has to find every referencing row when the referenced `image_assets`
      * row is deleted — unindexed, that is a sequential scan of this table PER
-     * DELETED ROW. `consolidateDuplicateCatalogImages.ts` deleting a single
+     * DELETED ROW. The since-removed `consolidateDuplicateCatalogImages.ts` deleting a single
      * batch of duplicate images against an unindexed `episodes` (see that
      * table below) blocked live episode inserts for 30+ minutes before this
      * was caught; these indexes are that fix.

@@ -5,8 +5,8 @@
 # `script` is a closed allowlist, not a free-text command: workflow_dispatch
 # already requires write access to trigger, but this still runs with write
 # access to the production database, so the blast radius of a mistake is
-# capped at "one of these two scripts, with one of these two flags" rather
-# than "any argv this trigger's caller can type."
+# capped at "one of these scripts, with these flags" rather than "any argv
+# this trigger's caller can type."
 name: Run Backend Script
 
 on:
@@ -19,16 +19,18 @@ on:
         options:
           - backfill-episode-images
           - backfill-fingerprints
-          - consolidate-duplicate-images
           - backfill-podcast-covers
+          - migrate-images-to-oxy
+          - migrate-alia-covers
+          - retire-legacy-image-storage
       args:
         description: >-
-          Optional flags, space-separated. Only --dry-run, --limit <n> and
-          --concurrency <n> are accepted; anything else is refused.
-          --concurrency affects backfill-episode-images and
-          backfill-podcast-covers (shows processed at once — default 4; the
-          other scripts ignore it). --limit bounds duplicate-hash GROUPS for
-          consolidate-duplicate-images, not rows.
+          Optional flags, space-separated. Only --dry-run, --apply, --limit <n>
+          and --concurrency <n> are accepted; anything else is refused.
+          --concurrency affects backfill-episode-images, backfill-podcast-covers
+          and migrate-images-to-oxy (default 4; the other scripts ignore it).
+          The three Oxy Files scripts PREVIEW unless given --apply
+          (docs/runbooks/oxy-files-images.md); --limit bounds their units.
         type: string
         required: false
         default: ''
@@ -81,9 +83,9 @@ jobs:
         env:
           RAW_ARGS: ${{ inputs.args }}
         run: |
-          flag='(--dry-run|--limit\ [0-9]+|--concurrency\ [0-9]+)'
+          flag='(--dry-run|--apply|--limit\ [0-9]+|--concurrency\ [0-9]+)'
           if [[ -n "$RAW_ARGS" && ! "$RAW_ARGS" =~ ^$flag([[:space:]]$flag)*$ ]]; then
-            echo "::error::args must be some combination of --dry-run, --limit <n> and --concurrency <n> only, got: $RAW_ARGS"
+            echo "::error::args must be some combination of --dry-run, --apply, --limit <n> and --concurrency <n> only, got: $RAW_ARGS"
             exit 1
           fi
           json="$(jq -cn --arg a "$RAW_ARGS" '($a | select(length > 0) | split(" ")) // []')"
@@ -101,8 +103,10 @@ jobs:
           case "$SCRIPT" in
             backfill-episode-images) path="packages/backend/dist/src/scripts/backfillEpisodeImages.js" ;;
             backfill-fingerprints) path="packages/backend/dist/src/scripts/backfillTrackFingerprints.js" ;;
-            consolidate-duplicate-images) path="packages/backend/dist/src/scripts/consolidateDuplicateCatalogImages.js" ;;
             backfill-podcast-covers) path="packages/backend/dist/src/scripts/backfillPodcastCovers.js" ;;
+            migrate-images-to-oxy) path="packages/backend/dist/src/scripts/migrateImagesToOxy.js" ;;
+            migrate-alia-covers) path="packages/backend/dist/src/scripts/migrateAliaCovers.js" ;;
+            retire-legacy-image-storage) path="packages/backend/dist/src/scripts/retireLegacyImageStorage.js" ;;
             *) echo "::error::unknown script: $SCRIPT"; exit 1 ;;
           esac
           echo "path=$path" >>"$GITHUB_OUTPUT"

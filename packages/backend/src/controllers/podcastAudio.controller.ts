@@ -25,7 +25,7 @@
  */
 
 import type { Response } from 'express';
-import { Readable } from 'stream';
+import type { Readable } from 'stream';
 import { eq } from 'drizzle-orm';
 import { isLiveEntityId } from '@oxy.so/db';
 import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
@@ -36,8 +36,11 @@ import { findEpisodeById } from '../db/podcasts/episodes';
 import { loadEpisodeHls } from '../db/podcasts/hydrate';
 import type { EpisodeRow } from '../db/podcasts/serialize';
 import { env } from '../config/env';
-import { getS3PodcastEpisodeAudioKey } from '../config/s3.config';
-import { streamFromS3, getObjectMetadata } from '../services/s3Service';
+import {
+  getS3PodcastEpisodeAudioKey,
+  openAudioObject,
+  statAudioObject,
+} from '../services/oxyFiles/audioStorage';
 import { requestMayReachShowMedia, resolveEpisodeAccess } from './stream.controller';
 import { mintStreamToken } from '../services/stream/streamToken';
 import {
@@ -133,7 +136,7 @@ export function parseRange(header: string | undefined, totalSize: number): Parse
 // ── /audio: S3-backed (syra source / cached rss) ───────────────────────────────
 
 async function serveFromS3(req: AuthRequest, res: Response, s3Key: string): Promise<void> {
-  const metadata = await getObjectMetadata(s3Key);
+  const metadata = await statAudioObject(s3Key);
   if (!metadata || metadata.contentLength === undefined) {
     res.status(404).json({ error: 'Audio not found' });
     return;
@@ -148,7 +151,7 @@ async function serveFromS3(req: AuthRequest, res: Response, s3Key: string): Prom
   res.set('Cache-Control', CACHE_CONTROL_AUDIO);
 
   if (range) {
-    const { stream } = await streamFromS3(s3Key, { start: range.start, end: range.end });
+    const { stream } = await openAudioObject(s3Key, { start: range.start, end: range.end });
     res.status(206);
     res.set('Content-Range', `bytes ${range.start}-${range.end}/${totalSize}`);
     res.set('Content-Length', String(range.end - range.start + 1));
@@ -157,7 +160,7 @@ async function serveFromS3(req: AuthRequest, res: Response, s3Key: string): Prom
     return;
   }
 
-  const { stream } = await streamFromS3(s3Key);
+  const { stream } = await openAudioObject(s3Key);
   res.status(200);
   res.set('Content-Length', String(totalSize));
   (stream as Readable).on('error', () => res.destroy());

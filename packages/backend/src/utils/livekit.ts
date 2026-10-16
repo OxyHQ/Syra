@@ -4,12 +4,12 @@ import {
   TrackSource,
   IngressClient,
   IngressInput,
-  IngressInfo,
+  type IngressInfo,
   EgressClient,
   EncodedFileOutput,
   EncodedFileType,
 } from 'livekit-server-sdk';
-import { getS3UploadConfig } from './spaces';
+import { recordingEgressTarget } from '../services/oxyFiles/audioStorage';
 import { logger } from './logger';
 import { isLiveKitAlreadyExistsError } from './livekitErrors';
 import { describeErrorSafely } from './error';
@@ -266,7 +266,7 @@ export async function deleteIngress(ingressId: string): Promise<void> {
  */
 export async function startRoomRecording(roomId: string, objectKey: string): Promise<string> {
   try {
-    const s3Config = getS3UploadConfig(objectKey);
+    const s3Config = recordingEgressTarget(objectKey);
 
     const output: EncodedFileOutput = new EncodedFileOutput({
       fileType: EncodedFileType.OGG,

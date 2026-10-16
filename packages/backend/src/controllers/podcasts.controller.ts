@@ -69,7 +69,12 @@ import {
 import { getParam, parseClampedLimit, parseOffset } from '../utils/reqParams';
 import { logger } from '../utils/logger';
 import { searchPodcasts as directorySearch } from '../services/podcasts/PodcastDirectory';
-import { importFeed } from '../services/podcasts/podcastImportService';
+import {
+  artworkColumns,
+  importFeed,
+  type ArtworkColumns,
+} from '../services/podcasts/podcastImportService';
+import { adoptCoverFile } from '../services/oxyFiles/adoptedCovers';
 import { syncPodcastSearch } from '../services/podcasts/podcastBackgroundImport';
 import {
   resolvePersons,
@@ -83,8 +88,7 @@ import {
 import { generatePodcastRss } from '../services/podcasts/podcastRssGenerator';
 import { deletePodcastCompletely } from '../services/podcasts/deletePodcast';
 import type { PodcastRow } from '../db/podcasts/serialize';
-import { getS3PodcastEpisodeAudioKey } from '../config/s3.config';
-import { uploadToS3 } from '../services/s3Service';
+import { getS3PodcastEpisodeAudioKey, putSourceAudio } from '../services/oxyFiles/audioStorage';
 import { oxy } from '../oxyClient';
 import { describeErrorSafely } from '../utils/error';
 
@@ -593,9 +597,19 @@ export async function createPodcast(req: AuthRequest, res: Response): Promise<vo
     persons = built.persons;
   }
 
+  if (input.image && input.imageFileId) {
+    res.status(400).json({ error: 'Send image or imageFileId, not both' });
+    return;
+  }
+
+  // The public RSS URL is derivable from the id, so the id is minted here rather
+  // than left to the column default — the same reason `uploadEpisode` mints one.
+  // Minted before the cover too: an adopted Oxy file is referenced BY this id.
+  const id = uuidv7();
+
   // Pull the gradient colors from the creator's uploaded cover (Syra image id),
   // matching how Album/Artist carry primaryColor.
-  let imageId: string | null = null;
+  let artwork: Partial<ArtworkColumns> = {};
   let primaryColor: string | undefined;
   let secondaryColor: string | undefined;
   if (input.image) {
@@ -604,14 +618,21 @@ export async function createPodcast(req: AuthRequest, res: Response): Promise<vo
       res.status(400).json({ error: 'Unknown cover image' });
       return;
     }
-    imageId = input.image;
+    artwork = artworkColumns(input.image, {});
     primaryColor = cover.primaryColor;
     secondaryColor = cover.secondaryColor;
+  } else if (input.imageFileId) {
+    const adopted = await adoptCoverFile(input.imageFileId, { oxyUserId: userId, podcastId: id });
+    if (!adopted.ok) {
+      res
+        .status(422)
+        .json({ error: 'That file cannot be this show’s cover', reason: adopted.reason });
+      return;
+    }
+    artwork = artworkColumns(adopted.imageId, adopted.imageSizes);
+    primaryColor = adopted.primaryColor;
+    secondaryColor = adopted.secondaryColor;
   }
-
-  // The public RSS URL is derivable from the id, so the id is minted here rather
-  // than left to the column default — the same reason `uploadEpisode` mints one.
-  const id = uuidv7();
 
   const row = await insertPodcast(
     {
@@ -619,7 +640,8 @@ export async function createPodcast(req: AuthRequest, res: Response): Promise<vo
       title: input.title,
       description: input.description,
       author: input.author,
-      imageId,
+      imageId: null,
+      ...artwork,
       primaryColor,
       secondaryColor,
       language: input.language,
@@ -761,7 +783,10 @@ export async function uploadEpisode(req: AuthRequest, res: Response): Promise<vo
       const pubDate = new Date();
 
       const audioKey = getS3PodcastEpisodeAudioKey(episodeId, podcast.id, format);
-      await uploadToS3(audioKey, file.buffer, { contentType: file.mimetype });
+      await putSourceAudio(audioKey, file.buffer, {
+        contentType: file.mimetype,
+        owner: { kind: 'account', oxyUserId: userId },
+      });
 
       const episode = await insertEpisode(
         {
@@ -957,13 +982,37 @@ export async function updatePodcast(req: AuthRequest, res: Response): Promise<vo
   // party who knows, and a wrong one in either direction is a real harm.
   if (updates.aiGenerated !== undefined) values.aiGenerated = updates.aiGenerated;
 
+  if (updates.image !== undefined && updates.imageFileId !== undefined) {
+    res.status(400).json({ error: 'Send image or imageFileId, not both' });
+    return;
+  }
+
+  if (updates.imageFileId !== undefined) {
+    const adopted = await adoptCoverFile(updates.imageFileId, {
+      oxyUserId: userId,
+      podcastId: podcast.id,
+    });
+    if (!adopted.ok) {
+      res
+        .status(422)
+        .json({ error: 'That file cannot be this show’s cover', reason: adopted.reason });
+      return;
+    }
+    Object.assign(values, artworkColumns(adopted.imageId, adopted.imageSizes));
+    // The new cover decides both accents, including their absence — see below.
+    values.primaryColor = adopted.primaryColor ?? null;
+    values.secondaryColor = adopted.secondaryColor ?? null;
+  }
+
   if (updates.image !== undefined) {
     const cover = await resolveCover(updates.image);
     if (!cover.ok) {
       res.status(400).json({ error: 'Unknown cover image' });
       return;
     }
-    values.imageId = updates.image;
+    // A single uploaded image has no size set: the previous cover's sizes go
+    // with it, or every DTO would keep rendering the old artwork.
+    Object.assign(values, artworkColumns(updates.image, {}));
     /**
      * `?? null`, for the same `undefined`-versus-`null` reason as the locker's
      * own PATCH (`uploads.controller.ts`'s `updateUpload`).

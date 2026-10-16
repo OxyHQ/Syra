@@ -39,11 +39,11 @@ import { getDb, type DbOrTransaction } from '../postgres';
 import { PROTECTED_COLUMNS_BY_TABLE } from '../schema/protectedColumns';
 import { roomMediaQueueItems, rooms } from '../schema/rooms';
 import {
-  BroadcastKind,
-  OwnerType,
+  type BroadcastKind,
+  type OwnerType,
   RoomStatus,
-  RoomType,
-  SpeakerPermission,
+  type RoomType,
+  type SpeakerPermission,
   type MediaQueueItem,
 } from './types';
 
@@ -362,6 +362,8 @@ export type UpdateRoomInput = Partial<{
   activeStreamUrl: string | null;
   streamTitle: string | null;
   streamImage: string | null;
+  /** The stream image as an Oxy file (ADR 0041). Setting `streamImage` alone clears it. */
+  streamImageFileId: string | null;
   streamDescription: string | null;
   rtmpUrl: string | null;
   rtmpStreamKey: string | null;
@@ -376,7 +378,16 @@ export async function updateRoom(
 ): Promise<RoomWithCredentials | undefined> {
   const [room] = await db
     .update(rooms)
-    .set({ ...input, updatedAt: new Date() })
+    .set({
+      ...input,
+      // One stream image at a time: a URL (a stream's own thumbnail, a client's
+      // link) replaces an uploaded file, and an uploaded file replaces the URL.
+      ...(input.streamImage !== undefined && input.streamImageFileId === undefined
+        ? { streamImageFileId: null }
+        : {}),
+      ...(input.streamImageFileId ? { streamImage: null } : {}),
+      updatedAt: new Date(),
+    })
     .where(eq(rooms.id, id))
     .returning(ROOM_ALL_COLUMNS);
 
@@ -400,6 +411,7 @@ export const CLEARED_STREAM_FIELDS: UpdateRoomInput = {
   activeStreamUrl: null,
   streamTitle: null,
   streamImage: null,
+  streamImageFileId: null,
   streamDescription: null,
   rtmpUrl: null,
   rtmpStreamKey: null,

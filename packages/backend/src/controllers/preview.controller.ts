@@ -7,7 +7,7 @@ import { playableTrackFilter } from '../db/catalog/visibility';
 import { getParam } from '../utils/reqParams';
 import { ensurePreviewClip } from '../services/preview/previewService';
 import type { PreviewSourceRef } from '../services/preview/previewService';
-import { streamFromS3 } from '../services/s3Service';
+import { openAudioObject } from '../services/oxyFiles/audioStorage';
 import { PREVIEW_CONTENT_TYPE, PREVIEW_DURATION_SEC } from '../services/ingest/previewClip';
 import { logger } from '../utils/logger';
 import { describeErrorSafely } from '../utils/error';
@@ -123,7 +123,7 @@ export const getTrackPreview = async (req: Request, res: Response, next: NextFun
       return res.status(404).json({ error: 'Preview not available' });
     }
 
-    const { stream, contentLength } = await streamFromS3(previewKey);
+    const { stream, contentLength } = await openAudioObject(previewKey);
 
     stream.on('error', (streamError: Error) => {
       logger.error('[PreviewController] Error reading preview stream', {

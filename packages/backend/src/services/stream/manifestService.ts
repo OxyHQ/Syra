@@ -24,9 +24,9 @@
  * it would only re-create the coupling to one entity's storage layout.
  */
 
-import { Readable } from 'stream';
+import type { Readable } from 'stream';
 import type { HlsRendition } from '@syra/shared-types';
-import { streamFromS3, getPresignedUrl } from '../s3Service';
+import { openAudioObject, presignAudioObject } from '../oxyFiles/audioStorage';
 import { rewriteVariantPlaylist } from './playlistRewrite';
 
 /**
@@ -77,7 +77,7 @@ function rememberManifestText(s3Key: string, entry: ManifestTextCacheEntry): voi
 }
 
 function readS3Text(s3Key: string): Promise<string> {
-  return streamFromS3(s3Key).then(
+  return openAudioObject(s3Key).then(
     ({ stream }) =>
       new Promise<string>((resolve, reject) => {
         const chunks: Buffer[] = [];
@@ -121,7 +121,7 @@ async function defaultPresign(
   s3Key: string,
   ttlSec: number = SEGMENT_URL_TTL_SEC,
 ): Promise<string> {
-  return getPresignedUrl(s3Key, ttlSec);
+  return presignAudioObject(s3Key, ttlSec);
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────

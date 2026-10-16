@@ -17,19 +17,18 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { Readable } from 'stream';
+import type { Readable } from 'stream';
 import { eq } from 'drizzle-orm';
 import type { AudioSource } from '@syra/shared-types';
 import { getDb } from '../../db/postgres';
 import { tracks, trackHlsRenditions } from '../../db/schema/catalog';
 import { logger } from '../../utils/logger';
 import { getTrackS3Key } from '../audioStorageService';
-import { streamFromS3 } from '../s3Service';
+import { getS3HlsKey, openAudioObject } from '../oxyFiles/audioStorage';
 import { packageToEncryptedHls } from './hlsPackager';
 import type { PackageOptions, PackageResult } from './hlsPackager';
 import { storePackagedHls } from './hlsStorage';
 import type { StoreHlsTarget, StoredHls } from './hlsStorage';
-import { getS3HlsKey } from '../../config/s3.config';
 import { probeAudio } from './probeAudio';
 import type { ProbedAudio } from './probeAudio';
 import { fingerprintFile } from '../uploads/fingerprint';
@@ -102,7 +101,7 @@ async function defaultFetchSource(track: IngestTrackSource): Promise<FetchSource
     albumId: track.albumId,
     audioSource: track.audioSource,
   } as Parameters<typeof getTrackS3Key>[0]);
-  const { stream } = await streamFromS3(s3Key);
+  const { stream } = await openAudioObject(s3Key);
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ingest-src-'));
   const localPath = path.join(tmpDir, `source.${track.audioSource.format}`);

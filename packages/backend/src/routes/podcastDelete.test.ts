@@ -682,12 +682,14 @@ describe('the delete responses match the schemas @syra.fm/sdk parses them with',
     expect(Object.keys(body.data as object).sort()).toEqual(['id', 'objectsDeleted', 'podcastId']);
   });
 
-  it('leaves the cover artwork behind — the one thing a show delete does NOT reclaim', async () => {
+  it('never deletes cover artwork bytes — the cover is released through its Oxy reference', async () => {
     /**
      * The claim the SDK's doc comment makes to Alia, asserted rather than
-     * described: `image_assets` is referenced `ON DELETE set null` and the
-     * artwork's objects live under `images/{imageId}/`, which is not one of the
-     * three trees a show delete sweeps.
+     * described: a show delete sweeps audio trees only. Artwork is an Oxy file
+     * now (ADR 0041), released by the delete's queued reference removal — never
+     * by deleting bytes another show may share — and a legacy cover's objects
+     * live under `images/{imageId}/`, which is not one of the three trees a show
+     * delete sweeps.
      *
      * It matters because Alia is about to call this for real and needs to know
      * what storage survives. Asserted on the SWEPT PREFIXES rather than on the

@@ -21,6 +21,7 @@ import type { HouseMemberRow, HouseRow } from './houses';
 import { isMember } from './houses';
 import type { RoomRow, RoomWithCredentials } from './rooms';
 import { HouseRooms, type MediaQueueItem } from './types';
+import { spaceImageUrl } from '../../services/oxyFiles/spaceImages';
 
 // ── rooms ─────────────────────────────────────────────────────────────────
 
@@ -64,6 +65,7 @@ export const PUBLIC_ROOM_FIELDS = [
   'recordingEgressId',
   'streamTitle',
   'streamImage',
+  'streamImageFileId',
   'streamDescription',
   'streamStartedAt',
   'streamDurationSec',
@@ -105,6 +107,15 @@ export function stripInternalStreamFields(
     if (value !== undefined) {
       sanitized[field] = value;
     }
+  }
+
+  // The stream image's Oxy file wins over its legacy URL (ADR 0041 dual read).
+  if (room.streamImageFileId || room.streamImage) {
+    sanitized.streamImage = spaceImageUrl(
+      room.streamImageFileId,
+      room.streamImage,
+      'room_stream_image',
+    );
   }
 
   return {
@@ -174,6 +185,9 @@ export interface PublicHouse {
   description: string | null;
   avatar: string | null;
   coverImage: string | null;
+  /** The images' Oxy files, for a client with Oxy's image resolver (ADR 0041). */
+  avatarFileId: string | null;
+  coverImageFileId: string | null;
   createdBy: string;
   visibility: { discovery: string; rooms: string; join: string };
   tags: string[];
@@ -206,8 +220,10 @@ export function serializeHouseFor(
     id: house.id,
     name: house.name,
     description: house.description,
-    avatar: house.avatar,
-    coverImage: house.coverImage,
+    avatar: spaceImageUrl(house.avatarFileId, house.avatar, 'house_avatar'),
+    coverImage: spaceImageUrl(house.coverImageFileId, house.coverImage, 'house_cover'),
+    avatarFileId: house.avatarFileId,
+    coverImageFileId: house.coverImageFileId,
     createdBy: house.createdBy,
     // `visibility` was one subdocument and is three flat columns; rebuilt so the
     // wire shape is unchanged.

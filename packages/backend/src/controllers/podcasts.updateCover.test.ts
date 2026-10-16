@@ -21,11 +21,13 @@
  * from the identical defect in the locker.
  */
 
-import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
+import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll } from 'bun:test';
+import sharp from 'sharp';
 import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
 import type { Response } from 'express';
 import { eq } from 'drizzle-orm';
 import { clearDb, connectDb, disconnectDb } from '../test/postgres';
+import { installFakeOxyFiles, resetOxyFiles, type FakeOxyFiles } from '../test/fakeOxyFiles';
 import { getDb } from '../db/postgres';
 import { imageAssets } from '../db/schema/catalog';
 import { podcasts } from '../db/schema/podcasts';
@@ -183,5 +185,85 @@ describe('PATCH /api/podcasts/:id — cover art replaces the palette', () => {
     expect(after?.title).toBe('Renamed');
     expect(after?.primaryColor).toBe('#ff0000');
     expect(after?.secondaryColor).toBe('#00ff00');
+  });
+});
+
+/**
+ * `imageFileId`: the cover is an Oxy file someone else owns — Alia's, for the
+ * shows it draws (OxyHQ/oxy ADR 0041). Syra references it and builds its size
+ * set; it never copies it, and the previous cover's sizes go with it.
+ */
+describe('PATCH /api/podcasts/:id — imageFileId', () => {
+  const ALIA = 'app-alia';
+  let oxy: FakeOxyFiles;
+  const saved = process.env.SYRA_COVER_APPLICATION_IDS;
+  beforeEach(() => {
+    oxy = installFakeOxyFiles();
+    process.env.SYRA_COVER_APPLICATION_IDS = ALIA;
+  });
+  afterEach(() => {
+    resetOxyFiles();
+    if (saved === undefined) delete process.env.SYRA_COVER_APPLICATION_IDS;
+    else process.env.SYRA_COVER_APPLICATION_IDS = saved;
+  });
+
+  const art = () =>
+    sharp({ create: { width: 800, height: 800, channels: 3, background: '#2255aa' } })
+      .png()
+      .toBuffer();
+
+  it("makes Alia's file the cover, with every size, and references it as this show", async () => {
+    const id = await makeOwnedShow({ primaryColor: '#ff0000', secondaryColor: '#00ff00' });
+    const file = oxy.seedFile({ bytes: await art(), ownerApplicationId: ALIA });
+    const res = makeRes();
+
+    await updatePodcast(makeReq(id, { imageFileId: file.id }), res as unknown as Response);
+
+    expect(res._status).toBe(200);
+    const after = await readShow(id);
+    const [large] = await getDb()
+      .select()
+      .from(imageAssets)
+      .where(eq(imageAssets.id, after?.imageSizesLargeId as string));
+    expect(large).toMatchObject({ oxyFileId: file.id, oxyVariant: 'w640' });
+    expect(after?.imageId).toBe(after?.imageSizesLargeId as string);
+    expect(after?.primaryColor).not.toBe('#ff0000');
+    expect(oxy.hasReference(file.id, 'podcast', id)).toBe(true);
+    expect(oxy.files.size).toBe(1);
+  });
+
+  it('refuses a file that is not the caller’s or a trusted application’s, changing nothing', async () => {
+    const id = await makeOwnedShow({ primaryColor: '#ff0000', secondaryColor: '#00ff00' });
+    const file = oxy.seedFile({ bytes: await art(), ownerUserId: 'a-stranger' });
+    const res = makeRes();
+
+    await updatePodcast(makeReq(id, { imageFileId: file.id }), res as unknown as Response);
+
+    expect(res._status).toBe(422);
+    expect((await readShow(id))?.imageId).toBeNull();
+  });
+
+  it('refuses image and imageFileId together', async () => {
+    const id = await makeOwnedShow({ primaryColor: '#ff0000', secondaryColor: '#00ff00' });
+    const res = makeRes();
+    await updatePodcast(
+      makeReq(id, { image: await makeImage(), imageFileId: 'f' }),
+      res as unknown as Response,
+    );
+    expect(res._status).toBe(400);
+  });
+
+  it('drops the previous size set when a single uploaded image replaces it', async () => {
+    const id = await makeOwnedShow({ primaryColor: '#ff0000', secondaryColor: '#00ff00' });
+    const file = oxy.seedFile({ bytes: await art(), ownerApplicationId: ALIA });
+    await updatePodcast(makeReq(id, { imageFileId: file.id }), makeRes() as unknown as Response);
+    const single = await makeImage({ primaryColor: '#0000ff' });
+
+    await updatePodcast(makeReq(id, { image: single }), makeRes() as unknown as Response);
+
+    const after = await readShow(id);
+    expect(after?.imageId).toBe(single);
+    expect(after?.imageSizesLargeId).toBeNull();
+    expect(after?.imageSizesSmallId).toBeNull();
   });
 });

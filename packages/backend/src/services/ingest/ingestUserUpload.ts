@@ -21,19 +21,18 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { Readable } from 'stream';
+import type { Readable } from 'stream';
 import { eq } from 'drizzle-orm';
 import { describeDriverError } from '@oxy.so/db';
 import { getDb, isDriverError } from '../../db/postgres';
 import { userUploads } from '../../db/schema/creators';
 import { setUploadHls } from '../../db/creators/uploads';
 import { logger } from '../../utils/logger';
-import { streamFromS3 } from '../s3Service';
+import { getS3LockerHlsKey, openAudioObject } from '../oxyFiles/audioStorage';
 import { packageToEncryptedHls, LOCKER_HLS_BITRATES_KBPS } from './hlsPackager';
 import type { PackageOptions, PackageResult } from './hlsPackager';
 import { storePackagedHls } from './hlsStorage';
 import type { StoreHlsTarget, StoredHls } from './hlsStorage';
-import { getS3LockerHlsKey } from '../../config/s3.config';
 import { probeAudio } from './probeAudio';
 import type { ProbedAudio } from './probeAudio';
 import { buildStreamKeyUri } from './streamKeyUri';
@@ -50,7 +49,7 @@ export interface UploadIngestDeps {
 
 /** Stream the stored source object to a temp file ffmpeg can read. */
 async function defaultFetchSource(s3Key: string, format: string): Promise<FetchSourceResult> {
-  const { stream } = await streamFromS3(s3Key);
+  const { stream } = await openAudioObject(s3Key);
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'locker-src-'));
   const localPath = path.join(tmpDir, `source.${format}`);

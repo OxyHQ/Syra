@@ -3,7 +3,7 @@
  *
  * ## Why this exists
  *
- * `podcastImportService.importFeed` re-hosts the show's own cover into Syra S3
+ * `podcastImportService.importFeed` re-hosts the show's own cover (into Oxy Files)
  * via `showCoverColumns`, but ONLY on a full parse. Its conditional-GET
  * short-circuit —
  *

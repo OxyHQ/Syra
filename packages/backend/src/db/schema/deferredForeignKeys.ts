@@ -380,6 +380,40 @@ export const ID_COLUMNS_WITHOUT_FOREIGN_KEY: readonly { column: string; reason: 
       'The Oxy account a notification was already emitted to — half of the unique claim key with ' +
       '`key` (RELATIONS.md: NotificationSuppression.oxyUserId).',
   },
+  // ── CROSS-SERVICE: Oxy file ids, owned by oxy-api (ADR 0041), never a Syra row ──
+  {
+    column: 'image_assets.oxy_file_id',
+    reason:
+      'The Oxy file holding the image bytes. Oxy owns files; Syra hears of a deletion or takedown ' +
+      'through its file events (services/oxyFiles/fileEvents.ts), not through a constraint.',
+  },
+  {
+    column: 'houses.avatar_file_id',
+    reason:
+      "An Oxy file owned by the house's creator — same reasoning as image_assets.oxy_file_id.",
+  },
+  {
+    column: 'houses.cover_image_file_id',
+    reason:
+      "An Oxy file owned by the house's creator — same reasoning as image_assets.oxy_file_id.",
+  },
+  {
+    column: 'rooms.stream_image_file_id',
+    reason: "An Oxy file owned by the room's host — same reasoning as image_assets.oxy_file_id.",
+  },
+  {
+    column: 'series.cover_image_file_id',
+    reason:
+      "An Oxy file owned by the series' creator — same reasoning as image_assets.oxy_file_id.",
+  },
+  {
+    column: 'oxy_file_reference_ops.file_id',
+    reason: 'The Oxy file a queued reference names — same reasoning as image_assets.oxy_file_id.',
+  },
+  {
+    column: 'oxy_file_events.file_id',
+    reason: 'The Oxy file an event was about — same reasoning as image_assets.oxy_file_id.',
+  },
   // ── Polymorphic, no single-table FK is expressible ────────────────────────
   {
     column: 'catalog_relations.source_id',
@@ -393,6 +427,14 @@ export const ID_COLUMNS_WITHOUT_FOREIGN_KEY: readonly { column: string; reason: 
   {
     column: 'catalog_relations.target_id',
     reason: 'Same polymorphism and same reasoning as catalog_relations.source_id (RELATIONS.md).',
+  },
+  {
+    column: 'oxy_file_reference_ops.entity_id',
+    reason:
+      'Polymorphic by the sibling `entity_type` (a catalog_entities, albums, tracks, user_uploads, ' +
+      'playlists, podcasts, episodes, houses, rooms or series id). It is the id Syra reports to Oxy ' +
+      'as the user of a file, and the row is written by a trigger on that very table; a deleted ' +
+      "entity's row is exactly the queued REMOVE, so a constraint would delete the intent it carries.",
   },
   {
     column: 'playback_states.active_device_id',

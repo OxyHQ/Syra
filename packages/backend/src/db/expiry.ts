@@ -79,6 +79,10 @@ import type { ExpirySweepTarget } from '@oxy.so/db/expiry';
 import { moderationExpirySweepTargets } from '@crowdsource.you/core/outbox/postgres';
 import { moderationTableSet } from './schema/moderation';
 import { episodeIngestTickets } from './schema/podcasts';
+import { oxyFileEvents, oxyFileReferenceOps } from './schema/oxyFiles';
+
+/** How long an Oxy file event's dedupe claim and a dead-lettered reference are kept. */
+const OXY_FILE_RECORD_RETENTION_SECONDS = 30 * 24 * 60 * 60;
 import {
   LISTENING_EVENT_RETENTION_SECONDS,
   listeningEvents,
@@ -156,4 +160,22 @@ export const EXPIRY_SWEEP_TARGETS: readonly ExpirySweepTarget[] = [
       'row per episode draft forever.',
   },
   ...moderationExpirySweepTargets(moderationTableSet),
+  {
+    table: oxyFileEvents,
+    column: oxyFileEvents.receivedAt,
+    retentionSeconds: OXY_FILE_RECORD_RETENTION_SECONDS,
+    reason:
+      "An Oxy file event's dedupe claim, 30 days after it arrived. Oxy stops redelivering an event " +
+      'long before that (16 attempts over about four days, then a dead letter, and its own delivery ' +
+      'rows expire at 30 days), so a deleted claim can no longer meet a redelivery to tell apart.',
+  },
+  {
+    table: oxyFileReferenceOps,
+    column: oxyFileReferenceOps.deadAt,
+    retentionSeconds: OXY_FILE_RECORD_RETENTION_SECONDS,
+    reason:
+      'A file reference the outbox gave up on, kept 30 days for inspection. Live rows have no ' +
+      'dead_at and are never matched. Deleting a dead row loses nothing: the nightly ' +
+      'reconciliation sends the full inventory each day and repairs what the row left undone.',
+  },
 ];

@@ -11,7 +11,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { s3Client, S3_BUCKET_NAME, S3_REGION, S3_ENDPOINT } from '../config/s3.config';
 import { logger } from '../utils/logger';
 import { getErrorMessage } from '../utils/error';
-import { Readable } from 'stream';
+import type { Readable } from 'stream';
 import { describeErrorSafely } from '../utils/error';
 
 interface AwsSdkError {
@@ -327,8 +327,7 @@ export async function deleteS3Prefix(prefix: string): Promise<number> {
  * Delete an explicit list of keys, batched at S3's own limit (1000 per
  * `DeleteObjects` call). Unlike `deleteS3Prefix`, the caller already knows
  * every key — there is nothing to list first, and the keys need not share a
- * prefix at all (`consolidateDuplicateCatalogImages.ts` calls this with keys
- * spanning many different entities' image variants in one pass).
+ * prefix at all.
  */
 export async function deleteFromS3Batch(keys: readonly string[]): Promise<number> {
   const BATCH_SIZE = 1000;

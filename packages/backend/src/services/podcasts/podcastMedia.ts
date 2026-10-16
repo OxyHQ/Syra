@@ -2,7 +2,7 @@
  * Podcast cover-art re-hosting — thin wrapper over the SHARED catalog image
  * pipeline (`mirrorCatalogImage`) that albums/artists/tracks use. It downloads
  * the external artwork (SSRF-guarded inside the pipeline via `validateUrlSecurity`),
- * produces the multi-resolution `imageSizes` variants in Syra S3, and extracts
+ * imports it into Oxy Files as Syra's file with its multi-resolution `imageSizes` rows, and extracts
  * `primaryColor`/`secondaryColor` — exactly like Artist/Album. No parallel
  * uploader: this only adapts the call for podcast/episode entities.
  *
@@ -26,7 +26,7 @@ export interface RehostedImage {
 }
 
 /**
- * Re-host a podcast/episode cover from its external URL into Syra S3. Idempotent
+ * Re-host a podcast/episode cover from its external URL into Oxy Files. Idempotent
  * when `existingImageId`/`existingImageSizes` are passed and the source bytes are
  * unchanged. Returns undefined when the artwork can't be fetched/processed.
  */

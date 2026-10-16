@@ -52,7 +52,7 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { Readable } from 'stream';
+import type { Readable } from 'stream';
 import {
   findEpisodeById,
   findEpisodeIdsAwaitingHls,
@@ -61,8 +61,11 @@ import {
 } from '../../db/podcasts/episodes';
 import type { EpisodeRow } from '../../db/podcasts/serialize';
 import { logger } from '../../utils/logger';
-import { getS3HlsKey, getS3PodcastEpisodeAudioKey } from '../../config/s3.config';
-import { streamFromS3 } from '../s3Service';
+import {
+  getS3HlsKey,
+  getS3PodcastEpisodeAudioKey,
+  openAudioObject,
+} from '../oxyFiles/audioStorage';
 import { packageToEncryptedHls } from '../ingest/hlsPackager';
 import type { PackageOptions, PackageResult } from '../ingest/hlsPackager';
 import { storePackagedHls } from '../ingest/hlsStorage';
@@ -96,7 +99,7 @@ async function defaultFetchSource(episode: EpisodeRow): Promise<EpisodeFetchSour
     episode.podcastId,
     episode.audioSourceFormat,
   );
-  const { stream } = await streamFromS3(s3Key);
+  const { stream } = await openAudioObject(s3Key);
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'episode-src-'));
   const localPath = path.join(tmpDir, `source.${episode.audioSourceFormat}`);
