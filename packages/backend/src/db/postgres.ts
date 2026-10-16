@@ -25,9 +25,17 @@ import * as schema from './schema';
 /** Seconds `closePostgres` waits for in-flight queries before forcing the socket shut. */
 const CLOSE_TIMEOUT_SECONDS = 5;
 
+/**
+ * The postgres.js client under the handle. Named off `OxyDatabase['$client']`
+ * rather than `ReturnType<typeof createDatabase>`: `createDatabase` is
+ * overloaded per driver, and `ReturnType` of an overloaded function picks the
+ * LAST overload (the opt-in bun-sql one), not the postgres.js default used here.
+ */
+export type PostgresClient = OxyDatabase<typeof schema>['$client'];
+
 let handle: {
   db: OxyDatabase<typeof schema>;
-  client: ReturnType<typeof createDatabase>['client'];
+  client: PostgresClient;
 } | null = null;
 
 /**
@@ -172,7 +180,7 @@ export function isDriverError(error: unknown): boolean {
  * @throws {Error} When the pool has not been opened, for the same reason
  *   `getDb()` does.
  */
-export function getPostgresClient(): ReturnType<typeof createDatabase>['client'] {
+export function getPostgresClient(): PostgresClient {
   if (!handle) {
     throw new Error('getPostgresClient() called before connectPostgres()');
   }
