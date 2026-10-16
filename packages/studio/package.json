@@ -29,6 +29,7 @@
     "@expo/vector-icons": "^15.0.2",
     "@gorhom/bottom-sheet": "^5.2.6",
     "@livekit/react-native": "^2.11.1",
+    "@oxy.so/app-preset": "^3.2.1",
     "@oxy.so/bloom": "^10.7.0",
     "@oxy.so/core": "4.10.0",
     "@oxy.so/services": "^11.5.0",

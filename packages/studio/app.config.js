@@ -104,6 +104,17 @@ module.exports = function (_config) {
           },
         ],
         'expo-web-browser',
+        // Release buildType bits expo-build-properties cannot express: the R8
+        // -optimize proguard file, and the real release signing config
+        // (credentials come from Gradle properties, never the repo). The artefact
+        // MUST carry the shared Oxy ecosystem certificate: Commons serves the
+        // identity only to callers holding the signature permissions below.
+        '@oxy.so/app-preset/plugin/withOxyAndroidRelease',
+        // This app runs on its own Android UID and reaches the Commons/Accounts
+        // providers over signature-protected IPC: this declares and requests
+        // so.oxy.permission.IDENTITY and DEVICE_SESSION and adds the <queries>
+        // for their providers.
+        '@oxy.so/services/plugins/withOxySharedPermissions',
       ],
       extra: {
         router: {
