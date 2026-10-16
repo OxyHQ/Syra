@@ -210,3 +210,39 @@ export interface UploadedImage {
   primaryColor?: string;
   secondaryColor?: string;
 }
+
+/**
+ * One current, public podcast show as `getPublicPodcastCards` hands it back —
+ * what a third-party app needs to render a reference card, and nothing an owner
+ * or a session could change. The wire contract (Zod and OpenAPI) is
+ * `@syra.fm/contracts`; this is the same shape without Zod.
+ */
+export interface PublicPodcastCard {
+  id: string;
+  title: string;
+  author?: string;
+  /** An absolute `http(s)` URL. */
+  artworkUrl?: string;
+  /** The show's page on the Syra web app, an absolute `http(s)` URL. */
+  showUrl: string;
+}
+
+/**
+ * Every requested id appears exactly once: in `items` when it is a current
+ * active public show, otherwise in `unavailableIds` (missing, private, unlisted
+ * or withdrawn — the batch does not say which).
+ */
+export interface PublicPodcastCardsResponse {
+  items: PublicPodcastCard[];
+  unavailableIds: string[];
+}
+
+/** The `error.code` of a structured public-API error body. */
+export const PUBLIC_API_ERROR_CODES = [
+  'bad_request',
+  'validation_failed',
+  'rate_limited',
+  'internal_error',
+  'service_unavailable',
+] as const;
+export type PublicApiErrorCode = (typeof PUBLIC_API_ERROR_CODES)[number];

@@ -8,6 +8,9 @@ import {
   podcastDeleted,
   podcastSubscription,
   podcastSummary,
+  publicApiError,
+  publicPodcastCardsResponse,
+  publicPodcastId,
   trackSummary,
   uploadedImage,
 } from './responses';
@@ -24,8 +27,9 @@ import type {
   PodcastVisibility,
   CoverArtSizes,
   ArtworkSize,
+  PublicPodcastCardsResponse,
 } from './types';
-import { SyraApiError } from './errors';
+import { SyraApiError, SyraResponseError } from './errors';
 
 /** Default base URL of the public Syra API. */
 export const DEFAULT_SYRA_BASE_URL = 'https://api.syra.fm';
@@ -252,6 +256,21 @@ export interface SyraClient {
    * returns just the show summary needed to render a card.
    */
   getPodcast(id: string): Promise<PodcastSummary>;
+  /**
+   * Current public show cards for up to 100 ids, in one request.
+   *
+   * Never sends the caller's token, so an owner sees exactly what everyone else
+   * sees: private, unlisted, withdrawn and missing shows all come back in
+   * `unavailableIds`. Duplicate ids are sent once. The response is `no-store`;
+   * keep only the ids in a durable cache, not the cards. Throws before fetching
+   * when there are no ids, more than 100 distinct ids, or a malformed id; a
+   * `SyraResponseError` when the batch does not account for every id exactly
+   * once; a `SyraApiError` (with `code`) on an error status.
+   */
+  getPublicPodcastCards(
+    ids: readonly string[],
+    options?: { signal?: AbortSignal },
+  ): Promise<PublicPodcastCardsResponse>;
   /** Build the Syra web app deep link for a podcast show (`/podcasts/:id`). */
   podcastUrl(id: string): string;
   /**
@@ -574,20 +593,32 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
   /** Raise the API's own error, preferring the message it sent over the status text. */
   async function raiseFor(response: Response, path: string): Promise<never> {
     let detail = `${response.status} ${response.statusText}`;
+    let code: SyraApiError['code'];
     try {
       const body: unknown = await response.json();
-      if (body && typeof body === 'object' && 'error' in body && typeof body.error === 'string') {
+      const structured = publicApiError(body, []);
+      if (structured.ok) {
+        code = structured.value.error.code;
+        detail = `${response.status} ${structured.value.error.message}`;
+      } else if (
+        body &&
+        typeof body === 'object' &&
+        'error' in body &&
+        typeof body.error === 'string'
+      ) {
         detail = `${response.status} ${body.error}`;
       }
     } catch {
       // A non-JSON error body is not itself an error worth reporting; the status
       // is what the caller acts on.
     }
-    throw new SyraApiError(response.status, `Syra API request failed: ${detail} (${path})`);
+    throw new SyraApiError(response.status, `Syra API request failed: ${detail} (${path})`, code);
   }
 
   interface RequestInit_ {
     method?: string;
+    /** Cancels the request; the caller's `AbortSignal`, passed straight to fetch. */
+    signal?: AbortSignal;
     body?: BodyInit;
     /** Extra headers. `Authorization` is added here, never by a caller. */
     headers?: Record<string, string>;
@@ -621,6 +652,7 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
     const response = await doFetch(`${baseURL}${path}`, {
       method: init.method ?? 'GET',
       headers,
+      ...(init.signal === undefined ? {} : { signal: init.signal }),
       ...(init.body === undefined ? {} : { body: init.body }),
     });
     if (!response.ok) return raiseFor(response, path);
@@ -794,6 +826,45 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
         `/api/podcasts/${encodeURIComponent(id)}`,
       )) as PodcastDetailResponseShape;
       return checkResponse(podcastSummary, json?.data?.podcast, 'getPodcast');
+    },
+
+    async getPublicPodcastCards(ids, cardOptions = {}) {
+      const unique = [...new Set(ids)];
+      if (unique.length < 1 || unique.length > 100) {
+        throw new RangeError(
+          `@syra.fm/sdk: getPublicPodcastCards() takes 1–100 distinct ids, got ${unique.length}`,
+        );
+      }
+      for (const [index, id] of unique.entries()) {
+        const checked = publicPodcastId(id, [index]);
+        if (!checked.ok) {
+          throw new TypeError(`@syra.fm/sdk: getPublicPodcastCards(): ${checked.issue.message}`);
+        }
+      }
+      const json = await request('/api/podcasts/public-cards', {
+        method: 'POST',
+        // Public-only by contract: an owner's token must not make their own
+        // private show appear, so none is sent even when a session exists.
+        anonymous: true,
+        signal: cardOptions.signal,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: unique }),
+      });
+      const batch = checkResponse(publicPodcastCardsResponse, json, 'getPublicPodcastCards');
+      const accounted = [...batch.items.map((item) => item.id), ...batch.unavailableIds];
+      const requested = new Set(unique);
+      if (
+        accounted.length !== requested.size ||
+        new Set(accounted).size !== requested.size ||
+        accounted.some((id) => !requested.has(id))
+      ) {
+        throw new SyraResponseError(
+          'getPublicPodcastCards',
+          [],
+          'Syra API response did not account for every requested id exactly once (getPublicPodcastCards)',
+        );
+      }
+      return batch;
     },
 
     podcastUrl(id) {

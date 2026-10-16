@@ -28,6 +28,7 @@
     "@oxy.so/core": "4.10.0",
     "@oxy.so/db": "^1.1.1",
     "@socket.io/redis-adapter": "^8.2.0",
+    "@syra.fm/contracts": "workspace:*",
     "@syra.fm/sdk": "workspace:*",
     "@syra/shared-types": "workspace:*",
     "@types/compression": "^1.8.1",

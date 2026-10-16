@@ -90,7 +90,7 @@ WORKDIR /app
 # unless dependencies change. EVERY workspace member's package.json must be
 # present — `bun install --frozen-lockfile` validates the full workspace graph
 # against the lockfile and aborts if any member is missing, so a new workspace
-# needs a COPY line here even when the backend never imports it. The five below
+# needs a COPY line here even when the backend never imports it. The six below
 # are exactly the members `bun.lock` records. The rest of the non-backend
 # workspaces' source is excluded via Dockerfile.dockerignore.
 COPY package.json bun.lock bunfig.toml ./
@@ -99,6 +99,7 @@ COPY packages/shared-types/package.json ./packages/shared-types/package.json
 COPY packages/frontend/package.json ./packages/frontend/package.json
 COPY packages/studio/package.json ./packages/studio/package.json
 COPY packages/sdk/package.json ./packages/sdk/package.json
+COPY packages/contracts/package.json ./packages/contracts/package.json
 
 # ---------------------------------------------------------------------------
 # Stage 1b: prod-deps — the production dependency tree the runner ships.
@@ -136,17 +137,22 @@ RUN bun install --frozen-lockfile --ignore-scripts
 COPY tsconfig.json ./tsconfig.json
 COPY packages/shared-types ./packages/shared-types
 COPY packages/sdk ./packages/sdk
+COPY packages/contracts ./packages/contracts
 COPY packages/backend ./packages/backend
 
-# Build order is load-bearing: shared-types, then the sdk, then the backend.
+# Build order is load-bearing: shared-types and contracts, then the sdk, then
+# the backend.
 # - shared-types: backend imports its compiled output at runtime via the
 #   `@syra/shared-types` -> file:../shared-types workspace link.
+# - contracts: the public routes validate against `@syra.fm/contracts` and serve
+#   its OpenAPI document; tsc and require() both resolve its dist.
 # - sdk: the backend's tsc (Node16 module resolution) resolves `@syra.fm/sdk`
 #   from its built `lib/typescript/**/*.d.ts` (react-native-builder-bob output);
 #   without lib the backend build fails with TS2307, and the runtime would fail
 #   to load the sdk.
 # Produces packages/backend/dist/server.js.
 RUN bun run build:shared-types \
+ && bun run build:contracts \
  && bun run build:sdk \
  && bun run build:backend
 
@@ -215,6 +221,8 @@ COPY --from=builder --chown=bun:bun /app/packages/sdk/package.json ./packages/sd
 COPY --from=builder --chown=bun:bun /app/packages/backend/dist ./packages/backend/dist
 COPY --from=builder --chown=bun:bun /app/packages/shared-types/dist ./packages/shared-types/dist
 COPY --from=builder --chown=bun:bun /app/packages/sdk/lib ./packages/sdk/lib
+COPY --from=builder --chown=bun:bun /app/packages/contracts/package.json ./packages/contracts/package.json
+COPY --from=builder --chown=bun:bun /app/packages/contracts/dist ./packages/contracts/dist
 
 # i18n locale files and other runtime assets shipped with the backend source.
 COPY --from=builder --chown=bun:bun /app/packages/backend/assets ./packages/backend/assets

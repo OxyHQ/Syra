@@ -35,6 +35,13 @@ if (page.hasMore) {
   const next = await syra.searchTracks('lofi beats', { limit: 10, offset: 10 });
 }
 
+// Resolve the reference cards an app renders, in one cancellable public-only
+// batch. Persist only show ids; the cards are current facts, not cache content.
+const cards = await syra.getPublicPodcastCards(['show-1', 'show-2'], {
+  signal: AbortSignal.timeout(8000),
+});
+// cards.items: active PUBLIC shows; cards.unavailableIds: everything else.
+
 // Fetch a single track
 const track = await syra.getTrack(page.items[0].id);
 
@@ -68,6 +75,7 @@ authenticated transport can be layered in a future version.
 | `artworkUrl(trackOrCoverArt, size?)` | Absolute artwork URL, or `undefined`. |
 | `searchPodcasts(query, { limit, offset })` | A `SearchPage<PodcastSummary>` of podcast shows. |
 | `getPodcast(id)` | A single `PodcastSummary`, schema-validated. |
+| `getPublicPodcastCards(ids, { signal })` | `{ items, unavailableIds }` for 1–100 distinct show ids: cards (`id`, `title`, `author?`, `artworkUrl?`, `showUrl`) for active public shows; private, unlisted, withdrawn and missing ids in `unavailableIds`. Never sends a token. |
 | `podcastUrl(id)` | Syra web deep link (`/podcasts/:id`). |
 | `podcastArtworkUrl(show, size?)` | Absolute show-artwork URL, or `undefined`. |
 | `subscribeToPodcast(id)` | Subscribe the signed-in caller to a show (idempotent). Needs `getAccessToken`. |
@@ -130,6 +138,22 @@ import { createSyraClient } from '@syra.fm/sdk/client';
 ```
 
 ## Changelog
+
+### 0.19.0
+
+- `getPublicPodcastCards(ids, { signal })`: one anonymous `POST
+  /api/podcasts/public-cards` for up to 100 show ids. Every id comes back once,
+  as a card or in `unavailableIds`; a batch that does not account for each id
+  throws `SyraResponseError`. The wire contract (Zod and OpenAPI) is
+  [`@syra.fm/contracts`](https://www.npmjs.com/package/@syra.fm/contracts), a
+  server-side package — the SDK checks the same shape without Zod. The live
+  document is `https://api.syra.fm/api/podcasts/openapi.json`.
+- `SyraApiError.code`: the machine-readable `error.code` when a route answers
+  with a structured public-API error (`bad_request`, `rate_limited`, …).
+- New types: `PublicPodcastCard`, `PublicPodcastCardsResponse`,
+  `PublicApiErrorCode`.
+- 0.17.0 (dist-tag `confirmed-ecosystem`) was a pre-release of this feature
+  that still bundled Zod; use 0.19.0.
 
 ### 0.18.0
 
