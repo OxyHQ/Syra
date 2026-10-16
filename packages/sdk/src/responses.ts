@@ -43,6 +43,8 @@ const coverArtVariant = object<CoverArtVariant>({
   url: string,
   width: optional(number),
   height: optional(number),
+  fileId: optional(string),
+  variant: optional(string),
 });
 
 const coverArtSizes = object<CoverArtSizes>({
@@ -137,6 +139,7 @@ export const episodeStream = object<EpisodeStream>({
 
 export const uploadedImage = object<UploadedImage>({
   id: string,
+  fileId: optional(string),
   primaryColor: optional(string),
   secondaryColor: optional(string),
 });

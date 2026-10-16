@@ -214,11 +214,23 @@ export const attributableImageSchema = z.discriminatedUnion('origin', [
 ]);
 export type AttributableImage = z.infer<typeof attributableImageSchema>;
 
+/**
+ * One rendition of a catalogue image.
+ *
+ * `url` is always `/api/images/:id`, which serves (or redirects to) the bytes
+ * for every image wherever it is stored. `fileId` and `variant` are present
+ * when the image is stored in Oxy Files (ADR 0041): the Oxy file id and the
+ * rendition name on Oxy's ladder (`thumb`, `w320`, `w640`, `w1280`; absent for
+ * the original). A client with Oxy's image resolver (`assets.publicUrl`)
+ * resolves those directly and skips the redirect.
+ */
 export const catalogImageVariantSchema = z.object({
   id: z.string(),
   url: z.string(),
   width: z.number(),
   height: z.number(),
+  fileId: z.string().optional(),
+  variant: z.string().optional(),
 });
 export type CatalogImageVariant = z.infer<typeof catalogImageVariantSchema>;
 

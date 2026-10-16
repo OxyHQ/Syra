@@ -1058,6 +1058,16 @@ describe('createSyraClient write methods', () => {
     expect(uploaded.id).toBe('img-1');
   });
 
+  it('createPodcast sends imageFileId as given', async () => {
+    const { client, calls } = authedClient(() => ({
+      body: { data: { id: 'p-2', title: 'Show' } },
+    }));
+
+    await client.createPodcast({ title: 'Show', imageFileId: 'file-2' });
+
+    expect(sentJson(calls[0])).toEqual({ title: 'Show', imageFileId: 'file-2' });
+  });
+
   it('createEpisodeDraft returns the episode id and its ticket', async () => {
     const { client, calls } = authedClient(() => ({
       body: {

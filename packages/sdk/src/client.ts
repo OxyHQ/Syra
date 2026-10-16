@@ -137,6 +137,14 @@ export interface CreatePodcastInput {
   author?: string;
   /** An image id from {@link SyraClient.uploadPodcastImage}, not a URL. */
   image?: string;
+  /**
+   * An Oxy file to use as the cover instead of {@link CreatePodcastInput.image}
+   * (never both): a public, active image owned by the caller's account or by an
+   * Oxy application Syra trusts to supply covers (Alia, for the shows it
+   * generates). Syra registers its own use of the file; the file stays its
+   * owner's.
+   */
+  imageFileId?: string;
   language?: string;
   categories?: string[];
   explicit?: boolean;
@@ -158,6 +166,8 @@ export interface UpdatePodcastInput {
   description?: string;
   author?: string;
   image?: string;
+  /** As {@link CreatePodcastInput.imageFileId}; never together with `image`. */
+  imageFileId?: string;
   language?: string;
   categories?: string[];
   explicit?: boolean;
@@ -362,7 +372,8 @@ export interface SyraClient {
    * `POST /api/images/upload` — store cover art and get the image id back.
    *
    * The id is what {@link CreatePodcastInput.image} wants; a URL is not accepted
-   * there, because the API re-hosts artwork rather than hotlinking it.
+   * there, because the API re-hosts artwork rather than hotlinking it. The image
+   * is stored as an Oxy file in the CALLER's own account (`fileId`).
    */
   uploadPodcastImage(image: UploadPayload, filename?: string): Promise<UploadedImage>;
   /**
@@ -383,14 +394,11 @@ export interface SyraClient {
    *   (`episode_progress`) and every subscriber's subscription
    *   (`user_podcast_subscriptions`).
    *
-   * **What it does NOT remove: the cover artwork.** `image_assets` is referenced
-   * `ON DELETE set null`, and the artwork's S3 objects live under
-   * `images/{imageId}/`, which is not one of the three swept trees — so the
-   * image rows and their bytes are deliberately left behind. One asset may be
-   * referenced by several shows and episodes and nothing records how many, so
-   * deleting it could blank a show nobody asked to touch. Reclaiming that
-   * storage needs a sweeper that can prove non-reference; it is not this call's
-   * job and this call will not do it silently.
+   * **The cover artwork is released, not deleted.** It is an Oxy file (OxyHQ/oxy
+   * ADR 0041): deleting the show removes Syra's use of it. A cover Syra owns
+   * (mirrored artwork) is then garbage-collected by Oxy once nothing else uses
+   * it; a cover that is the creator's own upload stays in their Oxy files, marked
+   * not in use, for them to keep or delete; a cover Alia drew stays Alia's.
    *
    * Two more consequences worth knowing before calling it for real:
    *
