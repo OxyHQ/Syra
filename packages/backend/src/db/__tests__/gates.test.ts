@@ -3259,7 +3259,7 @@ describe('user, taste and listening schema (Task 7)', () => {
       // say what sweeping either one costs; the order below is that fragment's.
       'moderation_outbox.expires_at:0',
       'moderation_events.expires_at:0',
-      // ADR 0041's two, reviewed: 30 days on a BIRTH column for the file-event
+      // ADR 0043's two, reviewed: 30 days on a BIRTH column for the file-event
       // dedupe claims (Oxy has long stopped redelivering by then), and 30 days
       // after the outbox GAVE UP on a reference — live rows have no dead_at and
       // are never matched; the nightly reconciliation repairs what a dead row

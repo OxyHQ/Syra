@@ -686,7 +686,7 @@ describe('the delete responses match the schemas @syra.fm/sdk parses them with',
     /**
      * The claim the SDK's doc comment makes to Alia, asserted rather than
      * described: a show delete sweeps audio trees only. Artwork is an Oxy file
-     * now (ADR 0041), released by the delete's queued reference removal — never
+     * now (ADR 0043), released by the delete's queued reference removal — never
      * by deleting bytes another show may share — and a legacy cover's objects
      * live under `images/{imageId}/`, which is not one of the three trees a show
      * delete sweeps.

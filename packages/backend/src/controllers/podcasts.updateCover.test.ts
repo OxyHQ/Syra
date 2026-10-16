@@ -190,7 +190,7 @@ describe('PATCH /api/podcasts/:id — cover art replaces the palette', () => {
 
 /**
  * `imageFileId`: the cover is an Oxy file someone else owns — Alia's, for the
- * shows it draws (OxyHQ/oxy ADR 0041). Syra references it and builds its size
+ * shows it draws (OxyHQ/oxy ADR 0043). Syra references it and builds its size
  * set; it never copies it, and the previous cover's sizes go with it.
  */
 describe('PATCH /api/podcasts/:id — imageFileId', () => {

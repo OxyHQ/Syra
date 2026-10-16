@@ -1,6 +1,6 @@
 -- oxy:deploy-phase=pre
 --
--- Every use Syra makes of an Oxy file reaches Oxy, durably (OxyHQ/oxy ADR 0041).
+-- Every use Syra makes of an Oxy file reaches Oxy, durably (OxyHQ/oxy ADR 0043).
 --
 -- Oxy keeps an application-owned file only while the application says it uses
 -- it: one nobody references is trashed after 24 hours. So a use is queued in

@@ -3,7 +3,7 @@
  *
  * ## Where the bytes are
  *
- * In Oxy Files (OxyHQ/oxy ADR 0041) for every image written since the move —
+ * In Oxy Files (OxyHQ/oxy ADR 0043) for every image written since the move —
  * `services/oxyFiles/images.ts` explains who owns which — and, for the rows the
  * migration has not copied yet, still in Syra's own bucket (`s3_key`). A row
  * holds one or both; {@link resolveImageAsset} reads the Oxy file FIRST and falls
@@ -22,7 +22,7 @@
  * for — an application file nobody references is trashed after 24 hours and
  * purged 30 days later. For a person's upload it is a file in their account
  * that nothing uses, which Oxy shows them as "Not in use"; it is theirs to keep
- * or delete, exactly as ADR 0041 D5 decides.
+ * or delete, exactly as ADR 0043 D5 decides.
  */
 
 import type { Readable } from 'stream';

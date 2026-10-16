@@ -1,9 +1,9 @@
-# Runbook — Syra's images move into Oxy Files (OxyHQ/oxy ADR 0041, phase 4)
+# Runbook — Syra's images move into Oxy Files (OxyHQ/oxy ADR 0043, phase 4)
 
 Every image Syra serves — catalogue artwork, a person's uploaded cover, a house
 avatar, a show cover — is stored in **Oxy Files** from this release on. Audio is
 not (yet): `packages/backend/src/services/oxyFiles/audioStorage.ts` says exactly
-why and what Oxy must add (`TODO(oxy-4b)`).
+why and what Oxy must add (`TODO(oxy-4c)`).
 
 The steps below are one-time, ordered, and each is safe to re-run. Nothing runs
 against production except through `.github/workflows/run-backend-script.yml`,
@@ -37,9 +37,11 @@ bucket object only when a row has none — and every such read is counted
 
 ## 0. Before deploying (Oxy side)
 
-1. Oxy's API with ADR 0041 stages 1–4a is deployed, and `@oxy.so/core` 4.14.0
-   is published (this PR's last commit pins it; `bun install` then refreshes
-   `bun.lock`).
+1. Oxy's API with ADR 0043 stages 1–4b is deployed (it is, in production), and
+   `@oxy.so/core` 4.18.0 / `@oxy.so/contracts` 4.22.0 / `@oxy.so/services`
+   11.9.0 are published (pinned in this PR). Stage 4c (private person media,
+   audio, play sessions, recording targets) is NOT required: Syra calls no 4c
+   endpoint, and audio stays on the bucket behind `audioStorage.ts`.
 2. Staff grant the **Syra** application, **internal tier**: `files:app:write`,
    `files:app:delete`, `files:references:write`, `files:user-media:write`,
    `files:read`. (`metadataByIds` names a file's owner only to an internal-tier

@@ -502,7 +502,7 @@ export type UpdateHouseInput = Partial<{
   description: string | null;
   avatar: string | null;
   coverImage: string | null;
-  /** The Oxy files (ADR 0041); writing one also clears its legacy URL — see `updateHouse`. */
+  /** The Oxy files (ADR 0043); writing one also clears its legacy URL — see `updateHouse`. */
   avatarFileId: string | null;
   coverImageFileId: string | null;
   tags: string[];

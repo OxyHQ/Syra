@@ -3,7 +3,7 @@
  * reference bookkeeping are built from.
  *
  * Oxy only keeps an application's file while the application says it uses it
- * (OxyHQ/oxy ADR 0041 D4/D5): an application-owned file nobody references goes
+ * (OxyHQ/oxy ADR 0043 D4/D5): an application-owned file nobody references goes
  * to the trash after 24 hours. So every use has to reach Oxy:
  *
  * - At write time, by the triggers of migration `0034_oxy_file_reference_triggers`,

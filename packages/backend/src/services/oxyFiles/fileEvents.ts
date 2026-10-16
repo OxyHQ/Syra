@@ -1,5 +1,5 @@
 /**
- * Oxy's file events (OxyHQ/oxy ADR 0041 D9): Oxy tells Syra when a file Syra
+ * Oxy's file events (OxyHQ/oxy ADR 0043 D9): Oxy tells Syra when a file Syra
  * owns or uses is deleted, trashed, restored, changes visibility, or is taken
  * down after a content claim — so Syra stops showing it at once instead of
  * serving a broken image until somebody notices.

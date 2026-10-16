@@ -13,7 +13,7 @@ import { resolveImageAsset } from '../services/imageAssetService';
 import { createOxyFilesWebhookRoutes } from './oxyFilesWebhook.routes';
 
 /**
- * Oxy's file events reach Syra and change what Syra serves (ADR 0041 D9): a
+ * Oxy's file events reach Syra and change what Syra serves (ADR 0043 D9): a
  * takedown stops the image at once, a restore brings it back, a duplicate
  * delivery does nothing twice — and the receiver verifies the RAW bytes, so it
  * must sit before the JSON parser.

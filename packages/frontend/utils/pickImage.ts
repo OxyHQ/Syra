@@ -82,7 +82,7 @@ function normalizeCandidate(
 }
 
 /**
- * A variant stored in Oxy Files (`fileId`, ADR 0041) resolves through Oxy's own
+ * A variant stored in Oxy Files (`fileId`, ADR 0043) resolves through Oxy's own
  * resolver — the one `AppProviders` installs for every Bloom image — straight to
  * the CDN rendition, skipping the `/api/images/:id` redirect. Any other variant,
  * or any variant before a resolver is installed, resolves through Syra's image

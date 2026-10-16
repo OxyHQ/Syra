@@ -395,7 +395,7 @@ export interface SyraClient {
    *   (`user_podcast_subscriptions`).
    *
    * **The cover artwork is released, not deleted.** It is an Oxy file (OxyHQ/oxy
-   * ADR 0041): deleting the show removes Syra's use of it. A cover Syra owns
+   * ADR 0043): deleting the show removes Syra's use of it. A cover Syra owns
    * (mirrored artwork) is then garbage-collected by Oxy once nothing else uses
    * it; a cover that is the creator's own upload stays in their Oxy files, marked
    * not in use, for them to keep or delete; a cover Alia drew stays Alia's.

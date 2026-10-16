@@ -232,7 +232,7 @@ export type UpdateSeriesInput = Partial<{
   title: string;
   description: string | null;
   coverImage: string | null;
-  /** The cover as an Oxy file (ADR 0041); writing it clears the legacy URL. */
+  /** The cover as an Oxy file (ADR 0043); writing it clears the legacy URL. */
   coverImageFileId: string | null;
   isActive: boolean;
   recurrenceType: RecurrenceType;

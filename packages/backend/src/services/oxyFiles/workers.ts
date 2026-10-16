@@ -1,5 +1,5 @@
 /**
- * The Oxy Files background work every API instance runs (ADR 0041):
+ * The Oxy Files background work every API instance runs (ADR 0043):
  *
  * - the reference outbox drainer (`referenceOutbox.ts`) — leased rows, so every
  *   instance shares the queue;

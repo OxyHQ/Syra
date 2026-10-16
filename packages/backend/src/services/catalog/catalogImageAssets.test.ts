@@ -8,7 +8,7 @@ import { imageAssets } from '../../db/schema/catalog';
 import { importableSourceUrl, mirrorCatalogImage } from './catalogImageAssets';
 
 /**
- * Catalogue artwork is imported BY OXY (ADR 0041 D7) as Syra's own file, and
+ * Catalogue artwork is imported BY OXY (ADR 0043 D7) as Syra's own file, and
  * deduplicated by Oxy: the same URL, or the same bytes, is the same file — so the
  * same six rows. What used to take a URL-hash lookup, a content-hash lookup and a
  * merge script is asserted here as "no new rows".

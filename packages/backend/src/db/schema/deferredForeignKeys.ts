@@ -380,7 +380,7 @@ export const ID_COLUMNS_WITHOUT_FOREIGN_KEY: readonly { column: string; reason: 
       'The Oxy account a notification was already emitted to — half of the unique claim key with ' +
       '`key` (RELATIONS.md: NotificationSuppression.oxyUserId).',
   },
-  // ── CROSS-SERVICE: Oxy file ids, owned by oxy-api (ADR 0041), never a Syra row ──
+  // ── CROSS-SERVICE: Oxy file ids, owned by oxy-api (ADR 0043), never a Syra row ──
   {
     column: 'image_assets.oxy_file_id',
     reason:

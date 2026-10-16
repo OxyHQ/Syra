@@ -36,7 +36,7 @@ const VARIANT_WIDTHS = {
 
 /**
  * Insert a real asset row and return the variant DTO pointing at it — stored the
- * way the real mirror stores catalogue artwork now, as an Oxy file (ADR 0041).
+ * way the real mirror stores catalogue artwork now, as an Oxy file (ADR 0043).
  */
 async function makeVariant(width: number, id = uuidv7()) {
   const fileId = `test-mirror-file-${id}`;

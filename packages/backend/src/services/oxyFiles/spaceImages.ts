@@ -1,6 +1,6 @@
 /**
  * The images of the live-rooms slice — a house's avatar and cover, a room's
- * stream image, a series' cover — in Oxy Files (OxyHQ/oxy ADR 0041).
+ * stream image, a series' cover — in Oxy Files (OxyHQ/oxy ADR 0043).
  *
  * ## Whose file
  *

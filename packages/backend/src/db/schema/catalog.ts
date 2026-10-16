@@ -258,7 +258,7 @@ export const OXY_IMAGE_VARIANTS = Object.keys(IMAGE_VARIANTS) as ImageVariantNam
  * at all — by `/api/images/:id` and by every DTO's variant lookup.
  *
  * - `unavailable`: Oxy says the file is in trash, deleted or no longer public.
- * - `blocked`: taken down after a content claim (ADR 0041 D10).
+ * - `blocked`: taken down after a content claim (ADR 0043 D10).
  * - `missing`: a legacy row whose object is not in the bucket (found by the
  *   migration; there is nothing to copy).
  */
@@ -278,7 +278,7 @@ export const imageAssets = pgTable(
      */
     s3Key: text(),
     /**
-     * The Oxy file holding the bytes (ADR 0041) — Syra's own file for catalogue
+     * The Oxy file holding the bytes (ADR 0043) — Syra's own file for catalogue
      * artwork, the uploader's for a person's upload. Several rows name one file:
      * a catalogue image is ONE file whose renditions are the six size rows.
      */

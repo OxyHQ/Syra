@@ -7,9 +7,10 @@
  *
  * ## Why audio is still in Syra's bucket — measured, not assumed
  *
- * Images moved to Oxy Files (ADR 0041, `oxyFiles/images.ts`); audio cannot yet,
- * because Oxy Files does not take it. Read off the Oxy API on the ADR 0041
- * branch (stages 1–4a):
+ * Images moved to Oxy Files (ADR 0043, `oxyFiles/images.ts`); audio cannot yet,
+ * because Oxy Files does not take it yet. Read off the Oxy API on the ADR 0043
+ * branch (stages 1–4a; stage 4b, now in production, added large multipart
+ * uploads but not the audio items below — those are stage 4c):
  *
  * - `POST /assets/service/app` and `/service/user-media` refuse anything but
  *   `image/*` and `video/*` (415), at most 40 MiB, in one request body; the
@@ -29,10 +30,13 @@
  * - LiveKit egress writes a room recording straight into an S3 bucket; Oxy has
  *   no upload target an external writer can be pointed at.
  *
- * ## What Oxy must add before audio moves — TODO(oxy-4b)
+ * ## What Oxy must add before audio moves — TODO(oxy-4c)
  *
  * Stage 4b ("large/any-type application uploads, presigned multipart, up to 8
- * GiB") is the first item; it is not the last:
+ * GiB") is in production and covers part of the first item; the rest — a
+ * person's private media, audio renditions, play sessions and recording
+ * targets — is stage 4c, which is NOT released. Nothing here calls a 4c
+ * endpoint; until it ships, every audio path stays on the bucket:
  *
  * 1. Any-MIME, multipart uploads (≤ 8 GiB) for an application's files AND a
  *    person's (`uploadAppFile` / `uploadUserMedia` with `audio/*`), with
@@ -128,7 +132,7 @@ function ownerTag(owner: AudioOwner): string {
 
 /**
  * Store an ORIGINAL — the bytes somebody uploaded or Syra mirrored, which Oxy
- * Files will own one day. TODO(oxy-4b): `uploadAppFile` / `uploadUserMedia`.
+ * Files will own one day. TODO(oxy-4c): `uploadAppFile` / `uploadUserMedia`.
  */
 export async function putSourceAudio(
   key: string,
@@ -144,7 +148,7 @@ export async function putSourceAudio(
 
 /**
  * Store something Syra DERIVED from an original — an HLS playlist or segment, a
- * preview clip. TODO(oxy-4b): rendered by Oxy's audio pipeline, so it goes away.
+ * preview clip. TODO(oxy-4c): rendered by Oxy's audio pipeline, so it goes away.
  */
 export async function putDerivedAudio(
   key: string,
@@ -154,7 +158,7 @@ export async function putDerivedAudio(
   await uploadToS3(key, body, options);
 }
 
-/** Read an audio object, whole or a byte range. TODO(oxy-4b): the playback grant. */
+/** Read an audio object, whole or a byte range. TODO(oxy-4c): the playback grant. */
 export function openAudioObject(
   key: string,
   range: AudioRange = {},
@@ -175,7 +179,7 @@ export function audioObjectExists(key: string): Promise<boolean> {
   return objectExists(key);
 }
 
-/** A time-limited URL for one object. TODO(oxy-4b): the playback grant. */
+/** A time-limited URL for one object. TODO(oxy-4c): the playback grant. */
 export function presignAudioObject(key: string, expiresInSeconds = 3600): Promise<string> {
   return getPresignedUrl(key, expiresInSeconds);
 }
@@ -205,7 +209,7 @@ export function getRecordingObjectKey(roomId: string, recordingId: string): stri
  * are set (local MinIO). Production sets neither: with no credentials in the
  * request, LiveKit's S3 uploader uses the AWS default chain on the LiveKit host,
  * whose instance role (`oxy-livekit` in oxy-infra) may put only under
- * `agora/recordings/`. TODO(oxy-4b): an Oxy upload target egress can write to.
+ * `agora/recordings/`. TODO(oxy-4c): an Oxy upload target egress can write to.
  */
 export function recordingEgressTarget(objectKey: string) {
   const accessKey = process.env.AWS_ACCESS_KEY_ID;

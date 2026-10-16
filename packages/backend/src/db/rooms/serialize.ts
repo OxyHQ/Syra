@@ -109,7 +109,7 @@ export function stripInternalStreamFields(
     }
   }
 
-  // The stream image's Oxy file wins over its legacy URL (ADR 0041 dual read).
+  // The stream image's Oxy file wins over its legacy URL (ADR 0043 dual read).
   if (room.streamImageFileId || room.streamImage) {
     sanitized.streamImage = spaceImageUrl(
       room.streamImageFileId,
@@ -185,7 +185,7 @@ export interface PublicHouse {
   description: string | null;
   avatar: string | null;
   coverImage: string | null;
-  /** The images' Oxy files, for a client with Oxy's image resolver (ADR 0041). */
+  /** The images' Oxy files, for a client with Oxy's image resolver (ADR 0043). */
   avatarFileId: string | null;
   coverImageFileId: string | null;
   createdBy: string;

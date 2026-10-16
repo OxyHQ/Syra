@@ -6,7 +6,7 @@ import { join, relative } from 'node:path';
  * Syra's bucket has exactly two kinds of caller left, and this holds it to that:
  *
  * - AUDIO, through `services/oxyFiles/audioStorage.ts` only — the one seam where
- *   audio moves to Oxy Files once Oxy takes it (TODO(oxy-4b)). A route or service
+ *   audio moves to Oxy Files once Oxy takes it (TODO(oxy-4c)). A route or service
  *   that imported the S3 layer directly would be a second place to change, and
  *   the one that gets missed.
  * - the LEGACY IMAGE read path, kept only until the image prefixes are retired:
@@ -57,7 +57,7 @@ describe('the S3 layer has only its two kinds of caller', () => {
 
   it('marks the audio move in exactly one module', () => {
     const marked = sourceFiles(SRC)
-      .filter((path) => readFileSync(path, 'utf8').includes('TODO(oxy-4b)'))
+      .filter((path) => readFileSync(path, 'utf8').includes('TODO(oxy-4c)'))
       .map((path) => relative(SRC, path));
     expect(marked).toEqual(['services/oxyFiles/audioStorage.ts']);
   });

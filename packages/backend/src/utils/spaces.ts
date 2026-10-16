@@ -21,7 +21,7 @@ const S3_PUBLIC_BASE_URL = process.env.S3_PUBLIC_BASE_URL?.replace(/\/+$/, '');
 
 /**
  * Extract the stored object key from a public bucket URL Syra produced before
- * its images moved to Oxy Files (ADR 0041), or `null` when the URL is not one of
+ * its images moved to Oxy Files (ADR 0043), or `null` when the URL is not one of
  * ours (an external host). Used to recognise a LEGACY house/room/series image —
  * to count reads of it and to delete it once replaced — without a hardcoded host.
  */

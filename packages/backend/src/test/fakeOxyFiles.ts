@@ -1,7 +1,7 @@
 /**
  * An in-memory Oxy Files, installed with {@link installFakeOxyFiles}.
  *
- * It keeps the rules of the real service (OxyHQ/oxy ADR 0041) that Syra's code
+ * It keeps the rules of the real service (OxyHQ/oxy ADR 0043) that Syra's code
  * depends on, so a test exercises the decision rather than a stub's echo:
  *
  * - one live file per (owner, SHA-256): the same bytes for the same owner are the
@@ -278,7 +278,7 @@ export class FakeOxyFiles implements OxyFilesApi {
     return `https://cloud.test/${fileId}${variant ? `?variant=${variant}` : ''}`;
   }
 
-  /** Whether this application may reference `file` (ADR 0041 D4, as Syra meets it). */
+  /** Whether this application may reference `file` (ADR 0043 D4, as Syra meets it). */
   private mayReference(file: FakeFile | undefined): boolean {
     if (!file) return false;
     if (file.ownerApplicationId === this.applicationId) return true;

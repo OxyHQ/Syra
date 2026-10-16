@@ -61,8 +61,8 @@ Production: web `https://syra.fm`, API/WebSocket `https://api.syra.fm` / `wss://
 
 ## Files: images in Oxy Files, audio behind one seam
 
-- Every image is an Oxy file (ADR 0041): catalogue art is Syra-owned, a person's upload theirs, a space image its owner's. `image_assets` rows name the file (`oxy_file_id`); never write to the bucket's image prefixes. Uses reach Oxy through DB triggers + outbox, never by hand. `docs/runbooks/oxy-files-images.md`.
-- Audio stays in the bucket until Oxy takes it; every audio read/write goes through `services/oxyFiles/audioStorage.ts` (gated by `audioStorage.boundary.test.ts`), the ONLY `TODO(oxy-4b)`.
+- Every image is an Oxy file (ADR 0043): catalogue art is Syra-owned, a person's upload theirs, a space image its owner's. `image_assets` rows name the file (`oxy_file_id`); never write to the bucket's image prefixes. Uses reach Oxy through DB triggers + outbox, never by hand. `docs/runbooks/oxy-files-images.md`.
+- Audio stays in the bucket until Oxy takes it; every audio read/write goes through `services/oxyFiles/audioStorage.ts` (gated by `audioStorage.boundary.test.ts`), the ONLY `TODO(oxy-4c)`.
 
 ## Frontend State Architecture
 

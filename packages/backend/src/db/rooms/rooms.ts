@@ -362,7 +362,7 @@ export type UpdateRoomInput = Partial<{
   activeStreamUrl: string | null;
   streamTitle: string | null;
   streamImage: string | null;
-  /** The stream image as an Oxy file (ADR 0041). Setting `streamImage` alone clears it. */
+  /** The stream image as an Oxy file (ADR 0043). Setting `streamImage` alone clears it. */
   streamImageFileId: string | null;
   streamDescription: string | null;
   rtmpUrl: string | null;

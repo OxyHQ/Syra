@@ -284,7 +284,7 @@ export const houses = pgTable(
     avatar: text(),
     coverImage: text(),
     /**
-     * The avatar and cover as Oxy files owned by the house's creator (ADR 0041).
+     * The avatar and cover as Oxy files owned by the house's creator (ADR 0043).
      * `avatar`/`coverImage` above are the LEGACY bucket URLs, read only while a
      * house has no file here; an upload writes the file and clears the URL.
      */

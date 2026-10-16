@@ -1,7 +1,7 @@
 /**
  * Catalogue artwork: an external image (Cover Art Archive, Wikimedia Commons, a
  * podcast feed) becomes a Syra image, stored in Oxy Files as a file the SYRA
- * application owns (OxyHQ/oxy ADR 0041).
+ * application owns (OxyHQ/oxy ADR 0043).
  *
  * ## Oxy fetches it, once
  *

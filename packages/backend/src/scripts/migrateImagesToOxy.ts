@@ -1,6 +1,6 @@
 /**
  * One-shot: copy every image still in Syra's legacy bucket into Oxy Files
- * (OxyHQ/oxy ADR 0041), and point its row at the copy.
+ * (OxyHQ/oxy ADR 0043), and point its row at the copy.
  *
  * ## What moves, and to whom
  *

@@ -1,6 +1,6 @@
 -- oxy:deploy-phase=pre
 --
--- Images move into Oxy Files (OxyHQ/oxy ADR 0041). Additive only:
+-- Images move into Oxy Files (OxyHQ/oxy ADR 0043). Additive only:
 --  * image_assets gains the Oxy file it is stored as (oxy_file_id, oxy_variant)
 --    and a serving status; s3_key becomes nullable because a row stored only in
 --    Oxy has no bucket object. The previous image always writes s3_key and never

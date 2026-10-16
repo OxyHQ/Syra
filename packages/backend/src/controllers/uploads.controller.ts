@@ -582,7 +582,7 @@ async function storeEmbeddedCoverArt(
   try {
     const probed = await sharp(picture.data).metadata();
     const { width, height } = probed;
-    // The uploader's file, in their own Oxy account (ADR 0041) — the artwork
+    // The uploader's file, in their own Oxy account (ADR 0043) — the artwork
     // arrived inside THEIR upload.
     const stored = await storeImageAsset({
       buffer: picture.data,

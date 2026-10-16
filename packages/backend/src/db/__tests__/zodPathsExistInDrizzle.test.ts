@@ -167,7 +167,7 @@ const TABLES_WITHOUT_DTO: Record<string, string> = {
   musicbrainzArtistUrls: 'server-internal — enrichment mirror',
   notificationPreferences: 'server-internal — hand-built shape, no zod DTO',
   notificationSuppressions: 'server-internal — delivery bookkeeping',
-  oxyFileEvents: 'server-internal — dedupe log of Oxy file events (ADR 0041)',
+  oxyFileEvents: 'server-internal — dedupe log of Oxy file events (ADR 0043)',
   oxyFileReconcileRuns: 'server-internal — the nightly Oxy reference reconciliation log',
   oxyFileReferenceOps: 'server-internal — the Oxy file-reference outbox, written by triggers',
   oxyFilesLegacyReads: 'server-internal — legacy bucket read counts, the retirement gate',

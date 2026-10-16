@@ -1,5 +1,5 @@
 /**
- * Images stored in Oxy Files (OxyHQ/oxy ADR 0041), as `image_assets` rows.
+ * Images stored in Oxy Files (OxyHQ/oxy ADR 0043), as `image_assets` rows.
  *
  * An `image_assets` row stays Syra's id for an image — fifty foreign-key columns
  * point at it — but its bytes are an Oxy file. Who owns the file is decided by

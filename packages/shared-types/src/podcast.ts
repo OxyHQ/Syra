@@ -166,7 +166,7 @@ export const createPodcastRequestSchema = z.object({
    * An Oxy file to use as the cover instead of `image` (never both): an active,
    * public image owned by the caller's account or by an Oxy application Syra
    * trusts to supply covers (Alia, for the shows it draws). Syra references the
-   * file; it stays its owner's (OxyHQ/oxy ADR 0041).
+   * file; it stays its owner's (OxyHQ/oxy ADR 0043).
    */
   imageFileId: z.string().min(1).max(128).optional(),
   language: z.string().optional(),

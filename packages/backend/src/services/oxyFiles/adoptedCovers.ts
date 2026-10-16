@@ -3,7 +3,7 @@
  * /api/podcasts`.
  *
  * The case it exists for is Alia: Alia draws a show's cover, so the cover is
- * Alia's file (OxyHQ/oxy ADR 0041 phase 4 moved Alia's covers out of Syra), and
+ * Alia's file (OxyHQ/oxy ADR 0043 phase 4 moved Alia's covers out of Syra), and
  * Syra only USES it. Syra therefore never copies it: it checks the file, records
  * its own reference (entity `podcast`), and gives it an `image_assets` set like
  * any other image, so every DTO, the RSS feed and `/api/images/:id` treat it the

@@ -6,7 +6,7 @@ import { logger } from '../utils/logger';
 import { describeErrorSafely } from '../utils/error';
 
 /**
- * `POST /webhooks/oxy/files` — Oxy's file events (OxyHQ/oxy ADR 0041 D9).
+ * `POST /webhooks/oxy/files` — Oxy's file events (OxyHQ/oxy ADR 0043 D9).
  *
  * Mounted in `server.ts` BEFORE `express.json()`, like the LiveKit and
  * CrowdSource receivers and for the same reason: the signature covers

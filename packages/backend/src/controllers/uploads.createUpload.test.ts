@@ -190,7 +190,7 @@ let bulkImportWas: string | undefined;
 beforeAll(async () => {
   await connectDb();
   installDeezerStub();
-  // Embedded cover art is stored in the uploader's Oxy account (ADR 0041).
+  // Embedded cover art is stored in the uploader's Oxy account (ADR 0043).
   const oxyFiles = installFakeOxyFiles();
   oxyFiles.localUsers.add(OWNER);
   oxyFiles.localUsers.add(STRANGER);

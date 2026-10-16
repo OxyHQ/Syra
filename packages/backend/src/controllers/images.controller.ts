@@ -45,7 +45,7 @@ export const uploadImage = async (req: AuthRequest, res: Response, next: NextFun
       return res.status(401).json({ error: 'Authentication required' });
     }
 
-    // The uploader's own file, in their Oxy account (ADR 0041): a person's
+    // The uploader's own file, in their Oxy account (ADR 0043): a person's
     // upload stays theirs, and Syra only references it where it is used.
     const result = await storeImageAsset({
       buffer: file.buffer,

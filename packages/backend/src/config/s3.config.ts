@@ -222,7 +222,7 @@ export function getS3PodcastShowPrefixes(podcastId: string): readonly string[] {
 
 /**
  * Every prefix Syra's images were written under before they moved to Oxy Files
- * (ADR 0041): `image_assets` objects, and the house / room / series images.
+ * (ADR 0043): `image_assets` objects, and the house / room / series images.
  * Nothing writes under them any more; `scripts/retireLegacyImageStorage.ts`
  * deletes them once the legacy-read gate is met. Each ends with `/`, so a prefix
  * can never match a sibling that merely starts with the same characters.

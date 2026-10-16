@@ -1,5 +1,5 @@
 /**
- * Oxy Files bookkeeping (OxyHQ/oxy ADR 0041).
+ * Oxy Files bookkeeping (OxyHQ/oxy ADR 0043).
  *
  * Syra's images live in Oxy Files: catalogue artwork as files the SYRA
  * application owns, a person's uploads as files their account owns. Oxy only
@@ -15,7 +15,7 @@
  *   wins, and `version` lets the drainer tell an intent it sent from one written
  *   while it was in flight. `services/oxyFiles/referenceOutbox.ts` drains it.
  * - `oxy_file_reconcile_runs` records the nightly inventory each entity type
- *   sends to Oxy (ADR 0041 D6) — the safety net under the outbox.
+ *   sends to Oxy (ADR 0043 D6) — the safety net under the outbox.
  * - `oxy_file_events` deduplicates Oxy's file events (at-least-once delivery).
  * - `oxy_files_legacy_reads` counts reads still answered from the old bucket,
  *   per day and kind — the number the bucket's retirement is gated on.

@@ -1,6 +1,6 @@
 /**
  * The nightly inventory: Syra's real use of Oxy files, sent to Oxy one entity
- * type at a time (OxyHQ/oxy ADR 0041 D6).
+ * type at a time (OxyHQ/oxy ADR 0043 D6).
  *
  * The triggers and the outbox register every use as it happens; this is the
  * safety net under them — a reference a dead-lettered row never delivered, a row
