@@ -73,6 +73,11 @@
   ],
   "author": "Syra Team",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/OxyHQ/Syra.git",
+    "directory": "packages/sdk"
+  },
   "engines": {
     "node": ">=18.0.0"
   },
