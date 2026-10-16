@@ -40,6 +40,9 @@ export type {
   CoverArtSizes,
   CoverArtVariant,
   ArtworkSize,
+  PublicPodcastCard,
+  PublicPodcastCardsResponse,
+  PublicApiErrorCode,
 } from './types';
 // The Zod schemas are NOT exported here: this entry is what apps bundle, and
 // Zod (with its locales) is ~500 KiB of JavaScript for a check the client does

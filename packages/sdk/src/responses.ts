@@ -2,6 +2,7 @@ import { SyraResponseError } from './errors';
 import {
   EPISODE_STATUSES,
   PODCAST_VISIBILITIES,
+  PUBLIC_API_ERROR_CODES,
   type CoverArtSizes,
   type CoverArtVariant,
   type EpisodeAudioSource,
@@ -12,16 +13,21 @@ import {
   type PodcastDeleted,
   type PodcastSubscription,
   type PodcastSummary,
+  type PublicApiErrorCode,
+  type PublicPodcastCard,
+  type PublicPodcastCardsResponse,
   type TrackSummary,
   type UploadedImage,
 } from './types';
 import {
+  array,
   boolean,
   formatPath,
   number,
   object,
   oneOf,
   optional,
+  refine,
   string,
   type Validator,
 } from './validate';
@@ -133,6 +139,37 @@ export const uploadedImage = object<UploadedImage>({
   id: string,
   primaryColor: optional(string),
   secondaryColor: optional(string),
+});
+
+/** An opaque show id as `@syra.fm/contracts` bounds it: 1–256 characters, no edge whitespace. */
+export const publicPodcastId = refine(
+  string,
+  (id) => id.length >= 1 && id.length <= 256 && id.trim() === id,
+  'expected a podcast id of 1–256 characters without surrounding whitespace',
+);
+
+/**
+ * Only `http(s)` — a card's URLs become an image source and a link in another
+ * app, where a `javascript:` or `data:` value would be the caller's problem.
+ */
+const httpUrl = refine(string, (url) => /^https?:\/\/\S+$/i.test(url), 'expected an http(s) URL');
+
+const publicPodcastCard = object<PublicPodcastCard>({
+  id: publicPodcastId,
+  title: string,
+  author: optional(string),
+  artworkUrl: optional(httpUrl),
+  showUrl: httpUrl,
+});
+
+export const publicPodcastCardsResponse = object<PublicPodcastCardsResponse>({
+  items: array(publicPodcastCard),
+  unavailableIds: array(publicPodcastId),
+});
+
+/** The `{ error: { code, message } }` body every public route answers an error with. */
+export const publicApiError = object<{ error: { code: PublicApiErrorCode; message: string } }>({
+  error: object({ code: oneOf(PUBLIC_API_ERROR_CODES), message: string }),
 });
 
 /** The checked value, or `undefined` — for list rows, where one bad row is skipped. */

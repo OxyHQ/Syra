@@ -242,7 +242,11 @@ jobs:
       # apps, so their typechecks — and the apps' — need them built first, same
       # order the deploy workflows use.
       - run: bun run build:shared-types
+      - run: bun run build:contracts
       - run: bun run build:sdk
+      # packages/contracts/openapi.json is the published wire contract of the
+      # public routes; it must be what the Zod contract generates.
+      - run: bun run check:public-openapi
       - name: Typecheck all packages
         run: bun run --filter '*' typecheck
       # The SDK suite ran nowhere in CI: its live-rooms UI tests (the icon glyphs
