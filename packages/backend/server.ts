@@ -1,6 +1,7 @@
 import { createPublicPodcastCardsRouter } from './src/routes/publicPodcastCards.routes';
 import { publicOpenApi } from '@syra.fm/contracts';
 import { env } from './src/config/env';
+import { trustLoadBalancer } from './src/config/trustProxy';
 import { startPlatformActivity } from './src/services/platformActivity';
 
 import express from 'express';
@@ -69,7 +70,7 @@ const activity = startPlatformActivity(() => activityReady && isPostgresConnecte
 const app = express();
 if (activity) app.use(activity.observeHttp);
 
-app.set('trust proxy', true);
+trustLoadBalancer(app);
 
 app.use(apiCors);
 app.use(
