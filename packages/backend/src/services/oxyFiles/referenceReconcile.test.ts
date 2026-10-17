@@ -3,7 +3,7 @@ import { eq, sql } from 'drizzle-orm';
 import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
 import { installFakeOxyFiles, resetOxyFiles, type FakeOxyFiles } from '../../test/fakeOxyFiles';
 import { getDb } from '../../db/postgres';
-import { oxyFileReconcileRuns } from '../../db/schema/oxyFiles';
+import { OXY_REFERENCE_ENTITY_TYPES, oxyFileReconcileRuns } from '../../db/schema/oxyFiles';
 import { reconcileEntityType, reconcileMode, runDueReconciliations } from './referenceReconcile';
 
 /**
@@ -83,12 +83,12 @@ describe('runDueReconciliations', () => {
     expect(reconcileMode()).toBe('dry-run');
 
     const first = await runDueReconciliations(new Date());
-    expect(first).toHaveLength(10);
+    expect(first).toHaveLength(OXY_REFERENCE_ENTITY_TYPES.length);
     expect(first.every((outcome) => outcome.dryRun)).toBe(true);
     expect(await runDueReconciliations(new Date())).toHaveLength(0);
 
     const tomorrow = new Date(Date.now() + 25 * 60 * 60 * 1000);
-    expect(await runDueReconciliations(tomorrow)).toHaveLength(10);
+    expect(await runDueReconciliations(tomorrow)).toHaveLength(OXY_REFERENCE_ENTITY_TYPES.length);
   });
 
   it('does nothing when switched off', async () => {

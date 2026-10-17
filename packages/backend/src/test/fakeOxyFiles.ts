@@ -11,7 +11,14 @@
  * - a reference may name the application's own file or any public/unlisted
  *   file; anything else is `not_found`; a removal of a reference Oxy does not
  *   hold is `not_found` too;
- * - reconciliation adds the listed pairs it may hold and removes the stale ones.
+ * - reconciliation adds the listed pairs it may hold and removes the stale ones;
+ * - stage 4c ({@link FakeOxyFiles.audio}): audio is stored (else 415, as an Oxy
+ *   without stage 4c answers), a person's file may be private, the application
+ *   may read what it stored for a person, a play session needs a rendered ladder
+ *   ({@link FakeOxyFiles.renderLadder}; else 409 `STREAM_NOT_READY`), and a
+ *   recording target becomes a file once something is "written" into it
+ *   ({@link FakeOxyFiles.writeRecording}). With `audio = false` every 4c route
+ *   answers 404, like an API that does not serve it yet.
  *
  * Nothing here talks to a network. Bytes an import "downloads" come from
  * {@link FakeOxyFiles.remote}; a missing URL fails the import like an
@@ -20,8 +27,15 @@
 
 import { createHash } from 'node:crypto';
 import { uuidv7 } from '@oxy.so/db';
+import { readFile } from 'node:fs/promises';
 import type {
+  ApplicationFile,
   ApplicationFileImport,
+  CreatedRecordingTarget,
+  PlaySession,
+  PlaySessionOptions,
+  PlaySessionState,
+  RecordingTarget,
   ApplicationFileUpload,
   FileImportOptions,
   FileVisibility,
@@ -83,6 +97,16 @@ export class FakeOxyFiles implements OxyFilesApi {
   readonly calls: Array<{ method: string; args: unknown[] }> = [];
   /** The next call to these methods throws this error once. */
   readonly failNext = new Map<string, Error>();
+  /** Whether this Oxy serves stage 4c (audio, private person media, streams, recordings). */
+  audio = true;
+  /** Files whose audio ladder Oxy has rendered (`hlsReadyAt`). */
+  readonly ladders = new Set<string>();
+  /** A person's files this application stored for them (its consent to read them). */
+  readonly storedFor = new Set<string>();
+  /** Play sessions, by id. */
+  readonly sessions = new Map<string, PlaySessionState>();
+  /** Recording targets, by id. */
+  readonly targets = new Map<string, RecordingTarget<ApplicationFile>>();
 
   private clock = 1;
 
@@ -103,7 +127,11 @@ export class FakeOxyFiles implements OxyFilesApi {
     owner: { applicationId?: string; userId?: string },
     visibility: FileVisibility,
   ): { file: FakeFile; deduplicated: boolean } {
-    if (!(mime.startsWith('image/') || mime.startsWith('video/')) || mime.startsWith('image/svg')) {
+    const media =
+      mime.startsWith('image/') ||
+      mime.startsWith('video/') ||
+      (this.audio && mime.startsWith('audio/'));
+    if (!media || mime.startsWith('image/svg')) {
       throw new FakeOxyError(415, `Unsupported media type ${mime}`);
     }
     const digest = sha(bytes);
@@ -223,19 +251,259 @@ export class FakeOxyFiles implements OxyFilesApi {
     ownerUserId: string,
     bytes: Uint8Array | ArrayBuffer | Blob,
     mime: string,
+    options: { visibility?: FileVisibility } = {},
   ): Promise<ServiceUserMediaFile> {
-    this.record('uploadUserMedia', [ownerUserId, mime]);
+    this.record('uploadUserMedia', [ownerUserId, mime, options]);
     if (!this.localUsers.has(ownerUserId)) {
       throw new FakeOxyError(403, 'User media owner must be an existing local user');
     }
-    const { file } = this.store(toBuffer(bytes), mime, { userId: ownerUserId }, 'public');
+    // Before stage 4c the route took no visibility: every file was public.
+    const visibility = this.audio ? (options.visibility ?? 'public') : 'public';
+    const { file } = this.store(toBuffer(bytes), mime, { userId: ownerUserId }, visibility);
+    this.storedFor.add(file.id);
     return {
       id: file.id,
       sha256: file.sha256,
       size: file.size,
       mime: file.mime,
-      visibility: 'public',
+      visibility: file.visibility,
     };
+  }
+
+  private async largeSource(source: unknown): Promise<Buffer> {
+    if (typeof source === 'string') return readFile(source);
+    return toBuffer(source as Uint8Array | ArrayBuffer | Blob);
+  }
+
+  async uploadAppFileLarge(
+    source: unknown,
+    options: {
+      mime: string;
+      visibility: FileVisibility;
+      reference?: { entityType: string; entityId: string };
+    },
+  ) {
+    this.record('uploadAppFileLarge', [options]);
+    const { file, deduplicated } = this.store(
+      await this.largeSource(source),
+      options.mime,
+      { applicationId: this.applicationId },
+      options.visibility,
+    );
+    if (options.reference) await this.references.add([{ fileId: file.id, ...options.reference }]);
+    return { file: this.appFile(file), deduplicated, uploadId: deduplicated ? null : uuidv7() };
+  }
+
+  async uploadUserMediaLarge(
+    ownerUserId: string,
+    source: unknown,
+    options: {
+      mime: string;
+      visibility?: FileVisibility;
+      reference?: { entityType: string; entityId: string };
+    },
+  ) {
+    this.record('uploadUserMediaLarge', [ownerUserId, options]);
+    if (!this.localUsers.has(ownerUserId)) {
+      throw new FakeOxyError(403, 'User media owner must be an existing local user');
+    }
+    const { file, deduplicated } = this.store(
+      await this.largeSource(source),
+      options.mime,
+      { userId: ownerUserId },
+      options.visibility ?? 'public',
+    );
+    this.storedFor.add(file.id);
+    if (options.reference) await this.references.add([{ fileId: file.id, ...options.reference }]);
+    return {
+      file: {
+        id: file.id,
+        sha256: file.sha256,
+        size: file.size,
+        mime: file.mime,
+        visibility: file.visibility,
+        status: file.status,
+      },
+      deduplicated,
+      uploadId: deduplicated ? null : uuidv7(),
+    };
+  }
+
+  /** Oxy finished rendering a file's audio ladder. */
+  renderLadder(fileId: string): void {
+    this.ladders.add(fileId);
+  }
+
+  /** Whether this application may read `file` with its service token (stage 4c consent). */
+  private mayRead(file: FakeFile | undefined): boolean {
+    if (!file || file.status !== 'active') return false;
+    return file.ownerApplicationId === this.applicationId || this.storedFor.has(file.id);
+  }
+
+  private require4c(route: string): void {
+    if (!this.audio) throw new FakeOxyError(404, `Cannot POST ${route}`);
+  }
+
+  readonly streams = {
+    create: async (fileId: string, options: PlaySessionOptions = {}): Promise<PlaySession> => {
+      this.record('streams.create', [fileId, options]);
+      this.require4c('/assets/service/streams');
+      const file = this.files.get(fileId);
+      if (!this.mayRead(file))
+        throw Object.assign(new FakeOxyError(404, 'Not found'), { code: 'NOT_FOUND' });
+      if (!this.ladders.has(fileId)) {
+        throw Object.assign(new FakeOxyError(409, 'No ladder yet'), { code: 'STREAM_NOT_READY' });
+      }
+      const sessionId = uuidv7();
+      const state: PlaySessionState = {
+        sessionId,
+        fileId,
+        kind: 'audio',
+        status: 'active',
+        encryption: options.encryption ?? 'aes-128',
+        keyAuthorization: options.keyAuthorization ?? 'none',
+        endUserId: options.endUserId ?? null,
+        expiresAt: new Date(Date.now() + (options.ttlSeconds ?? 3600) * 1000).toISOString(),
+      };
+      this.sessions.set(sessionId, state);
+      const base = `https://api.oxy.test/assets/streams/${sessionId}.secret`;
+      return {
+        ...state,
+        masterUrl: `${base}/master.m3u8`,
+        renditions: [64, 128, 256].map((kbps) => ({
+          type: `hls_a${kbps}`,
+          url: `${base}/hls_a${kbps}/index.m3u8`,
+          bandwidth: kbps * 1000,
+        })),
+        previewUrl: `${base}/preview.m4a`,
+        waveformUrl: `${base}/waveform.json`,
+      };
+    },
+    get: async (sessionId: string): Promise<PlaySessionState> => {
+      const state = this.sessions.get(sessionId);
+      if (!state) throw new FakeOxyError(404, 'Not found');
+      return state;
+    },
+    revoke: async (sessionId: string): Promise<{ sessionId: string; revoked: true }> => {
+      const state = this.sessions.get(sessionId);
+      if (state) state.status = 'revoked';
+      return { sessionId, revoked: true };
+    },
+    revokeWhere: async (filter: { fileId?: string; endUserId?: string }) => {
+      this.record('streams.revokeWhere', [filter]);
+      this.require4c('/assets/service/streams/revoke');
+      let revoked = 0;
+      for (const state of this.sessions.values()) {
+        if (state.status !== 'active') continue;
+        if (filter.fileId && state.fileId !== filter.fileId) continue;
+        if (filter.endUserId && state.endUserId !== filter.endUserId) continue;
+        state.status = 'revoked';
+        revoked += 1;
+      }
+      return { revoked };
+    },
+  };
+
+  async linkedDownloadUrls(ids: string[]): Promise<
+    Array<{
+      id: string;
+      url: string;
+      expiresIn: number;
+      mime: string;
+      size: number;
+      sha256: string;
+    }>
+  > {
+    this.record('linkedDownloadUrls', [ids]);
+    return ids
+      .map((id) => this.files.get(id))
+      .filter((file): file is FakeFile => this.mayRead(file))
+      .map((file) => ({
+        id: file.id,
+        url: `https://download.oxy.test/${file.id}?sig=x`,
+        expiresIn: 300,
+        mime: file.mime,
+        size: file.size,
+        sha256: file.sha256,
+      }));
+  }
+
+  async createAppRecordingTarget(options: {
+    visibility: FileVisibility;
+    filename?: string;
+    reference?: { entityType: string; entityId: string };
+    expiresInSeconds?: number;
+  }): Promise<CreatedRecordingTarget> {
+    this.record('createAppRecordingTarget', [options]);
+    this.require4c('/assets/service/app/recording-targets');
+    const targetId = `target-${uuidv7()}`;
+    const expiresAt = new Date(
+      Date.now() + (options.expiresInSeconds ?? 86_400) * 1000,
+    ).toISOString();
+    this.targets.set(targetId, { targetId, status: 'awaiting_upload', expiresAt });
+    this.targetOptions.set(targetId, options);
+    const filepath = `${targetId}/${options.filename ?? 'recording.ogg'}`;
+    const s3 = {
+      accessKey: targetId,
+      secret: 'target-secret',
+      region: 'us-east-1',
+      endpoint: 'https://api.oxy.test/assets/recording-ingest',
+      bucket: 'oxy-recordings',
+      forcePathStyle: true as const,
+    };
+    return {
+      targetId,
+      status: 'awaiting_upload',
+      expiresAt,
+      filepath,
+      s3,
+      livekit: {
+        filepath,
+        s3: {
+          access_key: s3.accessKey,
+          secret: s3.secret,
+          region: s3.region,
+          endpoint: s3.endpoint,
+          bucket: s3.bucket,
+          force_path_style: true,
+        },
+      },
+    };
+  }
+
+  private readonly targetOptions = new Map<
+    string,
+    { visibility: FileVisibility; reference?: { entityType: string; entityId: string } }
+  >();
+
+  /** LiveKit egress finished writing a recording into a target; Oxy verified it. */
+  async writeRecording(targetId: string, bytes: Buffer, mime = 'audio/ogg'): Promise<string> {
+    const target = this.targets.get(targetId);
+    const options = this.targetOptions.get(targetId);
+    if (!target || !options) throw new Error(`No target ${targetId}`);
+    const { file, deduplicated } = this.store(
+      bytes,
+      mime,
+      { applicationId: this.applicationId },
+      options.visibility,
+    );
+    if (options.reference) await this.references.add([{ fileId: file.id, ...options.reference }]);
+    this.targets.set(targetId, {
+      ...target,
+      status: 'completed',
+      size: file.size,
+      file: this.appFile(file),
+      deduplicated,
+    });
+    return file.id;
+  }
+
+  async getRecordingTarget(targetId: string): Promise<RecordingTarget<ApplicationFile>> {
+    this.record('getRecordingTarget', [targetId]);
+    this.require4c('/assets/service/app/recording-targets');
+    const target = this.targets.get(targetId);
+    if (!target) throw new FakeOxyError(404, 'Not found');
+    return target;
   }
 
   async metadataByIds(ids: string[]): Promise<ServiceAssetMetadata[]> {
@@ -249,6 +517,7 @@ export class FakeOxyFiles implements OxyFilesApi {
         mime: file.mime,
         size: file.size,
         status: file.status,
+        ...(this.ladders.has(file.id) ? { hlsReadyAt: new Date(0).toISOString() } : {}),
         ownerUserId: file.ownerUserId ?? null,
         ...(file.ownerApplicationId ? { ownerApplicationId: file.ownerApplicationId } : {}),
       }));
@@ -282,6 +551,7 @@ export class FakeOxyFiles implements OxyFilesApi {
   private mayReference(file: FakeFile | undefined): boolean {
     if (!file) return false;
     if (file.ownerApplicationId === this.applicationId) return true;
+    if (file.status === 'active' && this.storedFor.has(file.id)) return true;
     return (
       file.status === 'active' && (file.visibility === 'public' || file.visibility === 'unlisted')
     );

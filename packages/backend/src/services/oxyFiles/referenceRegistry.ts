@@ -1,6 +1,7 @@
 /**
- * Every place a Syra row points at an image — the ONE list both halves of the
- * reference bookkeeping are built from.
+ * Every place a Syra row points at an Oxy file — its images, and since stage 4c
+ * its audio — the ONE list both halves of the reference bookkeeping are built
+ * from.
  *
  * Oxy only keeps an application's file while the application says it uses it
  * (OxyHQ/oxy ADR 0043 D4/D5): an application-owned file nobody references goes
@@ -23,8 +24,14 @@
 import { sql, type SQL } from 'drizzle-orm';
 import type { OxyReferenceEntityType } from '../../db/schema/oxyFiles';
 
+/** The two trigger names: a row's images (`0034`) and its audio (`0036`). */
+export const REFERENCE_TRIGGERS = ['oxy_file_references', 'oxy_audio_file_references'] as const;
+export type ReferenceTrigger = (typeof REFERENCE_TRIGGERS)[number];
+
 export interface ReferenceSource {
   readonly entityType: OxyReferenceEntityType;
+  /** The trigger that watches these columns — one of each kind per table at most. */
+  readonly trigger: ReferenceTrigger;
   /** The SQL table whose `id` is the reference's entity id. */
   readonly table: string;
   readonly via: 'image_assets' | 'file';
@@ -42,54 +49,103 @@ function imageColumns(primary: string, sizePrefix: string): string[] {
 export const REFERENCE_SOURCES: readonly ReferenceSource[] = [
   {
     entityType: 'catalog_entity',
+    trigger: 'oxy_file_references',
     table: 'catalog_entities',
     via: 'image_assets',
     columns: [...imageColumns('image_id', 'image_sizes'), 'image_suggestions'],
   },
   {
     entityType: 'album',
+    trigger: 'oxy_file_references',
     table: 'albums',
     via: 'image_assets',
     columns: imageColumns('cover_art_id', 'cover_art_sizes'),
   },
   {
     entityType: 'track',
+    trigger: 'oxy_file_references',
     table: 'tracks',
     via: 'image_assets',
     columns: imageColumns('cover_art_id', 'cover_art_sizes'),
   },
   {
     entityType: 'user_upload',
+    trigger: 'oxy_file_references',
     table: 'user_uploads',
     via: 'image_assets',
     columns: imageColumns('cover_art_id', 'cover_art_sizes'),
   },
   {
     entityType: 'playlist',
+    trigger: 'oxy_file_references',
     table: 'playlists',
     via: 'image_assets',
     columns: imageColumns('cover_art_id', 'cover_art_sizes'),
   },
   {
     entityType: 'podcast',
+    trigger: 'oxy_file_references',
     table: 'podcasts',
     via: 'image_assets',
     columns: imageColumns('image_id', 'image_sizes'),
   },
   {
     entityType: 'episode',
+    trigger: 'oxy_file_references',
     table: 'episodes',
     via: 'image_assets',
     columns: imageColumns('image_id', 'image_sizes'),
   },
   {
     entityType: 'house',
+    trigger: 'oxy_file_references',
     table: 'houses',
     via: 'file',
     columns: ['avatar_file_id', 'cover_image_file_id'],
   },
-  { entityType: 'room', table: 'rooms', via: 'file', columns: ['stream_image_file_id'] },
-  { entityType: 'series', table: 'series', via: 'file', columns: ['cover_image_file_id'] },
+  {
+    entityType: 'room',
+    trigger: 'oxy_file_references',
+    table: 'rooms',
+    via: 'file',
+    columns: ['stream_image_file_id'],
+  },
+  {
+    entityType: 'series',
+    trigger: 'oxy_file_references',
+    table: 'series',
+    via: 'file',
+    columns: ['cover_image_file_id'],
+  },
+  // ── Audio (ADR 0043 stage 4c, migration 0036) ──
+  {
+    entityType: 'track_audio',
+    trigger: 'oxy_audio_file_references',
+    table: 'tracks',
+    via: 'file',
+    columns: ['audio_file_id'],
+  },
+  {
+    entityType: 'user_upload_audio',
+    trigger: 'oxy_audio_file_references',
+    table: 'user_uploads',
+    via: 'file',
+    columns: ['audio_file_id'],
+  },
+  {
+    entityType: 'episode_audio',
+    trigger: 'oxy_audio_file_references',
+    table: 'episodes',
+    via: 'file',
+    columns: ['audio_file_id'],
+  },
+  {
+    entityType: 'recording',
+    trigger: 'oxy_audio_file_references',
+    table: 'recordings',
+    via: 'file',
+    columns: ['oxy_file_id'],
+  },
 ];
 
 /** The one column in the list that holds a JSON array of suggestions rather than an id. */

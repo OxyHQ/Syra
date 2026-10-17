@@ -787,6 +787,13 @@ export const tracks = pgTable(
     // jsonb in the first pass and is not anymore.
     loudnessLufs: doublePrecision(),
     hlsMasterKey: text(),
+    /**
+     * The Oxy AUDIO file this row plays from (ADR 0043 stage 4c) — another
+     * service's key, no foreign key. `null` until the audio is stored in Oxy
+     * (`services/oxyFiles/audioStorage.ts`); while it is null, or while Oxy has
+     * not finished its ladder, the legacy bucket ladder serves.
+     */
+    audioFileId: text(),
     // The provenance LOG is `track_sources` (child table, below) — the third
     // sibling of `album_sources` and `catalog_entity_sources`. See the
     // file-level doc comment for why this wasn't in the first pass.
@@ -810,6 +817,8 @@ export const tracks = pgTable(
       sql`${t.audioSourceFormat} is null or ${t.audioSourceFormat} in (${sql.raw(inList(AUDIO_FORMATS))})`,
     ),
     check('tracks_popularity_check', sql`${t.popularity} between 0 and 100`),
+    // The key authorization callback finds the row a play session's file is.
+    index('tracks_audio_file_id_idx').on(t.audioFileId).where(sql`${t.audioFileId} is not null`),
     unique('tracks_external_isrc_key').on(t.externalIsrc),
     /**
      * The index decision for `mood` / `isExplicit` / `isAvailable` /

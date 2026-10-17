@@ -11,7 +11,7 @@ import { RecordingAccess, RecordingStatus } from '../db/rooms/types';
 import { describeErrorSafely } from '../utils/error';
 import { getParam } from '../utils/reqParams';
 import { logger } from '../utils/logger';
-import { deleteAudioObject, presignAudioObject } from '../services/oxyFiles/audioStorage';
+import { deleteRecordingAudio, recordingPlaybackUrl } from '../services/oxyFiles/audioStorage';
 
 const router = Router();
 
@@ -74,7 +74,12 @@ router.get('/:recordingId', async (req: AuthRequest, res: Response) => {
       }
     }
 
-    const playbackUrl = await presignAudioObject(recording.objectKey);
+    // The bucket object, or the Oxy file egress wrote into its recording target
+    // (collected here on first read once Oxy verified it).
+    const playbackUrl = await recordingPlaybackUrl(recording);
+    if (!playbackUrl) {
+      return res.status(409).json({ message: 'Recording is still being processed' });
+    }
 
     res.json({
       recording,
@@ -171,7 +176,7 @@ router.delete('/:recordingId', async (req: AuthRequest, res: Response) => {
 
     // Delete file from Spaces
     try {
-      await deleteAudioObject(recording.objectKey);
+      await deleteRecordingAudio(recording);
     } catch (err) {
       logger.warn(`Failed to delete recording file from Spaces (may already be gone):`, {
         err: describeErrorSafely(err),

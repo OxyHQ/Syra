@@ -62,9 +62,13 @@ import {
 import type { EpisodeRow } from '../../db/podcasts/serialize';
 import { logger } from '../../utils/logger';
 import {
+  audioMimeFor,
   getS3HlsKey,
   getS3PodcastEpisodeAudioKey,
+  mirrorAudioToOxy,
   openAudioObject,
+  oxyAudioEnabled,
+  oxyAudioMode,
 } from '../oxyFiles/audioStorage';
 import { packageToEncryptedHls } from '../ingest/hlsPackager';
 import type { PackageOptions, PackageResult } from '../ingest/hlsPackager';
@@ -82,6 +86,8 @@ export interface IngestEpisodeDeps {
   fetchSource?: (episode: EpisodeRow) => Promise<EpisodeFetchSourceResult>;
   packageHls?: (opts: PackageOptions) => Promise<PackageResult>;
   storeHls?: (result: PackageResult, target: StoreHlsTarget) => Promise<StoredHls>;
+  /** Store the original in Oxy Files (`null` when `OXY_AUDIO` is `legacy` or Oxy refused). */
+  mirrorToOxy?: typeof mirrorAudioToOxy;
   keyUri?: string;
 }
 
@@ -118,6 +124,36 @@ async function defaultFetchSource(episode: EpisodeRow): Promise<EpisodeFetchSour
   };
 }
 
+/** Stage the episode's original and store it in Oxy; `false` when it did not land there. */
+async function mirrorEpisodeToOxy(
+  episode: EpisodeRow,
+  ownerOxyUserId: string | null,
+  deps: IngestEpisodeDeps | undefined,
+): Promise<boolean> {
+  let fetched: EpisodeFetchSourceResult | undefined;
+  try {
+    fetched = await (deps?.fetchSource ?? defaultFetchSource)(episode);
+    const stored = await (deps?.mirrorToOxy ?? mirrorAudioToOxy)({
+      entity: { kind: 'episode', id: episode.id },
+      localPath: fetched.localPath,
+      mime: audioMimeFor(episode.audioSourceFormat ?? 'mp3'),
+      owner: ownerOxyUserId
+        ? { kind: 'account', oxyUserId: ownerOxyUserId }
+        : { kind: 'application' },
+      filename: `${episode.id}.${episode.audioSourceFormat ?? 'mp3'}`,
+    });
+    return stored !== null;
+  } catch (err) {
+    logger.warn('[podcasts] episode audio not staged for Oxy; the legacy ingest runs', {
+      episodeId: episode.id,
+      err: describeErrorSafely(err),
+    });
+    return false;
+  } finally {
+    fetched?.cleanup();
+  }
+}
+
 // ── Main job ───────────────────────────────────────────────────────────────────
 
 export async function ingestEpisode(episodeId: string, deps?: IngestEpisodeDeps): Promise<void> {
@@ -142,6 +178,22 @@ export async function ingestEpisode(episodeId: string, deps?: IngestEpisodeDeps)
       }),
     );
     throw new Error(`ingestEpisode: no source audio for episode ${episodeId}`);
+  }
+
+  /**
+   * Oxy Files (ADR 0043 stage 4c): a hosted episode's audio is its show
+   * OWNER's private file (Syra's own for a show nobody owns), whatever the
+   * show's audience — Oxy's play sessions and Syra's key authorization decide
+   * who hears it, so a private show needs no deferral there. In `oxy` mode an
+   * accepted file is the whole ingest; otherwise the legacy path below runs as
+   * before, the deferral included.
+   */
+  if (oxyAudioEnabled()) {
+    const mirrored = await mirrorEpisodeToOxy(episode, show.ownerOxyUserId, deps);
+    if (mirrored && (oxyAudioMode() === 'oxy' || show.visibility === 'private')) {
+      await setEpisodeStatus(episodeId, 'ready');
+      return;
+    }
   }
 
   /**
@@ -229,7 +281,9 @@ export function enqueueEpisodeIngest(episodeId: string): void {
  * answers immediately instead of blocking the PATCH on ffmpeg.
  */
 export async function enqueueDeferredEpisodeIngests(podcastId: string): Promise<void> {
-  const episodeIds = await findEpisodeIdsAwaitingHls(podcastId);
+  const episodeIds = await findEpisodeIdsAwaitingHls(podcastId, {
+    skipOxyAudio: oxyAudioMode() === 'oxy',
+  });
   if (episodeIds.length === 0) return;
 
   logger.info('[podcasts] enqueuing deferred episode ingests', {

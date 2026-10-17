@@ -10,7 +10,7 @@ import {
   findUploadsMatchedToTrack,
   type UploadStorageRef,
 } from '../../db/creators/uploads';
-import { deleteAudioObject, deleteAudioPrefix } from '../oxyFiles/audioStorage';
+import { deleteAudioObject, deleteAudioPrefix, revokePlaySessions } from '../oxyFiles/audioStorage';
 import { addStrike } from '../strikeService';
 import { recordContributorStrike } from './contributorStrikes';
 import { compareFingerprints } from '../uploads/fingerprint';
@@ -57,6 +57,8 @@ export interface LockerPurgeDeps {
   deletePrefix?: (prefix: string) => Promise<number>;
   /** Told once per owner whose locker lost files. Injectable so tests need no Oxy credentials. */
   notifyRemoval?: (notice: LockerRemovalNotice) => Promise<void>;
+  /** Stops an Oxy audio file's play sessions. Injectable so tests need no Oxy. */
+  revokeSessions?: (filter: { fileId: string }) => Promise<number>;
 }
 
 export interface LockerRemovalNotice {
@@ -250,6 +252,13 @@ export async function deleteUploadStoredObjects(
   const deletePrefix = deps.deletePrefix ?? deleteAudioPrefix;
   const prefix = hlsDirectoryPrefix(upload);
   let deleted = 0;
+
+  // Its Oxy audio file (ADR 0043 stage 4c) stops playing at the next segment.
+  // The file itself is the person's, in their own account: deleting the row
+  // drops Syra's reference and consent to read it (the `0036` trigger), and
+  // the bytes are theirs to delete — or Oxy's, under a content claim.
+  if (upload.audioFileId)
+    await (deps.revokeSessions ?? revokePlaySessions)({ fileId: upload.audioFileId });
 
   if (prefix) {
     deleted += await deletePrefix(prefix);
@@ -488,7 +497,7 @@ async function applyContributorTermination(
   const contributedTrackIds = await findContributedTrackIds(oxyUserId);
 
   if (contributedTrackIds.length > 0) {
-    await getDb()
+    const removed = await getDb()
       .update(tracks)
       .set({
         copyrightRemoved: true,
@@ -496,7 +505,11 @@ async function applyContributorTermination(
         removedAt: new Date(),
         removedReason: reason,
       })
-      .where(and(inArray(tracks.id, contributedTrackIds), eq(tracks.copyrightRemoved, false)));
+      .where(and(inArray(tracks.id, contributedTrackIds), eq(tracks.copyrightRemoved, false)))
+      .returning({ audioFileId: tracks.audioFileId });
+    for (const { audioFileId } of removed) {
+      if (audioFileId) await (deps.revokeSessions ?? revokePlaySessions)({ fileId: audioFileId });
+    }
   }
 
   // Their whole locker, not only the copies of the reported work.
@@ -551,6 +564,7 @@ export async function takeDownTrack(
       id: tracks.id,
       artistId: tracks.artistId,
       copyrightRemoved: tracks.copyrightRemoved,
+      audioFileId: tracks.audioFileId,
     })
     .from(tracks)
     .where(eq(tracks.id, trackId))
@@ -570,6 +584,13 @@ export async function takeDownTrack(
       ...(copyrightReportId ? { copyrightReportId } : {}),
     })
     .where(eq(tracks.id, trackId));
+
+  // Playing from Oxy Files (ADR 0043 stage 4c): every live session stops at the
+  // next segment, and the key authorization refuses any new one (the track is
+  // no longer playable).
+  if (track.audioFileId) {
+    await (deps.revokeSessions ?? revokePlaySessions)({ fileId: track.audioFileId });
+  }
 
   const purge = await purgeLockerCopiesOfTrack(trackId, deps);
 

@@ -1,6 +1,13 @@
 import express, { Router, type Request, type Response } from 'express';
-import { FileEventVerificationError, verifyFileEventSignature } from '@oxy.so/core/server';
+import {
+  FileEventVerificationError,
+  STREAM_KEY_AUTHORIZATION_EVENT_TYPE,
+  StreamKeyAuthorizationVerificationError,
+  verifyFileEventSignature,
+  verifyStreamKeyAuthorization,
+} from '@oxy.so/core/server';
 import { applyFileEvent } from '../services/oxyFiles/fileEvents';
+import { authorizeAudioKey } from '../services/oxyFiles/audioStorage';
 import { assertRawBody } from './crowdsourceWebhook.routes';
 import { logger } from '../utils/logger';
 import { describeErrorSafely } from '../utils/error';
@@ -22,6 +29,11 @@ import { describeErrorSafely } from '../utils/error';
  *
  * 2xx means "applied, or already applied"; anything else is retried by Oxy with
  * backoff, so an error here is safe to return and a 500 is better than a lie.
+ *
+ * The same endpoint answers a play session's `stream.key_authorization` (ADR
+ * 0043 stage 4c): synchronously, `{ "allow": true | false }`, decided by
+ * `audioKeyAuthorization.ts`. Oxy denies the key on anything but a 2xx
+ * `{ allow: true }` — so that branch fails CLOSED, and never asks to be retried.
  */
 
 /** Oxy's file events are small JSON documents; this bounds what is buffered. */
@@ -38,6 +50,44 @@ export function createOxyFilesWebhookRoutes(): Router {
       const body: unknown = req.body;
       if (!Buffer.isBuffer(body)) {
         res.status(400).json({ error: 'Expected a JSON body' });
+        return;
+      }
+
+      // A play session's key authorization (ADR 0043 stage 4c): signed like a
+      // file event, answered synchronously with `{ allow }` — Oxy denies the
+      // key on anything else, so every failure here is a refusal, never a 5xx
+      // Oxy would read as a retryable delivery.
+      if (req.get('oxy-event-type') === STREAM_KEY_AUTHORIZATION_EVENT_TYPE) {
+        let request: ReturnType<typeof verifyStreamKeyAuthorization>;
+        try {
+          request = verifyStreamKeyAuthorization(body, req.headers, secret);
+        } catch (error) {
+          if (error instanceof StreamKeyAuthorizationVerificationError) {
+            if (secret === '') {
+              res.status(404).end();
+              return;
+            }
+            logger.warn('[OxyFiles] refused a key authorization request', {
+              reason: error.message,
+            });
+            res.status(401).json({ error: 'Invalid signature' });
+            return;
+          }
+          throw error;
+        }
+        try {
+          const allow = await authorizeAudioKey({
+            fileId: request.session.fileId,
+            endUserId: request.session.endUserId,
+          });
+          res.json({ allow });
+        } catch (error) {
+          logger.error('[OxyFiles] key authorization failed; the key is denied', {
+            sessionId: request.session.id,
+            error: describeErrorSafely(error),
+          });
+          res.json({ allow: false });
+        }
         return;
       }
 

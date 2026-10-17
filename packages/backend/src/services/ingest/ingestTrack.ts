@@ -24,7 +24,14 @@ import { getDb } from '../../db/postgres';
 import { tracks, trackHlsRenditions } from '../../db/schema/catalog';
 import { logger } from '../../utils/logger';
 import { getTrackS3Key } from '../audioStorageService';
-import { getS3HlsKey, openAudioObject } from '../oxyFiles/audioStorage';
+import {
+  audioMimeFor,
+  getS3HlsKey,
+  mirrorAudioToOxy,
+  openAudioObject,
+  oxyAudioMode,
+  type StoredOxyAudio,
+} from '../oxyFiles/audioStorage';
 import { packageToEncryptedHls } from './hlsPackager';
 import type { PackageOptions, PackageResult } from './hlsPackager';
 import { storePackagedHls } from './hlsStorage';
@@ -74,6 +81,8 @@ export interface IngestDeps {
   packageHls?: (opts: PackageOptions) => Promise<PackageResult>;
   storeHls?: (result: PackageResult, target: StoreHlsTarget) => Promise<StoredHls>;
   generatePreview?: (params: StorePreviewFromSourceParams) => Promise<string>;
+  /** Store the original in Oxy Files (`null` when `OXY_AUDIO` is `legacy` or Oxy refused). */
+  mirrorToOxy?: typeof mirrorAudioToOxy;
   keyUri?: string;
 }
 
@@ -299,6 +308,31 @@ export async function ingestTrack(
     // ever written. Measured before packaging so a corrupt file fails here
     // rather than after a full transcode.
     const probed = await probe(fetched.localPath);
+
+    // Oxy Files (ADR 0043 stage 4c): the catalogue's audio is the SYRA
+    // application's private file, rendered by Oxy into its own ladder, waveform
+    // and 30-second preview. In `oxy` mode an accepted file is the whole result
+    // — no ladder of Syra's own — and anything Oxy refused takes the legacy
+    // path below exactly as before.
+    const oxy: StoredOxyAudio | null = await (deps?.mirrorToOxy ?? mirrorAudioToOxy)({
+      entity: { kind: 'track', id: trackId },
+      localPath: fetched.localPath,
+      mime: audioMimeFor(track.audioSource.format),
+      owner: { kind: 'application' },
+      previewStartSeconds: DEFAULT_PREVIEW_START_SEC,
+    });
+    if (oxy && oxyAudioMode() === 'oxy') {
+      await getDb()
+        .update(tracks)
+        .set({
+          audioSourceDuration: probed.durationSec,
+          ...(probed.bitrateKbps !== undefined ? { audioSourceBitrate: probed.bitrateKbps } : {}),
+          status: 'ready',
+        })
+        .where(eq(tracks.id, trackId));
+      await indexTrackFingerprint(trackId, fetched.localPath, fingerprint, indexFingerprint);
+      return;
+    }
 
     outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ingest-hls-'));
     const result = await packageHls({

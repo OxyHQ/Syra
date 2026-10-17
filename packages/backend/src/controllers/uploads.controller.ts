@@ -112,6 +112,7 @@ import { deleteUploadStoredObjects } from '../services/compliance/takedown';
 import { computeUploadExpiry, recordUploadPlay } from '../services/uploads/expirySweeper';
 
 import { openAudioObject, putSourceAudio } from '../services/oxyFiles/audioStorage';
+import { decideOxyPlayback } from '../services/stream/oxyPlayback';
 import { uploadTrackAudio } from '../services/audioStorageService';
 import { enqueueIngest, enqueueUploadIngest } from '../services/ingest/ingestQueue';
 import { LOCKER_HLS_BITRATES_KBPS } from '../services/ingest/hlsPackager';
@@ -2725,11 +2726,37 @@ export const getUploadStream = async (
       return;
     }
 
+    // The owner's private file in Oxy Files (ADR 0043 stage 4c): a play session
+    // for them alone, its key released only to the owner
+    // (`audioKeyAuthorization.ts`). Anything Oxy cannot serve plays from the
+    // legacy ladder below.
+    const oxy = await decideOxyPlayback({
+      audioFileId: upload.audioFileId,
+      endUserId: userId,
+      maxBitrateKbps: LOCKER_MAX_BITRATE_KBPS,
+      durationSec: upload.duration,
+    });
+    if (oxy.kind === 'oxy') {
+      await recordUploadPlay(uploadId, userId);
+      res.set('Cache-Control', CACHE_CONTROL_NO_STORE);
+      res.set('Vary', 'Authorization');
+      res.status(200).json(oxy.stream);
+      return;
+    }
+    if (oxy.kind === 'withdrawn') {
+      res.status(404).json({ error: 'Upload not found' });
+      return;
+    }
+
     // The ladder is `user_upload_hls_renditions` now, so "has a playable
     // rendition" is a second read rather than a field on the row. It is loaded
     // AFTER the status checks above, which is what keeps the locker listing —
     // the hot path — free of a join it never looks at.
     const hls = (await loadUploadHls([upload.id])).get(upload.id) ?? [];
+    if (oxy.ladderPending && hls.length === 0) {
+      res.status(409).json({ error: 'Upload processing' });
+      return;
+    }
     if (upload.status !== 'ready' || !upload.hlsMasterKey || hls.length === 0) {
       res.status(422).json({ error: 'Upload not playable' });
       return;

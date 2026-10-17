@@ -317,7 +317,11 @@ export async function episodeStats(
  * ingest is right for the second of those too. So every status but `unavailable`
  * is admitted, and the missing master key is the whole predicate.
  */
-export async function findEpisodeIdsAwaitingHls(podcastId: string): Promise<string[]> {
+export async function findEpisodeIdsAwaitingHls(
+  podcastId: string,
+  /** `OXY_AUDIO=oxy`: an episode already in Oxy Files has its ladder there and needs no ingest. */
+  options: { skipOxyAudio?: boolean } = {},
+): Promise<string[]> {
   const rows = await getDb()
     .select({ id: episodes.id })
     .from(episodes)
@@ -328,6 +332,7 @@ export async function findEpisodeIdsAwaitingHls(podcastId: string): Promise<stri
         isNull(episodes.hlsMasterKey),
         isNotNull(episodes.audioSourceUrl),
         ne(episodes.status, 'unavailable'),
+        options.skipOxyAudio ? isNull(episodes.audioFileId) : undefined,
       ),
     );
   return rows.map((row) => row.id);

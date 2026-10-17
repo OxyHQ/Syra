@@ -5,10 +5,11 @@ import { join, relative } from 'node:path';
 /**
  * Syra's bucket has exactly two kinds of caller left, and this holds it to that:
  *
- * - AUDIO, through `services/oxyFiles/audioStorage.ts` only — the one seam where
- *   audio moves to Oxy Files once Oxy takes it (TODO(oxy-4c)). A route or service
- *   that imported the S3 layer directly would be a second place to change, and
- *   the one that gets missed.
+ * - AUDIO, through `services/oxyFiles/audioStorage.ts` only — the one seam that
+ *   decides whether audio is stored in and played from Oxy Files or the bucket
+ *   (ADR 0043 stage 4c). A route or service that imported the S3 layer, or the
+ *   Oxy half of the seam (`oxyAudio.ts`), directly would be a second place to
+ *   change, and the one that gets missed.
  * - the LEGACY IMAGE read path, kept only until the image prefixes are retired:
  *   `imageAssetService.ts` (the dual read), `oxyFiles/legacyObjects.ts` (the
  *   migrations' reader), `utils/spaces.ts` (old space-image URLs) and
@@ -55,10 +56,19 @@ describe('the S3 layer has only its two kinds of caller', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('marks the audio move in exactly one module', () => {
-    const marked = sourceFiles(SRC)
-      .filter((path) => readFileSync(path, 'utf8').includes('TODO(oxy-4c)'))
+  it('reaches the Oxy half of the audio seam only through the seam', () => {
+    const OXY_AUDIO_IMPORT = /from\s+['"][^'"]*oxyFiles\/oxyAudio['"]|from\s+['"]\.\/oxyAudio['"]/;
+    const offenders = sourceFiles(SRC)
+      .filter((path) => OXY_AUDIO_IMPORT.test(readFileSync(path, 'utf8')))
+      .map((path) => relative(SRC, path))
+      .filter((path) => path !== 'services/oxyFiles/audioStorage.ts');
+    expect(offenders).toEqual([]);
+  });
+
+  it('leaves no audio waiting on Oxy: stage 4c is adopted, not deferred', () => {
+    const marked = sourceFiles(join(SRC, '..'))
+      .filter((path) => /TODO\(oxy-4[bc]\)/.test(readFileSync(path, 'utf8')))
       .map((path) => relative(SRC, path));
-    expect(marked).toEqual(['services/oxyFiles/audioStorage.ts']);
+    expect(marked).toEqual([]);
   });
 });

@@ -31,7 +31,7 @@ import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { FileEvent } from '@oxy.so/core/server';
 import { getDb } from '../../db/postgres';
 import { imageAssets, type ImageServingStatus } from '../../db/schema/catalog';
-import { oxyFileEvents } from '../../db/schema/oxyFiles';
+import { oxyAudioFiles, oxyFileEvents, type OxyAudioFileStatus } from '../../db/schema/oxyFiles';
 import { houses, rooms, series } from '../../db/schema/rooms';
 import { logger } from '../../utils/logger';
 
@@ -54,6 +54,25 @@ export function servingStatusAfter(event: FileEvent): ImageServingStatus {
 }
 
 /** Whether the event ends the file for good, so a direct file column lets go of it. */
+/**
+ * What an event means for an AUDIO file (stage 4c). Unlike an image, an audio
+ * original is PRIVATE by design — Syra plays it through play sessions — so a
+ * visibility change never withdraws it; only its status does.
+ */
+export function audioStatusAfter(event: FileEvent): OxyAudioFileStatus {
+  switch (event.type) {
+    case 'file.blocked':
+      return 'blocked';
+    case 'file.deleted':
+    case 'file.trashed':
+      return 'unavailable';
+    case 'file.restored':
+    case 'file.unblocked':
+    case 'file.visibility_changed':
+      return event.file.status === 'active' ? 'active' : 'unavailable';
+  }
+}
+
 function isTerminal(event: FileEvent): boolean {
   return event.type === 'file.deleted' || event.type === 'file.blocked';
 }
@@ -62,6 +81,8 @@ export interface AppliedFileEvent {
   duplicate: boolean;
   imageRows: number;
   clearedColumns: number;
+  /** `oxy_audio_files` rows updated (0 or 1): the file is one of Syra's audio files. */
+  audioFiles: number;
 }
 
 /**
@@ -75,7 +96,9 @@ export async function applyFileEvent(event: FileEvent): Promise<AppliedFileEvent
       .values({ eventId: event.id, type: event.type, fileId: event.file.id })
       .onConflictDoNothing()
       .returning({ eventId: oxyFileEvents.eventId });
-    if (inserted.length === 0) return { duplicate: true, imageRows: 0, clearedColumns: 0 };
+    if (inserted.length === 0) {
+      return { duplicate: true, imageRows: 0, clearedColumns: 0, audioFiles: 0 };
+    }
 
     const status = servingStatusAfter(event);
     const updated = await tx
@@ -90,6 +113,19 @@ export async function applyFileEvent(event: FileEvent): Promise<AppliedFileEvent
         ),
       )
       .returning({ id: imageAssets.id });
+
+    // An audio file's state, which every play and every key authorization reads:
+    // a withdrawn file plays from nowhere — not from Oxy, not from the bucket.
+    const audioFiles = (
+      await tx
+        .update(oxyAudioFiles)
+        .set({
+          status: audioStatusAfter(event),
+          updatedAt: sql`date_trunc('milliseconds', now())`,
+        })
+        .where(eq(oxyAudioFiles.fileId, event.file.id))
+        .returning({ fileId: oxyAudioFiles.fileId })
+    ).length;
 
     let clearedColumns = 0;
     if (isTerminal(event)) {
@@ -131,7 +167,8 @@ export async function applyFileEvent(event: FileEvent): Promise<AppliedFileEvent
       servingStatus: status,
       imageRows: updated.length,
       clearedColumns,
+      audioFiles,
     });
-    return { duplicate: false, imageRows: updated.length, clearedColumns };
+    return { duplicate: false, imageRows: updated.length, clearedColumns, audioFiles };
   });
 }

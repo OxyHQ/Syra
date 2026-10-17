@@ -405,3 +405,71 @@ describe('ingestTrack', () => {
     expect(received?.bitratesKbps).toBeUndefined();
   });
 });
+
+// ── Oxy Files (ADR 0043 stage 4c) ─────────────────────────────────────────────
+
+describe('ingestTrack with the audio in Oxy Files', () => {
+  const STORED = {
+    fileId: 'oxy-file-1',
+    sha256: 'a'.repeat(64),
+    size: 1,
+    mime: 'audio/mpeg',
+    deduplicated: false,
+  };
+
+  afterEach(() => {
+    delete process.env.OXY_AUDIO;
+  });
+
+  it('in oxy mode builds no ladder of its own once Oxy accepted the original', async () => {
+    process.env.OXY_AUDIO = 'oxy';
+    const track = await createTrack();
+    let packaged = false;
+    let previewed = false;
+    const mirrored: Array<{ entity: unknown; owner: unknown; previewStartSeconds?: number }> = [];
+
+    await ingestTrack(track.id, {
+      ...happyDeps,
+      mirrorToOxy: async (input) => {
+        mirrored.push(input);
+        return STORED;
+      },
+      packageHls: async () => {
+        packaged = true;
+        return CANNED_PACKAGE_RESULT;
+      },
+      generatePreview: async () => {
+        previewed = true;
+        return 'x';
+      },
+    });
+
+    expect(mirrored).toMatchObject([
+      {
+        entity: { kind: 'track', id: track.id },
+        owner: { kind: 'application' },
+        previewStartSeconds: 0,
+      },
+    ]);
+    expect(packaged).toBe(false);
+    expect(previewed).toBe(false);
+    const reloaded = await reload(track.id);
+    expect(reloaded?.status).toBe('ready');
+    expect(reloaded?.hlsMasterKey).toBeNull();
+    expect(await fingerprintFor(track.id)).toBeDefined();
+  });
+
+  it('builds the legacy ladder when Oxy refused the original, whatever the mode', async () => {
+    process.env.OXY_AUDIO = 'oxy';
+    const track = await createTrack();
+    await ingestTrack(track.id, { ...happyDeps, mirrorToOxy: async () => null });
+    expect((await reload(track.id))?.hlsMasterKey).toBe('hls/a/t/master.m3u8');
+  });
+
+  it('in dual mode stores the original in Oxy AND builds the legacy ladder', async () => {
+    process.env.OXY_AUDIO = 'dual';
+    const track = await createTrack();
+    await ingestTrack(track.id, { ...happyDeps, mirrorToOxy: async () => STORED });
+    expect((await reload(track.id))?.hlsMasterKey).toBe('hls/a/t/master.m3u8');
+  });
+});

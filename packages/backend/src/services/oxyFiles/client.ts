@@ -5,8 +5,10 @@
  * every one of them is Syra's own act: storing catalogue artwork Syra owns,
  * storing a person's upload into their account, and telling Oxy which files
  * Syra uses. The scopes it needs are `files:app:write`, `files:app:delete`,
- * `files:references:write`, `files:user-media:write` and `files:read`
- * (`docs/runbooks/oxy-files-images.md`).
+ * `files:references:write`, `files:user-media:write`, `files:read` and — for
+ * audio (stage 4c): play sessions on a person's file and the original's
+ * download URL — `files:linked:read` (`docs/runbooks/oxy-files-images.md`,
+ * `docs/runbooks/oxy-files-audio.md`).
  *
  * A dedicated `OxyServer`, not `oxyClient.ts`'s shared `oxy`: that one carries
  * no configured credential (its callers pass a pair per call), and a file call
@@ -31,6 +33,13 @@ export type OxyFilesApi = Pick<
   | 'metadataBySha256'
   | 'references'
   | 'publicUrl'
+  // Audio (ADR 0043 stage 4c), through `oxyAudio.ts` only.
+  | 'uploadAppFileLarge'
+  | 'uploadUserMediaLarge'
+  | 'streams'
+  | 'linkedDownloadUrls'
+  | 'createAppRecordingTarget'
+  | 'getRecordingTarget'
 >;
 
 const OXY_API_URL = process.env.OXY_API_URL || 'https://api.oxy.so';

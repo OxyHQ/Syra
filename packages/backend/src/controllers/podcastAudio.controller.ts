@@ -37,10 +37,14 @@ import { loadEpisodeHls } from '../db/podcasts/hydrate';
 import type { EpisodeRow } from '../db/podcasts/serialize';
 import { env } from '../config/env';
 import {
+  audioFileState,
   getS3PodcastEpisodeAudioKey,
   openAudioObject,
+  originalDownloadUrl,
+  oxyAudioEnabled,
   statAudioObject,
 } from '../services/oxyFiles/audioStorage';
+import { decideOxyPlayback } from '../services/stream/oxyPlayback';
 import { requestMayReachShowMedia, resolveEpisodeAccess } from './stream.controller';
 import { mintStreamToken } from '../services/stream/streamToken';
 import {
@@ -251,6 +255,27 @@ export async function getEpisodeAudio(req: AuthRequest, res: Response): Promise<
     return;
   }
 
+  // In Oxy Files (ADR 0043 stage 4c): a hosted episode's audio, or a mirrored
+  // enclosure Oxy imported. A file Oxy reported withdrawn is served from
+  // nowhere; otherwise a short-lived URL to the original — RSS clients follow
+  // the redirect, Range included — and anything Oxy cannot answer falls back to
+  // the legacy copy below.
+  if (episode.audioFileId) {
+    const state = await audioFileState(episode.audioFileId);
+    if (state && state.status !== 'active') {
+      res.status(404).json({ error: 'Episode not found' });
+      return;
+    }
+    if (oxyAudioEnabled()) {
+      const url = await originalDownloadUrl(episode.audioFileId);
+      if (url) {
+        res.set('Cache-Control', CACHE_CONTROL_NO_STORE);
+        res.redirect(302, url);
+        return;
+      }
+    }
+  }
+
   if (episode.source === 'syra') {
     if (!episode.audioSourceFormat) {
       res.status(404).json({ error: 'No audio for episode' });
@@ -339,8 +364,24 @@ export async function getEpisodeStream(req: AuthRequest, res: Response): Promise
     return;
   }
 
+  const oxy = await decideOxyPlayback({
+    audioFileId: episode.audioFileId,
+    endUserId: req.user.id,
+    maxBitrateKbps: access.maxBitrateKbps,
+    durationSec: episode.audioSourceDuration,
+  });
+  if (oxy.kind === 'oxy') {
+    res.set('Vary', 'Authorization');
+    res.status(200).json(oxy.stream);
+    return;
+  }
+  if (oxy.kind === 'withdrawn') {
+    res.status(404).json({ error: 'Episode not found' });
+    return;
+  }
+
   const hasHls = Boolean(episode.hlsMasterKey) && (await episodeHls(episodeId)).length > 0;
-  if (!hasHls && !episode.audioSourceUrl) {
+  if (!hasHls && !episode.audioSourceUrl && !episode.audioFileId) {
     res.status(422).json({ error: 'Episode has no stream' });
     return;
   }

@@ -74,7 +74,7 @@ import {
   shouldRetryIngressAfterDeletingExisting,
 } from '../utils/livekitErrors';
 import { deleteObject, cdnUrlToKey } from '../utils/spaces';
-import { getRecordingObjectKey } from '../services/oxyFiles/audioStorage';
+import { recordingStorage } from '../services/oxyFiles/audioStorage';
 import { oxyFileUrl } from '../services/oxyFiles/client';
 import { spaceImageUrl, uploadSpaceImage } from '../services/oxyFiles/spaceImages';
 import { processImage } from '../utils/imageProcessor';
@@ -850,9 +850,15 @@ function clearRecordingAutoStop(roomId: string) {
  */
 async function startRecordingForRoom(room: RoomWithCredentials) {
   const recordingId = uuidv7();
-  const objectKey = getRecordingObjectKey(room.id, recordingId);
+  // An Oxy recording target when `OXY_AUDIO` allows it and Oxy answers, the
+  // bucket otherwise (`audioStorage.recordingStorage`).
+  const storage = await recordingStorage({
+    roomId: room.id,
+    recordingId,
+    maxDurationSec: MAX_RECORDING_DURATION_MS / 1000,
+  });
 
-  const egressId = await startRoomRecording(room.id, objectKey);
+  const egressId = await startRoomRecording(room.id, storage);
 
   const recording = await createRecording({
     id: recordingId,
@@ -860,7 +866,8 @@ async function startRecordingForRoom(room: RoomWithCredentials) {
     roomTitle: room.title,
     host: room.host,
     egressId,
-    objectKey,
+    objectKey: storage.objectKey,
+    oxyRecordingTargetId: storage.oxyRecordingTargetId,
     startedAt: new Date(),
     expiresAt: new Date(Date.now() + RECORDING_EXPIRY_MS),
   });

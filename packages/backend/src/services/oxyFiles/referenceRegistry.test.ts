@@ -44,18 +44,22 @@ async function image(id: string, fileId: string | null): Promise<void> {
 describe('the triggers and REFERENCE_SOURCES are one list', () => {
   it('has exactly one trigger per source, created with its entity type, resolution and columns', async () => {
     const rows = [
-      ...(await getDb().execute<{ table: string; args: string }>(sql`
-        select c.relname as "table", encode(t.tgargs, 'escape') as args
+      ...(await getDb().execute<{ table: string; trigger: string; args: string }>(sql`
+        select c.relname as "table", t.tgname as "trigger", encode(t.tgargs, 'escape') as args
         from pg_trigger t join pg_class c on c.oid = t.tgrelid
-        where t.tgname = 'oxy_file_references' and not t.tgisinternal
+        where t.tgname in ('oxy_file_references', 'oxy_audio_file_references')
+          and not t.tgisinternal
       `)),
     ];
     const actual = Object.fromEntries(
-      rows.map((row) => [row.table, row.args.split('\\000').filter((arg) => arg.length > 0)]),
+      rows.map((row) => [
+        `${row.table}:${row.trigger}`,
+        row.args.split('\\000').filter((arg) => arg.length > 0),
+      ]),
     );
     const expected = Object.fromEntries(
       REFERENCE_SOURCES.map((source) => [
-        source.table,
+        `${source.table}:${source.trigger}`,
         [source.entityType, source.via, ...source.columns],
       ]),
     );
@@ -90,12 +94,12 @@ async function seedEveryEntity(): Promise<Record<OxyReferenceEntityType, string>
     values ('album-1', 'Al', 'ce-1', 'A', '2026', 'img-album')
   `);
   await db.execute(sql`
-    insert into tracks (id, title, artist_id, artist_name, duration, source, cover_art_sizes_small_id)
-    values ('track-1', 'T', 'ce-1', 'A', 1, 'upload', 'img-track')
+    insert into tracks (id, title, artist_id, artist_name, duration, source, cover_art_sizes_small_id, audio_file_id)
+    values ('track-1', 'T', 'ce-1', 'A', 1, 'upload', 'img-track', 'F-track_audio')
   `);
   await db.execute(sql`
-    insert into user_uploads (id, owner_oxy_user_id, title, duration, size_bytes, sha256, cover_art_id)
-    values ('upload-1', 'u', 'U', 1, 1, ${'a'.repeat(64)}, 'img-upload')
+    insert into user_uploads (id, owner_oxy_user_id, title, duration, size_bytes, sha256, cover_art_id, audio_file_id)
+    values ('upload-1', 'u', 'U', 1, 1, ${'a'.repeat(64)}, 'img-upload', 'F-user_upload_audio')
   `);
   await db.execute(sql`
     insert into playlists (id, name, owner_oxy_user_id, owner_username, cover_art_id)
@@ -106,8 +110,8 @@ async function seedEveryEntity(): Promise<Record<OxyReferenceEntityType, string>
     values ('podcast-1', 'Pod', 'syra', 'img-podcast')
   `);
   await db.execute(sql`
-    insert into episodes (id, podcast_id, podcast_title, title, guid, pub_date, source, image_id)
-    values ('episode-1', 'podcast-1', 'Pod', 'E', 'g', now(), 'syra', 'img-episode')
+    insert into episodes (id, podcast_id, podcast_title, title, guid, pub_date, source, image_id, audio_file_id)
+    values ('episode-1', 'podcast-1', 'Pod', 'E', 'g', now(), 'syra', 'img-episode', 'F-episode_audio')
   `);
   await db.execute(sql`
     insert into houses (id, name, created_by, avatar_file_id, cover_image_file_id)
@@ -120,6 +124,10 @@ async function seedEveryEntity(): Promise<Record<OxyReferenceEntityType, string>
     insert into series (id, title, created_by, recurrence_type, recurrence_time, room_template_title_pattern, cover_image_file_id)
     values ('series-1', 'S', 'u', 'weekly', '10:00', 'x', 'F-series')
   `);
+  await db.execute(sql`
+    insert into recordings (id, room_title, host, egress_id, object_key, started_at, expires_at, oxy_file_id)
+    values ('recording-1', 'R', 'u', 'egress-1', 'oxy/recording-1.ogg', now(), now(), 'F-recording')
+  `);
   return {
     catalog_entity: 'ce-1',
     album: 'album-1',
@@ -131,6 +139,10 @@ async function seedEveryEntity(): Promise<Record<OxyReferenceEntityType, string>
     house: 'house-1',
     room: 'room-1',
     series: 'series-1',
+    track_audio: 'track-1',
+    user_upload_audio: 'upload-1',
+    episode_audio: 'episode-1',
+    recording: 'recording-1',
   };
 }
 
@@ -142,14 +154,41 @@ describe('every write queues the files it starts or stops using', () => {
       { file_id: 'F-catalog_entity', entity_type: 'catalog_entity', entity_id: 'ce-1', op: 'add' },
       { file_id: 'F-suggestion', entity_type: 'catalog_entity', entity_id: 'ce-1', op: 'add' },
       { file_id: 'F-episode', entity_type: 'episode', entity_id: 'episode-1', op: 'add' },
+      {
+        file_id: 'F-episode_audio',
+        entity_type: 'episode_audio',
+        entity_id: 'episode-1',
+        op: 'add',
+      },
       { file_id: 'F-house', entity_type: 'house', entity_id: 'house-1', op: 'add' },
       { file_id: 'F-playlist', entity_type: 'playlist', entity_id: 'playlist-1', op: 'add' },
       { file_id: 'F-podcast', entity_type: 'podcast', entity_id: 'podcast-1', op: 'add' },
+      { file_id: 'F-recording', entity_type: 'recording', entity_id: 'recording-1', op: 'add' },
       { file_id: 'F-room', entity_type: 'room', entity_id: 'room-1', op: 'add' },
       { file_id: 'F-series', entity_type: 'series', entity_id: 'series-1', op: 'add' },
       { file_id: 'F-track', entity_type: 'track', entity_id: 'track-1', op: 'add' },
+      { file_id: 'F-track_audio', entity_type: 'track_audio', entity_id: 'track-1', op: 'add' },
       { file_id: 'F-user_upload', entity_type: 'user_upload', entity_id: 'upload-1', op: 'add' },
+      {
+        file_id: 'F-user_upload_audio',
+        entity_type: 'user_upload_audio',
+        entity_id: 'upload-1',
+        op: 'add',
+      },
     ]);
+  });
+
+  it("keeps a row's audio and its images apart: letting go of one never touches the other", async () => {
+    await seedEveryEntity();
+    await getDb().execute(sql`update tracks set audio_file_id = null where id = 'track-1'`);
+    const after = await ops();
+    expect(after.find((op) => op.entity_type === 'track_audio')).toMatchObject({ op: 'remove' });
+    expect(after.find((op) => op.entity_type === 'track')).toMatchObject({ op: 'add' });
+
+    await getDb().execute(sql`delete from recordings where id = 'recording-1'`);
+    expect((await ops()).find((op) => op.entity_type === 'recording')).toMatchObject({
+      op: 'remove',
+    });
   });
 
   it('turns an add into a remove when the row lets go, keeping one intent per key', async () => {

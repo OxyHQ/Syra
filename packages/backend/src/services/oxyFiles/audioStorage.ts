@@ -2,71 +2,41 @@
  * Syra's AUDIO storage — the one seam between every audio path in Syra and the
  * place audio bytes live. Every track source, HLS ladder, locker upload,
  * episode, enclosure cache, preview clip and room recording is written, read,
- * signed and deleted through this module and nothing else
- * (`audioStorage.boundary.test.ts` fails the build on a direct S3 import).
+ * signed, played and deleted through this module and nothing else
+ * (`audioStorage.boundary.test.ts` fails the build on a direct S3 import, and on
+ * any other importer of `oxyAudio.ts`).
  *
- * ## Why audio is still in Syra's bucket — measured, not assumed
+ * ## Two stores, one decision
  *
- * Images moved to Oxy Files (ADR 0043, `oxyFiles/images.ts`); audio cannot yet,
- * because Oxy Files does not take it yet. Read off the Oxy API on the ADR 0043
- * branch (stages 1–4a; stage 4b, now in production, added large multipart
- * uploads but not the audio items below — those are stage 4c):
+ * - **Oxy Files** (OxyHQ/oxy ADR 0043, stage 4c — `oxyAudio.ts`) is where a
+ *   listener's audio comes from: each audio-bearing row names a PRIVATE Oxy
+ *   file (`tracks.audio_file_id`, `user_uploads.audio_file_id`,
+ *   `episodes.audio_file_id`, `recordings.oxy_file_id`), Oxy renders its
+ *   audio-only HLS ladder, waveform and 30-second preview, and a play is a
+ *   per-listener, revocable play session whose AES-128 key Oxy releases only
+ *   after Syra's file-events endpoint allows it (`audioKeyAuthorization.ts`).
+ *   Enclosures are imported by Oxy from their URL (up to 8 GiB); room
+ *   recordings are written by LiveKit egress straight into an Oxy recording
+ *   target.
+ * - **The bucket** keeps every ORIGINAL Syra received — the input of every
+ *   process Syra still runs itself on the raw bytes: ingest and re-ingest,
+ *   fingerprinting, promoting a locker file to the catalogue, a preview at a
+ *   listener-chosen offset, a track played into a LiveKit room — and, for a
+ *   row Oxy does not serve yet, the legacy ladder that plays it. The owner a
+ *   caller names is stored on the object (`oxy-owner`).
  *
- * - `POST /assets/service/app` and `/service/user-media` refuse anything but
- *   `image/*` and `video/*` (415), at most 40 MiB, in one request body; the
- *   imports by URL refuse the same. A lossless album track, a two-hour episode
- *   and a room recording are all audio, and routinely larger.
- * - `/service/user-media` stores PUBLIC files only (it takes no visibility). A
- *   locker upload is a person's private music.
- * - The rendition pipeline (`variantService`) renders images, video and PDF. It
- *   has no audio path: no audio-only HLS ladder, no 30-second preview. Its HLS is
- *   a VIDEO ladder; it cannot be pointed at an audio file.
- * - A private file is read back by an application only through
- *   `linkedDownloadUrls` — one URL per file, and only for a file its owner linked
- *   to the application. Streaming needs a playlist plus hundreds of segment URLs
- *   behind ONE entitlement decision that Syra makes per play (playability,
- *   copyright takedowns, locker ownership, bitrate tier), and AES keys whose
- *   delivery Syra gates (`trackKeys`, `stream.controller`).
- * - LiveKit egress writes a room recording straight into an S3 bucket; Oxy has
- *   no upload target an external writer can be pointed at.
- *
- * ## What Oxy must add before audio moves — TODO(oxy-4c)
- *
- * Stage 4b ("large/any-type application uploads, presigned multipart, up to 8
- * GiB") is in production and covers part of the first item; the rest — a
- * person's private media, audio renditions, play sessions and recording
- * targets — is stage 4c, which is NOT released. Nothing here calls a 4c
- * endpoint; until it ships, every audio path stays on the bucket:
- *
- * 1. Any-MIME, multipart uploads (≤ 8 GiB) for an application's files AND a
- *    person's (`uploadAppFile` / `uploadUserMedia` with `audio/*`), with
- *    `visibility: 'private'` on the person's — the locker.
- * 2. An audio rendition pipeline: an audio-only adaptive HLS ladder (AAC
- *    64/128/256 kbps at least) announced by `hlsReadyAt`, and a short preview
- *    clip rendition at a given offset.
- * 3. Entitled private streaming: an application-minted, short-lived playback
- *    grant for one private file's whole HLS ladder (master, rendition playlists,
- *    segments), refusable per play — plus per-file content keys whose delivery
- *    the application gates, so a takedown or a lapsed entitlement stops playback.
- * 4. A presigned upload target an external writer can use (LiveKit egress), or
- *    an import of a presigned source, for recordings.
- * 5. Import by URL for `audio/*` larger than 40 MiB — the RSS enclosure cache.
- *
- * When those exist, this module is where the switch happens: `putSourceAudio`
- * becomes `uploadAppFile` (catalogue, enclosure cache) or `uploadUserMedia`
- * (a creator's track, a locker file, a hosted show's episode) with the owner its
- * caller already names; `putDerivedAudio` and the HLS/preview builders go away,
- * because Oxy renders them; `presignAudioObject` and `openAudioObject` become the
- * playback grant; recordings get the external upload target. The rows that hold
- * object keys then hold Oxy file ids, copied by a migration shaped like
- * `scripts/migrateImagesToOxy.ts` (verified per file, resumable, dual-read), and
- * the bucket is retired by a gate like `retireLegacyImageStorage.ts`'s.
- *
- * Until then: the bucket, unchanged. The owner a caller names is stored on the
- * object (`oxy-owner` metadata), so the eventual copy knows whose file each one
- * is without re-deriving it.
+ * `OXY_AUDIO` (`oxyAudio.ts`) decides which one a NEW file reaches and whether
+ * a play may come from Oxy: `legacy` (the default — nothing calls Oxy for audio
+ * at runtime), `dual` (both; Oxy preferred, the legacy ladder still built), or
+ * `oxy` (no legacy ladder unless Oxy refused the file). Every Oxy refusal falls
+ * back to the legacy path; a file Oxy reported withdrawn plays from neither.
+ * Existing audio moves with `scripts/migrateAudioToOxy.ts` (preview, then
+ * `--apply`), whose `retire` step deletes the legacy ladders Oxy has replaced;
+ * `docs/runbooks/oxy-files-audio.md` is the procedure.
  */
 
+import { createWriteStream } from 'node:fs';
+import { pipeline } from 'node:stream/promises';
 import type { Readable } from 'stream';
 import {
   S3_BUCKET_NAME,
@@ -93,6 +63,18 @@ import {
   streamFromS3,
   uploadToS3,
 } from '../s3Service';
+import { logger } from '../../utils/logger';
+import { describeErrorSafely } from '../../utils/error';
+import {
+  attachAudioFile,
+  collectRecording,
+  createRecordingTarget,
+  originalDownloadUrl,
+  oxyAudioEnabled,
+  oxyErrorOf,
+  revokePlaySessions,
+  type AudioOwner,
+} from './oxyAudio';
 
 // The object keys, unchanged: they are where audio IS, and every row that stores
 // one stores this spelling.
@@ -109,12 +91,7 @@ export {
   getS3PreviewKey,
 };
 
-/** Who an audio file belongs to — the owner it gets in Oxy Files once audio moves. */
-export type AudioOwner =
-  /** Syra's own: the catalogue, a mirrored RSS enclosure. */
-  | { kind: 'application' }
-  /** A person's: a creator's upload, a locker file, a hosted show's episode. */
-  | { kind: 'account'; oxyUserId: string };
+export type { AudioOwner } from './oxyAudio';
 
 export interface AudioPutOptions {
   contentType?: string;
@@ -131,8 +108,9 @@ function ownerTag(owner: AudioOwner): string {
 }
 
 /**
- * Store an ORIGINAL — the bytes somebody uploaded or Syra mirrored, which Oxy
- * Files will own one day. TODO(oxy-4c): `uploadAppFile` / `uploadUserMedia`.
+ * Store an ORIGINAL — the bytes somebody uploaded or Syra mirrored — in the
+ * bucket, the input of every process Syra runs on the raw bytes. Its Oxy copy
+ * is made by ingest ({@link mirrorAudioToOxy}), from the same bytes.
  */
 export async function putSourceAudio(
   key: string,
@@ -148,7 +126,8 @@ export async function putSourceAudio(
 
 /**
  * Store something Syra DERIVED from an original — an HLS playlist or segment, a
- * preview clip. TODO(oxy-4c): rendered by Oxy's audio pipeline, so it goes away.
+ * preview clip: the legacy ladder, built in `legacy` and `dual` mode or when
+ * Oxy refused a file. Oxy renders its own for every file it stores.
  */
 export async function putDerivedAudio(
   key: string,
@@ -158,7 +137,7 @@ export async function putDerivedAudio(
   await uploadToS3(key, body, options);
 }
 
-/** Read an audio object, whole or a byte range. TODO(oxy-4c): the playback grant. */
+/** Read an audio object, whole or a byte range. */
 export function openAudioObject(
   key: string,
   range: AudioRange = {},
@@ -179,9 +158,20 @@ export function audioObjectExists(key: string): Promise<boolean> {
   return objectExists(key);
 }
 
-/** A time-limited URL for one object. TODO(oxy-4c): the playback grant. */
+/** A time-limited URL for one bucket object (a legacy segment, an original). */
 export function presignAudioObject(key: string, expiresInSeconds = 3600): Promise<string> {
   return getPresignedUrl(key, expiresInSeconds);
+}
+
+/**
+ * Copy one bucket object to a local file — what the Oxy backfill uploads from.
+ * `false` when the object is not in the bucket.
+ */
+export async function stageAudioObject(key: string, localPath: string): Promise<boolean> {
+  if (!(await getObjectMetadata(key))) return false;
+  const { stream } = await streamFromS3(key);
+  await pipeline(stream, createWriteStream(localPath));
+  return true;
 }
 
 export function deleteAudioObject(key: string): Promise<void> {
@@ -204,12 +194,13 @@ export function getRecordingObjectKey(roomId: string, recordingId: string): stri
 }
 
 /**
- * Where LiveKit egress writes a room recording: straight into the bucket. It
+ * The legacy egress output: a room recording straight into the bucket. It
  * passes the `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` pair only when both
  * are set (local MinIO). Production sets neither: with no credentials in the
  * request, LiveKit's S3 uploader uses the AWS default chain on the LiveKit host,
  * whose instance role (`oxy-livekit` in oxy-infra) may put only under
- * `agora/recordings/`. TODO(oxy-4c): an Oxy upload target egress can write to.
+ * `agora/recordings/`. Used in `legacy` mode, and whenever Oxy refuses a
+ * recording target ({@link recordingStorage}).
  */
 export function recordingEgressTarget(objectKey: string) {
   const accessKey = process.env.AWS_ACCESS_KEY_ID;
@@ -223,3 +214,133 @@ export function recordingEgressTarget(objectKey: string) {
     forcePathStyle: Boolean(S3_ENDPOINT),
   };
 }
+
+/** Where a new room recording is written, and how Syra finds it afterwards. */
+export interface RecordingStorage {
+  /** The object key LiveKit writes (`recordings.object_key`). */
+  objectKey: string;
+  /** LiveKit's `S3Upload` for that key. */
+  s3: {
+    accessKey?: string;
+    secret?: string;
+    bucket: string;
+    region: string;
+    endpoint?: string;
+    forcePathStyle: boolean;
+  };
+  /** The Oxy recording target, when the recording goes into Oxy Files. */
+  oxyRecordingTargetId: string | null;
+}
+
+/**
+ * Where a new room recording goes: an Oxy recording target (Syra's own private
+ * file, collected once Oxy verified it) when `OXY_AUDIO` allows it and Oxy
+ * answers, the bucket otherwise.
+ */
+export async function recordingStorage(input: {
+  roomId: string;
+  recordingId: string;
+  maxDurationSec: number;
+}): Promise<RecordingStorage> {
+  const legacyKey = getRecordingObjectKey(input.roomId, input.recordingId);
+  if (oxyAudioEnabled()) {
+    try {
+      const target = await createRecordingTarget(input);
+      return {
+        objectKey: target.livekit.filepath,
+        s3: {
+          accessKey: target.s3.accessKey,
+          secret: target.s3.secret,
+          bucket: target.s3.bucket,
+          region: target.s3.region,
+          endpoint: target.s3.endpoint,
+          forcePathStyle: target.s3.forcePathStyle,
+        },
+        oxyRecordingTargetId: target.targetId,
+      };
+    } catch (error) {
+      logger.warn('[AudioStorage] no Oxy recording target; recording into the bucket', {
+        roomId: input.roomId,
+        ...oxyErrorOf(error),
+        error: describeErrorSafely(error),
+      });
+    }
+  }
+  return {
+    objectKey: legacyKey,
+    s3: (({ filepath: _filepath, ...upload }) => upload)(recordingEgressTarget(legacyKey)),
+    oxyRecordingTargetId: null,
+  };
+}
+
+/**
+ * A short-lived URL a recording plays from: its Oxy file's original (collected
+ * from the target on first read), or the bucket object. `null` while Oxy has
+ * not finished the recording, or when its file was withdrawn.
+ */
+export async function recordingPlaybackUrl(recording: {
+  id: string;
+  objectKey: string;
+  oxyFileId: string | null;
+  oxyRecordingTargetId: string | null;
+}): Promise<string | null> {
+  if (recording.oxyRecordingTargetId === null && recording.oxyFileId === null) {
+    return presignAudioObject(recording.objectKey);
+  }
+  const fileId =
+    recording.oxyFileId ??
+    (recording.oxyRecordingTargetId
+      ? await collectRecording(recording.id, recording.oxyRecordingTargetId)
+      : null);
+  return fileId ? originalDownloadUrl(fileId) : null;
+}
+
+/**
+ * Delete a recording's audio. A bucket recording's object goes now; an Oxy
+ * recording is let go by clearing its column (the trigger removes Syra's
+ * reference, and Oxy deletes an application file nobody uses), and any
+ * session playing it stops.
+ */
+export async function deleteRecordingAudio(recording: {
+  id: string;
+  objectKey: string;
+  oxyFileId: string | null;
+  oxyRecordingTargetId: string | null;
+}): Promise<void> {
+  if (recording.oxyRecordingTargetId === null && recording.oxyFileId === null) {
+    await deleteFromS3(recording.objectKey);
+    return;
+  }
+  if (recording.oxyFileId) {
+    await attachAudioFile({ kind: 'recording', id: recording.id }, null);
+    await revokePlaySessions({ fileId: recording.oxyFileId });
+  }
+}
+
+// ── Oxy Files (stage 4c) — the only way in to `oxyAudio.ts` ──────────────
+
+export {
+  AUDIO_REFERENCE_ENTITY_TYPES,
+  OXY_AUDIO_MODES,
+  attachAudioFile,
+  audioFileState,
+  audioMimeFor,
+  collectRecording as collectRecordingFile,
+  importEnclosureToOxy,
+  laddersReady,
+  mirrorAudioToOxy,
+  openPlaySession,
+  originalDownloadUrl,
+  oxyAudioEnabled,
+  oxyAudioMode,
+  revokePlaySessions,
+  setAudioFileStatus,
+  sha256OfFile,
+  storeAudioInOxy,
+  type AudioEntity,
+  type OxyAudioMode,
+  type OxyPlayback,
+  type OxyPlaybackResult,
+  type StoredOxyAudio,
+} from './oxyAudio';
+export { authorizeAudioKey } from './audioKeyAuthorization';
