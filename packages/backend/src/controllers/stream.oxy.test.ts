@@ -3,12 +3,17 @@ import { uuidv7 } from '@oxy.so/db';
 import type { Response } from 'express';
 import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
 import { clearDb, connectDb, disconnectDb } from '../test/postgres';
-import { installFakeOxyFiles, resetOxyFiles, type FakeOxyFiles } from '../test/fakeOxyFiles';
+import {
+  FakeOxyError,
+  installFakeOxyFiles,
+  resetOxyFiles,
+  type FakeOxyFiles,
+} from '../test/fakeOxyFiles';
 import { getDb } from '../db/postgres';
 import { catalogEntities, trackHlsRenditions, tracks } from '../db/schema/catalog';
 import { oxyAudioFiles } from '../db/schema/oxyFiles';
-import { getOxyMasterPlaylist, getStream } from './stream.controller';
-import { permittedRenditions } from '../services/stream/oxyPlayback';
+import { getStream } from './stream.controller';
+import { renditionsUnderCap } from '../services/stream/oxyPlayback';
 
 /**
  * `GET /api/stream/:trackId` plays a track from its Oxy audio file (ADR 0043
@@ -107,21 +112,13 @@ async function seedTrack(withLegacyLadder: boolean): Promise<{ trackId: string; 
   return { trackId: track!.id, fileId: file.id };
 }
 
-describe('permittedRenditions', () => {
-  const ladder = [64, 128, 256].map((kbps) => ({
-    type: `hls_a${kbps}`,
-    url: `https://o/${kbps}`,
-    bandwidth: kbps * 1000,
-  }));
-
-  it('keeps the rungs at or under the cap, and the lowest one under any cap', () => {
-    expect(permittedRenditions(ladder, 320).map((r) => r.type)).toEqual([
-      'hls_a64',
-      'hls_a128',
-      'hls_a256',
-    ]);
-    expect(permittedRenditions(ladder, 160).map((r) => r.type)).toEqual(['hls_a64', 'hls_a128']);
-    expect(permittedRenditions(ladder, 32).map((r) => r.type)).toEqual(['hls_a64']);
+describe('renditionsUnderCap', () => {
+  it('keeps the rungs at or under the cap, the lowest under any cap, and no list for the whole ladder', () => {
+    expect(renditionsUnderCap(320)).toBeUndefined();
+    expect(renditionsUnderCap(256)).toBeUndefined();
+    expect(renditionsUnderCap(160)).toEqual(['hls_a64', 'hls_a128']);
+    expect(renditionsUnderCap(96)).toEqual(['hls_a64']);
+    expect(renditionsUnderCap(32)).toEqual(['hls_a64']);
   });
 });
 
@@ -143,23 +140,28 @@ describe('GET /api/stream/:trackId with the audio in Oxy Files', () => {
     expect(body.previewUrl).toMatch(/preview\.m4a$/);
     expect(body.waveformUrl).toMatch(/waveform\.json$/);
 
-    // Free (160 kbps): Syra's capped master, listing the 64k and 128k rungs only.
-    const capped = new URL(body.url, 'http://syra.test');
-    const m = capped.searchParams.get('m');
-    expect(capped.pathname).toBe('/api/stream/oxy/master.m3u8');
-    const master = makeRes();
-    await getOxyMasterPlaylist(req({}, { m: m! }), master as unknown as Response);
-    expect(master._status).toBe(200);
-    const playlist = master._body as string;
-    expect(playlist).toContain('/hls_a64/index.m3u8');
-    expect(playlist).toContain('/hls_a128/index.m3u8');
-    expect(playlist).not.toContain('hls_a256');
+    // Free (160 kbps): the session itself carries the cap — Oxy serves only
+    // the 64k and 128k rungs of it — and the player opens Oxy's own master.
+    const [create] = fake.calls.filter((call) => call.method === 'streams.create');
+    expect((create!.args[1] as { renditions?: string[] }).renditions).toEqual([
+      'hls_a64',
+      'hls_a128',
+    ]);
+    expect(body.url).toMatch(/^https:\/\/api\.oxy\.test\/assets\/streams\/.+\/master\.m3u8$/);
   });
 
-  it('refuses a forged capped master', async () => {
+  it('answers 409 processing while Oxy has not rendered the rungs the cap allows', async () => {
+    const { trackId, fileId } = await seedTrack(false);
+    fake.renderLadder(fileId);
+    fake.failNext.set(
+      'streams.create',
+      Object.assign(new FakeOxyError(409, 'Those rungs are not ready'), {
+        code: 'STREAM_RENDITIONS_NOT_READY',
+      }),
+    );
     const res = makeRes();
-    await getOxyMasterPlaylist(req({}, { m: 'not-a-token' }), res as unknown as Response);
-    expect(res._status).toBe(401);
+    await getStream(req({ trackId }), res as unknown as Response);
+    expect(res._status).toBe(409);
   });
 
   it('plays the legacy ladder while Oxy has not rendered its own', async () => {

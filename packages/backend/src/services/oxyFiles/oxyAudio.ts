@@ -35,7 +35,7 @@ import { createHash } from 'node:crypto';
 import { createReadStream, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { eq, sql } from 'drizzle-orm';
-import type { CreatedRecordingTarget, PlaySession } from '@oxy.so/core';
+import type { CreatedRecordingTarget, PlaySession, PlaySessionRendition } from '@oxy.so/core';
 import { getDb } from '../../db/postgres';
 import { tracks } from '../../db/schema/catalog';
 import { userUploads } from '../../db/schema/creators';
@@ -417,6 +417,12 @@ export interface OpenPlaySessionInput {
   endUserId: string | null;
   /** The media's length, so a session never ends mid-play. */
   durationSec?: number | null;
+  /**
+   * The rungs this listener may play (Oxy enforces it on every request of the
+   * session: the master lists only these, any other rung is 404); omitted, the
+   * whole ladder.
+   */
+  renditions?: readonly PlaySessionRendition[];
 }
 
 function sessionTtlSeconds(durationSec: number | null | undefined): number {
@@ -439,10 +445,13 @@ export async function openPlaySession(input: OpenPlaySessionInput): Promise<OxyP
       ttlSeconds: sessionTtlSeconds(input.durationSec),
       encryption: 'aes-128',
       keyAuthorization: 'webhook',
+      ...(input.renditions ? { renditions: [...input.renditions] } : {}),
     });
   } catch (error) {
     const { status, code } = oxyErrorOf(error);
-    if (status === 409 && code === 'STREAM_NOT_READY') return { ok: false, reason: 'not_ready' };
+    if (status === 409 && (code === 'STREAM_NOT_READY' || code === 'STREAM_RENDITIONS_NOT_READY')) {
+      return { ok: false, reason: 'not_ready' };
+    }
     logger.warn('[OxyAudio] play session not opened; the legacy path answers', {
       fileId: input.fileId,
       status,

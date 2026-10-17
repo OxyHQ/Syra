@@ -4,7 +4,6 @@ import {
   getStreamKey,
   getMasterPlaylist,
   getVariantPlaylist,
-  getOxyMasterPlaylist,
 } from '../controllers/stream.controller';
 import { streamMediaCors } from '../middleware/streamMediaCors';
 
@@ -26,11 +25,6 @@ const router = Router();
  * `/:trackId` resolver is bearer-authed and deliberately keeps the global,
  * credentialed CORS — never give it the permissive `*`.
  */
-
-// An Oxy play session's capped master (ADR 0043 stage 4c). Registered FIRST:
-// `/oxy/master.m3u8` would otherwise match `/:trackId/master.m3u8`.
-router.options('/oxy/master.m3u8', streamMediaCors);
-router.get('/oxy/master.m3u8', streamMediaCors, getOxyMasterPlaylist);
 
 // Sub-resource routes (specific paths first) — tokenized media, Cast-reachable.
 router.options('/:trackId/key', streamMediaCors);
