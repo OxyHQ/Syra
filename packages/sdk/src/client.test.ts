@@ -293,6 +293,12 @@ describe('createSyraClient.artworkUrl', () => {
     );
   });
 
+  it('resolves a bare UUID asset id (every asset since the Postgres port)', () => {
+    expect(client.artworkUrl('01a038a2-7d40-7535-b0eb-2256e8841208')).toBe(
+      'https://api.example.test/api/images/01a038a2-7d40-7535-b0eb-2256e8841208',
+    );
+  });
+
   it('prefixes a relative /api/images path', () => {
     expect(client.artworkUrl('/api/images/507f1f77bcf86cd799439011')).toBe(
       'https://api.example.test/api/images/507f1f77bcf86cd799439011',
