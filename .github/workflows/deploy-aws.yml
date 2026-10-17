@@ -319,7 +319,10 @@ jobs:
           # then `apply`) are Oxy Files settings (docs/runbooks/oxy-files-images.md
           # step 0). Changing either is `aws ssm put-parameter --overwrite` plus a
           # redeploy: ECS resolves the parameter at task launch.
-          TASK_SECRET_OVERRIDES_JSON: '{"DATABASE_URL":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/DATABASE_URL","INGEST_TOKEN_SECRET":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/INGEST_TOKEN_SECRET","SYRA_COVER_APPLICATION_IDS":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/SYRA_COVER_APPLICATION_IDS","OXY_FILES_RECONCILE":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/OXY_FILES_RECONCILE"}'
+          # OXY_FILES_WEBHOOK_SECRET is the signing secret Oxy shows ONCE when the
+          # file-events endpoint is registered (runbook step 0.4); file events and
+          # play-session key authorization are verified with it.
+          TASK_SECRET_OVERRIDES_JSON: '{"DATABASE_URL":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/DATABASE_URL","INGEST_TOKEN_SECRET":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/INGEST_TOKEN_SECRET","SYRA_COVER_APPLICATION_IDS":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/SYRA_COVER_APPLICATION_IDS","OXY_FILES_RECONCILE":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/OXY_FILES_RECONCILE","OXY_FILES_WEBHOOK_SECRET":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/OXY_FILES_WEBHOOK_SECRET"}'
 
           # The Oxy service credential Syra no longer holds.
           #
