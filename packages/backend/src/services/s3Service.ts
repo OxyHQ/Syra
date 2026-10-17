@@ -324,6 +324,30 @@ export async function deleteS3Prefix(prefix: string): Promise<number> {
 }
 
 /**
+ * Every key under `prefix`, page by page (S3 answers at most 1000 a page).
+ * Read-only; the caller decides what a key means.
+ */
+export async function* listS3Keys(prefix: string): AsyncGenerator<string> {
+  if (!prefix) {
+    throw new Error('listS3Keys requires a non-empty prefix');
+  }
+  let continuationToken: string | undefined;
+  do {
+    const listed = await s3Client.send(
+      new ListObjectsV2Command({
+        Bucket: S3_BUCKET_NAME,
+        Prefix: prefix,
+        ContinuationToken: continuationToken,
+      }),
+    );
+    for (const object of listed.Contents ?? []) {
+      if (typeof object.Key === 'string') yield object.Key;
+    }
+    continuationToken = listed.IsTruncated ? listed.NextContinuationToken : undefined;
+  } while (continuationToken);
+}
+
+/**
  * Delete an explicit list of keys, batched at S3's own limit (1000 per
  * `DeleteObjects` call). Unlike `deleteS3Prefix`, the caller already knows
  * every key — there is nothing to list first, and the keys need not share a

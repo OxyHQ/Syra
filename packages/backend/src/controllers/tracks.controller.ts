@@ -417,7 +417,7 @@ export const uploadTrack = async (req: AuthRequest, res: Response, next: NextFun
       logger.debug('[TracksController] Starting S3 upload...');
       // Streamed from the temp file rather than buffered: the S3 client derives
       // Content-Length from the fs.ReadStream's path, so nothing is held in memory.
-      await uploadTrackAudio(
+      const audioSourceKey = await uploadTrackAudio(
         {
           id: trackId,
           artistId,
@@ -454,6 +454,8 @@ export const uploadTrack = async (req: AuthRequest, res: Response, next: NextFun
             albumName: album?.title,
             duration: probed.durationSec,
             audioSourceUrl,
+            // Where the original was WRITTEN: the artist or album can change later.
+            audioSourceKey,
             audioSourceFormat: format,
             audioSourceBitrate: probed.bitrateKbps,
             audioSourceDuration: probed.durationSec,

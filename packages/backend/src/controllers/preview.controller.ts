@@ -101,6 +101,7 @@ export const getTrackPreview = async (req: Request, res: Response, next: NextFun
         audioSourceFormat: tracks.audioSourceFormat,
         audioSourceBitrate: tracks.audioSourceBitrate,
         audioSourceDuration: tracks.audioSourceDuration,
+        audioSourceKey: tracks.audioSourceKey,
         audioFileId: tracks.audioFileId,
       })
       .from(tracks)
@@ -168,6 +169,7 @@ export const getTrackPreview = async (req: Request, res: Response, next: NextFun
             },
           }
         : {}),
+      ...(track.audioSourceKey === null ? {} : { audioSourceKey: track.audioSourceKey }),
       ...(hls === undefined ? {} : { hls }),
     };
 

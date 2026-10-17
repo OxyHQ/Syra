@@ -164,6 +164,7 @@ async function trackUnits(after: string | null): Promise<AudioUnit[]> {
       artistId: tracks.artistId,
       albumId: tracks.albumId,
       format: tracks.audioSourceFormat,
+      key: tracks.audioSourceKey,
     })
     .from(tracks)
     .where(
@@ -180,7 +181,9 @@ async function trackUnits(after: string | null): Promise<AudioUnit[]> {
     kind: 'tracks',
     entity: { kind: 'track', id: row.id },
     owner: { kind: 'application' },
-    objectKey: getS3AudioKey(row.id, row.artistId, row.albumId ?? undefined, row.format ?? 'mp3'),
+    // Where it was WRITTEN; the derived key only for a row not yet backfilled.
+    objectKey:
+      row.key ?? getS3AudioKey(row.id, row.artistId, row.albumId ?? undefined, row.format ?? 'mp3'),
     format: row.format ?? 'mp3',
   }));
 }

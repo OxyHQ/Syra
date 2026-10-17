@@ -39,6 +39,7 @@ import { createWriteStream } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import type { Readable } from 'stream';
 import {
+  S3_AUDIO_PREFIX,
   S3_BUCKET_NAME,
   S3_ENDPOINT,
   S3_REGION,
@@ -59,6 +60,7 @@ import {
   deleteS3Prefix,
   getObjectMetadata,
   getPresignedUrl,
+  listS3Keys,
   objectExists,
   streamFromS3,
   uploadToS3,
@@ -172,6 +174,14 @@ export async function stageAudioObject(key: string, localPath: string): Promise<
   const { stream } = await streamFromS3(key);
   await pipeline(stream, createWriteStream(localPath));
   return true;
+}
+
+/**
+ * Every catalogue original in the bucket (`audio/{artist}[/{album}]/{track}.{ext}`),
+ * as stored — what `backfillTrackAudioKeys.ts` finds a track's original by.
+ */
+export function listCatalogOriginalKeys(): AsyncGenerator<string> {
+  return listS3Keys(`${S3_AUDIO_PREFIX}/`);
 }
 
 export function deleteAudioObject(key: string): Promise<void> {

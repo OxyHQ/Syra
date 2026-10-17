@@ -24,12 +24,23 @@ import type { Readable } from 'stream';
  * (e.g. a partial row projection) that carries these fields without
  * matching the full `Track` shape.
  */
-export type TrackAudioRef = Pick<Track, 'id' | 'artistId' | 'albumId' | 'title' | 'audioSource'>;
+export type TrackAudioRef = Pick<Track, 'id' | 'artistId' | 'albumId' | 'title' | 'audioSource'> & {
+  /**
+   * `tracks.audio_source_key`: where the original was WRITTEN. Server-only, so
+   * not on the shared DTO. Pass it whenever the row is at hand — the derived
+   * key is only right while the track keeps the artist and album it was
+   * uploaded under.
+   */
+  audioSourceKey?: string | null;
+};
 
 /**
- * Get S3 key for a track
+ * The bucket key of a track's original: the one recorded at upload, else the
+ * one its CURRENT artist and album derive (right for a track that has kept
+ * both, and the only answer for one not yet backfilled).
  */
 export function getTrackS3Key(track: TrackAudioRef): string {
+  if (track.audioSourceKey) return track.audioSourceKey;
   if (!track.audioSource) {
     throw new Error(`Track ${track.id} has no audio source`);
   }
@@ -99,7 +110,7 @@ export async function getTrackStreamUrl(track: TrackAudioRef): Promise<string> {
  * Stream audio file from S3 with Range Request support
  */
 export async function streamTrackAudio(
-  track: Track,
+  track: TrackAudioRef,
   options: AudioRange = {},
 ): Promise<{
   stream: Readable;
@@ -114,7 +125,7 @@ export async function streamTrackAudio(
 /**
  * Get track audio metadata from S3
  */
-export async function getTrackAudioMetadata(track: Track) {
+export async function getTrackAudioMetadata(track: TrackAudioRef) {
   const key = getTrackS3Key(track);
   return statAudioObject(key);
 }
@@ -122,7 +133,7 @@ export async function getTrackAudioMetadata(track: Track) {
 /**
  * Check if track audio exists in S3
  */
-export async function trackAudioExists(track: Track): Promise<boolean> {
+export async function trackAudioExists(track: TrackAudioRef): Promise<boolean> {
   const key = getTrackS3Key(track);
   return audioObjectExists(key);
 }
@@ -130,7 +141,7 @@ export async function trackAudioExists(track: Track): Promise<boolean> {
 /**
  * Delete track audio from S3
  */
-export async function deleteTrackAudio(track: Track): Promise<void> {
+export async function deleteTrackAudio(track: TrackAudioRef): Promise<void> {
   const key = getTrackS3Key(track);
   await deleteAudioObject(key);
   logger.info(`[AudioStorageService] Deleted audio for track: ${track.id}`);

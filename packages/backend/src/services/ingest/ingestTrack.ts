@@ -68,6 +68,8 @@ export interface IngestTrackSource {
   artistId: string;
   albumId?: string;
   audioSource?: AudioSource;
+  /** Where the original was written (`tracks.audio_source_key`), when recorded. */
+  audioSourceKey?: string | null;
 }
 
 export interface IngestDeps {
@@ -102,13 +104,14 @@ async function defaultFetchSource(track: IngestTrackSource): Promise<FetchSource
     throw new Error(`No source audio for track ${track.id}`);
   }
 
-  // `getTrackS3Key` takes the shared `Track` DTO but reads only these four
+  // `getTrackS3Key` takes the shared `Track` DTO but reads only these five
   // fields, which is exactly what `IngestTrackSource` carries.
   const s3Key = getTrackS3Key({
     id: track.id,
     artistId: track.artistId,
     albumId: track.albumId,
     audioSource: track.audioSource,
+    audioSourceKey: track.audioSourceKey,
   } as Parameters<typeof getTrackS3Key>[0]);
   const { stream } = await openAudioObject(s3Key);
 
@@ -220,6 +223,7 @@ async function loadIngestSource(trackId: string): Promise<IngestTrackSource | nu
       audioSourceFormat: tracks.audioSourceFormat,
       audioSourceBitrate: tracks.audioSourceBitrate,
       audioSourceDuration: tracks.audioSourceDuration,
+      audioSourceKey: tracks.audioSourceKey,
     })
     .from(tracks)
     .where(eq(tracks.id, trackId))
@@ -231,6 +235,7 @@ async function loadIngestSource(trackId: string): Promise<IngestTrackSource | nu
     id: row.id,
     artistId: row.artistId,
     albumId: row.albumId ?? undefined,
+    audioSourceKey: row.audioSourceKey,
     // `url` and `format` are what make an `AudioSource`; a track still
     // processing has neither, and a row with one but not the other cannot
     // locate a file either.

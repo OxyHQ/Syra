@@ -60,6 +60,7 @@ interface PlayableTrackFields {
   readonly status: string;
   readonly audioSourceUrl: string | null;
   readonly audioSourceFormat: 'mp3' | 'flac' | 'ogg' | 'm4a' | 'wav' | null;
+  readonly audioSourceKey: string | null;
   readonly hlsMasterKey: string | null;
   readonly hlsRenditionCount: number;
 }
@@ -93,6 +94,7 @@ async function resolveTrackAudioUrl(track: PlayableTrackFields): Promise<AudioUr
         albumId: track.albumId ?? undefined,
         title: track.title,
         audioSource: { url: track.audioSourceUrl, format: track.audioSourceFormat },
+        audioSourceKey: track.audioSourceKey,
       });
       return { status: 'ok', audioUrl };
     } catch (err) {
@@ -194,6 +196,7 @@ export async function resolveTrack(trackId: string): Promise<ResolveTrackResult>
       status: tracks.status,
       audioSourceUrl: tracks.audioSourceUrl,
       audioSourceFormat: tracks.audioSourceFormat,
+      audioSourceKey: tracks.audioSourceKey,
       hlsMasterKey: tracks.hlsMasterKey,
       hlsRenditionCount: sql<number>`(
         select count(*)::int from ${trackHlsRenditions}

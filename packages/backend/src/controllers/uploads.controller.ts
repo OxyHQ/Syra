@@ -1471,7 +1471,7 @@ async function publishContribution(params: PublishParams): Promise<string> {
    * plays "no supported source was found". Contributions with no album resolved
    * kept working, which is what made it look like metadata rather than storage.
    */
-  await uploadTrackAudio(
+  const audioSourceKey = await uploadTrackAudio(
     {
       id: trackId,
       artistId: params.artistId,
@@ -1531,7 +1531,8 @@ async function publishContribution(params: PublishParams): Promise<string> {
   });
 
   await getDb().transaction(async (tx) => {
-    await tx.insert(tracks).values(trackValues);
+    // The key the original was WRITTEN to: the artist or album can change later.
+    await tx.insert(tracks).values({ ...trackValues, audioSourceKey });
 
     // In the SAME transaction as the track: a published recording whose credits
     // never landed misattributes it, and the gap is exactly the kind this

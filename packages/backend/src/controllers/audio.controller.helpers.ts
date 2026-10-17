@@ -6,13 +6,13 @@
 import { eq } from 'drizzle-orm';
 import { isLiveEntityId } from '@oxy.so/db';
 import { publicColumns } from '@oxy.so/db/assert';
-import { Response } from 'express';
+import type { Response } from 'express';
 import { getDb } from '../db/postgres';
 import { tracks } from '../db/schema/catalog';
 import { PROTECTED_COLUMNS_BY_TABLE } from '../db/schema/protectedColumns';
 import { toTrackDtos } from '../db/catalog/hydrate';
-import { getTrackAudioMetadata } from '../services/audioStorageService';
-import { Track } from '@syra/shared-types';
+import { getTrackAudioMetadata, type TrackAudioRef } from '../services/audioStorageService';
+import type { Track } from '@syra/shared-types';
 
 /**
  * Validation result for track operations
@@ -21,7 +21,8 @@ export interface TrackValidationResult {
   isValid: boolean;
   statusCode?: number;
   error?: string;
-  track?: Track;
+  /** The DTO, plus where its original was written (`getTrackS3Key` reads it; never sent). */
+  track?: Track & { audioSourceKey: string | null };
 }
 
 /**
@@ -92,7 +93,7 @@ export async function fetchAndValidateTrack(trackId: string): Promise<TrackValid
 
   return {
     isValid: true,
-    track,
+    track: { ...track, audioSourceKey: row.audioSourceKey },
   };
 }
 
@@ -101,7 +102,9 @@ export async function fetchAndValidateTrack(trackId: string): Promise<TrackValid
  * @param track - The track to validate
  * @returns Validation result
  */
-export async function validateAudioFileExists(track: Track): Promise<TrackValidationResult> {
+export async function validateAudioFileExists(
+  track: TrackAudioRef,
+): Promise<TrackValidationResult> {
   const metadata = await getTrackAudioMetadata(track);
   if (!metadata || !metadata.contentLength) {
     return {
