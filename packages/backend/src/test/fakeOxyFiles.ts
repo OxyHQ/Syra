@@ -400,11 +400,18 @@ export class FakeOxyFiles implements OxyFilesApi {
       return {
         ...state,
         masterUrl: `${base}/master.m3u8`,
-        renditions: [64, 128, 256].map((kbps) => ({
-          type: `hls_a${kbps}`,
-          url: `${base}/hls_a${kbps}/index.m3u8`,
-          bandwidth: kbps * 1000,
-        })),
+        // Like Oxy: a session opened with a rendition list carries only those rungs.
+        renditions: [64, 128, 256]
+          .filter(
+            (kbps) =>
+              !options.renditions ||
+              (options.renditions as readonly string[]).includes(`hls_a${kbps}`),
+          )
+          .map((kbps) => ({
+            type: `hls_a${kbps}`,
+            url: `${base}/hls_a${kbps}/index.m3u8`,
+            bandwidth: kbps * 1000,
+          })),
         previewUrl: `${base}/preview.m4a`,
         waveformUrl: `${base}/waveform.json`,
       };

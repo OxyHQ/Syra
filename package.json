@@ -50,7 +50,7 @@
   },
   "overrides": {
     "@oxy.so/bloom": "10.16.0",
-    "@oxy.so/core": "5.2.0",
+    "@oxy.so/core": "5.4.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.0",
