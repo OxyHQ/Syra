@@ -701,6 +701,19 @@ export const tracks = pgTable(
     comment: text(),
     /** `AudioSource` — absent while a track is still processing. */
     audioSourceUrl: text(),
+    /**
+     * The bucket key the original was WRITTEN to, recorded at upload.
+     *
+     * The key embeds the artist and album the track had when it was uploaded
+     * (`getS3AudioKey`), and both can change afterwards — an album edit, an
+     * artist split (`scripts/splitMergedArtist.ts`). Re-deriving it from the
+     * row then names an object that does not exist, so ingest, fingerprinting,
+     * a preview, room playback and the move into Oxy Files all miss a file that
+     * is there. `getTrackS3Key` reads this first; a row from before it existed
+     * is filled by `scripts/backfillTrackAudioKeys.ts`. Same column as
+     * `user_uploads.audio_source_key`.
+     */
+    audioSourceKey: text(),
     audioSourceFormat: text({ enum: AUDIO_FORMATS }),
     audioSourceBitrate: integer(),
     audioSourceDuration: doublePrecision(),

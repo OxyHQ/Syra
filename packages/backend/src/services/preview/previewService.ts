@@ -49,6 +49,8 @@ export interface PreviewSourceRef {
   albumId?: string;
   title: string;
   audioSource?: AudioSource;
+  /** Where the original was written (`tracks.audio_source_key`), when recorded. */
+  audioSourceKey?: string;
   hls?: HlsRendition[];
 }
 
@@ -426,6 +428,7 @@ async function runPreviewGeneration(
       albumId: track.albumId,
       title: track.title,
       audioSource: track.audioSource,
+      audioSourceKey: track.audioSourceKey,
     };
     const sourceKey = getTrackS3Key(sourceRef);
     if (await audioObjectExists(sourceKey)) {

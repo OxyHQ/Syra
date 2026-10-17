@@ -19,6 +19,7 @@ on:
         options:
           - backfill-episode-images
           - backfill-fingerprints
+          - backfill-track-audio-keys
           - backfill-podcast-covers
           - migrate-images-to-oxy
           - migrate-alia-covers
@@ -106,6 +107,7 @@ jobs:
           case "$SCRIPT" in
             backfill-episode-images) path="packages/backend/dist/src/scripts/backfillEpisodeImages.js" ;;
             backfill-fingerprints) path="packages/backend/dist/src/scripts/backfillTrackFingerprints.js" ;;
+            backfill-track-audio-keys) path="packages/backend/dist/src/scripts/backfillTrackAudioKeys.js" ;;
             backfill-podcast-covers) path="packages/backend/dist/src/scripts/backfillPodcastCovers.js" ;;
             migrate-images-to-oxy) path="packages/backend/dist/src/scripts/migrateImagesToOxy.js" ;;
             migrate-alia-covers) path="packages/backend/dist/src/scripts/migrateAliaCovers.js" ;;

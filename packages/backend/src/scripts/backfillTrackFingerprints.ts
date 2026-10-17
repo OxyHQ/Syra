@@ -111,7 +111,13 @@ export interface BackfillDeps {
  */
 type BackfillTrack = Pick<
   typeof tracks.$inferSelect,
-  'id' | 'artistId' | 'albumId' | 'title' | 'audioSourceUrl' | 'audioSourceFormat'
+  | 'id'
+  | 'artistId'
+  | 'albumId'
+  | 'title'
+  | 'audioSourceUrl'
+  | 'audioSourceFormat'
+  | 'audioSourceKey'
 >;
 
 /**
@@ -140,6 +146,7 @@ async function fingerprintOne(
       audioSource: track.audioSourceUrl
         ? { url: track.audioSourceUrl, format: track.audioSourceFormat ?? undefined }
         : undefined,
+      audioSourceKey: track.audioSourceKey,
     } as Parameters<typeof streamTrackAudio>[0]);
 
     await pipeline(stream, fs.createWriteStream(stagedPath));
@@ -259,6 +266,7 @@ export async function backfillTrackFingerprints(
         title: tracks.title,
         audioSourceUrl: tracks.audioSourceUrl,
         audioSourceFormat: tracks.audioSourceFormat,
+        audioSourceKey: tracks.audioSourceKey,
       })
       .from(tracks)
       .where(
