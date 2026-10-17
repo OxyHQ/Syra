@@ -30,6 +30,13 @@
  * and `oxy_file_reconcile_runs` records each entity type's last run, so a type is
  * inventoried again only 24 hours after it last finished — on whichever instance
  * gets there first.
+ *
+ * ## On demand
+ *
+ * {@link reconcileAllNow} runs every entity type at once under the same lock
+ * (`scripts/reconcileOxyFileReferences.ts`, through `run-backend-script.yml`),
+ * for an operator who has just moved data and wants the counts now. Its dry
+ * run is not recorded as a run: it would push the night's real run a day out.
  */
 
 import { sql } from 'drizzle-orm';
@@ -94,11 +101,30 @@ export interface ReconcileOutcome {
   refused: number;
 }
 
-/** Reconcile one entity type now, and record it. */
+/**
+ * Reconcile one entity type now, and record it — unless `record` is false (an
+ * operator's preview, which must not stand in for the night's run).
+ */
 export async function reconcileEntityType(
   entityType: OxyReferenceEntityType,
   dryRun: boolean,
+  { record = true }: { record?: boolean } = {},
 ): Promise<ReconcileOutcome> {
+  if (!record) {
+    const result = await oxyFiles().references.reconcile(
+      entityType,
+      referenceInventory(entityType),
+      { dryRun },
+    );
+    return {
+      entityType,
+      dryRun: result.dryRun,
+      added: result.added,
+      removed: result.removed,
+      unchanged: result.unchanged,
+      refused: result.refused,
+    };
+  }
   await getDb()
     .insert(oxyFileReconcileRuns)
     .values({ entityType, startedAt: new Date(), dryRun, finishedAt: null, lastError: null })
@@ -157,35 +183,68 @@ async function dueEntityTypes(now: Date): Promise<OxyReferenceEntityType[]> {
   });
 }
 
-/** One tick: under the lock, reconcile every due entity type. */
-export async function runDueReconciliations(now: Date = new Date()): Promise<ReconcileOutcome[]> {
-  const mode = reconcileMode();
-  if (mode === 'off') return [];
+/** Run `work` under the fleet-wide reconcile lock; `null` when another run holds it. */
+async function withReconcileLock<T>(work: () => Promise<T>): Promise<T | null> {
   const reserved = await getPostgresClient().reserve();
   try {
     const [claimed] = await reserved<{ locked: boolean }[]>`
       select pg_try_advisory_lock(${RECONCILE_LOCK_KEY}) as locked
     `;
-    if (!claimed?.locked) return [];
+    if (!claimed?.locked) return null;
     try {
-      const outcomes: ReconcileOutcome[] = [];
-      for (const entityType of await dueEntityTypes(now)) {
-        try {
-          outcomes.push(await reconcileEntityType(entityType, mode === 'dry-run'));
-        } catch (error) {
-          logger.error('[OxyFiles] reconciliation failed', {
-            entityType,
-            error: describeErrorSafely(error),
-          });
-        }
-      }
-      return outcomes;
+      return await work();
     } finally {
       await reserved`select pg_advisory_unlock(${RECONCILE_LOCK_KEY})`;
     }
   } finally {
     reserved.release();
   }
+}
+
+/** One tick: under the lock, reconcile every due entity type. */
+export async function runDueReconciliations(now: Date = new Date()): Promise<ReconcileOutcome[]> {
+  const mode = reconcileMode();
+  if (mode === 'off') return [];
+  const outcomes = await withReconcileLock(async () => {
+    const done: ReconcileOutcome[] = [];
+    for (const entityType of await dueEntityTypes(now)) {
+      try {
+        done.push(await reconcileEntityType(entityType, mode === 'dry-run'));
+      } catch (error) {
+        logger.error('[OxyFiles] reconciliation failed', {
+          entityType,
+          error: describeErrorSafely(error),
+        });
+      }
+    }
+    return done;
+  });
+  return outcomes ?? [];
+}
+
+export interface ReconcileAllResult {
+  outcomes: ReconcileOutcome[];
+  failed: Array<{ entityType: OxyReferenceEntityType; error: string }>;
+}
+
+/**
+ * Every entity type, now, under the nightly run's lock: `busy` while another
+ * run holds it. A dry run is not recorded (see "On demand"); an applied run
+ * is, and counts as the night's.
+ */
+export async function reconcileAllNow(dryRun: boolean): Promise<ReconcileAllResult | 'busy'> {
+  const result = await withReconcileLock(async () => {
+    const all: ReconcileAllResult = { outcomes: [], failed: [] };
+    for (const entityType of OXY_REFERENCE_ENTITY_TYPES) {
+      try {
+        all.outcomes.push(await reconcileEntityType(entityType, dryRun, { record: !dryRun }));
+      } catch (error) {
+        all.failed.push({ entityType, error: String(describeErrorSafely(error)) });
+      }
+    }
+    return all;
+  });
+  return result ?? 'busy';
 }
 
 let timer: ReturnType<typeof setInterval> | null = null;
