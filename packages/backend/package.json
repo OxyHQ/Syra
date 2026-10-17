@@ -16,6 +16,8 @@
     "migrate:images-to-oxy": "bun src/scripts/migrateImagesToOxy.ts",
     "migrate:alia-covers": "bun src/scripts/migrateAliaCovers.ts",
     "retire:legacy-image-storage": "bun src/scripts/retireLegacyImageStorage.ts",
+    "migrate:audio-to-oxy": "bun src/scripts/migrateAudioToOxy.ts",
+    "retire:legacy-audio-ladders": "bun src/scripts/retireLegacyAudioLadders.ts",
     "reseed:persons": "bun src/scripts/reseedPersons.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "bun run src/db/migrate.ts",
