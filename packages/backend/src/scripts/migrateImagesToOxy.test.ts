@@ -7,6 +7,8 @@ import { installFakeOxyFiles, resetOxyFiles, type FakeOxyFiles } from '../test/f
 import { getDb } from '../db/postgres';
 import { imageAssets } from '../db/schema/catalog';
 import { houses } from '../db/schema/rooms';
+import { FakeOxyError } from '../test/fakeOxyFiles';
+import { OxyWritePacer } from '../services/oxyFiles/writePacer';
 import { cdnUrlToKey } from '../utils/spaces';
 import { migrateImagesToOxy, type MigrationReportLine } from './migrateImagesToOxy';
 
@@ -100,9 +102,42 @@ async function playlist(id: string, coverId: string): Promise<void> {
   `);
 }
 
-async function run(apply: boolean) {
+const ORIGIN = 'https://api.syra.test';
+
+/**
+ * What `GET /api/images/:id` serves Oxy's importer: the bucket object of a row
+ * that names no Oxy file yet.
+ */
+async function serveImagesApi(): Promise<void> {
+  oxy.remote.clear();
+  const rows = await getDb().select().from(imageAssets);
+  for (const row of rows) {
+    const bytes = row.s3Key && row.oxyFileId === null ? bucket.get(row.s3Key) : undefined;
+    if (bytes) oxy.remote.set(`${ORIGIN}/api/images/${row.id}`, { bytes, mime: row.contentType });
+  }
+}
+
+/** Waits nothing, and counts what it would have waited. */
+const waits: number[] = [];
+const pacer = () =>
+  new OxyWritePacer({
+    sleep: async (ms) => {
+      waits.push(ms);
+    },
+  });
+
+async function run(apply: boolean, options: { limit?: number } = {}) {
+  await serveImagesApi();
   const lines: MigrationReportLine[] = [];
-  const stats = await migrateImagesToOxy({ apply, readObject, report: (line) => lines.push(line) });
+  const stats = await migrateImagesToOxy({
+    apply,
+    readObject,
+    objectExists: async (key) => bucket.has(key),
+    publicOrigin: ORIGIN,
+    pacer: pacer(),
+    ...options,
+    report: (line) => lines.push(line),
+  });
   return { stats, lines };
 }
 
@@ -198,7 +233,57 @@ describe('migrateImagesToOxy — images', () => {
     bucket.set('images/set-1-original/x', await png('#654321'));
     const { stats } = await run(true);
     expect(stats.hash_mismatch).toBe(1);
-    expect(oxy.files.size).toBe(0);
+    // Nothing points at what Oxy imported, so nothing references it: Oxy collects it.
+    const rows = await getDb().select().from(imageAssets);
+    expect(rows.every((row) => row.oxyFileId === null)).toBe(true);
+    expect(oxy.refs.size).toBe(0);
+  });
+
+  it("imports sets from Syra's own image URL, 50 to a call", async () => {
+    for (let index = 0; index < 51; index += 1) {
+      const color = `#${index.toString(16).padStart(2, '0')}3456`;
+      await artist(`ce-${index}`, await legacySet(`set-${index}`, await png(color, 16)));
+    }
+    const { stats } = await run(true);
+    expect(stats.copied).toBe(51);
+    const calls = oxy.calls.filter((call) => call.method === 'importAppFiles');
+    // Two calls, run side by side: one of 50, one of 1.
+    expect(calls.map((call) => call.args[0]).sort()).toEqual([1, 50]);
+    expect(oxy.calls.some((call) => call.method === 'uploadAppFile')).toBe(false);
+    expect([...oxy.sources.keys()]).toContain(`${ORIGIN}/api/images/set-0-original`);
+  }, 60_000);
+
+  it('waits out a 429 and makes the same import again, failing nothing', async () => {
+    await artist('ce-1', await legacySet('set-1', await png('#123456')));
+    oxy.failNext.set(
+      'importAppFiles',
+      Object.assign(new FakeOxyError(429, 'Too many'), {
+        details: { retryAfterSeconds: 42 },
+      }),
+    );
+    waits.length = 0;
+    const { stats } = await run(true);
+    expect(stats).toMatchObject({ copied: 1, failed: 0 });
+    expect(waits).toContain(42_000);
+  });
+
+  it('marks a set missing when Syra cannot serve its original because the bucket lost it', async () => {
+    const ids = await legacySet('set-1', await png('#123456'));
+    await artist('ce-1', ids);
+    bucket.delete('images/set-1-original/x');
+    const { lines } = await run(true);
+    expect(lines).toEqual([
+      expect.objectContaining({ kind: 'catalog_set', outcome: 'missing_object' }),
+    ]);
+    const rows = await getDb().select().from(imageAssets);
+    expect(rows.every((row) => row.servingStatus === 'missing')).toBe(true);
+  });
+
+  it('refuses to import without an https origin to import from', async () => {
+    await artist('ce-1', await legacySet('set-1', await png('#123456')));
+    await expect(
+      migrateImagesToOxy({ apply: true, publicOrigin: '', pacer: pacer() }),
+    ).rejects.toThrow(/STREAM_KEY_BASE_URL/);
   });
 
   it('finds nothing left to do on a second run', async () => {

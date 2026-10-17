@@ -68,8 +68,19 @@ before and after, and repoints its rows — which queues Syra's references. Skip
 and reports `unreferenced` (garbage, deleted at step 6) and `alia_handover`
 (step 3). Marks `missing_object` rows so nothing serves them again.
 
+A catalogue set is IMPORTED: Oxy fetches its original from
+`STREAM_KEY_BASE_URL/api/images/:id`, which streams the bucket object while the
+row names no file, 50 sets to one `importAppFiles` call. Oxy meters uploads and
+imports together, 30 calls a minute per application, and Syra's live catalogue
+imports draw on the same budget. The script therefore makes at most 20 calls a
+minute (`writePacer.ts`), and when it gets a 429 it waits as long as Oxy says
+and repeats the same call. About 83 000 sets take hours this way. Uploaded
+one at a time, they would take days.
+
 Run it with `--limit 200` first and spot-check the report lines (SHA-256, never
-URLs); then without a limit. Re-run until a run reports nothing but
+URLs); then in bounded passes (`--limit 20000`). The workflow stops waiting
+after an hour, but the task keeps running. Its log stream
+`/oxy/ecs` › `syra/syra/<task>` carries the final counts. Re-run until a run reports nothing but
 `unreferenced`/`alia_handover`. Exit code 1 means a `failed` or `hash_mismatch`
 unit — read its line; a re-run retries it.
 

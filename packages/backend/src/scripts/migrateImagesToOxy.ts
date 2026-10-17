@@ -6,9 +6,14 @@
  *
  * - A catalogue image SET (the six size rows `createImageSizes` used to write,
  *   one source, one `catalog_source_content_hash`) becomes ONE file the Syra
- *   application owns: only the ORIGINAL's bytes are copied, and every row of the
- *   set — and of every duplicate set of the same bytes — names that file and the
- *   Oxy rendition for its size. Six objects become one file.
+ *   application owns: only the ORIGINAL is copied, and every row of the set —
+ *   and of every duplicate set of the same bytes — names that file and the Oxy
+ *   rendition for its size. Six objects become one file. Sets are IMPORTED, 50
+ *   to an `importAppFiles` call, from Syra's own `GET /api/images/:id` (which
+ *   streams the bucket object for a row with no file yet): Oxy meters an
+ *   application's uploads and imports together, per CALL, so one batch of 50
+ *   costs what one upload does. Uploading the ~83 000 sets one by one at the
+ *   budget a migration may use would take three days; importing them, hours.
  * - A person's upload (`uploaded_by` set) becomes a file in THEIR Oxy account.
  *   An uploader Oxy no longer knows (a deleted account) cannot own anything, so
  *   that image becomes Syra's, and the report says so.
@@ -27,14 +32,19 @@
  *
  * ## Verified, resumable, and safe to re-run
  *
- * Every copy is hashed before upload and compared with the SHA-256 Oxy answers;
- * a set's original must also hash to the content hash recorded when it was
- * mirrored. A mismatch copies nothing. A row is "done" exactly when it names an
+ * Every upload is hashed first and compared with the SHA-256 Oxy answers; an
+ * imported set's original must hash, as Oxy stored it, to the content hash
+ * recorded when it was mirrored. A mismatch repoints nothing (the file Oxy made
+ * is unreferenced, so Oxy collects it). A row is "done" exactly when it names an
  * Oxy file, so a re-run — after an interruption, a failure, or a bounded
  * `--limit` pass — continues with what is left, and Oxy's per-owner
  * deduplication makes a repeated upload of the same bytes answer the same file.
  * Pointing a row at its file is what queues Syra's reference to it (migration
  * `0034`'s triggers), so a copied application file is in use from the start.
+ *
+ * Every Oxy write goes through {@link OxyWritePacer}: a third of Oxy's
+ * per-application budget is left to Syra's live catalogue imports, and a 429 is
+ * waited out and the same call made again — a run is never "restarted" by one.
  *
  * Reports carry SHA-256 hashes and Syra's own row ids — never a URL or a bucket
  * key. One JSON line per unit through the logger (`[migrate-images-to-oxy]`).
@@ -55,6 +65,7 @@ import { and, asc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { PgColumn } from 'drizzle-orm/pg-core';
 import { sqlColumnName } from '@oxy.so/db';
 import { closePostgres, connectPostgres, getDb } from '../db/postgres';
+import { env } from '../config/env';
 import { imageAssets } from '../db/schema/catalog';
 import { podcastSources } from '../db/schema/podcasts';
 import { houses, rooms, series } from '../db/schema/rooms';
@@ -69,16 +80,21 @@ import {
 } from '../services/oxyFiles/images';
 import {
   LegacyObjectTooLargeError,
+  legacyObjectExists,
   readLegacyObject,
   sha256Hex,
   type LegacyObjectReader,
 } from '../services/oxyFiles/legacyObjects';
+import { oxyFiles } from '../services/oxyFiles/client';
+import { OxyWritePacer } from '../services/oxyFiles/writePacer';
 import { cdnUrlToKey } from '../utils/spaces';
 import { logger } from '../utils/logger';
 import { describeErrorSafely } from '../utils/error';
 
 const BATCH_SIZE = 100;
 const DEFAULT_CONCURRENCY = 4;
+/** Sets per `importAppFiles` call: Oxy's batch ceiling. */
+const IMPORT_BATCH_SIZE = 50;
 
 export type MigrationOutcome =
   | 'planned'
@@ -113,6 +129,14 @@ export interface ImageMigrationOptions {
   /** Which half to run; both by default. */
   only?: 'images' | 'spaces';
   readObject?: LegacyObjectReader;
+  /** Whether the bucket still holds `key` — asked only after an import failed. */
+  objectExists?: (key: string) => Promise<boolean>;
+  /**
+   * The https origin Oxy imports a set's original from (`<origin>/api/images/:id`).
+   * Defaults to `STREAM_KEY_BASE_URL`, the API's public origin.
+   */
+  publicOrigin?: string;
+  pacer?: OxyWritePacer;
   report?: (line: MigrationReportLine) => void;
 }
 
@@ -147,31 +171,27 @@ async function imageMime(bytes: Buffer, stored: string | undefined): Promise<str
 
 /** Upload to the person's account; a person Oxy no longer knows cannot own it, so Syra does. */
 async function uploadOwned(
+  pacer: OxyWritePacer,
   ownerOxyUserId: string | null,
   bytes: Buffer,
   mime: string,
   name: string,
 ): Promise<{ file: StoredOxyFile; owner: 'application' | 'account'; ownerFallback: boolean }> {
+  const asApplication = () => pacer.call('app', () => uploadAppImage(bytes, mime, name));
   if (ownerOxyUserId === null) {
-    return {
-      file: await uploadAppImage(bytes, mime, name),
-      owner: 'application',
-      ownerFallback: false,
-    };
+    return { file: await asApplication(), owner: 'application', ownerFallback: false };
   }
   try {
     return {
-      file: await uploadUserImage(ownerOxyUserId, bytes, mime, name),
+      file: await pacer.call('user_media', () =>
+        uploadUserImage(ownerOxyUserId, bytes, mime, name),
+      ),
       owner: 'account',
       ownerFallback: false,
     };
   } catch (error) {
     if ((error as { status?: number }).status !== 403) throw error;
-    return {
-      file: await uploadAppImage(bytes, mime, name),
-      owner: 'application',
-      ownerFallback: true,
-    };
+    return { file: await asApplication(), owner: 'application', ownerFallback: true };
   }
 }
 
@@ -259,6 +279,9 @@ async function setOriginal(contentHash: string) {
         eq(imageAssets.catalogSourceContentHash, contentHash),
         eq(imageAssets.catalogSize, 'original'),
         isNotNull(imageAssets.s3Key),
+        // What `GET /api/images/:id` still streams from the bucket.
+        isNull(imageAssets.oxyFileId),
+        eq(imageAssets.servingStatus, 'active'),
       ),
     )
     .orderBy(asc(imageAssets.createdAt))
@@ -273,45 +296,14 @@ async function markMissing(ids: string[]): Promise<void> {
     .where(and(inArray(imageAssets.id, ids), isNull(imageAssets.oxyFileId)));
 }
 
-async function migrateSet(
-  row: LegacyRow & { contentHash: string },
-  options: ImageMigrationOptions,
-): Promise<MigrationReportLine> {
-  const members = await getDb()
-    .select({ id: imageAssets.id })
-    .from(imageAssets)
-    .where(
-      and(
-        eq(imageAssets.catalogSourceContentHash, row.contentHash),
-        isNull(imageAssets.oxyFileId),
-        inArray(imageAssets.catalogSize, [...CATALOG_IMAGE_SIZES]),
-      ),
-    );
-  const ids = members.map((member) => member.id);
-  const original = await setOriginal(row.contentHash);
-  const base = {
-    kind: 'catalog_set' as const,
-    ids,
-    owner: 'application' as const,
-    sha256: row.contentHash,
-  };
-  if (!options.apply) return { ...base, outcome: 'planned' };
-  if (!original?.s3Key)
-    return { ...base, outcome: 'missing_object', reason: 'the set has no original' };
+type SetRow = LegacyRow & { contentHash: string };
 
-  const read = await (options.readObject ?? readLegacyObject)(original.s3Key);
-  if (!read) {
-    await markMissing(ids);
-    return { ...base, outcome: 'missing_object' };
-  }
-  const digest = sha256Hex(read.bytes);
-  if (digest !== row.contentHash) {
-    return { ...base, outcome: 'hash_mismatch', reason: `original hashes to ${digest}` };
-  }
-  const mime = await imageMime(read.bytes, read.contentType ?? original.contentType);
-  if (!mime) return { ...base, outcome: 'unsupported_type' };
-
-  const file = verified(await uploadAppImage(read.bytes, mime, `catalog-${digest}`), digest);
+/** Point every legacy row of the set (and of its duplicates) at `fileId`, one rendition per size. */
+async function repointSet(
+  contentHash: string,
+  fileId: string,
+  original: { width: number | null; height: number | null },
+): Promise<void> {
   const width = original.width ?? 0;
   const height = original.height ?? 0;
   await getDb().transaction(async (tx) => {
@@ -321,26 +313,151 @@ async function migrateSet(
       await tx
         .update(imageAssets)
         .set({
-          oxyFileId: file.id,
+          oxyFileId: fileId,
           oxyVariant: variant,
           ...(width > 0 && height > 0 ? { width: dims.width, height: dims.height } : {}),
           updatedAt: sql`date_trunc('milliseconds', now())`,
         })
         .where(
           and(
-            eq(imageAssets.catalogSourceContentHash, row.contentHash),
+            eq(imageAssets.catalogSourceContentHash, contentHash),
             eq(imageAssets.catalogSize, size),
             isNull(imageAssets.oxyFileId),
           ),
         );
     }
   });
-  return { ...base, fileId: file.id, bytes: file.size, outcome: 'copied' };
+}
+
+/** What an Oxy refusal of a set's import is reported as. */
+function refusedOutcome(status: number): MigrationOutcome {
+  if (status === 415) return 'unsupported_type';
+  if (status === 413) return 'too_large';
+  return 'failed';
+}
+
+/**
+ * Copy up to {@link IMPORT_BATCH_SIZE} catalogue sets with ONE import call.
+ *
+ * Oxy fetches each set's original from Syra's `GET /api/images/:id`, which
+ * streams the bucket object for a row that names no file yet — the exact bytes
+ * a direct upload would send, and checked the same way: Oxy's SHA-256 of what it
+ * stored must be the content hash recorded when the set was mirrored.
+ */
+async function migrateSets(
+  rows: SetRow[],
+  options: ImageMigrationOptions & { pacer: OxyWritePacer; publicOrigin: string },
+): Promise<MigrationReportLine[]> {
+  const prepared = await Promise.all(
+    rows.map(async (row) => {
+      const members = await getDb()
+        .select({ id: imageAssets.id })
+        .from(imageAssets)
+        .where(
+          and(
+            eq(imageAssets.catalogSourceContentHash, row.contentHash),
+            isNull(imageAssets.oxyFileId),
+            inArray(imageAssets.catalogSize, [...CATALOG_IMAGE_SIZES]),
+          ),
+        );
+      return {
+        contentHash: row.contentHash,
+        original: await setOriginal(row.contentHash),
+        base: {
+          kind: 'catalog_set' as const,
+          ids: members.map((member) => member.id),
+          owner: 'application' as const,
+          sha256: row.contentHash,
+        },
+      };
+    }),
+  );
+  if (!options.apply) return prepared.map(({ base }) => ({ ...base, outcome: 'planned' }));
+
+  const lines: MigrationReportLine[] = [];
+  const importable: Array<
+    (typeof prepared)[number] & { original: NonNullable<(typeof prepared)[number]['original']> }
+  > = [];
+  for (const set of prepared) {
+    if (set.original?.s3Key) importable.push({ ...set, original: set.original });
+    else lines.push({ ...set.base, outcome: 'missing_object', reason: 'the set has no original' });
+  }
+  if (importable.length === 0) return lines;
+
+  let results: Awaited<ReturnType<ReturnType<typeof oxyFiles>['importAppFiles']>>;
+  try {
+    results = await options.pacer.call('app', () =>
+      oxyFiles().importAppFiles(
+        importable.map((set) => ({
+          sourceUrl: `${options.publicOrigin}/api/images/${encodeURIComponent(set.original.id)}`,
+          visibility: 'public' as const,
+        })),
+      ),
+    );
+  } catch (error) {
+    const reason = String(describeErrorSafely(error)).slice(0, 300);
+    return [
+      ...lines,
+      ...importable.map((set) => ({ ...set.base, outcome: 'failed' as const, reason })),
+    ];
+  }
+
+  const exists = options.objectExists ?? legacyObjectExists;
+  for (const result of results) {
+    const set = importable[result.index];
+    if (!set) continue;
+    try {
+      if (!result.ok) {
+        // A source Syra could not serve is, most often, an object the bucket
+        // lost: confirm with the bucket itself before saying so.
+        if (!(await exists(set.original.s3Key as string))) {
+          await markMissing(set.base.ids);
+          lines.push({ ...set.base, outcome: 'missing_object' });
+          continue;
+        }
+        lines.push({
+          ...set.base,
+          outcome: refusedOutcome(result.error.status),
+          reason: `${result.error.status} ${result.error.code}`,
+        });
+        continue;
+      }
+      if (result.file.sha256 !== set.contentHash) {
+        lines.push({
+          ...set.base,
+          outcome: 'hash_mismatch',
+          reason: `Oxy stored ${result.file.sha256}`,
+        });
+        continue;
+      }
+      await repointSet(set.contentHash, result.file.id, set.original);
+      lines.push({
+        ...set.base,
+        fileId: result.file.id,
+        bytes: result.file.size,
+        outcome: 'copied',
+      });
+    } catch (error) {
+      lines.push({
+        ...set.base,
+        outcome: 'failed',
+        reason: String(describeErrorSafely(error)).slice(0, 300),
+      });
+    }
+  }
+  // An answer Oxy left out (it never should) is a failure, not a silent skip.
+  const answered = new Set(results.map((result) => result.index));
+  importable.forEach((set, index) => {
+    if (!answered.has(index)) {
+      lines.push({ ...set.base, outcome: 'failed', reason: 'no answer for this item' });
+    }
+  });
+  return lines;
 }
 
 async function migrateSingle(
   row: LegacyRow,
-  options: ImageMigrationOptions,
+  options: ImageMigrationOptions & { pacer: OxyWritePacer },
 ): Promise<MigrationReportLine> {
   const base = {
     kind: 'image' as const,
@@ -358,7 +475,13 @@ async function migrateSingle(
   const mime = await imageMime(read.bytes, row.contentType);
   if (!mime) return { ...base, sha256: digest, outcome: 'unsupported_type' };
 
-  const uploaded = await uploadOwned(row.uploadedBy, read.bytes, mime, `image-${row.id}`);
+  const uploaded = await uploadOwned(
+    options.pacer,
+    row.uploadedBy,
+    read.bytes,
+    mime,
+    `image-${row.id}`,
+  );
   const file = verified(uploaded.file, digest);
   await getDb()
     .update(imageAssets)
@@ -448,7 +571,7 @@ const SPACE_SOURCES: SpaceImageSource[] = [
 async function migrateSpaceImage(
   source: SpaceImageSource,
   row: { id: string; owner: string; url: string },
-  options: ImageMigrationOptions,
+  options: ImageMigrationOptions & { pacer: OxyWritePacer },
 ): Promise<MigrationReportLine> {
   const key = cdnUrlToKey(row.url) as string;
   const base = { kind: source.kind, ids: [row.id], owner: 'account' as const };
@@ -464,7 +587,13 @@ async function migrateSpaceImage(
   const digest = sha256Hex(read.bytes);
   const mime = await imageMime(read.bytes, read.contentType);
   if (!mime) return { ...base, sha256: digest, outcome: 'unsupported_type' };
-  const uploaded = await uploadOwned(row.owner, read.bytes, mime, `${source.kind}-${row.id}`);
+  const uploaded = await uploadOwned(
+    options.pacer,
+    row.owner,
+    read.bytes,
+    mime,
+    `${source.kind}-${row.id}`,
+  );
   const file = verified(uploaded.file, digest);
   await source.repoint(row.id, row.url, file.id);
   return {
@@ -494,6 +623,17 @@ export async function migrateImagesToOxy(
 ): Promise<ImageMigrationStats> {
   const stats = emptyStats();
   const concurrency = options.concurrency ?? DEFAULT_CONCURRENCY;
+  const publicOrigin = (options.publicOrigin ?? env.STREAM_KEY_BASE_URL).replace(/\/+$/, '');
+  if (options.apply && options.only !== 'spaces' && !publicOrigin.startsWith('https://')) {
+    // Oxy imports https only, from a public address: a set's original is
+    // fetched from the API's own origin, which must therefore be one.
+    throw new Error(
+      `migrate-images-to-oxy imports catalogue sets from <origin>/api/images/:id, and the origin ` +
+        `(STREAM_KEY_BASE_URL) is ${publicOrigin === '' ? 'unset' : `'${publicOrigin}'`}: ` +
+        'it must be the https API origin',
+    );
+  }
+  const run = { ...options, pacer: options.pacer ?? new OxyWritePacer(), publicOrigin };
   const report = (line: MigrationReportLine) => {
     stats[line.outcome] += 1;
     options.report?.(line);
@@ -525,6 +665,21 @@ export async function migrateImagesToOxy(
     }
   };
 
+  /** Sets waiting for an import batch. */
+  let pendingSets: SetRow[] = [];
+  /** Import what is pending in batches of 50, `concurrency` batches at a time. */
+  const flushSets = async () => {
+    const batches: SetRow[][] = [];
+    for (let index = 0; index < pendingSets.length; index += IMPORT_BATCH_SIZE) {
+      batches.push(pendingSets.slice(index, index + IMPORT_BATCH_SIZE));
+    }
+    pendingSets = [];
+    await pool(batches, concurrency, async (batch) => {
+      stats.units += batch.length;
+      for (const line of await migrateSets(batch, run)) report(line);
+    });
+  };
+
   if (options.only !== 'spaces') {
     const seenHashes = new Set<string>();
     let after: string | undefined;
@@ -554,19 +709,17 @@ export async function migrateImagesToOxy(
         }
         if (isSetMember) {
           seenHashes.add(contentHash);
-          units.push(() =>
-            guarded({ kind: 'catalog_set', ids: [row.id], sha256: contentHash }, () =>
-              migrateSet({ ...row, contentHash }, options),
-            ),
-          );
+          pendingSets.push({ ...row, contentHash });
         } else {
           units.push(() =>
-            guarded({ kind: 'image', ids: [row.id] }, () => migrateSingle(row, options)),
+            guarded({ kind: 'image', ids: [row.id] }, () => migrateSingle(row, run)),
           );
         }
       }
       await pool(units, concurrency, (unit) => unit());
+      if (pendingSets.length >= IMPORT_BATCH_SIZE * concurrency) await flushSets();
     }
+    await flushSets();
   }
 
   if (options.only !== 'images') {
@@ -580,9 +733,7 @@ export async function migrateImagesToOxy(
         // a link a client sent) is not Syra's to copy.
         const units = rows.filter((row) => cdnUrlToKey(row.url) !== null).filter(() => take());
         await pool(units, concurrency, (row) =>
-          guarded({ kind: source.kind, ids: [row.id] }, () =>
-            migrateSpaceImage(source, row, options),
-          ),
+          guarded({ kind: source.kind, ids: [row.id] }, () => migrateSpaceImage(source, row, run)),
         );
       }
     }

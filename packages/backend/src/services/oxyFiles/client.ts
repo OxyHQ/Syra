@@ -28,6 +28,8 @@ export type OxyFilesApi = Pick<
   ServerAssetsApi,
   | 'uploadAppFile'
   | 'importAppFile'
+  // Batch import (50 URLs a call): what the image migration copies sets with.
+  | 'importAppFiles'
   | 'uploadUserMedia'
   | 'metadataByIds'
   | 'metadataBySha256'

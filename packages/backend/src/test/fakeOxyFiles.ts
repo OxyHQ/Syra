@@ -31,6 +31,7 @@ import { readFile } from 'node:fs/promises';
 import type {
   ApplicationFile,
   ApplicationFileImport,
+  ApplicationFileImportBatchResult,
   CreatedRecordingTarget,
   PlaySession,
   PlaySessionOptions,
@@ -211,6 +212,13 @@ export class FakeOxyFiles implements OxyFilesApi {
     options: FileImportOptions & { visibility: FileVisibility },
   ): Promise<ApplicationFileImport> {
     this.record('importAppFile', [sourceUrl, options]);
+    return this.importOne(sourceUrl, options);
+  }
+
+  private async importOne(
+    sourceUrl: string,
+    options: FileImportOptions & { visibility: FileVisibility },
+  ): Promise<ApplicationFileImport> {
     if (!sourceUrl.startsWith('https://')) {
       throw new FakeOxyError(422, 'SOURCE_URL_REFUSED');
     }
@@ -245,6 +253,28 @@ export class FakeOxyFiles implements OxyFilesApi {
       source: { host: new URL(sourceUrl).host, fetchedAt: new Date().toISOString() },
       ...(reference ? { reference } : {}),
     };
+  }
+
+  /**
+   * Oxy's batch import: each item answers on its own, in order — a refusal is
+   * `{ ok: false, error }` for that item, never the call's failure.
+   */
+  async importAppFiles(
+    items: Array<FileImportOptions & { sourceUrl: string; visibility: FileVisibility }>,
+  ): Promise<ApplicationFileImportBatchResult[]> {
+    this.record('importAppFiles', [items.length]);
+    if (items.length > 50) throw new FakeOxyError(400, 'items must be an array of at most 50');
+    const results: ApplicationFileImportBatchResult[] = [];
+    for (const [index, { sourceUrl, ...options }] of items.entries()) {
+      try {
+        results.push({ index, ok: true, ...(await this.importOne(sourceUrl, options)) });
+      } catch (error) {
+        const status = error instanceof FakeOxyError ? error.status : 500;
+        const message = error instanceof Error ? error.message : String(error);
+        results.push({ index, ok: false, error: { status, code: message, message } });
+      }
+    }
+    return results;
   }
 
   async uploadUserMedia(
