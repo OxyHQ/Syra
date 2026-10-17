@@ -59,10 +59,10 @@ Production: web `https://syra.fm`, API/WebSocket `https://api.syra.fm` / `wss://
 - Gate private API calls (library, playlists, artist profile, privacy, preferences, recommendations) with `useAuth().canUsePrivateApi` / `isPrivateApiPending` — not app-local token helpers.
 - `packages/frontend/utils/api.ts` owns the linked authenticated Syra API client via `oxyServices.createLinkedClient(...)`. Components/hooks must not hand-roll auth headers, refresh, CSRF probing, or session invalidation.
 
-## Files: images in Oxy Files, audio behind one seam
+## Files: images and audio in Oxy Files
 
 - Every image is an Oxy file (ADR 0043): catalogue art is Syra-owned, a person's upload theirs, a space image its owner's. `image_assets` rows name the file (`oxy_file_id`); never write to the bucket's image prefixes. Uses reach Oxy through DB triggers + outbox, never by hand. `docs/runbooks/oxy-files-images.md`.
-- Audio stays in the bucket until Oxy takes it; every audio read/write goes through `services/oxyFiles/audioStorage.ts` (gated by `audioStorage.boundary.test.ts`), the ONLY `TODO(oxy-4c)`.
+- Audio (stage 4c) goes ONLY through `services/oxyFiles/audioStorage.ts` (`audioStorage.boundary.test.ts`): private Oxy files, played via per-listener play sessions whose key our file-events endpoint authorizes (`audioKeyAuthorization.ts`). `OXY_AUDIO` legacy|dual|oxy; every Oxy refusal falls back to the bucket. `docs/runbooks/oxy-files-audio.md`.
 
 ## Frontend State Architecture
 

@@ -1,9 +1,8 @@
 # Runbook — Syra's images move into Oxy Files (OxyHQ/oxy ADR 0043, phase 4)
 
 Every image Syra serves — catalogue artwork, a person's uploaded cover, a house
-avatar, a show cover — is stored in **Oxy Files** from this release on. Audio is
-not (yet): `packages/backend/src/services/oxyFiles/audioStorage.ts` says exactly
-why and what Oxy must add (`TODO(oxy-4c)`).
+avatar, a show cover — is stored in **Oxy Files** from this release on. Audio
+has its own procedure: `docs/runbooks/oxy-files-audio.md`.
 
 The steps below are one-time, ordered, and each is safe to re-run. Nothing runs
 against production except through `.github/workflows/run-backend-script.yml`,
