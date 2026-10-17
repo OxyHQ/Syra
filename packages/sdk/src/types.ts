@@ -207,11 +207,20 @@ export interface EpisodeDeleted {
   objectsDeleted: number;
 }
 
-/** What `getEpisodeStream` hands back: a tokenized HLS URL with its own deadline. */
+/**
+ * What `getEpisodeStream` hands back: a tokenized HLS URL with its own deadline.
+ *
+ * When the episode's audio is in Oxy Files (Syra 0.21), `url` is an Oxy play
+ * session's master playlist and the same session also serves Oxy's 30-second
+ * `previewUrl` and the `waveformUrl` peaks (audiowaveform JSON) — both absent
+ * for an episode still played from Syra's own ladder.
+ */
 export interface EpisodeStream {
   url: string;
   type: string;
   expiresAt?: string;
+  previewUrl?: string;
+  waveformUrl?: string;
 }
 
 /** What the image upload endpoint hands back. */

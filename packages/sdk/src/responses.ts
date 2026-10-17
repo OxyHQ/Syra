@@ -135,6 +135,8 @@ export const episodeStream = object<EpisodeStream>({
   url: string,
   type: string,
   expiresAt: optional(string),
+  previewUrl: optional(string),
+  waveformUrl: optional(string),
 });
 
 export const uploadedImage = object<UploadedImage>({

@@ -134,6 +134,8 @@ export const episodeStreamSchema = z.object({
   url: z.string(),
   type: z.string(),
   expiresAt: z.string().optional(),
+  previewUrl: z.string().optional(),
+  waveformUrl: z.string().optional(),
 });
 
 export const uploadedImageSchema = z.object({

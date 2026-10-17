@@ -136,6 +136,13 @@ agree('episode deleted', schemas.episodeDeletedSchema, responses.episodeDeleted,
 agree('episode stream', schemas.episodeStreamSchema, responses.episodeStream, [
   { url: 'https://x/m3u8', type: 'hls' },
   { url: 'https://x/m3u8', type: 'hls', expiresAt: '2026', token: 'secret' },
+  {
+    url: 'https://oxy/master.m3u8',
+    type: 'hls',
+    previewUrl: 'https://oxy/preview.m4a',
+    waveformUrl: 'https://oxy/waveform.json',
+  },
+  { url: 'https://x/m3u8', type: 'hls', waveformUrl: 1 },
   { url: 'https://x/m3u8' },
   ...NOT_OBJECTS,
 ]);
