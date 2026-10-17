@@ -287,6 +287,17 @@ jobs:
       - name: Install audio toolchain
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg libchromaprint-tools
 
+      # Every Oxy app shares ONE Postgres, so a migration that holds an ACCESS
+      # EXCLUSIVE lock on a table read per request while it backfills or builds
+      # an index stalls every product on it (oxy, 2026-10-16). The rules are
+      # oxy's MIGRATION-CONTRACT.md ("Every migration keeps its locks short"),
+      # checked by @oxy.so/db's own gate for every migration after 0036; the
+      # hot tables are the ones a listener's request reads. A reviewed
+      # exception says why in its file: `-- oxy:lock-review=<reason>`.
+      - name: Check migration locks
+        working-directory: packages/backend
+        run: bun run db:check-locks
+
       # Schema-vs-migration drift gate (Task 4 review, Critical #2): every
       # DB-backed test below runs against the already-MIGRATED database,
       # which does not move when a `schema/*.ts` file changes. A committed
