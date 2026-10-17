@@ -313,7 +313,13 @@ jobs:
           # auth` — at task launch, not at deploy. Nothing in this workflow
           # creates one: a new entry here is preceded by its owner writing
           # /oxy/syra/<NAME> with `aws ssm put-parameter` (oxy-infra runbook 46).
-          TASK_SECRET_OVERRIDES_JSON: '{"DATABASE_URL":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/DATABASE_URL","INGEST_TOKEN_SECRET":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/INGEST_TOKEN_SECRET"}'
+          #
+          # SYRA_COVER_APPLICATION_IDS (Alia's Oxy application id) and
+          # OXY_FILES_RECONCILE (`dry-run` until the first counts are reviewed,
+          # then `apply`) are Oxy Files settings (docs/runbooks/oxy-files-images.md
+          # step 0). Changing either is `aws ssm put-parameter --overwrite` plus a
+          # redeploy: ECS resolves the parameter at task launch.
+          TASK_SECRET_OVERRIDES_JSON: '{"DATABASE_URL":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/DATABASE_URL","INGEST_TOKEN_SECRET":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/INGEST_TOKEN_SECRET","SYRA_COVER_APPLICATION_IDS":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/SYRA_COVER_APPLICATION_IDS","OXY_FILES_RECONCILE":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/OXY_FILES_RECONCILE"}'
 
           # The Oxy service credential Syra no longer holds.
           #
