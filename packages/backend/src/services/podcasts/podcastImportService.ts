@@ -189,7 +189,7 @@ function buildEpisodeSet(
 }
 
 /**
- * Re-host the show cover into Syra S3 and return the columns to write, keeping
+ * Re-host the show cover (into Oxy Files, as Syra's file) and return the columns to write, keeping
  * the external URL only as a fallback.
  *
  * Returns the columns rather than mutating a row. Colors follow the catalog convention: REPLACE when the image

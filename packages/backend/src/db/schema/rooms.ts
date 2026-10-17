@@ -283,6 +283,13 @@ export const houses = pgTable(
      */
     avatar: text(),
     coverImage: text(),
+    /**
+     * The avatar and cover as Oxy files owned by the house's creator (ADR 0043).
+     * `avatar`/`coverImage` above are the LEGACY bucket URLs, read only while a
+     * house has no file here; an upload writes the file and clears the URL.
+     */
+    avatarFileId: text(),
+    coverImageFileId: text(),
     /** An Oxy account id — no foreign key. Not `*_id`-suffixed. */
     createdBy: text().notNull(),
     // `visibility` is a single subdocument, flattened — see the file-level doc
@@ -390,6 +397,8 @@ export const series = pgTable(
     description: text(),
     /** A raw S3 CDN URL string, not an `image_assets` reference — see `houses.avatar`. */
     coverImage: text(),
+    /** The cover as an Oxy file owned by the series' creator — see `houses.avatarFileId`. */
+    coverImageFileId: text(),
     houseId: text().references(() => houses.id, { onDelete: 'set null' }),
     /** An Oxy account id — no foreign key. Not `*_id`-suffixed. */
     createdBy: text().notNull(),
@@ -591,6 +600,8 @@ export const rooms = pgTable(
     activeStreamUrl: text(),
     streamTitle: text(),
     streamImage: text(),
+    /** The stream image as an Oxy file owned by the host — see `houses.avatarFileId`. */
+    streamImageFileId: text(),
     streamDescription: text(),
     /** Internal stream credential — see `activeIngressId`. */
     rtmpUrl: text(),
@@ -894,6 +905,15 @@ export const recordings = pgTable(
      */
     objectKey: text().notNull(),
     /**
+     * The Oxy file the recording became (ADR 0043 stage 4c): LiveKit egress
+     * wrote it into an Oxy recording target, and Oxy stored it as Syra's own
+     * private file. `null` for a bucket recording, and until the target is
+     * collected. Another service's key, no foreign key.
+     */
+    oxyFileId: text(),
+    /** The Oxy recording target egress writes into; `null` for a bucket recording. */
+    oxyRecordingTargetId: text(),
+    /**
      * `integer`, not a double — the house convention, matching `user_uploads.sizeBytes`
      * (`creators.ts:311`) and `image_assets.byteSize` (`catalog.ts:228`). The
      * ceiling is 2.1 GB, which a single room's recorded audio does not
@@ -928,6 +948,7 @@ export const recordings = pgTable(
     // `Recording.findOne({ egressId })` — the LiveKit egress webhook's only
     // lookup key (`routes/rooms.routes.ts:867`).
     unique('recordings_egress_id_key').on(t.egressId),
+    index('recordings_oxy_file_id_idx').on(t.oxyFileId).where(sql`${t.oxyFileId} is not null`),
     // The public recordings listing, both sorts (`routes/recordings.routes.ts:24,32`).
     index('recordings_ready_public_created_at_idx')
       .on(t.createdAt.desc())

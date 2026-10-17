@@ -43,7 +43,7 @@ import type {
 import { isLiveEntityId } from '@oxy.so/db';
 import type { albums, catalogEntities, imageAssets, tracks } from '../schema/catalog';
 import type { playlists } from '../schema/library';
-import { PROTECTED_COLUMNS_BY_TABLE } from '../schema/protectedColumns';
+import type { PROTECTED_COLUMNS_BY_TABLE } from '../schema/protectedColumns';
 import { isPreviewEligibleTrack } from './visibility';
 
 // ── Row shapes ────────────────────────────────────────────────────────────
@@ -70,7 +70,10 @@ export type AlbumRow = typeof albums.$inferSelect;
 export type PlaylistRow = typeof playlists.$inferSelect;
 
 /** The `image_assets` columns a rendered variant needs. */
-export type ImageAssetRow = Pick<typeof imageAssets.$inferSelect, 'id' | 'width' | 'height'>;
+export type ImageAssetRow = Pick<
+  typeof imageAssets.$inferSelect,
+  'id' | 'width' | 'height' | 'oxyFileId' | 'oxyVariant' | 'servingStatus'
+>;
 
 /**
  * Resolves an `image_assets` id to its rendered variant, or `undefined` when the
@@ -138,7 +141,19 @@ export function imageVariantLookup(assets: readonly ImageAssetRow[]): ImageVaria
     const url = normalizeImageRef(asset.id);
     // A variant is only renderable with real dimensions.
     if (!url || asset.width === null || asset.height === null) continue;
-    byId.set(asset.id, { id: asset.id, url, width: asset.width, height: asset.height });
+    // Taken down, deleted or never copied: no image, the same answer
+    // `/api/images/:id` gives — a DTO must not advertise a URL that 404s.
+    if (asset.servingStatus !== 'active') continue;
+    byId.set(asset.id, {
+      id: asset.id,
+      url,
+      width: asset.width,
+      height: asset.height,
+      // Stored in Oxy Files: a client with Oxy's resolver renders the file
+      // directly; `url` still works for every other client (it redirects).
+      ...(asset.oxyFileId === null ? {} : { fileId: asset.oxyFileId }),
+      ...(asset.oxyVariant === null ? {} : { variant: asset.oxyVariant }),
+    });
   }
   return (id) => (id === null ? undefined : byId.get(id));
 }

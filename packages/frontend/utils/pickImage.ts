@@ -1,5 +1,5 @@
 import type { CatalogImageSizes, CatalogImageVariant, TrackImage } from '@syra/shared-types';
-import { resolveCatalogImageUrl } from './catalogImages';
+import { resolveCatalogFileUrl, resolveCatalogImageUrl } from './catalogImages';
 
 type ImageCandidate = {
   url: string;
@@ -81,8 +81,24 @@ function normalizeCandidate(
   };
 }
 
+/**
+ * A variant stored in Oxy Files (`fileId`, ADR 0043) resolves through Oxy's own
+ * resolver — the one `AppProviders` installs for every Bloom image — straight to
+ * the CDN rendition, skipping the `/api/images/:id` redirect. Any other variant,
+ * or any variant before a resolver is installed, resolves through Syra's image
+ * route, as it always has (it redirects to the same file).
+ */
 function candidateFromVariant(variant: CatalogImageVariant | undefined): ImageCandidate | null {
   if (!variant) return null;
+  const fileUrl = variant.fileId
+    ? resolveCatalogFileUrl(variant.fileId, variant.variant)
+    : undefined;
+  if (fileUrl) {
+    return {
+      url: fileUrl,
+      width: typeof variant.width === 'number' && variant.width > 0 ? variant.width : 0,
+    };
+  }
   return (
     normalizeCandidate(variant.url, variant.width) ?? normalizeCandidate(variant.id, variant.width)
   );

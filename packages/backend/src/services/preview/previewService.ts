@@ -22,11 +22,15 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { Readable } from 'stream';
+import type { Readable } from 'stream';
 import { eq } from 'drizzle-orm';
 import type { AudioSource, HlsRendition } from '@syra/shared-types';
-import { getS3PreviewKey } from '../../config/s3.config';
-import { uploadToS3, streamFromS3, objectExists } from '../s3Service';
+import {
+  audioObjectExists,
+  getS3PreviewKey,
+  openAudioObject,
+  putDerivedAudio,
+} from '../oxyFiles/audioStorage';
 import { getTrackS3Key, type TrackAudioRef } from '../audioStorageService';
 import { getDb } from '../../db/postgres';
 import { trackKeys } from '../../db/schema/trackKeys';
@@ -72,7 +76,7 @@ export async function storePreviewFromSourceFile(
   try {
     await generatePreviewClip({ inputPath, startSec, outPath });
     const body = fs.readFileSync(outPath);
-    await uploadToS3(previewKey, body, { contentType: PREVIEW_CONTENT_TYPE });
+    await putDerivedAudio(previewKey, body, { contentType: PREVIEW_CONTENT_TYPE });
     return previewKey;
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -256,7 +260,7 @@ async function defaultGetKeyHex(trackId: string): Promise<string | null> {
 }
 
 async function readS3Text(s3Key: string): Promise<string> {
-  const { stream } = await streamFromS3(s3Key);
+  const { stream } = await openAudioObject(s3Key);
   return new Promise<string>((resolve, reject) => {
     const chunks: Buffer[] = [];
     stream.on('data', (chunk: Buffer) => chunks.push(chunk));
@@ -266,7 +270,7 @@ async function readS3Text(s3Key: string): Promise<string> {
 }
 
 async function readS3Buffer(s3Key: string): Promise<Buffer> {
-  const { stream } = await streamFromS3(s3Key);
+  const { stream } = await openAudioObject(s3Key);
   return new Promise<Buffer>((resolve, reject) => {
     const chunks: Buffer[] = [];
     stream.on('data', (chunk: Buffer) => chunks.push(chunk));
@@ -305,7 +309,7 @@ export async function storePreviewFromHls(
   const fetchText = deps.fetchText ?? readS3Text;
   const fetchSegment = deps.fetchSegment ?? readS3Buffer;
   const runClip = deps.runClip ?? generatePreviewClipFromHls;
-  const upload = deps.upload ?? uploadToS3;
+  const upload = deps.upload ?? putDerivedAudio;
 
   const keyHex = await getKeyHex(trackId);
   if (!keyHex) {
@@ -389,7 +393,7 @@ export async function ensurePreviewClip(
   startSec: number,
 ): Promise<string | null> {
   const previewKey = getS3PreviewKey(track.id, startSec);
-  if (await objectExists(previewKey)) {
+  if (await audioObjectExists(previewKey)) {
     return previewKey;
   }
 
@@ -424,11 +428,11 @@ async function runPreviewGeneration(
       audioSource: track.audioSource,
     };
     const sourceKey = getTrackS3Key(sourceRef);
-    if (await objectExists(sourceKey)) {
+    if (await audioObjectExists(sourceKey)) {
       const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'preview-src-'));
       const sourcePath = path.join(tmpDir, `source.${track.audioSource.format}`);
       try {
-        const { stream } = await streamFromS3(sourceKey);
+        const { stream } = await openAudioObject(sourceKey);
         await pipeToFile(stream, sourcePath);
         return await storePreviewFromSourceFile({
           trackId: track.id,

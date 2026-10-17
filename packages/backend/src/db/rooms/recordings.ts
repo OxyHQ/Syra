@@ -194,6 +194,8 @@ export interface CreateRecordingInput {
   readonly host: string;
   readonly egressId: string;
   readonly objectKey: string;
+  /** The Oxy recording target egress writes into; `null` for a bucket recording. */
+  readonly oxyRecordingTargetId?: string | null;
   readonly startedAt: Date;
   readonly expiresAt: Date;
 }
@@ -212,6 +214,7 @@ export async function createRecording(
       status: RecordingStatus.RECORDING,
       egressId: input.egressId,
       objectKey: input.objectKey,
+      oxyRecordingTargetId: input.oxyRecordingTargetId ?? null,
       startedAt: input.startedAt,
       access: RecordingAccess.PUBLIC,
       expiresAt: input.expiresAt,

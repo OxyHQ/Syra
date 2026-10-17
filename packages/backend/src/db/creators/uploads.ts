@@ -383,6 +383,8 @@ export interface UploadStorageRef {
   ownerOxyUserId: string;
   audioSourceKey: string | null;
   hlsMasterKey: string | null;
+  /** The upload's Oxy audio file (ADR 0043 stage 4c), whose play sessions a purge stops. */
+  audioFileId: string | null;
   hls: HlsRendition[];
 }
 
@@ -391,6 +393,7 @@ const STORAGE_REF_COLUMNS = {
   ownerOxyUserId: userUploads.ownerOxyUserId,
   audioSourceKey: userUploads.audioSourceKey,
   hlsMasterKey: userUploads.hlsMasterKey,
+  audioFileId: userUploads.audioFileId,
 } as const;
 
 type StorageRefRow = { [K in keyof typeof STORAGE_REF_COLUMNS]: UploadRow[K] };

@@ -32,6 +32,25 @@ function apiImageUrl(pathOrId: string): string {
   return `${getCatalogApiOrigin()}${path}`;
 }
 
+/** Resolves an Oxy file id (and rendition) to a URL — Oxy's `assets.publicUrl`. */
+export type CatalogFileResolver = (fileId: string, variant?: string) => string;
+
+let catalogFileResolver: CatalogFileResolver | null = null;
+
+/**
+ * Install the Oxy file resolver catalogue artwork uses (`AppProviders`, from the
+ * same `oxyServices` its Bloom `ImageResolverProvider` uses). Kept out of this
+ * module's imports so the image helpers stay pure for every test that loads them.
+ */
+export function setCatalogFileResolver(resolver: CatalogFileResolver | null): void {
+  catalogFileResolver = resolver;
+}
+
+/** The URL of an Oxy-stored catalogue image, or `undefined` before a resolver is installed. */
+export function resolveCatalogFileUrl(fileId: string, variant?: string): string | undefined {
+  return catalogFileResolver?.(fileId, variant);
+}
+
 export function resolveCatalogImageUrl(value: string | null | undefined): string | undefined {
   if (!value) return undefined;
 

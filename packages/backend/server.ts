@@ -57,6 +57,8 @@ import recordingsRoutes from './src/routes/recordings.routes';
 import livekitWebhookRoutes from './src/routes/livekitWebhook.routes';
 import reportsRoutes from './src/routes/reports.routes';
 import { createCrowdSourceWebhookRoutes } from './src/routes/crowdsourceWebhook.routes';
+import { createOxyFilesWebhookRoutes } from './src/routes/oxyFilesWebhook.routes';
+import { startOxyFilesWorkers, stopOxyFilesWorkers } from './src/services/oxyFiles/workers';
 import { assertModerationSchema, getModerationIntegration } from './src/moderation/integration';
 import { initializeRoomSocket } from './src/sockets/roomSocket';
 import { initializeIO } from './src/utils/socket';
@@ -87,6 +89,11 @@ app.get('/api/podcasts/openapi.json', (_req, res) => res.json(publicOpenApi()));
 // The route is machine-to-machine and gated entirely by cryptographic signature
 // verification, so it needs no per-request rate limit.
 app.use('/livekit', livekitWebhookRoutes);
+
+// Oxy's file events (ADR 0043 D9) — before the JSON parser for the same reason
+// as the two receivers around it: the signature covers the raw bytes. Mounted
+// ahead of `/webhooks` so the CrowdSource receiver never sees its requests.
+app.use('/webhooks/oxy/files', createOxyFilesWebhookRoutes());
 
 // The CrowdSource webhook receiver, mounted here for the SAME reason and with the
 // same consequence if it moves: its HMAC covers the exact bytes that arrived, and
@@ -486,6 +493,11 @@ const bootServer = async () => {
   // run. See `acquireSweepLock` in services/uploads/expirySweeper.ts.
   startExpirySweeper();
 
+  // Oxy Files (ADR 0043): deliver queued file references, reconcile them
+  // nightly, and flush the legacy-image-read counts the bucket retirement waits
+  // on. See services/oxyFiles/workers.ts.
+  startOxyFilesWorkers();
+
   // Drain the moderation outbox. Deliberately NOT lock-guarded like the two
   // schedulers above: every event is claimed under a Postgres lease with an owner
   // check, so N instances share the work and a dead instance's lease is reclaimed
@@ -519,6 +531,7 @@ async function shutdown() {
   const httpClosed = new Promise<void>((resolve) => server.close(() => resolve()));
   await Promise.all([httpClosed, new Promise<void>((resolve) => io.close(() => resolve()))]);
   await activity?.stop();
+  await stopOxyFilesWorkers();
   clearTimeout(timeout);
   process.exit(0);
 }

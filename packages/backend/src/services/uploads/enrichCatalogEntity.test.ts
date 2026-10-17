@@ -412,7 +412,11 @@ describe('artist photo suggestions from an uploaded file', () => {
    * test file in the run.
    */
   const fakeStore: ArtistPhotoSuggestionDeps = {
-    storeImage: async () => ({ id: await makeArtistRow(), s3Key: 'k' }),
+    storeImage: async () => ({
+      id: await makeArtistRow(),
+      fileId: 'oxy-file-1',
+      pixels: { width: 1, height: 1 },
+    }),
   };
 
   it('classifies picture types, which is what keeps a cover off an artist profile', () => {

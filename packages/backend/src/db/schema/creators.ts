@@ -380,6 +380,13 @@ export const userUploads = pgTable(
     // The HLS rendition LADDER is `user_upload_hls_renditions`, below.
     hlsMasterKey: text(),
     loudnessLufs: doublePrecision(),
+    /**
+     * The Oxy AUDIO file this locker upload plays from: a private file in the
+     * owner's account (ADR 0043 stage 4c). Another service's key, no foreign
+     * key; `null` until the audio is stored in Oxy
+     * (`services/oxyFiles/audioStorage.ts`).
+     */
+    audioFileId: text(),
 
     status: text({ enum: UPLOAD_STATUSES }).notNull().default('processing'),
 
@@ -466,6 +473,10 @@ export const userUploads = pgTable(
      * with `owner_oxy_user_id`.
      */
     index('user_uploads_sha256_idx').on(t.sha256),
+    // The key authorization callback finds the row a play session's file is.
+    index('user_uploads_audio_file_id_idx')
+      .on(t.audioFileId)
+      .where(sql`${t.audioFileId} is not null`),
     /**
      * The takedown purge's candidate bucket: a DMCA takedown has to reach
      * every locker copy INCLUDING re-encodes, which hash differently, so

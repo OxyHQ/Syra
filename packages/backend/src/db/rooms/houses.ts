@@ -61,6 +61,8 @@ const HOUSE_COLUMNS = {
   description: houses.description,
   avatar: houses.avatar,
   coverImage: houses.coverImage,
+  avatarFileId: houses.avatarFileId,
+  coverImageFileId: houses.coverImageFileId,
   createdBy: houses.createdBy,
   visibilityDiscovery: houses.visibilityDiscovery,
   visibilityRooms: houses.visibilityRooms,
@@ -500,6 +502,9 @@ export type UpdateHouseInput = Partial<{
   description: string | null;
   avatar: string | null;
   coverImage: string | null;
+  /** The Oxy files (ADR 0043); writing one also clears its legacy URL — see `updateHouse`. */
+  avatarFileId: string | null;
+  coverImageFileId: string | null;
   tags: string[];
   visibility: HouseVisibility;
 }>;
@@ -514,8 +519,17 @@ export async function updateHouse(
     .set({
       name: input.name,
       description: input.description,
-      avatar: input.avatar,
-      coverImage: input.coverImage,
+      // A new image is ONE of the two: an Oxy file clears the legacy URL, and a
+      // URL replaces the file. Otherwise the dual read would keep showing
+      // whichever one is older.
+      avatar: input.avatarFileId ? null : input.avatar,
+      coverImage: input.coverImageFileId ? null : input.coverImage,
+      avatarFileId:
+        input.avatar !== undefined && input.avatarFileId === undefined ? null : input.avatarFileId,
+      coverImageFileId:
+        input.coverImage !== undefined && input.coverImageFileId === undefined
+          ? null
+          : input.coverImageFileId,
       tags: input.tags,
       visibilityDiscovery: input.visibility?.discovery,
       visibilityRooms: input.visibility?.rooms,

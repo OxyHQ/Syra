@@ -647,14 +647,14 @@ export async function suggestArtistPhotosFromUpload(
     // have been another mechanism that runs and does nothing.
     try {
       const probed = await sharp(picture.data).metadata();
+      // The proposer's file when there is one (it came out of THEIR upload),
+      // Syra's otherwise — `storeImageAsset` decides the owner from `uploadedBy`.
       const asset = await deps.storeImage({
         buffer: picture.data,
         filename: `artist-suggestion.${probed.format ?? 'jpg'}`,
         contentType: picture.mimeType,
         ownerType: 'upload',
         ...(input.proposedByOxyUserId && { uploadedBy: input.proposedByOxyUserId }),
-        ...(probed.width !== undefined && { width: probed.width }),
-        ...(probed.height !== undefined && { height: probed.height }),
       });
 
       /**

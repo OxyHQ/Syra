@@ -57,7 +57,7 @@ import {
 } from '@syra/shared-types';
 
 import { env } from '../config/env';
-import { getS3LockerAudioKey } from '../config/s3.config';
+import { getS3LockerAudioKey } from '../services/oxyFiles/audioStorage';
 import { getDb, isDriverError, isPostgresConnected } from '../db/postgres';
 import { albums, catalogEntities, imageAssets, trackCredits, tracks } from '../db/schema/catalog';
 import { trackKeys } from '../db/schema/trackKeys';
@@ -111,7 +111,8 @@ import { evaluatePublicContribution } from '../services/compliance/contributionP
 import { deleteUploadStoredObjects } from '../services/compliance/takedown';
 import { computeUploadExpiry, recordUploadPlay } from '../services/uploads/expirySweeper';
 
-import { uploadToS3, streamFromS3 } from '../services/s3Service';
+import { openAudioObject, putSourceAudio } from '../services/oxyFiles/audioStorage';
+import { decideOxyPlayback } from '../services/stream/oxyPlayback';
 import { uploadTrackAudio } from '../services/audioStorageService';
 import { enqueueIngest, enqueueUploadIngest } from '../services/ingest/ingestQueue';
 import { LOCKER_HLS_BITRATES_KBPS } from '../services/ingest/hlsPackager';
@@ -582,14 +583,14 @@ async function storeEmbeddedCoverArt(
   try {
     const probed = await sharp(picture.data).metadata();
     const { width, height } = probed;
+    // The uploader's file, in their own Oxy account (ADR 0043) — the artwork
+    // arrived inside THEIR upload.
     const stored = await storeImageAsset({
       buffer: picture.data,
       filename: `cover.${probed.format ?? 'jpg'}`,
       contentType: picture.mimeType,
       ownerType: 'upload',
       uploadedBy: uploaderOxyUserId,
-      width,
-      height,
     });
 
     return {
@@ -836,8 +837,10 @@ async function storeLockerUpload(
   try {
     // Streamed from the temp file: the S3 client derives Content-Length from the
     // ReadStream's path, so a 200MB upload is never held in memory.
-    await uploadToS3(audioKey, fs.createReadStream(filePath), {
+    await putSourceAudio(audioKey, fs.createReadStream(filePath), {
       contentType: `audio/${format}`,
+      // A locker file is the person's private music.
+      owner: { kind: 'account', oxyUserId: ownerOxyUserId },
     });
   } catch (err) {
     await deleteUploads([uploadId]).catch((cleanupErr: unknown) =>
@@ -1482,6 +1485,9 @@ async function publishContribution(params: PublishParams): Promise<string> {
       },
     },
     fs.createReadStream(params.filePath),
+    // The contributor's own file, published to the catalogue under their
+    // attestation: theirs once audio moves to Oxy Files.
+    { kind: 'account', oxyUserId: params.uploaderOxyUserId },
   );
 
   /**
@@ -2506,7 +2512,7 @@ export const promoteUpload = async (
     // catalogue's ingest reads from the track's own key, not the locker's.
     stagedDir = fs.mkdtempSync(path.join(os.tmpdir(), 'promote-'));
     const stagedPath = path.join(stagedDir, `source.${audioSource.format}`);
-    const { stream } = await streamFromS3(audioSource.key);
+    const { stream } = await openAudioObject(audioSource.key);
     await new Promise<void>((resolve, reject) => {
       const destination = fs.createWriteStream(stagedPath);
       stream.pipe(destination);
@@ -2720,11 +2726,37 @@ export const getUploadStream = async (
       return;
     }
 
+    // The owner's private file in Oxy Files (ADR 0043 stage 4c): a play session
+    // for them alone, its key released only to the owner
+    // (`audioKeyAuthorization.ts`). Anything Oxy cannot serve plays from the
+    // legacy ladder below.
+    const oxy = await decideOxyPlayback({
+      audioFileId: upload.audioFileId,
+      endUserId: userId,
+      maxBitrateKbps: LOCKER_MAX_BITRATE_KBPS,
+      durationSec: upload.duration,
+    });
+    if (oxy.kind === 'oxy') {
+      await recordUploadPlay(uploadId, userId);
+      res.set('Cache-Control', CACHE_CONTROL_NO_STORE);
+      res.set('Vary', 'Authorization');
+      res.status(200).json(oxy.stream);
+      return;
+    }
+    if (oxy.kind === 'withdrawn') {
+      res.status(404).json({ error: 'Upload not found' });
+      return;
+    }
+
     // The ladder is `user_upload_hls_renditions` now, so "has a playable
     // rendition" is a second read rather than a field on the row. It is loaded
     // AFTER the status checks above, which is what keeps the locker listing —
     // the hot path — free of a join it never looks at.
     const hls = (await loadUploadHls([upload.id])).get(upload.id) ?? [];
+    if (oxy.ladderPending && hls.length === 0) {
+      res.status(409).json({ error: 'Upload processing' });
+      return;
+    }
     if (upload.status !== 'ready' || !upload.hlsMasterKey || hls.length === 0) {
       res.status(422).json({ error: 'Upload not playable' });
       return;

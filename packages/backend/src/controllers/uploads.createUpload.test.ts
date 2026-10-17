@@ -13,6 +13,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterEach, afterAll, mock } from 'bun:test';
+import { installFakeOxyFiles, resetOxyFiles } from '../test/fakeOxyFiles';
 import express from 'express';
 import http from 'http';
 import fs from 'fs';
@@ -189,6 +190,10 @@ let bulkImportWas: string | undefined;
 beforeAll(async () => {
   await connectDb();
   installDeezerStub();
+  // Embedded cover art is stored in the uploader's Oxy account (ADR 0043).
+  const oxyFiles = installFakeOxyFiles();
+  oxyFiles.localUsers.add(OWNER);
+  oxyFiles.localUsers.add(STRANGER);
 
   /**
    * The invisibility test calls `search`, which fires `syncPodcastSearch` in the
@@ -232,6 +237,7 @@ afterEach(async () => {
 });
 
 afterAll(async () => {
+  resetOxyFiles();
   if (bulkImportWas === undefined) delete process.env.PODCAST_BULK_IMPORT_ENABLED;
   else process.env.PODCAST_BULK_IMPORT_ENABLED = bulkImportWas;
   await new Promise<void>((resolve) => server.close(() => resolve()));

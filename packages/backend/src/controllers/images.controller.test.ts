@@ -20,7 +20,7 @@ import type { NextFunction, Request, Response } from 'express';
  *
  * ## Why a 404 is the assertion for a well-formed id
  *
- * `getImageAssetStream` returns `null` for an id matching no row WITHOUT
+ * `resolveImageAsset` returns `null` for an id matching no row WITHOUT
  * reaching S3, so a well-formed id that names nothing is a 404 that proves the
  * request got PAST the guard. That is the discriminator: under a 24-hex-only
  * guard a uuid v7 never reaches the query at all and comes back 400.

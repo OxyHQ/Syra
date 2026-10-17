@@ -6,6 +6,7 @@ import {
   type CatalogImageTarget,
 } from './pickImage';
 import type { CatalogImageSizes, TrackImage } from '@syra/shared-types';
+import { setCatalogFileResolver } from './catalogImages';
 
 const IMAGES: TrackImage[] = [
   { url: '/api/images/111111111111111111111111', width: 150, height: 150, source: 'upload' },
@@ -75,6 +76,41 @@ describe('pickImageUrl — size selection', () => {
     expect(pickImageUrl(undefined, FALLBACK, 500, SIZES)).toBe(
       `${API_IMAGES}/666666666666666666666666`,
     );
+  });
+
+  it("resolves an Oxy-stored variant through Oxy's own resolver, at its rendition", () => {
+    const oxySizes: CatalogImageSizes = {
+      small: {
+        id: 'row-s',
+        url: '/api/images/row-s',
+        width: 256,
+        height: 256,
+        fileId: 'file-1',
+        variant: 'thumb',
+      },
+      large: {
+        id: 'row-l',
+        url: '/api/images/row-l',
+        width: 640,
+        height: 640,
+        fileId: 'file-1',
+        variant: 'w640',
+      },
+    };
+    // Before a resolver is installed: Syra's route, which redirects to the file.
+    expect(pickImageUrl(undefined, FALLBACK, 64, oxySizes)).toBe(`${API_IMAGES}/row-s`);
+
+    setCatalogFileResolver((id, variant) => `https://cloud.test/${id}?variant=${variant}`);
+    try {
+      expect(pickImageUrl(undefined, FALLBACK, 64, oxySizes)).toBe(
+        'https://cloud.test/file-1?variant=thumb',
+      );
+      expect(pickImageUrl(undefined, FALLBACK, 500, oxySizes)).toBe(
+        'https://cloud.test/file-1?variant=w640',
+      );
+    } finally {
+      setCatalogFileResolver(null);
+    }
   });
 
   it('supports semantic render targets backed by catalog variants', () => {

@@ -220,11 +220,19 @@ export function getS3PodcastShowPrefixes(podcastId: string): readonly string[] {
   ];
 }
 
-export function getS3ImageKey(imageId: string, filename: string): string {
-  const safeFilename =
-    filename.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'image';
-  return `${S3_IMAGE_PREFIX}/${imageId}/${safeFilename}`;
-}
+/**
+ * Every prefix Syra's images were written under before they moved to Oxy Files
+ * (ADR 0043): `image_assets` objects, and the house / room / series images.
+ * Nothing writes under them any more; `scripts/retireLegacyImageStorage.ts`
+ * deletes them once the legacy-read gate is met. Each ends with `/`, so a prefix
+ * can never match a sibling that merely starts with the same characters.
+ */
+export const LEGACY_IMAGE_PREFIXES: readonly string[] = [
+  `${S3_IMAGE_PREFIX}/`,
+  'agora/houses/',
+  'agora/rooms/',
+  'agora/series/',
+];
 
 export const S3_PREVIEW_PREFIX = process.env.S3_PREVIEW_PREFIX || 'previews';
 

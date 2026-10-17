@@ -449,7 +449,7 @@ export const podcasts = pgTable(
      * indexes a foreign key column on its own, but `ON DELETE SET NULL` still
      * has to find every referencing row when the referenced `image_assets`
      * row is deleted — unindexed, that is a sequential scan of this table PER
-     * DELETED ROW. `consolidateDuplicateCatalogImages.ts` deleting a single
+     * DELETED ROW. The since-removed `consolidateDuplicateCatalogImages.ts` deleting a single
      * batch of duplicate images against an unindexed `episodes` (see that
      * table below) blocked live episode inserts for 30+ minutes before this
      * was caught; these indexes are that fix.
@@ -663,6 +663,13 @@ export const episodes = pgTable(
     audioSourceDuration: doublePrecision(),
     // `hls` is a child table (episode_hls_renditions, below).
     hlsMasterKey: text(),
+    /**
+     * The Oxy AUDIO file this episode plays from (ADR 0043 stage 4c): a
+     * hosted episode's audio (the show owner's file), or a mirrored enclosure
+     * Syra imported (Syra's own). Another service's key, no foreign key;
+     * `null` until the audio is stored in Oxy (`services/oxyFiles/audioStorage.ts`).
+     */
+    audioFileId: text(),
     // ── Signals ───────────────────────────────────────────────────────────
     playCount: integer().notNull().default(0),
     popularity: integer().notNull().default(0),
@@ -695,6 +702,8 @@ export const episodes = pgTable(
       sql`${t.audioSourceFormat} is null or ${t.audioSourceFormat} in (${sql.raw(inList(AUDIO_FORMATS))})`,
     ),
     check('episodes_popularity_check', sql`${t.popularity} between 0 and 100`),
+    // The key authorization callback finds the row a play session's file is.
+    index('episodes_audio_file_id_idx').on(t.audioFileId).where(sql`${t.audioFileId} is not null`),
     // One episode per feed guid.
     unique('episodes_podcast_id_guid_key').on(t.podcastId, t.guid),
     // Reverse-chronological listing within a show — NON-partial; see the

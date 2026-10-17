@@ -133,6 +133,7 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import { createdAt, generatedId, inList, timestamptz, tsvector, updatedAt } from '@oxy.so/db';
+import { IMAGE_VARIANTS, type ImageVariantName } from '@oxy.so/utils/image';
 import type {
   ArtistImageSuggestion,
   ArtistMember,
@@ -246,13 +247,45 @@ export const CATALOG_IMAGE_ENTITY_TYPES = [
 
 export type CatalogImageEntityType = (typeof CATALOG_IMAGE_ENTITY_TYPES)[number];
 
+/**
+ * Oxy's image renditions an `image_assets` row may name (`@oxy.so/utils/image`,
+ * whose NAMES are the contract). A row that names none is the original.
+ */
+export const OXY_IMAGE_VARIANTS = Object.keys(IMAGE_VARIANTS) as ImageVariantName[];
+
+/**
+ * Whether an image may be served. Anything but `active` is answered as no image
+ * at all — by `/api/images/:id` and by every DTO's variant lookup.
+ *
+ * - `unavailable`: Oxy says the file is in trash, deleted or no longer public.
+ * - `blocked`: taken down after a content claim (ADR 0043 D10).
+ * - `missing`: a legacy row whose object is not in the bucket (found by the
+ *   migration; there is nothing to copy).
+ */
+export const IMAGE_SERVING_STATUSES = ['active', 'unavailable', 'blocked', 'missing'] as const;
+export type ImageServingStatus = (typeof IMAGE_SERVING_STATUSES)[number];
+
 // ── image_assets ─────────────────────────────────────────────────────────
 
 export const imageAssets = pgTable(
   'image_assets',
   {
     id: generatedId(),
-    s3Key: text().notNull(),
+    /**
+     * The LEGACY storage: an object in Syra's own bucket. Null once the image is
+     * in Oxy Files; the bucket's image prefixes are retired when no row needs one
+     * (`docs/runbooks/oxy-files-images.md`).
+     */
+    s3Key: text(),
+    /**
+     * The Oxy file holding the bytes (ADR 0043) — Syra's own file for catalogue
+     * artwork, the uploader's for a person's upload. Several rows name one file:
+     * a catalogue image is ONE file whose renditions are the six size rows.
+     */
+    oxyFileId: text(),
+    /** The Oxy rendition this row serves; null is the original. */
+    oxyVariant: text({ enum: OXY_IMAGE_VARIANTS as [ImageVariantName, ...ImageVariantName[]] }),
+    servingStatus: text({ enum: IMAGE_SERVING_STATUSES }).notNull().default('active'),
     filename: text().notNull(),
     contentType: text().notNull(),
     byteSize: integer().notNull(),
@@ -279,6 +312,19 @@ export const imageAssets = pgTable(
   },
   (t) => [
     unique('image_assets_s3_key_key').on(t.s3Key),
+    // Every row is stored SOMEWHERE: the legacy bucket, Oxy Files, or (during
+    // the soak) both.
+    check('image_assets_storage_check', sql`${t.s3Key} is not null or ${t.oxyFileId} is not null`),
+    check(
+      'image_assets_oxy_variant_check',
+      sql`${t.oxyVariant} is null or (${t.oxyFileId} is not null and ${t.oxyVariant} in (${sql.raw(inList(OXY_IMAGE_VARIANTS))}))`,
+    ),
+    check(
+      'image_assets_serving_status_check',
+      sql`${t.servingStatus} in (${sql.raw(inList(IMAGE_SERVING_STATUSES))})`,
+    ),
+    // A file event names the file; the reference triggers resolve rows to files.
+    index('image_assets_oxy_file_id_idx').on(t.oxyFileId),
     check(
       'image_assets_owner_type_check',
       sql`${t.ownerType} in (${sql.raw(inList(IMAGE_ASSET_OWNER_TYPES))})`,
@@ -299,7 +345,7 @@ export const imageAssets = pgTable(
       t.catalogSize,
     ),
     index('image_assets_catalog_source_content_hash_idx').on(t.catalogSourceContentHash),
-    // `findExistingCatalogImageSet` (`imageAssetService.ts`) queries this
+    // The catalogue mirror used to query this
     // column on EVERY mirror attempt, before ever downloading — an
     // unindexed scan here would be a full table scan of image_assets on
     // every single catalog image mirror across the whole app.
@@ -511,12 +557,18 @@ export const catalogEntities = pgTable(
     index('catalog_entities_verified_popularity_idx').on(t.verified, t.popularity.desc()),
     index('catalog_entities_linked_artist_id_idx').on(t.linkedArtistId),
     index('catalog_entities_search_gin').using('gin', t.searchVector),
+    // The Oxy reference trigger on `image_assets` finds the artists whose
+    // pending photo suggestions name a repointed image (`@>` on `image.url`).
+    index('catalog_entities_image_suggestions_gin').using(
+      'gin',
+      sql`${t.imageSuggestions} jsonb_path_ops`,
+    ),
     /**
      * These seven cover the `image_assets.id` FK columns. Postgres never
      * indexes a foreign key column on its own, but `ON DELETE SET NULL` still
      * has to find every referencing row when the referenced `image_assets`
      * row is deleted — unindexed, that is a sequential scan of this table PER
-     * DELETED ROW. `consolidateDuplicateCatalogImages.ts` deleting a single
+     * DELETED ROW. The since-removed `consolidateDuplicateCatalogImages.ts` deleting a single
      * batch of duplicate images against an unindexed `episodes` blocked live
      * episode inserts for 30+ minutes before this was caught; every table
      * `image_assets.id` can be referenced from gets the same indexes.
@@ -735,6 +787,13 @@ export const tracks = pgTable(
     // jsonb in the first pass and is not anymore.
     loudnessLufs: doublePrecision(),
     hlsMasterKey: text(),
+    /**
+     * The Oxy AUDIO file this row plays from (ADR 0043 stage 4c) — another
+     * service's key, no foreign key. `null` until the audio is stored in Oxy
+     * (`services/oxyFiles/audioStorage.ts`); while it is null, or while Oxy has
+     * not finished its ladder, the legacy bucket ladder serves.
+     */
+    audioFileId: text(),
     // The provenance LOG is `track_sources` (child table, below) — the third
     // sibling of `album_sources` and `catalog_entity_sources`. See the
     // file-level doc comment for why this wasn't in the first pass.
@@ -758,6 +817,8 @@ export const tracks = pgTable(
       sql`${t.audioSourceFormat} is null or ${t.audioSourceFormat} in (${sql.raw(inList(AUDIO_FORMATS))})`,
     ),
     check('tracks_popularity_check', sql`${t.popularity} between 0 and 100`),
+    // The key authorization callback finds the row a play session's file is.
+    index('tracks_audio_file_id_idx').on(t.audioFileId).where(sql`${t.audioFileId} is not null`),
     unique('tracks_external_isrc_key').on(t.externalIsrc),
     /**
      * The index decision for `mood` / `isExplicit` / `isAvailable` /

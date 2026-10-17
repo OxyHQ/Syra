@@ -21,19 +21,24 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { Readable } from 'stream';
+import type { Readable } from 'stream';
 import { eq } from 'drizzle-orm';
 import { describeDriverError } from '@oxy.so/db';
 import { getDb, isDriverError } from '../../db/postgres';
 import { userUploads } from '../../db/schema/creators';
 import { setUploadHls } from '../../db/creators/uploads';
 import { logger } from '../../utils/logger';
-import { streamFromS3 } from '../s3Service';
+import {
+  audioMimeFor,
+  getS3LockerHlsKey,
+  mirrorAudioToOxy,
+  openAudioObject,
+  oxyAudioMode,
+} from '../oxyFiles/audioStorage';
 import { packageToEncryptedHls, LOCKER_HLS_BITRATES_KBPS } from './hlsPackager';
 import type { PackageOptions, PackageResult } from './hlsPackager';
 import { storePackagedHls } from './hlsStorage';
 import type { StoreHlsTarget, StoredHls } from './hlsStorage';
-import { getS3LockerHlsKey } from '../../config/s3.config';
 import { probeAudio } from './probeAudio';
 import type { ProbedAudio } from './probeAudio';
 import { buildStreamKeyUri } from './streamKeyUri';
@@ -45,12 +50,14 @@ export interface UploadIngestDeps {
   probe?: (inputPath: string) => Promise<ProbedAudio>;
   packageHls?: (opts: PackageOptions) => Promise<PackageResult>;
   storeHls?: (result: PackageResult, target: StoreHlsTarget) => Promise<StoredHls>;
+  /** Store the original in Oxy Files (`null` when `OXY_AUDIO` is `legacy` or Oxy refused). */
+  mirrorToOxy?: typeof mirrorAudioToOxy;
   keyUri?: string;
 }
 
 /** Stream the stored source object to a temp file ffmpeg can read. */
 async function defaultFetchSource(s3Key: string, format: string): Promise<FetchSourceResult> {
-  const { stream } = await streamFromS3(s3Key);
+  const { stream } = await openAudioObject(s3Key);
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'locker-src-'));
   const localPath = path.join(tmpDir, `source.${format}`);
@@ -134,6 +141,30 @@ export async function ingestUserUpload(uploadId: string, deps?: UploadIngestDeps
     cleanup = fetched.cleanup;
 
     const probed = await probe(fetched.localPath);
+
+    // Oxy Files (ADR 0043 stage 4c): a locker file is the person's PRIVATE file
+    // in their own account, stored for them by Syra — which is Syra's consent to
+    // play it back to them, and theirs to withdraw from their file manager. In
+    // `oxy` mode an accepted file needs no ladder of Syra's own.
+    const oxy = await (deps?.mirrorToOxy ?? mirrorAudioToOxy)({
+      entity: { kind: 'user_upload', id: uploadId },
+      localPath: fetched.localPath,
+      mime: audioMimeFor(audioSource.format),
+      owner: { kind: 'account', oxyUserId: upload.ownerOxyUserId },
+      filename: `${uploadId}.${audioSource.format}`,
+    });
+    if (oxy && oxyAudioMode() === 'oxy') {
+      await getDb()
+        .update(userUploads)
+        .set({
+          duration: probed.durationSec,
+          ...(probed.bitrateKbps !== undefined && { bitrateKbps: probed.bitrateKbps }),
+          ...(probed.codec !== undefined && { codec: probed.codec }),
+          status: 'ready',
+        })
+        .where(eq(userUploads.id, uploadId));
+      return;
+    }
 
     outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'locker-hls-'));
     const result = await packageHls({

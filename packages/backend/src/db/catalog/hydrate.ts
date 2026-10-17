@@ -87,7 +87,14 @@ export async function loadImageVariants(
   if (wanted.length === 0) return () => undefined;
 
   const assets: ImageAssetRow[] = await getDb()
-    .select({ id: imageAssets.id, width: imageAssets.width, height: imageAssets.height })
+    .select({
+      id: imageAssets.id,
+      width: imageAssets.width,
+      height: imageAssets.height,
+      oxyFileId: imageAssets.oxyFileId,
+      oxyVariant: imageAssets.oxyVariant,
+      servingStatus: imageAssets.servingStatus,
+    })
     .from(imageAssets)
     .where(inArray(imageAssets.id, wanted));
 

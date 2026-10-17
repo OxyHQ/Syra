@@ -1,7 +1,14 @@
 /**
- * Cache-on-demand for external (RSS) episodes. Copies an origin enclosure into
- * Syra's S3 over an SSRF-safe channel so a popular/saved episode keeps playing
- * even if the third-party host degrades, and so we can serve it from our edge.
+ * Cache-on-demand for external (RSS) episodes, so a popular/saved episode keeps
+ * playing even if the third-party host degrades.
+ *
+ * With `OXY_AUDIO` on (ADR 0043 stage 4c) the copy is made BY OXY: an import by
+ * URL (https, public hosts, up to 8 GiB — one over 40 MiB is fetched in the
+ * background and the SDK waits), stored as Syra's own private file with Oxy's
+ * audio ladder, waveform and preview, referenced as the episode's audio. One
+ * URL is imported once however many episodes name it. If Oxy refuses or cannot
+ * be reached, the legacy copy below is made instead: Syra fetches the enclosure
+ * over an SSRF-safe channel into its bucket (at most {@link MAX_CACHE_BYTES}).
  *
  * This is the FALLBACK copy path (S3 object). The richer HLS transcode for very
  * popular episodes reuses the shared ingest pipeline (`ingestEpisode`) once the
@@ -12,8 +19,12 @@
 import type { IncomingMessage } from 'node:http';
 import { safeFetch, SsrfRejection, UpstreamError } from '@oxy.so/core/server';
 import { findEpisodeById, setEpisodeCache } from '../../db/podcasts/episodes';
-import { getS3PodcastEpisodeCacheKey } from '../../config/s3.config';
-import { uploadToS3 } from '../s3Service';
+import {
+  getS3PodcastEpisodeCacheKey,
+  importEnclosureToOxy,
+  oxyAudioEnabled,
+  putSourceAudio,
+} from '../oxyFiles/audioStorage';
 import { logger } from '../../utils/logger';
 import { describeErrorSafely } from '../../utils/error';
 
@@ -64,19 +75,50 @@ async function readCapped(stream: IncomingMessage, maxBytes: number): Promise<Bu
   });
 }
 
+/** Where an episode's enclosure was cached: an Oxy file, or a bucket object. */
+export type CachedEnclosure = { store: 'oxy'; fileId: string } | { store: 'bucket'; key: string };
+
 /**
- * Copy an episode's origin enclosure into S3 and mark `cache.status = 'cached'`.
- * Idempotent: a no-op if already cached. Returns the resulting cache S3 key, or
- * null when the episode is not a cacheable external episode.
+ * Copy an episode's origin enclosure — into Oxy Files when `OXY_AUDIO` allows
+ * and Oxy accepts it, into the bucket otherwise — and mark
+ * `cache.status = 'cached'`. Idempotent: a no-op if already cached. Returns
+ * where it is, or null when the episode is not a cacheable external episode.
  */
-export async function cacheEpisode(episodeId: string): Promise<string | null> {
+export async function cacheEpisode(
+  episodeId: string,
+  deps: { importToOxy?: typeof importEnclosureToOxy } = {},
+): Promise<CachedEnclosure | null> {
   const found = await findEpisodeById(episodeId);
   if (!found) return null;
   const { episode } = found;
   if (episode.source !== 'rss' || !episode.enclosureUrl) return null;
+  if (episode.audioFileId) return { store: 'oxy', fileId: episode.audioFileId };
   // `cache.s3Key` is `cache_object_key` here — renamed in `schema/podcasts.ts`
   // because `cacheS3Key` tokenizes as `cache_s_3_key` under drizzle's casing.
-  if (episode.cacheStatus === 'cached' && episode.cacheObjectKey) return episode.cacheObjectKey;
+  if (episode.cacheStatus === 'cached' && episode.cacheObjectKey) {
+    return { store: 'bucket', key: episode.cacheObjectKey };
+  }
+
+  if (oxyAudioEnabled()) {
+    try {
+      const stored = await (deps.importToOxy ?? importEnclosureToOxy)(
+        episodeId,
+        episode.enclosureUrl,
+      );
+      await setEpisodeCache(episodeId, { status: 'cached', cachedAt: new Date() });
+      logger.info('[podcasts] episode enclosure imported into Oxy Files', {
+        episodeId,
+        fileId: stored.fileId,
+        bytes: stored.size,
+      });
+      return { store: 'oxy', fileId: stored.fileId };
+    } catch (err) {
+      logger.warn('[podcasts] Oxy did not import the enclosure; caching it in the bucket', {
+        episodeId,
+        err: describeErrorSafely(err),
+      });
+    }
+  }
 
   const ext = extFor(episode.enclosureType ?? undefined, episode.enclosureUrl);
   const s3Key = getS3PodcastEpisodeCacheKey(episodeId, episode.podcastId, ext);
@@ -100,12 +142,13 @@ export async function cacheEpisode(episodeId: string): Promise<string | null> {
       : (episode.enclosureType ?? 'audio/mpeg');
 
   const buffer = await readCapped(result.response, MAX_CACHE_BYTES);
-  await uploadToS3(s3Key, buffer, { contentType });
+  // A mirrored RSS enclosure is Syra's copy, not anybody's upload.
+  await putSourceAudio(s3Key, buffer, { contentType, owner: { kind: 'application' } });
 
   await setEpisodeCache(episodeId, { status: 'cached', objectKey: s3Key, cachedAt: new Date() });
 
   logger.info('[podcasts] episode cached to S3', { episodeId, s3Key, bytes: buffer.length });
-  return s3Key;
+  return { store: 'bucket', key: s3Key };
 }
 
 /**

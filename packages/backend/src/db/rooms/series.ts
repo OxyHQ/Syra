@@ -20,7 +20,8 @@ import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { descNullsLast } from '../catalog/containers';
 import { getDb, type DbOrTransaction } from '../postgres';
 import { series, seriesEpisodes } from '../schema/rooms';
-import { RecurrenceType, RoomType, SpeakerPermission } from './types';
+import type { RecurrenceType, RoomType, SpeakerPermission } from './types';
+import { spaceImageUrl } from '../../services/oxyFiles/spaceImages';
 
 export type SeriesRow = typeof series.$inferSelect;
 export type SeriesEpisodeRow = typeof seriesEpisodes.$inferSelect;
@@ -57,6 +58,8 @@ export interface SeriesView {
   title: string;
   description: string | null;
   coverImage: string | null;
+  /** The cover's Oxy file, for a client with Oxy's image resolver. */
+  coverImageFileId: string | null;
   houseId: string | null;
   createdBy: string;
   recurrence: Recurrence;
@@ -74,7 +77,8 @@ export function toSeriesView(row: SeriesRow, episodes: readonly SeriesEpisodeRow
     id: row.id,
     title: row.title,
     description: row.description,
-    coverImage: row.coverImage,
+    coverImage: spaceImageUrl(row.coverImageFileId, row.coverImage, 'series_cover'),
+    coverImageFileId: row.coverImageFileId,
     houseId: row.houseId,
     createdBy: row.createdBy,
     recurrence: {
@@ -228,6 +232,8 @@ export type UpdateSeriesInput = Partial<{
   title: string;
   description: string | null;
   coverImage: string | null;
+  /** The cover as an Oxy file (ADR 0043); writing it clears the legacy URL. */
+  coverImageFileId: string | null;
   isActive: boolean;
   recurrenceType: RecurrenceType;
   recurrenceDayOfWeek: number | null;
@@ -249,7 +255,15 @@ export async function updateSeries(
 ): Promise<SeriesRow | undefined> {
   const [row] = await db
     .update(series)
-    .set({ ...input, updatedAt: new Date() })
+    .set({
+      ...input,
+      // One cover at a time: an Oxy file clears the legacy URL, a URL the file.
+      ...(input.coverImage !== undefined && input.coverImageFileId === undefined
+        ? { coverImageFileId: null }
+        : {}),
+      ...(input.coverImageFileId ? { coverImage: null } : {}),
+      updatedAt: new Date(),
+    })
     .where(eq(series.id, id))
     .returning();
 

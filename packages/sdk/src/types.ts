@@ -8,12 +8,22 @@
  * server-side consumers, is `@syra.fm/sdk/schemas`.
  */
 
-/** A single artwork variant. The backend serializes `url` as `/api/images/:id`. */
+/**
+ * A single artwork variant. The backend serializes `url` as `/api/images/:id`,
+ * which serves the bytes (or redirects to them) for every variant.
+ *
+ * `fileId` and `variant` are present when the artwork is stored in Oxy Files:
+ * the Oxy file id and the Oxy rendition name (`thumb`, `w320`, … — absent for
+ * the original). A client that has Oxy's image resolver (`assets.publicUrl`)
+ * resolves those directly instead of going through `url`.
+ */
 export interface CoverArtVariant {
   id?: string;
   url: string;
   width?: number;
   height?: number;
+  fileId?: string;
+  variant?: string;
 }
 
 /** Named artwork variants keyed by size. */
@@ -197,16 +207,27 @@ export interface EpisodeDeleted {
   objectsDeleted: number;
 }
 
-/** What `getEpisodeStream` hands back: a tokenized HLS URL with its own deadline. */
+/**
+ * What `getEpisodeStream` hands back: a tokenized HLS URL with its own deadline.
+ *
+ * When the episode's audio is in Oxy Files (Syra 0.21), `url` is an Oxy play
+ * session's master playlist and the same session also serves Oxy's 30-second
+ * `previewUrl` and the `waveformUrl` peaks (audiowaveform JSON) — both absent
+ * for an episode still played from Syra's own ladder.
+ */
 export interface EpisodeStream {
   url: string;
   type: string;
   expiresAt?: string;
+  previewUrl?: string;
+  waveformUrl?: string;
 }
 
 /** What the image upload endpoint hands back. */
 export interface UploadedImage {
   id: string;
+  /** The Oxy file the image is stored as, owned by the uploader's account. */
+  fileId?: string;
   primaryColor?: string;
   secondaryColor?: string;
 }

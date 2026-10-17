@@ -56,7 +56,14 @@ globalThis.fetch = new Proxy(originalFetch, {
 async function run(): Promise<void> {
   try {
     issuer = createServer((req, res) => {
-      if (!req.url?.startsWith('/session/validate/receiver-session')) {
+      // core >= 4.18 validates the presented bearer against its session
+      // (`/session/validate-header/:id`, the token in Authorization) so a token
+      // only ever validates the session it was issued for; older cores used
+      // the unbound `/session/validate/:id`. The issuer answers both, and the
+      // header form only when the bearer is actually presented.
+      const headerBound = req.url?.startsWith('/session/validate-header/receiver-session');
+      const unbound = req.url?.startsWith('/session/validate/receiver-session');
+      if (!(unbound || (headerBound && req.headers.authorization?.startsWith('Bearer ')))) {
         res.writeHead(404).end();
         return;
       }

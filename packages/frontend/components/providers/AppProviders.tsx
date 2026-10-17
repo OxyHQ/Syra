@@ -12,8 +12,9 @@
  * mount, which was causing the white-screen-after-splash bug.
  */
 
+import { setCatalogFileResolver } from '@/utils/catalogImages';
 import React, { memo, useCallback, useMemo } from 'react';
-import { QueryClient, useQueryClient } from '@tanstack/react-query';
+import { type QueryClient, useQueryClient } from '@tanstack/react-query';
 import { I18nextProvider, useTranslation } from 'react-i18next';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
@@ -21,7 +22,7 @@ import { MenuProvider } from 'react-native-popup-menu';
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { OxyProvider, useOxy } from '@oxy.so/services';
-import { OxyServices } from '@oxy.so/core';
+import type { OxyServices } from '@oxy.so/core';
 import { ImageResolverProvider, type ImageResolver } from '@oxy.so/bloom/image-resolver';
 import { LiveConfigProvider, LiveRoomProvider } from '@syra.fm/sdk';
 
@@ -165,10 +166,12 @@ export const AppProviders = memo(function AppProviders({
   // Single chokepoint that resolves Oxy file IDs to loadable URLs for every
   // Bloom Avatar/Image in the tree. Bloom's Avatar runs bare-string `source`
   // values through this resolver; passing raw file IDs to `source` requires it.
-  const resolveImage: ImageResolver = useMemo(
-    () => (id: string, variant?: string) => oxyServices.assets.publicUrl(id, variant),
-    [oxyServices],
-  );
+  const resolveImage: ImageResolver = useMemo(() => {
+    const resolve = (id: string, variant?: string) => oxyServices.assets.publicUrl(id, variant);
+    // Catalogue artwork stored in Oxy Files resolves through the same chokepoint.
+    setCatalogFileResolver(resolve);
+    return resolve;
+  }, [oxyServices]);
 
   return (
     <SafeAreaProvider initialMetrics={initialWindowMetrics}>

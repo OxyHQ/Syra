@@ -1,113 +1,145 @@
-import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
+import { Readable } from 'stream';
+import sharp from 'sharp';
+import { eq } from 'drizzle-orm';
 import { clearDb, connectDb, disconnectDb } from '../test/postgres';
+import { installFakeOxyFiles, resetOxyFiles, type FakeOxyFiles } from '../test/fakeOxyFiles';
 import { getDb } from '../db/postgres';
 import { imageAssets } from '../db/schema/catalog';
-import { findExistingCatalogImageSet } from './imageAssetService';
+import { pendingLegacyReads } from './oxyFiles/legacyReads';
+import {
+  resolveImageAsset,
+  setLegacyImageReaderForTests,
+  storeImageAsset,
+} from './imageAssetService';
+
+/**
+ * Writes go to Oxy Files only; reads take the Oxy file first and the legacy
+ * bucket object only when there is none — and count that fallback, because the
+ * bucket's retirement waits for the count to reach zero.
+ */
 
 beforeAll(connectDb);
-afterEach(clearDb);
+let oxy: FakeOxyFiles;
+const legacyKeysRead: string[] = [];
+beforeEach(() => {
+  oxy = installFakeOxyFiles();
+  legacyKeysRead.length = 0;
+  setLegacyImageReaderForTests(async (key) => {
+    legacyKeysRead.push(key);
+    return {
+      stream: Readable.from([Buffer.from('legacy')]),
+      contentLength: 6,
+      contentType: 'image/jpeg',
+    };
+  });
+});
+afterEach(async () => {
+  resetOxyFiles();
+  setLegacyImageReaderForTests(null);
+  await clearDb();
+});
 afterAll(disconnectDb);
 
-const SIZES = ['small', 'medium', 'large', 'xlarge', 'xxlarge', 'original'] as const;
+const png = () =>
+  sharp({ create: { width: 64, height: 48, channels: 3, background: '#118844' } })
+    .png()
+    .toBuffer();
 
-/** One complete six-row mirrored set, exactly as `createImageSizes` stamps one. */
-async function seedCompleteSet(input: {
-  sourceUrlHash: string;
-  sourceContentHash: string;
-  primaryColor?: string;
-  secondaryColor?: string;
-}): Promise<void> {
-  for (const size of SIZES) {
-    await getDb()
-      .insert(imageAssets)
-      .values({
-        s3Key: `images/${input.sourceContentHash}/${size}`,
-        filename: `rss-episode-test-${size}`,
-        contentType: size === 'original' ? 'image/jpeg' : 'image/webp',
-        byteSize: 1000,
-        width: 100,
-        height: 100,
-        ownerType: 'episode',
-        primaryColor: input.primaryColor,
-        secondaryColor: input.secondaryColor,
-        catalogProvider: 'rss',
-        catalogEntityType: 'episode',
-        catalogExternalId: 'seed-episode',
-        catalogSize: size,
-        catalogSourceUrlHash: input.sourceUrlHash,
-        catalogSourceContentHash: input.sourceContentHash,
-      });
-  }
-}
-
-describe('findExistingCatalogImageSet', () => {
-  it('finds a complete prior set by source URL hash', async () => {
-    await seedCompleteSet({
-      sourceUrlHash: 'url-hash-1',
-      sourceContentHash: 'content-hash-1',
-      primaryColor: '#112233',
-      secondaryColor: '#445566',
+describe('storeImageAsset', () => {
+  it("stores a person's upload in their own Oxy account", async () => {
+    oxy.localUsers.add('person-1');
+    const stored = await storeImageAsset({
+      buffer: await png(),
+      filename: 'cover.png',
+      contentType: 'image/png',
+      ownerType: 'upload',
+      uploadedBy: 'person-1',
     });
 
-    const found = await findExistingCatalogImageSet('sourceUrlHash', 'url-hash-1');
-
-    expect(found).toBeDefined();
-    expect(found?.sourceUrlHash).toBe('url-hash-1');
-    expect(found?.sourceContentHash).toBe('content-hash-1');
-    expect(found?.primaryColor).toBe('#112233');
-    expect(found?.secondaryColor).toBe('#445566');
-    for (const size of SIZES) {
-      expect(found?.imageSizes[size]?.id).toBeTruthy();
-      expect(found?.imageSizes[size]?.url).toBe(`/api/images/${found?.imageSizes[size]?.id}`);
-    }
-    expect(found?.imageId).toBe(found?.imageSizes.large?.id);
+    expect(oxy.files.get(stored.fileId)?.ownerUserId).toBe('person-1');
+    const [row] = await getDb().select().from(imageAssets).where(eq(imageAssets.id, stored.id));
+    expect(row).toMatchObject({
+      oxyFileId: stored.fileId,
+      oxyVariant: null,
+      s3Key: null,
+      uploadedBy: 'person-1',
+      width: 64,
+      height: 48,
+    });
+    expect(stored.pixels.primaryColor).toBeDefined();
   });
 
-  it('finds a complete prior set by source content hash — a different URL, the same bytes', async () => {
-    await seedCompleteSet({ sourceUrlHash: 'url-hash-2', sourceContentHash: 'content-hash-2' });
-
-    const found = await findExistingCatalogImageSet('sourceContentHash', 'content-hash-2');
-
-    expect(found).toBeDefined();
-    expect(found?.sourceUrlHash).toBe('url-hash-2');
+  it("stores an image nobody uploaded as Syra's own file", async () => {
+    const stored = await storeImageAsset({
+      buffer: await png(),
+      filename: 'x.png',
+      contentType: 'image/png',
+      ownerType: 'upload',
+    });
+    expect(oxy.files.get(stored.fileId)?.ownerApplicationId).toBe(oxy.applicationId);
   });
 
-  it('returns undefined for a hash nothing has ever mirrored', async () => {
-    const found = await findExistingCatalogImageSet('sourceUrlHash', 'no-such-hash');
-    expect(found).toBeUndefined();
+  it('fails loudly, and writes no row, when Oxy refuses the upload', async () => {
+    await expect(
+      storeImageAsset({
+        buffer: await png(),
+        filename: 'x.png',
+        contentType: 'image/png',
+        ownerType: 'upload',
+        uploadedBy: 'not-a-local-user',
+      }),
+    ).rejects.toThrow();
+    expect(await getDb().select().from(imageAssets)).toHaveLength(0);
+  });
+});
+
+describe('resolveImageAsset — Oxy first, the bucket only as a fallback', () => {
+  async function row(values: Partial<typeof imageAssets.$inferInsert>): Promise<string> {
+    const [inserted] = await getDb()
+      .insert(imageAssets)
+      .values({
+        filename: 'f',
+        contentType: 'image/jpeg',
+        byteSize: 1,
+        ownerType: 'upload',
+        ...values,
+      })
+      .returning({ id: imageAssets.id });
+    return inserted!.id;
+  }
+
+  it("redirects to the Oxy file's rendition when the row has one, even with a bucket copy", async () => {
+    const id = await row({ oxyFileId: 'file-1', oxyVariant: 'w320', s3Key: 'images/a/b' });
+    expect(await resolveImageAsset(id)).toEqual({
+      kind: 'oxy',
+      url: 'https://cloud.test/file-1?variant=w320',
+    });
+    expect(legacyKeysRead).toEqual([]);
   });
 
-  it('refuses an INCOMPLETE set rather than ship a CatalogImageSizes missing keys', async () => {
-    // Only three of six sizes stored — e.g. a mirror interrupted mid-upload.
-    for (const size of ['small', 'medium', 'large'] as const) {
-      await getDb()
-        .insert(imageAssets)
-        .values({
-          s3Key: `images/partial/${size}`,
-          filename: `rss-episode-partial-${size}`,
-          contentType: 'image/webp',
-          byteSize: 1000,
-          width: 100,
-          height: 100,
-          ownerType: 'episode',
-          catalogSize: size,
-          catalogSourceUrlHash: 'partial-hash',
-          catalogSourceContentHash: 'partial-content-hash',
-        });
-    }
-
-    const found = await findExistingCatalogImageSet('sourceUrlHash', 'partial-hash');
-    expect(found).toBeUndefined();
+  it('streams a legacy row from the bucket and counts it', async () => {
+    const before = pendingLegacyReads().get('image_asset') ?? 0;
+    const id = await row({ s3Key: 'images/legacy/cover.jpg' });
+    const resolved = await resolveImageAsset(id);
+    expect(resolved?.kind).toBe('legacy');
+    expect(legacyKeysRead).toEqual(['images/legacy/cover.jpg']);
+    expect(pendingLegacyReads().get('image_asset')).toBe(before + 1);
   });
 
-  it('resolves to the OLDEST complete set when a hash matches rows from more than one', async () => {
-    await seedCompleteSet({ sourceUrlHash: 'url-hash-dup', sourceContentHash: 'content-hash-old' });
-    // A second, later mirror of the identical URL (created before this dedup
-    // existed) — the lookup must not non-deterministically pick either.
-    await seedCompleteSet({ sourceUrlHash: 'url-hash-dup', sourceContentHash: 'content-hash-new' });
+  it('never falls back to the bucket for an image Oxy will not serve', async () => {
+    const blocked = await row({
+      oxyFileId: 'file-2',
+      s3Key: 'images/x/y',
+      servingStatus: 'blocked',
+    });
+    const missing = await row({ s3Key: 'images/gone', servingStatus: 'missing' });
+    expect(await resolveImageAsset(blocked)).toEqual({ kind: 'unavailable' });
+    expect(await resolveImageAsset(missing)).toEqual({ kind: 'unavailable' });
+    expect(legacyKeysRead).toEqual([]);
+  });
 
-    const found = await findExistingCatalogImageSet('sourceUrlHash', 'url-hash-dup');
-
-    expect(found?.sourceContentHash).toBe('content-hash-old');
+  it('answers null for an id that names no row', async () => {
+    expect(await resolveImageAsset('no-such-id')).toBeNull();
   });
 });

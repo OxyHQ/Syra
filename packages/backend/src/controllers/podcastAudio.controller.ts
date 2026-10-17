@@ -25,7 +25,7 @@
  */
 
 import type { Response } from 'express';
-import { Readable } from 'stream';
+import type { Readable } from 'stream';
 import { eq } from 'drizzle-orm';
 import { isLiveEntityId } from '@oxy.so/db';
 import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
@@ -36,8 +36,15 @@ import { findEpisodeById } from '../db/podcasts/episodes';
 import { loadEpisodeHls } from '../db/podcasts/hydrate';
 import type { EpisodeRow } from '../db/podcasts/serialize';
 import { env } from '../config/env';
-import { getS3PodcastEpisodeAudioKey } from '../config/s3.config';
-import { streamFromS3, getObjectMetadata } from '../services/s3Service';
+import {
+  audioFileState,
+  getS3PodcastEpisodeAudioKey,
+  openAudioObject,
+  originalDownloadUrl,
+  oxyAudioEnabled,
+  statAudioObject,
+} from '../services/oxyFiles/audioStorage';
+import { decideOxyPlayback } from '../services/stream/oxyPlayback';
 import { requestMayReachShowMedia, resolveEpisodeAccess } from './stream.controller';
 import { mintStreamToken } from '../services/stream/streamToken';
 import {
@@ -133,7 +140,7 @@ export function parseRange(header: string | undefined, totalSize: number): Parse
 // ── /audio: S3-backed (syra source / cached rss) ───────────────────────────────
 
 async function serveFromS3(req: AuthRequest, res: Response, s3Key: string): Promise<void> {
-  const metadata = await getObjectMetadata(s3Key);
+  const metadata = await statAudioObject(s3Key);
   if (!metadata || metadata.contentLength === undefined) {
     res.status(404).json({ error: 'Audio not found' });
     return;
@@ -148,7 +155,7 @@ async function serveFromS3(req: AuthRequest, res: Response, s3Key: string): Prom
   res.set('Cache-Control', CACHE_CONTROL_AUDIO);
 
   if (range) {
-    const { stream } = await streamFromS3(s3Key, { start: range.start, end: range.end });
+    const { stream } = await openAudioObject(s3Key, { start: range.start, end: range.end });
     res.status(206);
     res.set('Content-Range', `bytes ${range.start}-${range.end}/${totalSize}`);
     res.set('Content-Length', String(range.end - range.start + 1));
@@ -157,7 +164,7 @@ async function serveFromS3(req: AuthRequest, res: Response, s3Key: string): Prom
     return;
   }
 
-  const { stream } = await streamFromS3(s3Key);
+  const { stream } = await openAudioObject(s3Key);
   res.status(200);
   res.set('Content-Length', String(totalSize));
   (stream as Readable).on('error', () => res.destroy());
@@ -248,6 +255,27 @@ export async function getEpisodeAudio(req: AuthRequest, res: Response): Promise<
     return;
   }
 
+  // In Oxy Files (ADR 0043 stage 4c): a hosted episode's audio, or a mirrored
+  // enclosure Oxy imported. A file Oxy reported withdrawn is served from
+  // nowhere; otherwise a short-lived URL to the original — RSS clients follow
+  // the redirect, Range included — and anything Oxy cannot answer falls back to
+  // the legacy copy below.
+  if (episode.audioFileId) {
+    const state = await audioFileState(episode.audioFileId);
+    if (state && state.status !== 'active') {
+      res.status(404).json({ error: 'Episode not found' });
+      return;
+    }
+    if (oxyAudioEnabled()) {
+      const url = await originalDownloadUrl(episode.audioFileId);
+      if (url) {
+        res.set('Cache-Control', CACHE_CONTROL_NO_STORE);
+        res.redirect(302, url);
+        return;
+      }
+    }
+  }
+
   if (episode.source === 'syra') {
     if (!episode.audioSourceFormat) {
       res.status(404).json({ error: 'No audio for episode' });
@@ -336,8 +364,24 @@ export async function getEpisodeStream(req: AuthRequest, res: Response): Promise
     return;
   }
 
+  const oxy = await decideOxyPlayback({
+    audioFileId: episode.audioFileId,
+    endUserId: req.user.id,
+    maxBitrateKbps: access.maxBitrateKbps,
+    durationSec: episode.audioSourceDuration,
+  });
+  if (oxy.kind === 'oxy') {
+    res.set('Vary', 'Authorization');
+    res.status(200).json(oxy.stream);
+    return;
+  }
+  if (oxy.kind === 'withdrawn') {
+    res.status(404).json({ error: 'Episode not found' });
+    return;
+  }
+
   const hasHls = Boolean(episode.hlsMasterKey) && (await episodeHls(episodeId)).length > 0;
-  if (!hasHls && !episode.audioSourceUrl) {
+  if (!hasHls && !episode.audioSourceUrl && !episode.audioFileId) {
     res.status(422).json({ error: 'Episode has no stream' });
     return;
   }

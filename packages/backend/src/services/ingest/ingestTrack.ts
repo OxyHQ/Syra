@@ -17,19 +17,25 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { Readable } from 'stream';
+import type { Readable } from 'stream';
 import { eq } from 'drizzle-orm';
 import type { AudioSource } from '@syra/shared-types';
 import { getDb } from '../../db/postgres';
 import { tracks, trackHlsRenditions } from '../../db/schema/catalog';
 import { logger } from '../../utils/logger';
 import { getTrackS3Key } from '../audioStorageService';
-import { streamFromS3 } from '../s3Service';
+import {
+  audioMimeFor,
+  getS3HlsKey,
+  mirrorAudioToOxy,
+  openAudioObject,
+  oxyAudioMode,
+  type StoredOxyAudio,
+} from '../oxyFiles/audioStorage';
 import { packageToEncryptedHls } from './hlsPackager';
 import type { PackageOptions, PackageResult } from './hlsPackager';
 import { storePackagedHls } from './hlsStorage';
 import type { StoreHlsTarget, StoredHls } from './hlsStorage';
-import { getS3HlsKey } from '../../config/s3.config';
 import { probeAudio } from './probeAudio';
 import type { ProbedAudio } from './probeAudio';
 import { fingerprintFile } from '../uploads/fingerprint';
@@ -75,6 +81,8 @@ export interface IngestDeps {
   packageHls?: (opts: PackageOptions) => Promise<PackageResult>;
   storeHls?: (result: PackageResult, target: StoreHlsTarget) => Promise<StoredHls>;
   generatePreview?: (params: StorePreviewFromSourceParams) => Promise<string>;
+  /** Store the original in Oxy Files (`null` when `OXY_AUDIO` is `legacy` or Oxy refused). */
+  mirrorToOxy?: typeof mirrorAudioToOxy;
   keyUri?: string;
 }
 
@@ -102,7 +110,7 @@ async function defaultFetchSource(track: IngestTrackSource): Promise<FetchSource
     albumId: track.albumId,
     audioSource: track.audioSource,
   } as Parameters<typeof getTrackS3Key>[0]);
-  const { stream } = await streamFromS3(s3Key);
+  const { stream } = await openAudioObject(s3Key);
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ingest-src-'));
   const localPath = path.join(tmpDir, `source.${track.audioSource.format}`);
@@ -300,6 +308,31 @@ export async function ingestTrack(
     // ever written. Measured before packaging so a corrupt file fails here
     // rather than after a full transcode.
     const probed = await probe(fetched.localPath);
+
+    // Oxy Files (ADR 0043 stage 4c): the catalogue's audio is the SYRA
+    // application's private file, rendered by Oxy into its own ladder, waveform
+    // and 30-second preview. In `oxy` mode an accepted file is the whole result
+    // — no ladder of Syra's own — and anything Oxy refused takes the legacy
+    // path below exactly as before.
+    const oxy: StoredOxyAudio | null = await (deps?.mirrorToOxy ?? mirrorAudioToOxy)({
+      entity: { kind: 'track', id: trackId },
+      localPath: fetched.localPath,
+      mime: audioMimeFor(track.audioSource.format),
+      owner: { kind: 'application' },
+      previewStartSeconds: DEFAULT_PREVIEW_START_SEC,
+    });
+    if (oxy && oxyAudioMode() === 'oxy') {
+      await getDb()
+        .update(tracks)
+        .set({
+          audioSourceDuration: probed.durationSec,
+          ...(probed.bitrateKbps !== undefined ? { audioSourceBitrate: probed.bitrateKbps } : {}),
+          status: 'ready',
+        })
+        .where(eq(tracks.id, trackId));
+      await indexTrackFingerprint(trackId, fetched.localPath, fingerprint, indexFingerprint);
+      return;
+    }
 
     outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ingest-hls-'));
     const result = await packageHls({

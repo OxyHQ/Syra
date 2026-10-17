@@ -1,4 +1,4 @@
-import { Router, Response } from 'express';
+import { Router, type Response } from 'express';
 import multer from 'multer';
 import { isLiveEntityId, uuidv7 } from '@oxy.so/db';
 import {
@@ -73,13 +73,10 @@ import {
   mapLiveKitIngressError,
   shouldRetryIngressAfterDeletingExisting,
 } from '../utils/livekitErrors';
-import {
-  getRecordingObjectKey,
-  uploadObject,
-  deleteObject,
-  getAgoraRoomImageKey,
-  cdnUrlToKey,
-} from '../utils/spaces';
+import { deleteObject, cdnUrlToKey } from '../utils/spaces';
+import { recordingStorage } from '../services/oxyFiles/audioStorage';
+import { oxyFileUrl } from '../services/oxyFiles/client';
+import { spaceImageUrl, uploadSpaceImage } from '../services/oxyFiles/spaceImages';
 import { processImage } from '../utils/imageProcessor';
 import { emitLiveRoomsUpdated } from '../utils/socket';
 import { resolvePodcastEpisode } from '../utils/syraPodcast';
@@ -172,7 +169,12 @@ function emitStreamStarted(
   roomId: string,
   room: Pick<
     RoomWithCredentials,
-    'streamTitle' | 'streamImage' | 'streamDescription' | 'streamStartedAt' | 'streamDurationSec'
+    | 'streamTitle'
+    | 'streamImage'
+    | 'streamImageFileId'
+    | 'streamDescription'
+    | 'streamStartedAt'
+    | 'streamDurationSec'
   >,
 ) {
   const io = global.io;
@@ -181,7 +183,8 @@ function emitStreamStarted(
   const roomPayload = {
     roomId,
     title: room.streamTitle || undefined,
-    image: room.streamImage || undefined,
+    image:
+      spaceImageUrl(room.streamImageFileId, room.streamImage, 'room_stream_image') ?? undefined,
     description: room.streamDescription || undefined,
     // Progress-card inputs: when the stream started (ISO) and its total length
     // (seconds) when known. The client can render elapsed/total from these
@@ -847,9 +850,15 @@ function clearRecordingAutoStop(roomId: string) {
  */
 async function startRecordingForRoom(room: RoomWithCredentials) {
   const recordingId = uuidv7();
-  const objectKey = getRecordingObjectKey(room.id, recordingId);
+  // An Oxy recording target when `OXY_AUDIO` allows it and Oxy answers, the
+  // bucket otherwise (`audioStorage.recordingStorage`).
+  const storage = await recordingStorage({
+    roomId: room.id,
+    recordingId,
+    maxDurationSec: MAX_RECORDING_DURATION_MS / 1000,
+  });
 
-  const egressId = await startRoomRecording(room.id, objectKey);
+  const egressId = await startRoomRecording(room.id, storage);
 
   const recording = await createRecording({
     id: recordingId,
@@ -857,7 +866,8 @@ async function startRecordingForRoom(room: RoomWithCredentials) {
     roomTitle: room.title,
     host: room.host,
     egressId,
-    objectKey,
+    objectKey: storage.objectKey,
+    oxyRecordingTargetId: storage.oxyRecordingTargetId,
     startedAt: new Date(),
     expiresAt: new Date(Date.now() + RECORDING_EXPIRY_MS),
   });
@@ -2984,18 +2994,15 @@ router.post(
         return;
       }
 
-      const { buffer, contentType } = await processImage(req.file.buffer, 'roomImage');
-      const objectKey = getAgoraRoomImageKey(id as string);
+      const image = await processImage(req.file.buffer, 'roomImage');
+      // The host's file (see `services/oxyFiles/spaceImages.ts`).
+      const file = await uploadSpaceImage(room.host, image, 'room-image');
+      await updateRoom(room.id, { streamImageFileId: file.id });
 
       const oldStreamImageKey = cdnUrlToKey(room.streamImage);
-      if (oldStreamImageKey && oldStreamImageKey !== objectKey) {
-        deleteObject(oldStreamImageKey).catch(() => {});
-      }
+      if (oldStreamImageKey) deleteObject(oldStreamImageKey).catch(() => {});
 
-      const cdnUrl = await uploadObject(objectKey, buffer, contentType, 'public-read');
-      await updateRoom(room.id, { streamImage: cdnUrl });
-
-      res.json({ streamImage: cdnUrl });
+      res.json({ streamImage: oxyFileUrl(file.id), streamImageFileId: file.id });
     } catch (error) {
       logger.error('Error uploading room image:', {
         roomId: req.params.id,

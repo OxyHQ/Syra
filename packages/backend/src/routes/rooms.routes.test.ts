@@ -51,6 +51,7 @@ function roomWithCredentials(): RoomWithCredentials {
     activeStreamUrl: 'https://example.com/source.m3u8',
     streamTitle: 'Public stream title',
     streamImage: null,
+    streamImageFileId: null,
     streamDescription: null,
     rtmpUrl: 'rtmp://livekit.example/live',
     rtmpStreamKey: SECRET_STREAM_KEY,

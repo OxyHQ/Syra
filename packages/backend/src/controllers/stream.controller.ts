@@ -15,6 +15,7 @@ import {
 } from '../services/stream/manifestService';
 import { getUserEntitlement } from '../services/premium/entitlement';
 import { computeMaxBitrateKbps } from '../services/stream/audioQuality';
+import { buildOxyMasterPlaylist, decideOxyPlayback } from '../services/stream/oxyPlayback';
 
 const CONTENT_TYPE_OCTET_STREAM = 'application/octet-stream';
 const CONTENT_TYPE_HLS_PLAYLIST = 'application/vnd.apple.mpegurl';
@@ -189,6 +190,8 @@ const PLAYBACK_TRACK_COLUMNS = {
   copyrightRemoved: tracks.copyrightRemoved,
   status: tracks.status,
   hlsMasterKey: tracks.hlsMasterKey,
+  audioFileId: tracks.audioFileId,
+  duration: tracks.duration,
 } as const;
 
 /** Picked off the schema type, so a column changing shape fails here. */
@@ -271,6 +274,11 @@ function resolveManifestToken(req: AuthRequest, trackId: string, maxBitrateKbps:
  *
  * Response shape:
  *   - HLS:     { url, type: 'hls', expiresAt }  (url includes ?t=<streamToken>)
+ *   - Oxy:     { url, type: 'hls', expiresAt, previewUrl?, waveformUrl? } — an
+ *     Oxy play session (ADR 0043 stage 4c) when the track's audio is in Oxy
+ *     Files and its ladder is ready; `url` is Oxy's master, or Syra's capped
+ *     one (`/api/stream/oxy/master.m3u8`). Anything Oxy cannot serve falls back
+ *     to the legacy ladder.
  *
  * The token embeds maxBitrateKbps derived from the user's entitlement + prefs.
  * Free users receive cap=160; premium users receive cap=320; data-saver forces 96.
@@ -320,6 +328,23 @@ export async function getStream(req: AuthRequest, res: Response): Promise<void> 
     entitlement,
   );
 
+  const oxy = await decideOxyPlayback({
+    audioFileId: track.audioFileId,
+    endUserId: req.user.id,
+    maxBitrateKbps,
+    durationSec: track.duration,
+  });
+  if (oxy.kind === 'oxy') {
+    res.set('Cache-Control', CACHE_CONTROL_STREAM_RESOLUTION);
+    res.set('Vary', 'Authorization');
+    res.status(200).json(oxy.stream);
+    return;
+  }
+  if (oxy.kind === 'withdrawn') {
+    res.status(403).json({ error: 'Track unavailable' });
+    return;
+  }
+
   const hasLadder =
     track.status === 'ready' &&
     Boolean(track.hlsMasterKey) &&
@@ -340,7 +365,36 @@ export async function getStream(req: AuthRequest, res: Response): Promise<void> 
     return;
   }
 
+  // In Oxy Files with no ladder of Syra's own, and Oxy's not rendered yet.
+  if (oxy.ladderPending) {
+    res.status(409).json({ error: 'Track processing' });
+    return;
+  }
+
   res.status(422).json({ error: 'Track not playable' });
+}
+
+// ── Oxy capped master ─────────────────────────────────────────────────────────
+
+/**
+ * GET /api/stream/oxy/master.m3u8?m=<signed rendition list>
+ *
+ * The master playlist for an Oxy play session under a listener's bitrate cap
+ * (`services/stream/oxyPlayback.ts`): only the rungs the cap permits, each an
+ * Oxy session URL. The list is signed by the resolver that opened the session,
+ * so this needs no other credential — and holds no secret the player does not
+ * already have.
+ */
+export async function getOxyMasterPlaylist(req: AuthRequest, res: Response): Promise<void> {
+  const token = typeof req.query?.m === 'string' ? req.query.m : '';
+  const playlist = token ? buildOxyMasterPlaylist(token) : null;
+  if (!playlist) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+  res.set('Content-Type', CONTENT_TYPE_HLS_PLAYLIST);
+  res.set('Cache-Control', CACHE_CONTROL_NO_STORE);
+  res.status(200).send(playlist);
 }
 
 // ── Key endpoint ──────────────────────────────────────────────────────────────

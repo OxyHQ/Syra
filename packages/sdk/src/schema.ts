@@ -38,6 +38,8 @@ export const coverArtVariantSchema = z.object({
   url: z.string(),
   width: z.number().optional(),
   height: z.number().optional(),
+  fileId: z.string().optional(),
+  variant: z.string().optional(),
 });
 
 export const coverArtSizesSchema = z.object({
@@ -132,10 +134,13 @@ export const episodeStreamSchema = z.object({
   url: z.string(),
   type: z.string(),
   expiresAt: z.string().optional(),
+  previewUrl: z.string().optional(),
+  waveformUrl: z.string().optional(),
 });
 
 export const uploadedImageSchema = z.object({
   id: z.string(),
+  fileId: z.string().optional(),
   primaryColor: z.string().optional(),
   secondaryColor: z.string().optional(),
 });

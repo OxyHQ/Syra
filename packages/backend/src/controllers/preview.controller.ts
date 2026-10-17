@@ -7,13 +7,55 @@ import { playableTrackFilter } from '../db/catalog/visibility';
 import { getParam } from '../utils/reqParams';
 import { ensurePreviewClip } from '../services/preview/previewService';
 import type { PreviewSourceRef } from '../services/preview/previewService';
-import { streamFromS3 } from '../services/s3Service';
+import {
+  openAudioObject,
+  openPlaySession,
+  oxyAudioEnabled,
+} from '../services/oxyFiles/audioStorage';
 import { PREVIEW_CONTENT_TYPE, PREVIEW_DURATION_SEC } from '../services/ingest/previewClip';
 import { logger } from '../utils/logger';
 import { describeErrorSafely } from '../utils/error';
 
 // Preview clips are immutable for a given (trackId, startSec) → cache hard.
 const PREVIEW_CACHE_CONTROL = 'public, max-age=31536000, immutable';
+
+/**
+ * Oxy's preview of a track whose audio is in Oxy Files (ADR 0043 stage 4c):
+ * the 30-second clip Oxy rendered from offset 0 — Syra's default — reached
+ * through a play session opened for NOBODY, so its key (and with it the full
+ * ladder) is refused by `audioKeyAuthorization.ts` and only the clip is usable.
+ * One session per track, reused until shortly before it expires, so a guest's
+ * request costs Oxy nothing.
+ */
+const oxyPreviewUrls = new Map<string, { url: string; reuseUntil: number }>();
+const OXY_PREVIEW_CACHE_MAX = 5000;
+const OXY_PREVIEW_REUSE_MARGIN_MS = 10 * 60 * 1000;
+
+async function oxyPreviewUrl(
+  trackId: string,
+  audioFileId: string,
+): Promise<string | 'withdrawn' | null> {
+  const cached = oxyPreviewUrls.get(trackId);
+  if (cached && cached.reuseUntil > Date.now()) return cached.url;
+  const result = await openPlaySession({ fileId: audioFileId, endUserId: null });
+  if (!result.ok) return result.reason === 'withdrawn' ? 'withdrawn' : null;
+  const url = result.playback.previewUrl;
+  if (!url) return null;
+  if (oxyPreviewUrls.size >= OXY_PREVIEW_CACHE_MAX) {
+    const oldest = oxyPreviewUrls.keys().next().value;
+    if (oldest) oxyPreviewUrls.delete(oldest);
+  }
+  oxyPreviewUrls.set(trackId, {
+    url,
+    reuseUntil: new Date(result.playback.expiresAt).getTime() - OXY_PREVIEW_REUSE_MARGIN_MS,
+  });
+  return url;
+}
+
+/** Forget the cached Oxy preview sessions (tests). */
+export function clearOxyPreviewCache(): void {
+  oxyPreviewUrls.clear();
+}
 
 /**
  * Clamp a requested start offset into `[0, max]`. Non-numeric / negative inputs
@@ -59,6 +101,7 @@ export const getTrackPreview = async (req: Request, res: Response, next: NextFun
         audioSourceFormat: tracks.audioSourceFormat,
         audioSourceBitrate: tracks.audioSourceBitrate,
         audioSourceDuration: tracks.audioSourceDuration,
+        audioFileId: tracks.audioFileId,
       })
       .from(tracks)
       .where(and(playableTrackFilter(), eq(tracks.id, trackId)))
@@ -71,6 +114,16 @@ export const getTrackPreview = async (req: Request, res: Response, next: NextFun
     const durationSec = Number.isFinite(track.duration) ? track.duration : 0;
     const maxStart = Math.max(0, Math.floor(durationSec) - PREVIEW_DURATION_SEC);
     const startSec = clampStart(req.query.start, maxStart);
+
+    // Oxy renders ONE preview, from offset 0; any other offset is Syra's own clip.
+    if (startSec === 0 && track.audioFileId && oxyAudioEnabled()) {
+      const url = await oxyPreviewUrl(track.id, track.audioFileId);
+      if (url === 'withdrawn') return res.status(404).json({ error: 'Preview not available' });
+      if (url) {
+        res.setHeader('Cache-Control', 'public, max-age=300');
+        return res.redirect(302, url);
+      }
+    }
 
     const hasRetainedSource = Boolean(track.audioSourceUrl && track.audioSourceFormat);
 
@@ -123,7 +176,7 @@ export const getTrackPreview = async (req: Request, res: Response, next: NextFun
       return res.status(404).json({ error: 'Preview not available' });
     }
 
-    const { stream, contentLength } = await streamFromS3(previewKey);
+    const { stream, contentLength } = await openAudioObject(previewKey);
 
     stream.on('error', (streamError: Error) => {
       logger.error('[PreviewController] Error reading preview stream', {
