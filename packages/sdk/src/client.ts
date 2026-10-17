@@ -502,7 +502,13 @@ const ARTWORK_FALLBACK_ORDER: ArtworkSize[] = [
   'small',
 ];
 
-const OBJECT_ID_PATTERN = /^[a-f\d]{24}$/i;
+/**
+ * A Syra image asset id: a UUID (every asset since the Postgres port) or a
+ * 24-hex ObjectId (assets from before it). An id the pattern misses is a cover
+ * that silently resolves to nothing.
+ */
+const IMAGE_ASSET_ID_PATTERN =
+  /^(?:[a-f\d]{24}|[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12})$/i;
 
 /**
  * Default episode page size, matching the backend's own default so the SDK's
@@ -718,7 +724,7 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
     if (ref.startsWith('/api/images/')) {
       return `${baseURL}${ref}`;
     }
-    if (OBJECT_ID_PATTERN.test(ref)) {
+    if (IMAGE_ASSET_ID_PATTERN.test(ref)) {
       return `${baseURL}/api/images/${ref}`;
     }
     return undefined;
