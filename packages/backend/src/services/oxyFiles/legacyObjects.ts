@@ -6,7 +6,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import { streamFromS3 } from '../s3Service';
+import { getObjectMetadata, streamFromS3 } from '../s3Service';
 
 /** The most a migration reads into memory: Oxy's own upload ceiling. */
 export const LEGACY_OBJECT_MAX_BYTES = 40 * 1024 * 1024;
@@ -66,6 +66,14 @@ export const readLegacyObject: LegacyObjectReader = async (key) => {
     ...(opened.contentType ? { contentType: opened.contentType } : {}),
   };
 };
+
+/**
+ * Whether the bucket still holds `key`. Only a 404 answers "no"; any other
+ * failure is thrown, so a transient error never marks an image missing.
+ */
+export async function legacyObjectExists(key: string): Promise<boolean> {
+  return (await getObjectMetadata(key)) !== null;
+}
 
 export function sha256Hex(bytes: Buffer): string {
   return createHash('sha256').update(bytes).digest('hex');
