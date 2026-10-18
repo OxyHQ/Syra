@@ -54,3 +54,16 @@ with the dependency graph; the measured gzip total increases by 45 bytes while
 the source payload and raw ceiling remain unchanged. The gzip ceiling is adjusted
 to that exact measured total; all seven other ceilings are preserved. Local and
 CI exports agree. This does not permit added languages or larger raw payloads.
+
+## Bloom 12 adoption (2026-10-18)
+
+Bloom 12 adds translated PlacePicker and UsageCard messages to the deferred
+catalogues, verified against the published Bloom 10.16.0 archive. The production
+export measures 1,247,628 translation bytes and 425,598 gzip bytes both locally
+and in CI. These become the exact translation ceilings (increases of 6,203 and
+1,098 bytes respectively over the previous limits).
+
+CI measures initial JavaScript at 8,129,811 bytes / 2,049,151 gzip bytes, within
+the existing limits; local gzip differs by one byte. All six non-translation
+limits remain unchanged, and the source-map provenance and mutation gates still
+apply to every chunk.
