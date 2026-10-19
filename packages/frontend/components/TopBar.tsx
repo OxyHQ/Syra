@@ -481,7 +481,6 @@ export const TopBar: React.FC = () => {
     <ProfileButton
       expanded={false}
       avatarSize={32}
-      onNavigateManage={() => router.push('/settings')}
       onNavigateProfile={user?.username ? () => router.push(userHref(user.username)) : undefined}
       onAddAccount={() => openAccountDialog('add')}
     />

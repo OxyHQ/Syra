@@ -29,7 +29,7 @@
     ]
   },
   "dependencies": {
-    "@alia.onl/sdk": "^21.3.1",
+    "@alia.onl/sdk": "^21.5.0",
     "@babel/plugin-proposal-export-namespace-from": "^7.18.9",
     "@babel/plugin-syntax-dynamic-import": "^7.8.3",
     "@babel/plugin-syntax-import-meta": "^7.10.4",
@@ -45,7 +45,7 @@
     "@oxy.so/bloom": "14.0.0",
     "@oxy.so/core": "6.0.0",
     "@oxy.so/expo-splash": "^1.0.0",
-    "@oxy.so/services": "^11.17.0",
+    "@oxy.so/services": "^12.2.0",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/netinfo": "12.0.1",
     "@react-native/js-polyfills": "^0.81.1",
