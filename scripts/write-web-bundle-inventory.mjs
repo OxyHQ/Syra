@@ -11,9 +11,14 @@ const inventory = {};
 for (const file of walk(dist).filter((file) => file.endsWith('.js'))) {
   const mapFile = `${file}.map`;
   const map = JSON.parse(readFileSync(mapFile, 'utf8'));
+  // Expo SDK 58's Metro writes indexed source maps (`sections`, each with its
+  // own `map`); earlier SDKs wrote a flat map with `sources` at the top level.
+  const sources = map.sections
+    ? map.sections.flatMap((section) => section.map?.sources ?? [])
+    : map.sources;
   const translation =
-    map.sources.length > 0 &&
-    map.sources.every((source) =>
+    sources.length > 0 &&
+    sources.every((source) =>
       /^\/node_modules\/@oxy\.so\/bloom\/lib\/module\/locale\/translations\/(ar|bn|ca|de|es|fr|hi|id|it|ja|pt|ru|tr|zh)\.js$/.test(
         source,
       ),

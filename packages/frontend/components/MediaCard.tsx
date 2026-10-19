@@ -335,7 +335,7 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
         (isHovered || isMenuOpen) && styles.containerRaised,
         isHovered && { backgroundColor: hoverBackground },
         ...Platform.select({
-          web: [webViewStyle({ cursor: 'pointer' })],
+          web: [webViewStyle({ cursor: 'pointer' as const })],
           default: [],
         }),
       ]}
@@ -438,7 +438,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...Platform.select({
       web: {
-        cursor: 'pointer',
+        cursor: 'pointer' as const,
         boxShadow: '0 8px 16px rgba(0, 0, 0, 0.3)',
       },
     }),
@@ -458,7 +458,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...Platform.select({
       web: {
-        cursor: 'pointer',
+        cursor: 'pointer' as const,
       },
     }),
   },

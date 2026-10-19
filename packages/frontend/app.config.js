@@ -107,7 +107,9 @@ module.exports = function (_config) {
       // native-only plugins (like expo-notifications) from web builds.
       plugins: (() => {
         const base = [
-          'expo-router',
+          // SDK 58 turns on async routes for web by default; keep SDK 57's single
+          // web bundle (the bundle budget is measured against that shape).
+          ['expo-router', { asyncRoutes: { web: false } }],
           // Native OS splash (Oxy family "Instagram, from Meta" pattern): Syra's
           // OWN equalizer logo (white on transparent) centered on the shared dark
           // brand background, with the Oxy symbol pinned to the bottom.

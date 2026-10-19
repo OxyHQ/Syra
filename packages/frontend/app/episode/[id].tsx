@@ -364,7 +364,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 24,
     marginTop: 8,
-    ...Platform.select({ web: { cursor: 'pointer' } }),
+    ...Platform.select({ web: { cursor: 'pointer' as const } }),
   },
   playButtonText: {
     fontSize: 15,
@@ -383,7 +383,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     paddingVertical: 10,
-    ...Platform.select({ web: { cursor: 'pointer' } }),
+    ...Platform.select({ web: { cursor: 'pointer' as const } }),
   },
   chapterTime: {
     fontSize: 13,
@@ -399,7 +399,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     paddingVertical: 8,
-    ...Platform.select({ web: { cursor: 'pointer' } }),
+    ...Platform.select({ web: { cursor: 'pointer' as const } }),
   },
   linkText: {
     fontSize: 14,

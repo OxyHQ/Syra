@@ -6,14 +6,20 @@ interface ScrollEventTarget {
   closest?: (selector: string) => Element | null;
 }
 
+/**
+ * On web the target is the scrolling DOM node; on native it is a node handle
+ * (a number) or a `ReactNativeElement`, which also exposes `scrollTop`.
+ */
+type ScrollEventTargetLike = ScrollEventTarget | number;
+
 interface ScrollEventNativeEvent {
   contentOffset?: { x?: number; y?: number } | number;
-  target?: ScrollEventTarget;
+  target?: ScrollEventTargetLike;
 }
 
 type ScrollEvent = {
   nativeEvent?: ScrollEventNativeEvent;
-  target?: ScrollEventTarget;
+  target?: ScrollEventTargetLike;
 };
 
 type WheelLikeEvent = {
@@ -72,7 +78,8 @@ function extractOffsetY(event: ScrollEvent): number {
   const nativeEvent: ScrollEventNativeEvent | undefined = event?.nativeEvent;
   if (!nativeEvent) {
     const target = event?.target;
-    if (target && typeof target.scrollTop === 'number') return target.scrollTop;
+    if (target && typeof target === 'object' && typeof target.scrollTop === 'number')
+      return target.scrollTop;
     return 0;
   }
 
@@ -83,7 +90,8 @@ function extractOffsetY(event: ScrollEvent): number {
   if (typeof offsetY === 'number') return offsetY;
 
   const target = nativeEvent.target ?? event?.target;
-  if (target && typeof target.scrollTop === 'number') return target.scrollTop;
+  if (target && typeof target === 'object' && typeof target.scrollTop === 'number')
+    return target.scrollTop;
 
   return 0;
 }
@@ -114,7 +122,7 @@ export function LayoutScrollProvider({
       // Optimize web DOM queries - only check if we don't have a registered element
       if (Platform.OS === 'web' && !scrollElementRef.current) {
         const target = event?.nativeEvent?.target ?? event?.target;
-        if (target && typeof target.closest === 'function') {
+        if (target && typeof target === 'object' && typeof target.closest === 'function') {
           const owner = target.closest('[data-layoutscroll="true"]') as HTMLElement | null;
           if (owner) {
             scrollElementRef.current = owner;

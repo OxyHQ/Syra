@@ -3,6 +3,7 @@
  */
 
 import { StyleSheet, ViewStyle, TextStyle, ImageStyle, StyleProp } from 'react-native';
+import type { SheetViewStyle } from '@/utils/webStyles';
 
 /**
  * Flatten an array of style props into a single resolved style object.
@@ -14,5 +15,8 @@ import { StyleSheet, ViewStyle, TextStyle, ImageStyle, StyleProp } from 'react-n
 export function flattenStyleArray<T extends ViewStyle | TextStyle | ImageStyle>(
   styles: StyleProp<T> | (StyleProp<T> | undefined | null | false)[],
 ): T {
-  return StyleSheet.flatten(styles) as T;
+  // Expo's react-native-web augmentation types `ViewStyle` (and `ImageStyle`,
+  // which RN 0.88 derives from it) more loosely than `flatten` accepts — see
+  // `SheetViewStyle`. Only the static type is narrowed; the value is unchanged.
+  return StyleSheet.flatten(styles as StyleProp<SheetViewStyle | TextStyle>) as T;
 }

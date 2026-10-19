@@ -68,7 +68,7 @@ const GenreCardComponent: React.FC<GenreCardProps> = ({
         styles.container,
         isHovered && styles.containerHovered,
         ...Platform.select({
-          web: [webViewStyle({ cursor: 'pointer' })],
+          web: [webViewStyle({ cursor: 'pointer' as const })],
           default: [],
         }),
       ]}
@@ -180,7 +180,7 @@ const styles = StyleSheet.create({
     right: 16,
     zIndex: 2,
     ...Platform.select({
-      web: webViewStyle({ cursor: 'pointer' }),
+      web: webViewStyle({ cursor: 'pointer' as const }),
       default: {},
     }),
   },

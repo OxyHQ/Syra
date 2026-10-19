@@ -68,7 +68,9 @@ module.exports = function (_config) {
         // Metro configuration is handled in metro.config.js
       },
       plugins: [
-        'expo-router',
+        // SDK 58 turns on async routes for web by default; keep SDK 57's single
+        // web bundle (the bundle budget is measured against that shape).
+        ['expo-router', { asyncRoutes: { web: false } }],
         [
           'expo-splash-screen',
           {

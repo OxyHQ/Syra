@@ -40,7 +40,7 @@ const styles = StyleSheet.create({
     borderRadius: 1000,
     ...Platform.select({
       web: {
-        cursor: 'pointer',
+        cursor: 'pointer' as const,
       },
     }),
   },

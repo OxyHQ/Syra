@@ -1194,7 +1194,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   seeAllButton: {
-    ...Platform.select({ web: { cursor: 'pointer' } }),
+    ...Platform.select({ web: { cursor: 'pointer' as const } }),
   },
   seeAll: {
     fontSize: 13,
@@ -1212,7 +1212,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
     textDecorationLine: 'underline',
-    ...Platform.select({ web: { cursor: 'pointer' } }),
+    ...Platform.select({ web: { cursor: 'pointer' as const } }),
   },
 });
 

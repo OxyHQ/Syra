@@ -29,6 +29,9 @@ import { flattenStyleArray } from '@/styles/shared';
 import type { ButtonProps } from './types';
 export type { ButtonProps, ButtonVariant, ButtonSize } from './types';
 
+/** RN 0.88 style types are read-only; the builders below assemble one key at a time. */
+type Mutable<T> = { -readonly [K in keyof T]: T[K] };
+
 const SIZE_CONFIG = {
   small: {
     paddingVertical: 6,
@@ -145,7 +148,7 @@ const ButtonComponent: React.FC<ButtonProps> = ({
 
   // Base button styles
   const baseStyles = useMemo(() => {
-    const styles: ViewStyle = {
+    const styles: Mutable<ViewStyle> = {
       alignItems: 'center',
       justifyContent: 'center',
       flexDirection: 'row',
@@ -205,7 +208,7 @@ const ButtonComponent: React.FC<ButtonProps> = ({
 
   // Text styles
   const textStyles = useMemo(() => {
-    const styles: TextStyle = {
+    const styles: Mutable<TextStyle> = {
       fontSize: sizeConfig.fontSize,
       fontWeight: Platform.OS === 'web' ? 'bold' : '600',
     };

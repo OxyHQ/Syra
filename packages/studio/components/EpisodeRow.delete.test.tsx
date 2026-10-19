@@ -19,6 +19,10 @@ import { episodeService } from '@/services/episodeService';
 
 const dialogProps: Record<string, unknown>[] = [];
 
+// SDK 58: jest-expo mocks `react-native/asset-registry`, but expo-asset reads
+// the registry through `react-native`'s index, so a real icon font load throws
+// "missing from the asset registry". The icon is not what these tests check.
+jest.mock('@expo/vector-icons/MaterialCommunityIcons', () => () => null);
 jest.mock('@oxy.so/bloom/alert-dialog', () => ({
   AlertDialog: (props: Record<string, unknown>) => {
     dialogProps.push(props);

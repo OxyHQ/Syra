@@ -712,7 +712,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
     ...Platform.select({
       web: {
-        cursor: 'pointer',
+        cursor: 'pointer' as const,
       },
     }),
   },
@@ -756,7 +756,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     ...Platform.select({
       web: {
-        cursor: 'pointer',
+        cursor: 'pointer' as const,
         transition: 'transform 0.2s',
         ':hover': {
           transform: 'scale(1.1)',
@@ -774,7 +774,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     ...Platform.select({
       web: {
-        cursor: 'pointer',
+        cursor: 'pointer' as const,
       },
     }),
   },
@@ -885,7 +885,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...Platform.select({
       web: {
-        cursor: 'pointer',
+        cursor: 'pointer' as const,
         transition: 'transform 0.2s',
         ':hover': {
           transform: 'scale(1.05)',
@@ -908,7 +908,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     ...Platform.select({
       web: {
-        cursor: 'pointer',
+        cursor: 'pointer' as const,
         transition: 'transform 0.2s, background-color 0.2s',
       },
     }),
