@@ -616,7 +616,7 @@ export function PodcastStreamPicker({ onSelectEpisode, onStartQueue }: PodcastSt
                 <View style={styles.footerLoader}>
                   <ActivityIndicator size="small" color={theme.colors.primary} />
                 </View>
-              ) : null
+              ) : undefined
             }
           />
         )}
@@ -753,7 +753,7 @@ export function PodcastStreamPicker({ onSelectEpisode, onStartQueue }: PodcastSt
               <View style={styles.footerLoader}>
                 <ActivityIndicator size="small" color={theme.colors.primary} />
               </View>
-            ) : null
+            ) : undefined
           }
         />
       )}
@@ -1098,7 +1098,7 @@ export function MusicPicker({ onSelectTrack, onStartQueue }: MusicPickerProps) {
               <View style={styles.footerLoader}>
                 <ActivityIndicator size="small" color={theme.colors.primary} />
               </View>
-            ) : null
+            ) : undefined
           }
         />
       )}

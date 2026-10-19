@@ -171,7 +171,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     ...Platform.select({
       web: {
-        cursor: 'pointer',
+        cursor: 'pointer' as const,
       },
     }),
   },
@@ -199,7 +199,7 @@ const styles = StyleSheet.create({
     ...Platform.select({
       web: {
         transition: 'opacity 0.2s',
-        cursor: 'pointer',
+        cursor: 'pointer' as const,
       },
     }),
   },

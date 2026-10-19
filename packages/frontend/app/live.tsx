@@ -81,7 +81,9 @@ export default function LiveScreen() {
         refreshControl={
           <RefreshControl
             refreshing={isRefetching}
-            onRefresh={refetch}
+            onRefresh={() => {
+              refetch();
+            }}
             tintColor={theme.colors.primary}
           />
         }

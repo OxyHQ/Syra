@@ -103,7 +103,7 @@ const TrackRowComponent: React.FC<TrackRowProps> = ({
           // art behind it instead of tinting.
           undefined,
           ...Platform.select({
-            web: [webViewStyle({ cursor: 'pointer' })],
+            web: [webViewStyle({ cursor: 'pointer' as const })],
             default: [],
           }),
         ]}
@@ -318,7 +318,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...Platform.select({
       web: {
-        cursor: 'pointer',
+        cursor: 'pointer' as const,
       },
     }),
   },
@@ -329,7 +329,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...Platform.select({
       web: {
-        cursor: 'pointer',
+        cursor: 'pointer' as const,
       },
     }),
   },

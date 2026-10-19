@@ -658,7 +658,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     ...Platform.select({
       web: {
-        cursor: 'pointer',
+        cursor: 'pointer' as const,
       },
     }),
   },
@@ -717,7 +717,7 @@ const styles = StyleSheet.create({
     minHeight: 40,
     ...Platform.select({
       web: {
-        cursor: 'pointer',
+        cursor: 'pointer' as const,
       },
     }),
   },
@@ -780,7 +780,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...Platform.select({
       web: {
-        cursor: 'pointer',
+        cursor: 'pointer' as const,
       },
     }),
   },

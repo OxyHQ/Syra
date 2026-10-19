@@ -53,25 +53,15 @@ function Brand() {
 // skeleton, signed-in row + account switcher, signed-out "Sign in") and the
 // device-account switcher menu. `expanded` renders the full row (avatar + name +
 // handle) in the sidebar; the collapsed avatar-only variant fits the mobile
-// top-bar slot. Manage goes to the ManageAccount sheet (this studio has no
-// standalone settings route); add-account opens the account dialog.
+// top-bar slot. "Manage your Oxy account" always opens the SDK's ManageAccount
+// screen; add-account opens the account dialog.
 function AccountButton({ expanded = true }: { expanded?: boolean }) {
-  const { showBottomSheet, openAccountDialog } = useOxy();
-  const onNavigateManage = useCallback(() => {
-    showBottomSheet?.('ManageAccount');
-  }, [showBottomSheet]);
+  const { openAccountDialog } = useOxy();
   const onAddAccount = useCallback(() => {
     openAccountDialog('add');
   }, [openAccountDialog]);
 
-  return (
-    <ProfileButton
-      expanded={expanded}
-      avatarSize={34}
-      onNavigateManage={onNavigateManage}
-      onAddAccount={onAddAccount}
-    />
-  );
+  return <ProfileButton expanded={expanded} avatarSize={34} onAddAccount={onAddAccount} />;
 }
 
 function NavButton({

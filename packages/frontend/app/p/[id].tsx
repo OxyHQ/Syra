@@ -1169,7 +1169,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     ...Platform.select({
-      web: { cursor: 'pointer' },
+      web: { cursor: 'pointer' as const },
     }),
   },
   scrollView: {
@@ -1257,7 +1257,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 14,
-    ...Platform.select({ web: { cursor: 'pointer' } }),
+    ...Platform.select({ web: { cursor: 'pointer' as const } }),
   },
   linkChipText: {
     fontSize: 12,
@@ -1297,7 +1297,7 @@ const styles = StyleSheet.create({
     elevation: 5,
     overflow: 'hidden',
     ...Platform.select({
-      web: { cursor: 'pointer' },
+      web: { cursor: 'pointer' as const },
     }),
   },
   playButtonInner: {
@@ -1314,7 +1314,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 20,
     ...Platform.select({
-      web: { cursor: 'pointer' },
+      web: { cursor: 'pointer' as const },
     }),
   },
   sectionHeader: {

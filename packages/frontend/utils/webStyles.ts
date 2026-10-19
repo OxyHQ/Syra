@@ -33,10 +33,24 @@ interface WebOnlyProps {
 type WebStyle<T> = Omit<T, keyof WebOnlyProps> & WebOnlyProps;
 
 /**
- * Tag a web-only CSS bag as a React Native `ViewStyle`.
+ * Keys Expo's react-native-web augmentation (`expo/types/react-native-web.d.ts`)
+ * types more loosely on `ViewStyle` than on `TextStyle`: `userSelect` as any
+ * string and `transitionDuration` as also a number. RN 0.88's `StyleSheet.create`
+ * and `StyleSheet.flatten` check every entry against the combined text/image
+ * style, so a value typed as the full `ViewStyle` is rejected there. Taking
+ * these two keys from `TextStyle` keeps the result assignable to both.
  */
-export function webViewStyle(style: WebStyle<ViewStyle>): ViewStyle {
-  return style as ViewStyle;
+type ViewTextConflictKeys = 'userSelect' | 'transitionDuration';
+
+/** A `ViewStyle` that `StyleSheet.create` and `StyleSheet.flatten` accept. */
+export type SheetViewStyle = Omit<ViewStyle, ViewTextConflictKeys> &
+  Pick<TextStyle, ViewTextConflictKeys>;
+
+/**
+ * Tag a web-only CSS bag as a React Native view style.
+ */
+export function webViewStyle(style: WebStyle<ViewStyle>): SheetViewStyle {
+  return style as SheetViewStyle;
 }
 
 /**

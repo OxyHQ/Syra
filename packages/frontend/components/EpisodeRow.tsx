@@ -97,7 +97,7 @@ const EpisodeRowComponent: React.FC<EpisodeRowProps> = ({
       style={[
         styles.row,
         undefined,
-        ...Platform.select({ web: [webViewStyle({ cursor: 'pointer' })], default: [] }),
+        ...Platform.select({ web: [webViewStyle({ cursor: 'pointer' as const })], default: [] }),
       ]}
     >
       {imageUri ? (
@@ -214,7 +214,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...Platform.select({
       web: {
-        cursor: 'pointer',
+        cursor: 'pointer' as const,
       },
     }),
   },

@@ -440,7 +440,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
     ...Platform.select({
       web: {
-        cursor: 'pointer',
+        cursor: 'pointer' as const,
       },
     }),
   },
@@ -516,7 +516,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...Platform.select({
       web: {
-        cursor: 'pointer',
+        cursor: 'pointer' as const,
       },
     }),
   },
@@ -532,7 +532,7 @@ const styles = StyleSheet.create({
     minWidth: 0, // Let numberOfLines ellipsize within the panel width
     ...Platform.select({
       web: {
-        cursor: 'pointer',
+        cursor: 'pointer' as const,
       },
     }),
   },
@@ -553,7 +553,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     ...Platform.select({
       web: {
-        cursor: 'pointer',
+        cursor: 'pointer' as const,
       },
     }),
   },
@@ -572,7 +572,7 @@ const styles = StyleSheet.create({
     gap: 12,
     ...Platform.select({
       web: {
-        cursor: 'pointer',
+        cursor: 'pointer' as const,
       },
     }),
   },
@@ -613,7 +613,7 @@ const styles = StyleSheet.create({
     flex: 1,
     ...Platform.select({
       web: {
-        cursor: 'pointer',
+        cursor: 'pointer' as const,
       },
     }),
   },
@@ -631,7 +631,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     ...Platform.select({
       web: {
-        cursor: 'pointer',
+        cursor: 'pointer' as const,
       },
     }),
   },

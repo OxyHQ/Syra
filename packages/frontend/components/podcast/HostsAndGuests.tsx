@@ -110,7 +110,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     paddingVertical: 8,
-    ...Platform.select({ web: { cursor: 'pointer' } }),
+    ...Platform.select({ web: { cursor: 'pointer' as const } }),
   },
   avatar: {
     width: 44,

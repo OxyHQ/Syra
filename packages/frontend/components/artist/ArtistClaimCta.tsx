@@ -217,7 +217,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 4,
-    ...Platform.select({ web: { cursor: 'pointer' } }),
+    ...Platform.select({ web: { cursor: 'pointer' as const } }),
   },
   buttonText: {
     fontSize: 13,

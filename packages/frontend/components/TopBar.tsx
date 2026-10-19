@@ -10,8 +10,7 @@ import {
   Image,
   ScrollView,
   GestureResponderEvent,
-  type NativeSyntheticEvent,
-  type TextInputKeyPressEventData,
+  type TextInputKeyPressEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { webTextStyle, webViewStyle } from '@/utils/webStyles';
@@ -252,13 +251,13 @@ export const TopBar: React.FC = () => {
     navigateFromSearch(searchItems[index].href);
   };
 
-  const handleSearchKeyPress = (event: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
+  const handleSearchKeyPress = (event: TextInputKeyPressEvent) => {
     const key = event.nativeEvent.key;
     const preventDefault = () => {
       event.preventDefault?.();
       // On react-native-web the underlying `nativeEvent` is a DOM KeyboardEvent
       // that also exposes `preventDefault`; native platforms have no such method.
-      const domNativeEvent = event.nativeEvent as TextInputKeyPressEventData & {
+      const domNativeEvent = event.nativeEvent as TextInputKeyPressEvent['nativeEvent'] & {
         preventDefault?: () => void;
       };
       domNativeEvent.preventDefault?.();
@@ -482,7 +481,6 @@ export const TopBar: React.FC = () => {
     <ProfileButton
       expanded={false}
       avatarSize={32}
-      onNavigateManage={() => router.push('/settings')}
       onNavigateProfile={user?.username ? () => router.push(userHref(user.username)) : undefined}
       onAddAccount={() => openAccountDialog('add')}
     />
@@ -732,7 +730,7 @@ const styles = StyleSheet.create({
     minHeight: 48,
     ...Platform.select({
       web: {
-        cursor: 'pointer',
+        cursor: 'pointer' as const,
       },
     }),
   },
@@ -762,7 +760,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...Platform.select({
       web: {
-        cursor: 'pointer',
+        cursor: 'pointer' as const,
       },
     }),
   },
@@ -789,7 +787,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
     ...Platform.select({
       web: {
-        cursor: 'pointer',
+        cursor: 'pointer' as const,
       },
     }),
   },

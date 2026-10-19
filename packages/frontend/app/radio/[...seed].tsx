@@ -233,7 +233,7 @@ const RadioStationScreen: React.FC = () => {
                   },
                 }}
               />
-            ) : null
+            ) : undefined
           }
         />
       </View>
@@ -297,7 +297,7 @@ const styles = StyleSheet.create({
     gap: 6,
     marginTop: 16,
     ...Platform.select({
-      web: { cursor: 'pointer' },
+      web: { cursor: 'pointer' as const },
     }),
   },
   restartLabel: {

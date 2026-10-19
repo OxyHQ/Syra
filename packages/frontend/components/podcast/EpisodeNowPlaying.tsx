@@ -192,7 +192,7 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    ...Platform.select({ web: { cursor: 'pointer' } }),
+    ...Platform.select({ web: { cursor: 'pointer' as const } }),
   },
   speedRow: {
     flexDirection: 'row',
@@ -215,7 +215,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     paddingVertical: 8,
-    ...Platform.select({ web: { cursor: 'pointer' } }),
+    ...Platform.select({ web: { cursor: 'pointer' as const } }),
   },
   chapterTime: {
     fontSize: 13,

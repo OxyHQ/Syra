@@ -365,7 +365,7 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     ...Platform.select({
       web: {
-        cursor: 'pointer',
+        cursor: 'pointer' as const,
       },
     }),
   },
@@ -391,7 +391,7 @@ const styles = StyleSheet.create({
   albumArtPressable: {
     ...Platform.select({
       web: {
-        cursor: 'pointer',
+        cursor: 'pointer' as const,
       },
     }),
   },

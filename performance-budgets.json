@@ -1,15 +1,16 @@
 {
   "frontendWeb": {
-    "initialJavaScriptBytes": 8684303,
-    "initialJavaScriptGzipBytes": 2100316,
+    "initialJavaScriptBytes": 7840000,
+    "initialJavaScriptGzipBytes": 2002000,
     "translationBytes": 1247628,
     "translationGzipBytes": 425598,
-    "otherJavaScriptBytes": 2267796,
-    "otherJavaScriptGzipBytes": 645489,
+    "otherJavaScriptBytes": 2595000,
+    "otherJavaScriptGzipBytes": 742000,
     "nonJavaScriptBytes": 2529814,
     "fontBytes": 2105000
   },
   "notes": {
-    "2026-10-19 services 11.17.0": "Rebalanced, not loosened per category: initialJavaScript* fell by the measured drop (-268,277 raw / -73,633 gzip) once the app imported @oxy.so/services/ui/client; otherJavaScript* (+437,796 raw / +110,489 gzip) and nonJavaScriptBytes (+14,814) rose only by what services 11.17's single screenComponents warm-up chunk adds: Bloom phone-input flags (144 KB, via LanguageSelectorScreen's CountryFlag and EditProfileFieldScreen's PhoneInput), the Bloom chat-people barrel (UserListScreen imports only ContactRow), qrcode (InlineCommonsQr, PaymentGatewayScreen), date-picker (EditProfileFieldScreen), and OxyOneScreen's assets/one/floral.jpg (15,925 B). Tighten these again when services loads those lazily / narrowly and serves the Oxy One artwork remotely."
+    "2026-10-19 services 11.17.0": "Rebalanced, not loosened per category: initialJavaScript* fell by the measured drop (-268,277 raw / -73,633 gzip) once the app imported @oxy.so/services/ui/client; otherJavaScript* (+437,796 raw / +110,489 gzip) and nonJavaScriptBytes (+14,814) rose only by what services 11.17's single screenComponents warm-up chunk adds: Bloom phone-input flags (144 KB, via LanguageSelectorScreen's CountryFlag and EditProfileFieldScreen's PhoneInput), the Bloom chat-people barrel (UserListScreen imports only ContactRow), qrcode (InlineCommonsQr, PaymentGatewayScreen), date-picker (EditProfileFieldScreen), and OxyOneScreen's assets/one/floral.jpg (15,925 B). Tighten these again when services loads those lazily / narrowly and serves the Oxy One artwork remotely.",
+    "2026-10-19 Expo SDK 58": "Rebalanced, not loosened: with @alia.onl/sdk 21.5.0 (imports useAppAssertion from the lean @oxy.so/services/ui/client) and services 12.2.0 (the ui barrel no longer registers the account screens) nothing hoists into __common, so initialJavaScript* fall to the measured 7,835,201 raw / 2,000,003 gzip (-849,102 / -100,313). otherJavaScript* rise to the measured 2,591,215 / 740,409 (+323,419 / +94,920): the lazily loaded Ask Alia chunk (AliaAskSheetWithVoice, 1,359,589 / 376,325) carries Alia 21's chat and voice call and Bloom 14's chat components, loaded only when Ask Alia opens. Measured with Expo SDK 58 and asyncRoutes web:false."
   }
 }

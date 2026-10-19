@@ -6,13 +6,12 @@ import {
   Modal,
   Platform,
   Pressable,
-  ImageBackground,
-  ImageSourcePropType,
   type StyleProp,
   type ViewStyle,
   type GestureResponderEvent,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
+import { Image, type ImageSource } from 'expo-image';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -186,7 +185,7 @@ const WelcomeModal: React.FC<WelcomeModalProps> = ({ visible, onClose }) => {
   );
 
   // Load background image
-  const backgroundImage: ImageSourcePropType = useMemo(
+  const backgroundImage: ImageSource = useMemo(
     () => require('@/assets/images/welcome-modal-bg.jpg'),
     [],
   );
@@ -226,12 +225,13 @@ const WelcomeModal: React.FC<WelcomeModalProps> = ({ visible, onClose }) => {
         ]}
       >
         <Pressable onPress={handleContentPress} style={styles.contentPressable}>
-          <ImageBackground
-            source={backgroundImage}
-            style={styles.modalBox}
-            imageStyle={styles.modalBoxImage}
-            resizeMode="cover"
-          >
+          <View style={styles.modalBox}>
+            <Image
+              source={backgroundImage}
+              style={styles.modalBoxImage}
+              contentFit="cover"
+              accessible={false}
+            />
             {/* Close Button */}
             <Pressable
               onPress={handleBackdropPress}
@@ -287,7 +287,7 @@ const WelcomeModal: React.FC<WelcomeModalProps> = ({ visible, onClose }) => {
                 </Pressable>
               </View>
             </View>
-          </ImageBackground>
+          </View>
         </Pressable>
       </Animated.View>
     </GestureHandlerRootView>
@@ -347,6 +347,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   modalBoxImage: {
+    ...StyleSheet.absoluteFill,
     opacity: 0.95,
   },
   closeButton: {

@@ -408,7 +408,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 20,
     marginTop: 4,
-    ...Platform.select({ web: { cursor: 'pointer' } }),
+    ...Platform.select({ web: { cursor: 'pointer' as const } }),
   },
   subscribeText: {
     fontSize: 14,
@@ -417,7 +417,7 @@ const styles = StyleSheet.create({
   descriptionWrap: webViewStyle({
     marginBottom: 20,
     gap: 4,
-    ...Platform.select({ web: { cursor: 'pointer' } }),
+    ...Platform.select({ web: { cursor: 'pointer' as const } }),
   }),
   description: {
     fontSize: 14,
