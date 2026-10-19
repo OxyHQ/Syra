@@ -1,12 +1,15 @@
 {
   "frontendWeb": {
-    "initialJavaScriptBytes": 8952580,
-    "initialJavaScriptGzipBytes": 2173949,
+    "initialJavaScriptBytes": 8684303,
+    "initialJavaScriptGzipBytes": 2100316,
     "translationBytes": 1247628,
     "translationGzipBytes": 425598,
-    "otherJavaScriptBytes": 1830000,
-    "otherJavaScriptGzipBytes": 535000,
-    "nonJavaScriptBytes": 2515000,
+    "otherJavaScriptBytes": 2267796,
+    "otherJavaScriptGzipBytes": 645489,
+    "nonJavaScriptBytes": 2529814,
     "fontBytes": 2105000
+  },
+  "notes": {
+    "2026-10-19 services 11.17.0": "Rebalanced, not loosened per category: initialJavaScript* fell by the measured drop (-268,277 raw / -73,633 gzip) once the app imported @oxy.so/services/ui/client; otherJavaScript* (+437,796 raw / +110,489 gzip) and nonJavaScriptBytes (+14,814) rose only by what services 11.17's single screenComponents warm-up chunk adds: Bloom phone-input flags (144 KB, via LanguageSelectorScreen's CountryFlag and EditProfileFieldScreen's PhoneInput), the Bloom chat-people barrel (UserListScreen imports only ContactRow), qrcode (InlineCommonsQr, PaymentGatewayScreen), date-picker (EditProfileFieldScreen), and OxyOneScreen's assets/one/floral.jpg (15,925 B). Tighten these again when services loads those lazily / narrowly and serves the Oxy One artwork remotely."
   }
 }

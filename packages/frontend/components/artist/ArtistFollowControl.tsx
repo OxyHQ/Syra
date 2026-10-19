@@ -14,7 +14,7 @@ import React, { memo, useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@oxy.so/bloom/button';
-import { FollowTargetButton, useOxy } from '@oxy.so/services';
+import { FollowTargetButton, useOxy } from '@oxy.so/services/ui/client';
 import { useAuthGate } from '@/hooks/useAuthGate';
 import { useToggleFollowArtist } from '@/hooks/useLibrary';
 import { ARTIST_FOLLOW_KIND, ensureArtistFollowTarget } from '@/lib/followGraph';
