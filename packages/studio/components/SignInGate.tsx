@@ -1,7 +1,7 @@
 import { type ReactNode, useCallback } from 'react';
 import { Text, View } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { useOxy } from '@oxy.so/services';
+import { useOxy } from '@oxy.so/services/ui/client';
 import { useTheme } from '@oxy.so/bloom/theme';
 import { Button } from '@oxy.so/bloom/button';
 import { Loading } from '@oxy.so/bloom/loading';

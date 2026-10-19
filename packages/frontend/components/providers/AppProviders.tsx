@@ -21,7 +21,7 @@ import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { MenuProvider } from 'react-native-popup-menu';
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { OxyProvider, useOxy } from '@oxy.so/services';
+import { OxyProvider, useOxy } from '@oxy.so/services/ui/client';
 import type { OxyServices } from '@oxy.so/core';
 import { ImageResolverProvider, type ImageResolver } from '@oxy.so/bloom/image-resolver';
 import { LiveConfigProvider, LiveRoomProvider } from '@syra.fm/sdk';

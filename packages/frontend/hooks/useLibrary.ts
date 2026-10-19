@@ -6,7 +6,7 @@ import {
   type QueryClient,
   type UseMutationResult,
 } from '@tanstack/react-query';
-import { useOxy } from '@oxy.so/services';
+import { useOxy } from '@oxy.so/services/ui/client';
 import type { Track } from '@syra/shared-types';
 import {
   libraryService,

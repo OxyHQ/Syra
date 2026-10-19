@@ -8,7 +8,7 @@ let mockCanUsePrivateApi = false;
 
 jest.mock('expo-router', () => ({ Stack: { Screen: () => null } }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
-jest.mock('@oxy.so/services', () => ({ useOxy: () => ({ user: { id: 'listener' } }) }));
+jest.mock('@oxy.so/services/ui/client', () => ({ useOxy: () => ({ user: { id: 'listener' } }) }));
 jest.mock('@/hooks/useAuthGate', () => ({
   useAuthGate: () => ({
     canUsePrivateApi: mockCanUsePrivateApi,

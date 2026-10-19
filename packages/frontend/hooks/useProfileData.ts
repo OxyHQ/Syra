@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useOxy } from '@oxy.so/services';
+import { useOxy } from '@oxy.so/services/ui/client';
 import { useUserAppearance, type UserAppearance } from '@/store/appearanceStore';
 import { usePrivacySettings } from './usePrivacySettings';
 

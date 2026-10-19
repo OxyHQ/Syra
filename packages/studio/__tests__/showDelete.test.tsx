@@ -80,7 +80,7 @@ jest.mock('expo-router', () => ({
 
 let mockViewerId: string | undefined = 'owner-1';
 
-jest.mock('@oxy.so/services', () => ({
+jest.mock('@oxy.so/services/ui/client', () => ({
   useOxy: () => ({
     user: mockViewerId ? { id: mockViewerId } : undefined,
     canUsePrivateApi: true,

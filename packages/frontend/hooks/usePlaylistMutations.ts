@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query';
-import { useOxy } from '@oxy.so/services';
+import { useOxy } from '@oxy.so/services/ui/client';
 import type { Playlist, Track, UpdatePlaylistRequest } from '@syra/shared-types';
 import {
   playlistService,

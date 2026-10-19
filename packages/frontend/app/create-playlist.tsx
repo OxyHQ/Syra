@@ -13,7 +13,7 @@ import {
 import { useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxy.so/bloom/theme';
-import { useOxy } from '@oxy.so/services';
+import { useOxy } from '@oxy.so/services/ui/client';
 import { useRouter } from 'expo-router';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { CoverArtPicker } from '@/components/playlists/CoverArtPicker';

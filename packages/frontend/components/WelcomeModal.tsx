@@ -23,7 +23,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxy.so/bloom/theme';
-import { useOxy } from '@oxy.so/services';
+import { useOxy } from '@oxy.so/services/ui/client';
 import { useRouter } from 'expo-router';
 import { CloseIcon } from '@/assets/icons/close-icon';
 import { LogoIcon } from '@/assets/logo';

@@ -41,7 +41,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",
-    "@oxy.so/doctor": "1.1.0",
+    "@oxy.so/doctor": "1.1.1",
     "@types/node": "^20.0.0",
     "typescript": "~5.9.2"
   },
@@ -49,8 +49,8 @@
     "node": ">=18.0.0"
   },
   "overrides": {
-    "@oxy.so/bloom": "12.0.0",
-    "@oxy.so/core": "5.4.0",
+    "@oxy.so/bloom": "13.0.0",
+    "@oxy.so/core": "6.0.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.0",
@@ -59,8 +59,8 @@
     "tailwindcss": "4.2.2",
     "lightningcss": "1.30.1",
     "lightningcss-linux-x64-gnu": "1.30.1",
-    "@oxy.so/services": "11.14.0",
-    "@oxy.so/contracts": "4.24.0",
+    "@oxy.so/services": "11.16.0",
+    "@oxy.so/contracts": "5.0.0",
     "@oxy.so/protocol": "1.4.0"
   }
 }

@@ -31,7 +31,9 @@ jest.mock('@/hooks/useLibrary', () => ({
   useLibrary: jest.fn(() => ({})),
   withMembership: jest.fn(),
 }));
-jest.mock('@oxy.so/services', () => ({ useOxy: jest.fn(() => ({ canUsePrivateApi: false })) }));
+jest.mock('@oxy.so/services/ui/client', () => ({
+  useOxy: jest.fn(() => ({ canUsePrivateApi: false })),
+}));
 jest.mock('@oxy.so/bloom/toast', () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
 jest.mock('@/services/podcastService', () => ({ podcastService: {} }));
 jest.mock('@/services/episodeService', () => ({ episodeService: {} }));

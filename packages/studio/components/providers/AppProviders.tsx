@@ -14,7 +14,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { OxyProvider } from '@oxy.so/services';
+import { OxyProvider } from '@oxy.so/services/ui/client';
 import type { OxyServices } from '@oxy.so/core';
 import { ImageResolverProvider, type ImageResolver } from '@oxy.so/bloom/image-resolver';
 import { LiveConfigProvider, LiveRoomProvider } from '@syra.fm/sdk';

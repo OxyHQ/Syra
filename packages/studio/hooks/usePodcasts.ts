@@ -1,4 +1,4 @@
-import { useOxy } from '@oxy.so/services';
+import { useOxy } from '@oxy.so/services/ui/client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CreatePodcastRequest } from '@syra/shared-types';
 import { podcastService } from '@/services/podcastService';

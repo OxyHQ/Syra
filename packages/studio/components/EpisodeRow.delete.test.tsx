@@ -47,7 +47,7 @@ jest.mock('@/components/Artwork', () => ({
 // `hooks/usePodcasts` pulls the Oxy session in for its queries. Nothing on the
 // delete path reads it, and the package ships untranspiled sources that jest
 // cannot load, so it is stubbed at the boundary.
-jest.mock('@oxy.so/services', () => ({
+jest.mock('@oxy.so/services/ui/client', () => ({
   useOxy: () => ({ user: { id: 'owner-1' }, canUsePrivateApi: true, isPrivateApiPending: false }),
 }));
 

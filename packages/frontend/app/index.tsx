@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { Image } from 'expo-image';
-import { useOxy } from '@oxy.so/services';
+import { useOxy } from '@oxy.so/services/ui/client';
 import { RoomCard, useLiveRoom, createRoomsService, type Room } from '@syra.fm/sdk';
 import SEO from '@/components/SEO';
 import { MediaCard } from '@/components/MediaCard';

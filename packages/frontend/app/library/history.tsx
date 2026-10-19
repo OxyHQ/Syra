@@ -2,7 +2,7 @@ import React from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text } from 'react-native';
 import { Stack } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { useOxy } from '@oxy.so/services';
+import { useOxy } from '@oxy.so/services/ui/client';
 import { useTranslation } from 'react-i18next';
 import { useAuthGate } from '@/hooks/useAuthGate';
 import { libraryService } from '@/services/libraryService';

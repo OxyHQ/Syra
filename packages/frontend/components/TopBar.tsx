@@ -18,7 +18,7 @@ import { webTextStyle, webViewStyle } from '@/utils/webStyles';
 import { useRouter, usePathname, useLocalSearchParams, type Href } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxy.so/bloom/theme';
-import { useOxy, ProfileButton } from '@oxy.so/services';
+import { useOxy, ProfileButton } from '@oxy.so/services/ui/client';
 import { useQuery } from '@tanstack/react-query';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import Avatar from './Avatar';

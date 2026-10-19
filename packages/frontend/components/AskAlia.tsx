@@ -4,7 +4,7 @@ import { Pressable } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { AliaAvatarIcon } from '@alia.onl/sdk/avatar';
 import { useTheme } from '@oxy.so/bloom/theme';
-import { useOxy } from '@oxy.so/services';
+import { useOxy } from '@oxy.so/services/ui/client';
 import { useAuthGate } from '@/hooks/useAuthGate';
 import { usePlayerStore } from '@/stores/playerStore';
 

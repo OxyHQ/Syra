@@ -29,7 +29,7 @@ import { isNotFoundError } from '@/utils/api';
 import { toast } from '@oxy.so/bloom/toast';
 import { useAuthGate } from '@/hooks/useAuthGate';
 import { CATALOG_QUERY_KEYS } from '@/hooks/useLibraryCollections';
-import { useOxy } from '@oxy.so/services';
+import { useOxy } from '@oxy.so/services/ui/client';
 import { PlaylistActionsSheet } from '@/components/playlist/PlaylistActionsSheet';
 import { TrackActionsSheet } from '@/components/playlist/TrackActionsSheet';
 
