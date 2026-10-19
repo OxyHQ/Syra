@@ -3,7 +3,7 @@ import { Alert, Linking, ScrollView, StyleSheet, Text, View } from 'react-native
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useMutation } from '@tanstack/react-query';
 import { getAccountDisplayName } from '@oxy.so/core';
-import { useOxy } from '@oxy.so/services';
+import { useOxy } from '@oxy.so/services/ui/client';
 import { SettingsListGroup, SettingsListItem } from '@oxy.so/bloom/settings-list';
 import { Switch } from '@oxy.so/bloom/switch';
 import {

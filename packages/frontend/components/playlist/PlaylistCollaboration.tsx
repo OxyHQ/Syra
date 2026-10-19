@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { useOxy } from '@oxy.so/services';
+import { useOxy } from '@oxy.so/services/ui/client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { Playlist } from '@syra/shared-types';

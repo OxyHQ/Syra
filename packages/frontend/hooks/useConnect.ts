@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useOxy } from '@oxy.so/services';
+import { useOxy } from '@oxy.so/services/ui/client';
 import type { Device, PlaybackCommand } from '@syra/shared-types';
 import { playerSocketService } from '@/services/playerSocketService';
 

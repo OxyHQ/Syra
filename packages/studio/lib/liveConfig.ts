@@ -1,4 +1,4 @@
-import { useOxy } from '@oxy.so/services';
+import { useOxy } from '@oxy.so/services/ui/client';
 import { useTheme } from '@oxy.so/bloom/theme';
 import { Avatar } from '@oxy.so/bloom/avatar';
 import { useQuery } from '@tanstack/react-query';

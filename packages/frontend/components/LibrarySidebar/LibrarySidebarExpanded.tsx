@@ -7,7 +7,7 @@ import Octicons from '@expo/vector-icons/Octicons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxy.so/bloom/theme';
 import { Search } from '@oxy.so/bloom/search';
-import { useOxy } from '@oxy.so/services';
+import { useOxy } from '@oxy.so/services/ui/client';
 import { useUploads } from '@/hooks/useUploads';
 import { useMyPodcasts, useSubscriptions } from '@/hooks/usePodcasts';
 import { Image } from 'expo-image';

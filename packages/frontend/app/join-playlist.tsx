@@ -1,7 +1,7 @@
 import React from 'react';
 import { Pressable, ScrollView, Text } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useOxy } from '@oxy.so/services';
+import { useOxy } from '@oxy.so/services/ui/client';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { playlistSharingService } from '@/services/playlistSharingService';

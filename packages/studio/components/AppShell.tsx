@@ -3,7 +3,7 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useRouter, usePathname, type Href } from 'expo-router';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from '@oxy.so/bloom/theme';
-import { useOxy, ProfileButton } from '@oxy.so/services';
+import { useOxy, ProfileButton } from '@oxy.so/services/ui/client';
 import { useResponsive } from '@/hooks/useResponsive';
 import { cn } from '@/lib/utils';
 

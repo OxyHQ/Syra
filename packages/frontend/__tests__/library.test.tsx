@@ -26,7 +26,7 @@ import { podcastSchema, type Podcast, type PodcastSubscriptions } from '@syra/sh
  * `check-i18n` that does not cover test files.
  */
 
-jest.mock('@oxy.so/services', () => ({
+jest.mock('@oxy.so/services/ui/client', () => ({
   useOxy: () => ({ canUsePrivateApi: true, isAuthenticated: true, isPrivateApiPending: false }),
 }));
 

@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { useOxy } from '@oxy.so/services';
+import { useOxy } from '@oxy.so/services/ui/client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CreateAlbumRequest, Track } from '@syra/shared-types';
 import {

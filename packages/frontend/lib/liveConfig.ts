@@ -1,4 +1,4 @@
-import { useOxy } from '@oxy.so/services';
+import { useOxy } from '@oxy.so/services/ui/client';
 import { useTheme } from '@oxy.so/bloom/theme';
 import { useQuery } from '@tanstack/react-query';
 import type { LiveConfig, LiveTheme, UserEntity } from '@syra.fm/sdk';

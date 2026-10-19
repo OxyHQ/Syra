@@ -5,7 +5,7 @@ import { AlertDialog } from '@oxy.so/bloom/alert-dialog';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxy.so/bloom/theme';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useOxy } from '@oxy.so/services';
+import { useOxy } from '@oxy.so/services/ui/client';
 import type { Playlist } from '@syra/shared-types';
 import { useDeletePlaylist, useUpdatePlaylist } from '@/hooks/usePlaylistMutations';
 import { EmptyState } from '@/components/common/EmptyState';

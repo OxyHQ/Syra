@@ -7,7 +7,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { useOxy } from '@oxy.so/services';
+import { useOxy } from '@oxy.so/services/ui/client';
 import type { Track } from '@syra/shared-types';
 import { musicService } from '@/services/musicService';
 import { useAddTracksToPlaylist } from '@/hooks/usePlaylistMutations';

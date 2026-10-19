@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useOxy } from '@oxy.so/services';
+import { useOxy } from '@oxy.so/services/ui/client';
 
 /**
  * Bounded gate over the Oxy session, used by every identity-sensitive screen.

@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxy.so/bloom/theme';
 import { Playlist, Album, Artist } from '@syra/shared-types';
 import { Image } from 'expo-image';
-import { useOxy } from '@oxy.so/services';
+import { useOxy } from '@oxy.so/services/ui/client';
 import { useMyPodcasts, useSubscriptions } from '@/hooks/usePodcasts';
 import { pickCatalogImageUrl, resolvePodcastArtwork } from '@/utils/pickImage';
 

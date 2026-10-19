@@ -6,7 +6,7 @@ import {
   useQueryClient,
   type UseMutationResult,
 } from '@tanstack/react-query';
-import { useOxy } from '@oxy.so/services';
+import { useOxy } from '@oxy.so/services/ui/client';
 import { useAuthGate } from '@/hooks/useAuthGate';
 import type { Episode, Podcast, PodcastSubscriptions } from '@syra/shared-types';
 import { podcastService, type BrowsePodcastsParams } from '@/services/podcastService';
