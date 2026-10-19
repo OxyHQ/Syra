@@ -117,14 +117,22 @@ async function serveImagesApi(): Promise<void> {
   }
 }
 
-/** Waits nothing, and counts what it would have waited. */
+/**
+ * Waits nothing, and counts what it would have waited. The pacer's clock is
+ * virtual and moves only by what it slept: on the wall clock, the millisecond
+ * between a 429 and the retry's slot made the recorded wait 41,999, not 42,000.
+ */
 const waits: number[] = [];
-const pacer = () =>
-  new OxyWritePacer({
+const pacer = () => {
+  let clock = 0;
+  return new OxyWritePacer({
+    now: () => clock,
     sleep: async (ms) => {
       waits.push(ms);
+      clock += ms;
     },
   });
+};
 
 async function run(apply: boolean, options: { limit?: number } = {}) {
   await serveImagesApi();
