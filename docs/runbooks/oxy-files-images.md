@@ -23,7 +23,7 @@ and every script previews unless given `--apply`.
 Every use is registered with Oxy: database triggers (migration `0034`) queue
 `add`/`remove` in `oxy_file_reference_ops` in the transaction of the write; every
 API task drains the queue (`referenceOutbox.ts`); a nightly reconciliation per
-entity type (`referenceReconcile.ts`, `OXY_FILES_RECONCILE`) repairs the rest.
+entity type (`referenceReconcile.ts`, always applied) repairs the rest.
 Oxy's file events (`POST /webhooks/oxy/files`) stop serving a deleted, trashed,
 private or blocked file at once.
 
@@ -47,7 +47,6 @@ bucket object only when a row has none — and every such read is counted
    token; the cover hand-over and `imageFileId` depend on it.)
 3. Set in SSM (`/oxy/syra/*`):
    - `SYRA_COVER_APPLICATION_IDS` = Alia's Oxy application id.
-   - `OXY_FILES_RECONCILE` = `dry-run` (the default; see step 4).
 4. Register the file-events endpoint `https://api.syra.fm/webhooks/oxy/files`
    (console → Webhooks → File events, or `oxy.apps.setFilesWebhook`). The
    endpoint answers Oxy's challenge before it has a secret; store the secret the
@@ -94,16 +93,17 @@ unit — read its line; a re-run retries it.
    `SYRA_COVER_APPLICATION_IDS`. `awaiting_alia` means step 3.1 has not reached
    that show yet: run again afterwards.
 
-## 4. Reconciliation: dry run, then apply
+## 4. Reconciliation
 
-The nightly run starts as a dry run (`oxy_file_reconcile_runs` holds the
-counts). Not to wait for the night, run `reconcile-oxy-file-references` (a
-preview: every entity type's counts in the task's log, nothing recorded) right
-after step 2. When `removed` and `refused` are understood (they should be ~0
-after step 2), set `OXY_FILES_RECONCILE=apply` and run
-`reconcile-oxy-file-references --apply` once. This must be `apply` before Oxy's
-lifecycle sweep is switched to `enforce`: an application file Syra uses but never
-referenced would be trashed 24 hours later.
+The nightly run always applies (`oxy_file_reconcile_runs` holds the counts).
+For the counts without changing anything, run `reconcile-oxy-file-references`
+(a preview: every entity type's counts in the task's log, nothing recorded);
+`removed` and `refused` should be ~0 after step 2. Not to wait for the night,
+run `reconcile-oxy-file-references --apply`. It must have applied once before
+Oxy's lifecycle sweep is switched to `enforce`: an application file Syra uses
+but never referenced would be trashed 24 hours later. Production's first preview
+(2026-10-20) found 167,421 references in place and nothing to add, remove or
+refuse.
 
 ## 5. The soak — legacy reads to zero
 
