@@ -97,8 +97,11 @@ unit — read its line; a re-run retries it.
 ## 4. Reconciliation: dry run, then apply
 
 The nightly run starts as a dry run (`oxy_file_reconcile_runs` holds the
-counts). When `removed` and `refused` are understood (they should be ~0 after
-step 2), set `OXY_FILES_RECONCILE=apply`. This must be `apply` before Oxy's
+counts). Not to wait for the night, run `reconcile-oxy-file-references` (a
+preview: every entity type's counts in the task's log, nothing recorded) right
+after step 2. When `removed` and `refused` are understood (they should be ~0
+after step 2), set `OXY_FILES_RECONCILE=apply` and run
+`reconcile-oxy-file-references --apply` once. This must be `apply` before Oxy's
 lifecycle sweep is switched to `enforce`: an application file Syra uses but never
 referenced would be trashed 24 hours later.
 

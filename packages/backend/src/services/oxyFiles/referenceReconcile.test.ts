@@ -4,7 +4,12 @@ import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
 import { installFakeOxyFiles, resetOxyFiles, type FakeOxyFiles } from '../../test/fakeOxyFiles';
 import { getDb } from '../../db/postgres';
 import { OXY_REFERENCE_ENTITY_TYPES, oxyFileReconcileRuns } from '../../db/schema/oxyFiles';
-import { reconcileEntityType, reconcileMode, runDueReconciliations } from './referenceReconcile';
+import {
+  reconcileAllNow,
+  reconcileEntityType,
+  reconcileMode,
+  runDueReconciliations,
+} from './referenceReconcile';
 
 /**
  * The nightly inventory: Oxy is told the whole truth for one entity type and
@@ -103,5 +108,39 @@ describe('runDueReconciliations', () => {
     await house('h-1', used.id);
     await runDueReconciliations();
     expect(oxy.hasReference(used.id, 'house', 'h-1')).toBe(true);
+  });
+});
+
+describe('reconcileAllNow', () => {
+  it("previews every entity type without recording a run, so the night's run still happens", async () => {
+    const used = oxy.seedFile({ bytes: Buffer.from('used'), ownerUserId: 'u' });
+    await house('h-1', used.id);
+
+    const preview = await reconcileAllNow(true);
+
+    expect(preview).not.toBe('busy');
+    if (preview === 'busy') return;
+    expect(preview.outcomes).toHaveLength(OXY_REFERENCE_ENTITY_TYPES.length);
+    expect(preview.outcomes.find((o) => o.entityType === 'house')).toMatchObject({
+      added: 1,
+      dryRun: true,
+    });
+    expect(oxy.hasReference(used.id, 'house', 'h-1')).toBe(false);
+    expect(await getDb().select().from(oxyFileReconcileRuns)).toEqual([]);
+
+    process.env.OXY_FILES_RECONCILE = 'apply';
+    expect(await runDueReconciliations()).toHaveLength(OXY_REFERENCE_ENTITY_TYPES.length);
+  });
+
+  it("applies every entity type and records it as the night's run", async () => {
+    const used = oxy.seedFile({ bytes: Buffer.from('used'), ownerUserId: 'u' });
+    await house('h-1', used.id);
+
+    const applied = await reconcileAllNow(false);
+
+    expect(applied).not.toBe('busy');
+    expect(oxy.hasReference(used.id, 'house', 'h-1')).toBe(true);
+    process.env.OXY_FILES_RECONCILE = 'apply';
+    expect(await runDueReconciliations()).toHaveLength(0);
   });
 });
