@@ -112,7 +112,7 @@ describe('runDueReconciliations', () => {
 });
 
 describe('reconcileAllNow', () => {
-  it('previews every entity type without recording a run, so the night\'s run still happens', async () => {
+  it("previews every entity type without recording a run, so the night's run still happens", async () => {
     const used = oxy.seedFile({ bytes: Buffer.from('used'), ownerUserId: 'u' });
     await house('h-1', used.id);
 
@@ -132,7 +132,7 @@ describe('reconcileAllNow', () => {
     expect(await runDueReconciliations()).toHaveLength(OXY_REFERENCE_ENTITY_TYPES.length);
   });
 
-  it('applies every entity type and records it as the night\'s run', async () => {
+  it("applies every entity type and records it as the night's run", async () => {
     const used = oxy.seedFile({ bytes: Buffer.from('used'), ownerUserId: 'u' });
     await house('h-1', used.id);
 
