@@ -314,12 +314,11 @@ jobs:
           # creates one: a new entry here is preceded by its owner writing
           # /oxy/syra/<NAME> with `aws ssm put-parameter` (oxy-infra runbook 46).
           #
-          # SYRA_COVER_APPLICATION_IDS (Alia's Oxy application id) and
-          # OXY_FILES_RECONCILE (`dry-run` until the first counts are reviewed,
-          # then `apply`) are Oxy Files settings (docs/runbooks/oxy-files-images.md
-          # step 0). Changing either is `aws ssm put-parameter --overwrite` plus a
-          # redeploy: ECS resolves the parameter at task launch.
-          TASK_SECRET_OVERRIDES_JSON: '{"DATABASE_URL":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/DATABASE_URL","INGEST_TOKEN_SECRET":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/INGEST_TOKEN_SECRET","SYRA_COVER_APPLICATION_IDS":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/SYRA_COVER_APPLICATION_IDS","OXY_FILES_RECONCILE":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/OXY_FILES_RECONCILE"}'
+          # SYRA_COVER_APPLICATION_IDS (Alia's Oxy application id) is an Oxy
+          # Files setting (docs/runbooks/oxy-files-images.md step 0). Changing it
+          # is `aws ssm put-parameter --overwrite` plus a redeploy: ECS resolves
+          # the parameter at task launch.
+          TASK_SECRET_OVERRIDES_JSON: '{"DATABASE_URL":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/DATABASE_URL","INGEST_TOKEN_SECRET":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/INGEST_TOKEN_SECRET","SYRA_COVER_APPLICATION_IDS":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/SYRA_COVER_APPLICATION_IDS"}'
 
           # The Oxy service credential Syra no longer holds.
           #
@@ -338,7 +337,10 @@ jobs:
           # The SSM parameters are untouched and still exist. This removes the
           # task definition's REFERENCE to them, which is the half a deploy owns;
           # retiring the parameters is a separate, later, irreversible step.
-          TASK_SECRET_REMOVALS: OXY_SERVICE_API_KEY OXY_SERVICE_API_SECRET
+          #
+          # OXY_FILES_RECONCILE is retired too: the nightly reference
+          # reconciliation always applies, with no mode to set.
+          TASK_SECRET_REMOVALS: OXY_SERVICE_API_KEY OXY_SERVICE_API_SECRET OXY_FILES_RECONCILE
 
           # PRE_DEPLOY_TASK_COMMAND_JSON / POST_DEPLOY_TASK_COMMAND_JSON are NOT
           # set here: whichever selector step above ran put them in $GITHUB_ENV,

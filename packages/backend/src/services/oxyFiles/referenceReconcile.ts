@@ -17,12 +17,11 @@
  * (a test holds the two equal), so the nightly answer and the per-write answer
  * cannot disagree about what "uses a file" means.
  *
- * ## Mode
+ * ## Always applied
  *
- * `OXY_FILES_RECONCILE` = `apply` | `dry-run` (default) | `off`. A dry run asks
- * Oxy for the counts and changes nothing — the first runs, before anyone has
- * looked at what `removed` would be, should be dry. `docs/runbooks/oxy-files-images.md`
- * says when to switch.
+ * The nightly run always applies: there is no mode to set. An operator who
+ * wants the counts first runs the on-demand preview below, which changes
+ * nothing.
  *
  * ## Once a day, fleet-wide
  *
@@ -53,20 +52,12 @@ import { describeErrorSafely } from '../../utils/error';
 import { oxyFiles } from './client';
 import { inventoryQuery, lastEntityIdOfPage, referenceSource } from './referenceRegistry';
 
-export type ReconcileMode = 'apply' | 'dry-run' | 'off';
-
 const PAGE_SIZE = 2_000;
 const RUN_EVERY_MS = 24 * 60 * 60 * 1000;
 const TICK_INTERVAL_MS = 60 * 60 * 1000;
 const INITIAL_DELAY_MS = 10 * 60 * 1000;
 /** Distinct from every other advisory lock key in this database. */
 const RECONCILE_LOCK_KEY = 0x0f11e5;
-
-export function reconcileMode(): ReconcileMode {
-  const value = process.env.OXY_FILES_RECONCILE?.trim();
-  if (value === 'apply' || value === 'off') return value;
-  return 'dry-run';
-}
 
 /** Every `{ fileId, entityId }` Syra uses for one entity type, streamed by entity id. */
 export async function* referenceInventory(
@@ -203,13 +194,11 @@ async function withReconcileLock<T>(work: () => Promise<T>): Promise<T | null> {
 
 /** One tick: under the lock, reconcile every due entity type. */
 export async function runDueReconciliations(now: Date = new Date()): Promise<ReconcileOutcome[]> {
-  const mode = reconcileMode();
-  if (mode === 'off') return [];
   const outcomes = await withReconcileLock(async () => {
     const done: ReconcileOutcome[] = [];
     for (const entityType of await dueEntityTypes(now)) {
       try {
-        done.push(await reconcileEntityType(entityType, mode === 'dry-run'));
+        done.push(await reconcileEntityType(entityType, false));
       } catch (error) {
         logger.error('[OxyFiles] reconciliation failed', {
           entityType,
@@ -252,7 +241,6 @@ let first: ReturnType<typeof setTimeout> | null = null;
 
 export function startReferenceReconciler(): void {
   if (timer || first) return;
-  if (reconcileMode() === 'off') return;
   if (!canAuthenticateAsOxyService()) {
     logger.warn('[OxyFiles] no Oxy service identity: nightly reference reconciliation is off');
     return;

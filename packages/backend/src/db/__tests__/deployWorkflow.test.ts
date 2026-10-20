@@ -388,13 +388,19 @@ describe('runtime secrets come from SSM, and no workflow writes one', () => {
    * 0026, `src/oxyClient.ts`). A name in BOTH lists is refused by
    * `deploy-ecs-image.sh`.
    */
-  it('removes the Oxy service credential from every revision it registers', () => {
+  it('removes the retired secrets from every revision it registers', () => {
     const deployStep = workflow.jobs.deploy.steps.find((step) =>
       step.name?.startsWith('Register immutable task definition'),
     );
     expect(deployStep, 'the deploy step is gone').toBeDefined();
     const removals = (deployStep?.env?.TASK_SECRET_REMOVALS ?? '').split(/\s+/).filter(Boolean);
-    expect(removals).toEqual(['OXY_SERVICE_API_KEY', 'OXY_SERVICE_API_SECRET']);
+    // The Oxy service credential, and OXY_FILES_RECONCILE — the nightly
+    // reference reconciliation always applies, with no mode to set.
+    expect(removals).toEqual([
+      'OXY_SERVICE_API_KEY',
+      'OXY_SERVICE_API_SECRET',
+      'OXY_FILES_RECONCILE',
+    ]);
 
     const overrides = JSON.parse(deployStep?.env?.TASK_SECRET_OVERRIDES_JSON ?? '{}') as Record<
       string,

@@ -4,12 +4,7 @@ import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
 import { installFakeOxyFiles, resetOxyFiles, type FakeOxyFiles } from '../../test/fakeOxyFiles';
 import { getDb } from '../../db/postgres';
 import { OXY_REFERENCE_ENTITY_TYPES, oxyFileReconcileRuns } from '../../db/schema/oxyFiles';
-import {
-  reconcileAllNow,
-  reconcileEntityType,
-  reconcileMode,
-  runDueReconciliations,
-} from './referenceReconcile';
+import { reconcileAllNow, reconcileEntityType, runDueReconciliations } from './referenceReconcile';
 
 /**
  * The nightly inventory: Oxy is told the whole truth for one entity type and
@@ -18,14 +13,11 @@ import {
 
 beforeAll(connectDb);
 let oxy: FakeOxyFiles;
-const savedMode = process.env.OXY_FILES_RECONCILE;
 beforeEach(() => {
   oxy = installFakeOxyFiles();
 });
 afterEach(async () => {
   resetOxyFiles();
-  if (savedMode === undefined) delete process.env.OXY_FILES_RECONCILE;
-  else process.env.OXY_FILES_RECONCILE = savedMode;
   await clearDb();
 });
 afterAll(disconnectDb);
@@ -83,27 +75,17 @@ describe('reconcileEntityType', () => {
 });
 
 describe('runDueReconciliations', () => {
-  it('defaults to a dry run, and runs each type once a day', async () => {
-    delete process.env.OXY_FILES_RECONCILE;
-    expect(reconcileMode()).toBe('dry-run');
-
+  it('applies, and runs each type once a day', async () => {
     const first = await runDueReconciliations(new Date());
     expect(first).toHaveLength(OXY_REFERENCE_ENTITY_TYPES.length);
-    expect(first.every((outcome) => outcome.dryRun)).toBe(true);
+    expect(first.every((outcome) => !outcome.dryRun)).toBe(true);
     expect(await runDueReconciliations(new Date())).toHaveLength(0);
 
     const tomorrow = new Date(Date.now() + 25 * 60 * 60 * 1000);
     expect(await runDueReconciliations(tomorrow)).toHaveLength(OXY_REFERENCE_ENTITY_TYPES.length);
   });
 
-  it('does nothing when switched off', async () => {
-    process.env.OXY_FILES_RECONCILE = 'off';
-    expect(await runDueReconciliations()).toEqual([]);
-    expect(oxy.calls).toEqual([]);
-  });
-
-  it('applies when told to', async () => {
-    process.env.OXY_FILES_RECONCILE = 'apply';
+  it('registers what Syra uses', async () => {
     const used = oxy.seedFile({ bytes: Buffer.from('used'), ownerUserId: 'u' });
     await house('h-1', used.id);
     await runDueReconciliations();
@@ -128,7 +110,6 @@ describe('reconcileAllNow', () => {
     expect(oxy.hasReference(used.id, 'house', 'h-1')).toBe(false);
     expect(await getDb().select().from(oxyFileReconcileRuns)).toEqual([]);
 
-    process.env.OXY_FILES_RECONCILE = 'apply';
     expect(await runDueReconciliations()).toHaveLength(OXY_REFERENCE_ENTITY_TYPES.length);
   });
 
@@ -140,7 +121,6 @@ describe('reconcileAllNow', () => {
 
     expect(applied).not.toBe('busy');
     expect(oxy.hasReference(used.id, 'house', 'h-1')).toBe(true);
-    process.env.OXY_FILES_RECONCILE = 'apply';
     expect(await runDueReconciliations()).toHaveLength(0);
   });
 });
