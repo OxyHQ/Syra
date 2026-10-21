@@ -4,6 +4,7 @@ export * from './profile';
 export * from './media';
 export * from './track';
 export * from './upload';
+export * from './audioUpload';
 export * from './album';
 export * from './artist';
 export * from './playlist';

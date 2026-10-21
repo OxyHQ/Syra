@@ -6,6 +6,7 @@ import {
   DeleteObjectCommand,
   DeleteObjectsCommand,
   ListObjectsV2Command,
+  CopyObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import {
@@ -461,5 +462,132 @@ export async function objectExists(key: string): Promise<boolean> {
     return metadata !== null;
   } catch (error) {
     return false;
+  }
+}
+
+/**
+ * Every object under `prefix` with when it was last written, page by page —
+ * the store's, then (while R2 migrates from S3) what only the legacy store
+ * holds. Read-only, like {@link listS3Keys}; for a caller that decides by age.
+ */
+export async function* listS3Objects(
+  prefix: string,
+): AsyncGenerator<{ key: string; lastModified: Date | undefined }> {
+  if (!prefix) {
+    throw new Error('listS3Objects requires a non-empty prefix');
+  }
+  const seen = legacyStore ? new Set<string>() : null;
+  for await (const object of listObjectsIn({ client: s3Client, bucket: S3_BUCKET_NAME }, prefix)) {
+    seen?.add(object.key);
+    yield object;
+  }
+  if (legacyStore && seen) {
+    for await (const object of listObjectsIn(legacyStore, prefix)) {
+      if (!seen.has(object.key)) yield object;
+    }
+  }
+}
+
+async function* listObjectsIn(
+  target: Pick<ObjectStore, 'client' | 'bucket'>,
+  prefix: string,
+): AsyncGenerator<{ key: string; lastModified: Date | undefined }> {
+  let continuationToken: string | undefined;
+  do {
+    const listed = await target.client.send(
+      new ListObjectsV2Command({
+        Bucket: target.bucket,
+        Prefix: prefix,
+        ContinuationToken: continuationToken,
+      }),
+    );
+    for (const object of listed.Contents ?? []) {
+      if (typeof object.Key === 'string') {
+        yield { key: object.Key, lastModified: object.LastModified };
+      }
+    }
+    continuationToken = listed.IsTruncated ? listed.NextContinuationToken : undefined;
+  } while (continuationToken);
+}
+
+export interface PresignedUploadOptions {
+  /** The ONLY Content-Type the URL admits; the object is stored with it. */
+  contentType: string;
+  /** The EXACT body size the URL admits. */
+  contentLength: number;
+  expiresInSeconds: number;
+}
+
+/**
+ * A presigned PUT for exactly one object at `key`, of exactly `contentType`
+ * and exactly `contentLength` bytes.
+ *
+ * Both are SIGNED headers (`X-Amz-SignedHeaders: content-length;content-type;
+ * host`), so storage refuses a body of any other length or a request declaring
+ * any other type — the signature no longer matches. A PUT rather than a POST
+ * policy because the store is Cloudflare R2 (OxyHQ/oxy ADR 0047), whose S3 API
+ * has no browser-form uploads; the same URL works against S3. Signing needs no
+ * request to storage.
+ */
+export async function createPresignedUpload(
+  key: string,
+  options: PresignedUploadOptions,
+): Promise<{ url: string; headers: Record<string, string> }> {
+  const url = await getSignedUrl(
+    s3Client,
+    new PutObjectCommand({
+      Bucket: S3_BUCKET_NAME,
+      Key: key,
+      ContentType: options.contentType,
+      ContentLength: options.contentLength,
+    }),
+    {
+      expiresIn: options.expiresInSeconds,
+      // Content-Length is signed by default; Content-Type only when asked.
+      signableHeaders: new Set(['content-type', 'content-length']),
+    },
+  );
+  // Content-Length is not listed: every client sets it from the body, and a
+  // browser refuses to let a page set it at all.
+  return { url, headers: { 'Content-Type': options.contentType } };
+}
+
+/**
+ * Copy an object to another key inside the bucket, replacing its type and
+ * metadata. Server-side: no byte passes through this process. A single
+ * CopyObject handles objects up to 5 GB, ten times the largest upload Syra
+ * accepts.
+ */
+export async function copyWithinS3(
+  sourceKey: string,
+  destinationKey: string,
+  options: S3UploadOptions = {},
+): Promise<void> {
+  try {
+    await s3Client.send(
+      new CopyObjectCommand({
+        Bucket: S3_BUCKET_NAME,
+        Key: destinationKey,
+        CopySource: `${S3_BUCKET_NAME}/${sourceKey.split('/').map(encodeURIComponent).join('/')}`,
+        MetadataDirective: 'REPLACE',
+        ContentType: options.contentType,
+        Metadata: options.metadata,
+      }),
+    );
+    logger.debug(`[S3Service] Copied ${sourceKey} to ${destinationKey}`);
+  } catch (error: unknown) {
+    const e = asAwsError(error);
+    logger.error(
+      `[S3Service] Error copying within S3:`,
+      {
+        sourceKey,
+        destinationKey,
+        bucket: S3_BUCKET_NAME,
+        errorCode: e.Code ?? e.name,
+        errorMessage: e.message,
+      },
+      { error: describeErrorSafely(error) },
+    );
+    throw error;
   }
 }

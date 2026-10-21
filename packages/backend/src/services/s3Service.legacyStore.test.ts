@@ -108,6 +108,29 @@ describe('the legacy store while Syra migrates to R2', () => {
     ]);
   });
 
+  it('an age listing (the abandoned-upload sweep) includes what only the legacy store holds, once', () => {
+    const { result } = run(
+      env,
+      `const keys = []; for await (const o of service.listS3Objects('hls/a/t/')) keys.push(o.key); return keys.sort();`,
+    );
+    expect(result).toEqual(['hls/a/t/master.m3u8', 'hls/a/t/seg0.ts', 'hls/a/t/seg1.ts']);
+  });
+
+  it('a direct upload is presigned against R2, with its length and type signed', () => {
+    const { result, sent } = run(
+      env,
+      `const { url, headers } = await service.createPresignedUpload('incoming/track/account/u/x', { contentType: 'audio/mpeg', contentLength: 1234, expiresInSeconds: 60 }); const u = new URL(url); return { host: u.host, path: u.pathname, signed: u.searchParams.get('X-Amz-SignedHeaders'), headers };`,
+    );
+    expect(result).toEqual({
+      host: 'syra-media.acct.r2.cloudflarestorage.com',
+      path: '/incoming/track/account/u/x',
+      signed: 'content-length;content-type;host',
+      headers: { 'Content-Type': 'audio/mpeg' },
+    });
+    // Signing is local: nothing was sent to either store.
+    expect(sent).toEqual([]);
+  });
+
   it('after the migration nothing is mirrored', () => {
     const { sent } = run(R2, `await service.deleteFromS3('k');`);
     expect(sent.map((call) => call.store)).toEqual(['r2']);

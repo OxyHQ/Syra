@@ -1,7 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
 import fs from 'fs';
-import os from 'os';
-import multer from 'multer';
 import { and, asc, count, eq, sql } from 'drizzle-orm';
 import { isLiveEntityId, uuidv7 } from '@oxy.so/db';
 import { publicColumns } from '@oxy.so/db/assert';
@@ -29,21 +27,12 @@ import { uploadTrackAudio } from '../services/audioStorageService';
 import { logger } from '../utils/logger';
 import { getStoredImageColors } from '../utils/imageColors';
 import { enqueueIngest } from '../services/ingest/ingestQueue';
-import {
-  AUDIO_UPLOAD_REJECTED_MESSAGE,
-  MAX_AUDIO_UPLOAD_BYTES,
-  audioFormatFor,
-  isAllowedAudioMime,
-} from '../config/audioUpload';
+import { audioIntake, multipartAudioParser } from '../services/uploads/directAudioUpload';
 import { probeAudio } from '../services/ingest/probeAudio';
 import type { ProbedAudio } from '../services/ingest/probeAudio';
 import { getErrorMessage, getErrorStack, getHttpStatus } from '../utils/error';
 import { getParam, parseBoundedLimit, parseOffset } from '../utils/reqParams';
 import { describeErrorSafely } from '../utils/error';
-
-interface AudioUploadRequest extends AuthRequest {
-  file?: Express.Multer.File;
-}
 
 /** The public columns of `tracks` — no `sha256`, no `images`. */
 const publicTrackColumns = () => publicColumns(tracks, PROTECTED_COLUMNS_BY_TABLE);
@@ -252,29 +241,13 @@ export const searchTracks = async (req: Request, res: Response, next: NextFuncti
   }
 };
 
-// Configure multer for audio file uploads.
-//
-// Disk storage, not memory: ffprobe (duration/bitrate), fpcalc (fingerprint) and
-// music-metadata (tags) all read a path, and holding a 200MB Buffer per in-flight
-// request does not survive consumer upload volume. Multer removes the temp file
-// itself when the multipart parse fails (filter rejection, size limit); every
-// path AFTER a successful parse is cleaned up in `uploadTrack`'s `finally`.
-//
-// The cap and the allowlist come from `config/audioUpload` so this controller and
-// the listener-upload controller cannot drift on what Syra accepts.
-const audioUpload = multer({
-  storage: multer.diskStorage({ destination: os.tmpdir() }),
-  limits: {
-    fileSize: MAX_AUDIO_UPLOAD_BYTES,
-  },
-  fileFilter: (req, file, cb) => {
-    if (isAllowedAudioMime(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error(AUDIO_UPLOAD_REJECTED_MESSAGE));
-    }
-  },
-}).single('audioFile');
+/**
+ * The audio of a creator upload: a multipart file (`audioFile`) or, for a file
+ * sent straight to storage, `uploadId` — see `services/uploads/directAudioUpload`,
+ * which also owns the cap and the type allowlist, shared with every other audio
+ * route.
+ */
+const audioUpload = multipartAudioParser('track');
 
 /**
  * POST /api/tracks/upload
@@ -288,9 +261,10 @@ export const uploadTrack = async (req: AuthRequest, res: Response, next: NextFun
       return res.status(400).json({ error: 'Upload error', message: err.message });
     }
 
-    // Multer has written the upload to a temp file. It must be removed on every
-    // exit path below — validation rejection, thrown error, and success alike.
-    const tempPath = (req as AudioUploadRequest).file?.path;
+    // Owns every copy of the audio — the multipart temp file, a staged copy, the
+    // incoming object — and removes them on every exit path below: validation
+    // rejection, thrown error, and success alike.
+    const intake = audioIntake(req, 'track');
 
     try {
       logger.debug('[TracksController] Starting track upload process...');
@@ -299,11 +273,15 @@ export const uploadTrack = async (req: AuthRequest, res: Response, next: NextFun
       }
 
       const userId = getAuthenticatedUserId(req);
-      const file = (req as AudioUploadRequest).file;
+      const received = await intake.receive({ kind: 'account', oxyUserId: userId });
 
-      if (!file) {
+      if (received.kind === 'missing') {
         return res.status(400).json({ error: 'Missing file', message: 'Audio file is required' });
       }
+      if (received.kind === 'refused') {
+        return res.status(received.refusal.status).json(received.refusal.body);
+      }
+      const audio = received.audio;
 
       // Get form data
       const { title, artistId, albumId, coverArt, genre, isExplicit } = req.body;
@@ -352,16 +330,14 @@ export const uploadTrack = async (req: AuthRequest, res: Response, next: NextFun
         album = found;
       }
 
-      // Determine audio format from file
-      // Non-null by construction: multer's fileFilter already refused anything
-      // not on the allowlist, and both sides read the same table.
-      const format = audioFormatFor(file.mimetype) ?? 'mp3';
+      // Checked against the allowlist on the way in, whichever way it came.
+      const format = audio.format;
 
       // Duration and bitrate come from the file, never from the client. A
       // hand-typed duration was both a bad user experience and unenforceable.
       let probed: ProbedAudio;
       try {
-        probed = await probeAudio(file.path);
+        probed = await probeAudio(await audio.localPath());
       } catch (probeError: unknown) {
         logger.warn('[TracksController] ffprobe rejected the uploaded audio', {
           message: getErrorMessage(probeError),
@@ -430,7 +406,7 @@ export const uploadTrack = async (req: AuthRequest, res: Response, next: NextFun
             duration: probed.durationSec,
           },
         },
-        fs.createReadStream(file.path),
+        fs.createReadStream(await audio.localPath()),
         // The creator's upload: theirs once audio moves to Oxy Files.
         { kind: 'account', oxyUserId: userId },
       );
@@ -525,16 +501,7 @@ export const uploadTrack = async (req: AuthRequest, res: Response, next: NextFun
         logger.error('[TracksController] Error occurred but response already sent');
       }
     } finally {
-      if (tempPath) {
-        // `force` makes an already-removed file a no-op; any other failure is a
-        // real disk problem and is logged rather than swallowed.
-        await fs.promises.rm(tempPath, { force: true }).catch((rmError: unknown) =>
-          logger.warn('[TracksController] Failed to remove upload temp file', {
-            tempPath,
-            message: getErrorMessage(rmError),
-          }),
-        );
-      }
+      await intake.dispose();
     }
   });
 };

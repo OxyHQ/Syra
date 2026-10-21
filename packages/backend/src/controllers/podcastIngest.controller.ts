@@ -8,6 +8,7 @@
  * credential in the call. The endpoints here are the halves of the answer:
  *
  *   POST /api/podcasts/:id/episodes/draft            requireAuth + owner -> a ticket
+ *   POST /api/podcasts/episodes/:id/ingest/upload    the TICKET is the auth -> a presigned PUT
  *   POST /api/podcasts/episodes/:id/ingest           the TICKET is the auth
  *   POST /api/podcasts/episodes/:id/ingest/abandon   likewise, for the other ending
  *
@@ -18,6 +19,12 @@
  * ticket's two possible uses, not an extra one: it spends the same single
  * redemption.
  *
+ * `ingest/upload` is NOT a use. It signs a PUT the holder sends the audio to,
+ * straight to storage (`services/uploads/directAudioUpload.ts`), because no
+ * request body to this API may exceed the proxy's 100 MB and an episode may be
+ * 500 MB; `ingest` then names the upload instead of carrying the file. It runs
+ * the same ticket checks and spends nothing — the redemption is still `ingest`.
+ *
  * What the ticket is narrowed to, and why each narrowing exists, is
  * `services/podcasts/ingestToken.ts`. What makes it single-use is
  * `db/podcasts/ingestTickets.ts` and the table it writes. This file is where
@@ -27,7 +34,6 @@
  * is anything written.
  */
 
-import multer from 'multer';
 import type { Response } from 'express';
 import { isLiveEntityId, uuidv7 } from '@oxy.so/db';
 import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
@@ -35,8 +41,8 @@ import { getRequiredOxyUserId } from '@oxy.so/core/server';
 import {
   abandonEpisodeIngestRequestSchema,
   createEpisodeDraftRequestSchema,
+  createEpisodeIngestUploadRequestSchema,
   ingestEpisodeAudioRequestSchema,
-  type AudioSource,
   type EpisodePerson,
 } from '@syra/shared-types';
 import { getDb } from '../db/postgres';
@@ -45,6 +51,7 @@ import { findEpisodeById, insertEpisode, updateEpisode } from '../db/podcasts/ep
 import {
   claimIngestTicket,
   insertIngestTicket,
+  isIngestTicketRedeemable,
   releaseIngestTicket,
 } from '../db/podcasts/ingestTickets';
 import { loadShowContext, toEpisodeDtos } from '../db/podcasts/hydrate';
@@ -52,7 +59,14 @@ import { viewerOwnsShow } from '../db/podcasts/visibility';
 import { mintIngestTicket, verifyIngestTicket } from '../services/podcasts/ingestToken';
 import { enqueueEpisodeIngest } from '../services/podcasts/ingestEpisode';
 import { buildCreatorPersons, makeOxyUsersFetcher } from '../services/podcasts/resolvePersons';
-import { getS3PodcastEpisodeAudioKey, putSourceAudio } from '../services/oxyFiles/audioStorage';
+import { getS3PodcastEpisodeAudioKey } from '../services/oxyFiles/audioStorage';
+import {
+  audioIntake,
+  createAudioUploadTarget,
+  multipartAudioParser,
+  type AudioIntake,
+  type ReceivedAudio,
+} from '../services/uploads/directAudioUpload';
 import { getParam } from '../utils/reqParams';
 import { logger } from '../utils/logger';
 import { describeErrorSafely } from '../utils/error';
@@ -70,31 +84,12 @@ import { oxy } from '../oxyClient';
  */
 const INGEST_TICKET_HEADER = 'x-ingest-ticket';
 
-/** Same limits and the same field name as `uploadEpisode` — one upload contract, not two. */
-const AUDIO_FORMAT_BY_MIME: Record<string, AudioSource['format']> = {
-  'audio/mpeg': 'mp3',
-  'audio/mp3': 'mp3',
-  'audio/flac': 'flac',
-  'audio/ogg': 'ogg',
-  'audio/vorbis': 'ogg',
-  'audio/mp4': 'm4a',
-  'audio/x-m4a': 'm4a',
-  'audio/wav': 'wav',
-  'audio/x-wav': 'wav',
-};
-
-const ingestAudioUpload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 500 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => {
-    if (AUDIO_FORMAT_BY_MIME[file.mimetype]) cb(null, true);
-    else cb(new Error('Invalid file type. Only audio files are allowed.'));
-  },
-}).single('audioFile');
-
-interface AudioUploadRequest extends AuthRequest {
-  file?: Express.Multer.File;
-}
+/**
+ * The audio: a multipart file (`audioFile`, what `@syra.fm/sdk` ≤ 0.21 sends)
+ * or, for a file sent straight to storage, `uploadId`. The same parser, cap and
+ * allowlist as `uploadEpisode` — one upload contract, not two.
+ */
+const ingestAudioUpload = multipartAudioParser('episode');
 
 /**
  * The episode states that may still RECEIVE audio.
@@ -108,6 +103,9 @@ interface AudioUploadRequest extends AuthRequest {
  * do.
  */
 const INGESTIBLE_STATUSES: readonly string[] = ['processing', 'failed'];
+
+/** The answer for a ticket that was already redeemed or is past its deadline. */
+const SPENT_TICKET = 'Ingest ticket already used or expired';
 
 // ── Draft ─────────────────────────────────────────────────────────────────────
 
@@ -230,10 +228,18 @@ export async function createEpisodeDraft(req: AuthRequest, res: Response): Promi
 
 /** Every refusal these endpoints can make, and the status each one answers with. */
 type IngestRefusal =
-  | { status: 400; error: string }
+  | { status: 400; error: string; message?: string }
   | { status: 401; error: string }
   | { status: 404; error: string }
-  | { status: 409; error: string };
+  | { status: 409; error: string }
+  | { status: 413; error: string; message?: string };
+
+/** The JSON a refusal answers with: its `error`, and its `message` when it has one. */
+function refusalBody(refusal: IngestRefusal): { error: string; message?: string } {
+  return 'message' in refusal && refusal.message !== undefined
+    ? { error: refusal.error, message: refusal.message }
+    : { error: refusal.error };
+}
 
 /**
  * Everything that must be true before a ticket may act on its episode, in the
@@ -319,36 +325,48 @@ async function authorizeTicket(
 }
 
 /**
- * {@link authorizeTicket} plus the two things only the AUDIO redemption needs:
- * a file, in a format this API stores.
+ * {@link authorizeTicket} plus the one thing only the AUDIO redemption needs: a
+ * file, in a format this API stores — whether it came in the body or was sent
+ * straight to storage under THIS episode's ticket.
  *
  * Kept after the ticket checks rather than before them, so a caller holding a
- * bad ticket learns nothing about the episode from the shape of its own upload.
+ * bad ticket learns nothing about the episode from the shape of its own upload —
+ * and so storage is only ever looked at for a ticket that names this episode.
  */
 async function authorizeIngest(
   req: AuthRequest,
   episodeId: string,
+  intake: AudioIntake,
 ): Promise<
   | {
       ok: true;
       jti: string;
       podcastId: string;
       ownerOxyUserId: string;
-      format: AudioSource['format'];
-      file: Express.Multer.File;
+      audio: ReceivedAudio;
     }
   | { ok: false; refusal: IngestRefusal }
 > {
   const authorized = await authorizeTicket(req, episodeId);
   if (!authorized.ok) return authorized;
 
-  const file = (req as AudioUploadRequest).file;
-  if (!file) {
+  // A spent ticket is refused as spent before storage is looked at: a replay
+  // after a direct upload would otherwise answer "upload not found" (the
+  // redemption consumed it), which is true but names the wrong problem.
+  if (!(await isIngestTicketRedeemable(authorized.jti, episodeId))) {
+    return { ok: false, refusal: { status: 409, error: SPENT_TICKET } };
+  }
+
+  const received = await intake.receive({ kind: 'ingest-ticket', episodeId });
+  if (received.kind === 'missing') {
     return { ok: false, refusal: { status: 400, error: 'Audio file is required' } };
   }
-  const format = AUDIO_FORMAT_BY_MIME[file.mimetype];
-  if (!format) {
-    return { ok: false, refusal: { status: 400, error: 'Unsupported audio format' } };
+  if (received.kind === 'refused') {
+    const { status, body } = received.refusal;
+    return {
+      ok: false,
+      refusal: { status: status === 413 ? 413 : 400, error: body.error, message: body.message },
+    };
   }
 
   return {
@@ -356,9 +374,54 @@ async function authorizeIngest(
     jti: authorized.jti,
     podcastId: authorized.podcastId,
     ownerOxyUserId: authorized.ownerOxyUserId,
-    format,
-    file,
+    audio: received.audio,
   };
+}
+
+/**
+ * POST /api/podcasts/episodes/:id/ingest/upload — a presigned PUT to send this
+ * episode's audio to, straight to storage, authenticated by the ticket alone.
+ *
+ * The ticket's checks in full ({@link authorizeTicket}) and NOT its claim: this
+ * spends nothing, because nothing is attached until `ingest` names the upload,
+ * and that is the redemption. A holder may ask for one again (a transfer that
+ * failed half way); every unused upload is deleted a day after it landed.
+ */
+export async function createEpisodeIngestUpload(req: AuthRequest, res: Response): Promise<void> {
+  const episodeId = getParam(req, 'id');
+  if (!isLiveEntityId(episodeId)) {
+    res.status(400).json({ error: 'Invalid episode ID' });
+    return;
+  }
+
+  const parsed = createEpisodeIngestUploadRequestSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid upload request', details: parsed.error.issues });
+    return;
+  }
+
+  const authorized = await authorizeTicket(req, episodeId);
+  if (!authorized.ok) {
+    res.status(authorized.refusal.status).json(refusalBody(authorized.refusal));
+    return;
+  }
+  if (!(await isIngestTicketRedeemable(authorized.jti, episodeId))) {
+    res.status(409).json({ error: SPENT_TICKET });
+    return;
+  }
+
+  const result = await createAudioUploadTarget({
+    purpose: 'episode',
+    principal: { kind: 'ingest-ticket', episodeId },
+    mimeType: parsed.data.mimeType,
+    sizeBytes: parsed.data.sizeBytes,
+  });
+  if (!result.ok) {
+    res.status(result.refusal.status).json(result.refusal.body);
+    return;
+  }
+
+  res.status(201).json({ data: result.target });
 }
 
 /**
@@ -385,117 +448,133 @@ export async function ingestEpisodeAudio(req: AuthRequest, res: Response): Promi
       return;
     }
 
-    const episodeId = getParam(req, 'id');
-    if (!isLiveEntityId(episodeId)) {
-      res.status(400).json({ error: 'Invalid episode ID' });
-      return;
-    }
-
-    const parsed = ingestEpisodeAudioRequestSchema.safeParse(req.body ?? {});
-    if (!parsed.success) {
-      res.status(400).json({ error: 'Invalid ingest metadata', details: parsed.error.issues });
-      return;
-    }
-    const fields = parsed.data;
-
-    const authorized = await authorizeIngest(req, episodeId);
-    if (!authorized.ok) {
-      res.status(authorized.refusal.status).json({ error: authorized.refusal.error });
-      return;
-    }
-
-    // The single-use boundary. Everything above this line is a read.
-    const claimed = await claimIngestTicket(getDb(), authorized.jti, episodeId);
-    if (!claimed) {
-      res.status(409).json({ error: 'Ingest ticket already used or expired' });
-      return;
-    }
-
+    // Owns every copy of the audio — the multipart temp file and the incoming
+    // object — and removes them on every exit, refusals included.
+    const intake = audioIntake(req, 'episode');
     try {
-      const audioKey = getS3PodcastEpisodeAudioKey(
-        episodeId,
-        authorized.podcastId,
-        authorized.format,
-      );
-      await putSourceAudio(audioKey, authorized.file.buffer, {
-        contentType: authorized.file.mimetype,
-        // A hosted show's episode belongs to the show's owner — the ticket was
-        // minted by them, and their show is what it is ingested into.
-        owner: { kind: 'account', oxyUserId: authorized.ownerOxyUserId },
-      });
-
-      /**
-       * The field allowlist, assigned one by one and never spread — the same
-       * discipline every other write in this vertical follows, and here it IS
-       * the capability's boundary. `explicit`, `episodeType`, `aiGenerated`,
-       * the credits and every storage column are absent because the
-       * authenticated user set them at draft time and the ticket holder has no
-       * standing to change them.
-       *
-       * `title` IS present, and it is the one field here that names the episode
-       * rather than describing its audio. It is included because the draft was
-       * written before any content existed, so its title can only describe what
-       * was ASKED FOR — and the holder of this ticket is the only party that has
-       * seen what was actually made. The reasoning, and why this is not a
-       * widening of the capability, is on
-       * `ingestEpisodeAudioRequestSchema`.
-       *
-       * Every field is written only when PRESENT. For the title that is
-       * load-bearing rather than uniform: ingest is single-use, so a worker that
-       * has nothing better than the placeholder must be able to deliver the
-       * audio without the omission costing the episode its name.
-       */
-      const updated = await updateEpisode(episodeId, {
-        ...(fields.title === undefined ? {} : { title: fields.title }),
-        audioSourceFormat: authorized.format,
-        ...(fields.duration === undefined ? {} : { duration: fields.duration }),
-        ...(fields.season === undefined ? {} : { season: fields.season }),
-        ...(fields.episodeNumber === undefined ? {} : { episodeNumber: fields.episodeNumber }),
-        ...(fields.description === undefined ? {} : { description: fields.description }),
-        ...(fields.summary === undefined ? {} : { summary: fields.summary }),
-        // Back to `processing` explicitly, so a RETRY after a failed transcode
-        // does not leave the episode reading `failed` while its new audio is
-        // being packaged.
-        status: 'processing',
-      });
-
-      if (!updated) {
-        // Unreachable: `authorizeIngest` loaded this row. Treated as a failure
-        // rather than ignored, so the ticket is released instead of spent on a
-        // write that did not happen.
-        throw new Error(`ingestEpisodeAudio: episode ${episodeId} vanished mid-redemption`);
-      }
-
-      enqueueEpisodeIngest(episodeId);
-
-      /**
-       * Serialized as a NON-OWNER, on purpose.
-       *
-       * The redeemer holds a capability, not the owner's identity — so the
-       * response carries what any listener would see and not `hlsMasterKey` or
-       * `cache.s3Key`. A worker has no use for storage keys, and handing them
-       * back would quietly turn a write capability into a read of internal
-       * layout.
-       *
-       * 202, not 201: the episode exists but its audio is still being packaged.
-       */
-      const shows = await loadShowContext([updated]);
-      const [dto] = await toEpisodeDtos([updated], undefined, shows);
-      res.status(202).json({ data: dto });
-    } catch (err) {
-      await releaseIngestTicket(authorized.jti).catch((releaseErr) =>
-        logger.error('[podcasts] failed to release an ingest ticket', {
-          episodeId,
-          err: describeErrorSafely(releaseErr),
-        }),
-      );
-      logger.error('[podcasts] episode ingest redemption failed', {
-        episodeId,
-        err: describeErrorSafely(err),
-      });
-      if (!res.headersSent) res.status(500).json({ error: 'Failed to ingest episode audio' });
+      await redeemWithAudio(req, res, intake);
+    } finally {
+      await intake.dispose();
     }
   });
+}
+
+/** The body of {@link ingestEpisodeAudio}, inside the intake's lifetime. */
+async function redeemWithAudio(
+  req: AuthRequest,
+  res: Response,
+  intake: AudioIntake,
+): Promise<void> {
+  const episodeId = getParam(req, 'id');
+  if (!isLiveEntityId(episodeId)) {
+    res.status(400).json({ error: 'Invalid episode ID' });
+    return;
+  }
+
+  const parsed = ingestEpisodeAudioRequestSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid ingest metadata', details: parsed.error.issues });
+    return;
+  }
+  const fields = parsed.data;
+
+  const authorized = await authorizeIngest(req, episodeId, intake);
+  if (!authorized.ok) {
+    res.status(authorized.refusal.status).json(refusalBody(authorized.refusal));
+    return;
+  }
+
+  // The single-use boundary. Everything above this line is a read.
+  const claimed = await claimIngestTicket(getDb(), authorized.jti, episodeId);
+  if (!claimed) {
+    res.status(409).json({ error: SPENT_TICKET });
+    return;
+  }
+
+  try {
+    const audioKey = getS3PodcastEpisodeAudioKey(
+      episodeId,
+      authorized.podcastId,
+      authorized.audio.format,
+    );
+    await authorized.audio.storeAsSource(audioKey, {
+      contentType: authorized.audio.mimeType,
+      // A hosted show's episode belongs to the show's owner — the ticket was
+      // minted by them, and their show is what it is ingested into.
+      owner: { kind: 'account', oxyUserId: authorized.ownerOxyUserId },
+    });
+
+    /**
+     * The field allowlist, assigned one by one and never spread — the same
+     * discipline every other write in this vertical follows, and here it IS
+     * the capability's boundary. `explicit`, `episodeType`, `aiGenerated`,
+     * the credits and every storage column are absent because the
+     * authenticated user set them at draft time and the ticket holder has no
+     * standing to change them.
+     *
+     * `title` IS present, and it is the one field here that names the episode
+     * rather than describing its audio. It is included because the draft was
+     * written before any content existed, so its title can only describe what
+     * was ASKED FOR — and the holder of this ticket is the only party that has
+     * seen what was actually made. The reasoning, and why this is not a
+     * widening of the capability, is on
+     * `ingestEpisodeAudioRequestSchema`.
+     *
+     * Every field is written only when PRESENT. For the title that is
+     * load-bearing rather than uniform: ingest is single-use, so a worker that
+     * has nothing better than the placeholder must be able to deliver the
+     * audio without the omission costing the episode its name.
+     */
+    const updated = await updateEpisode(episodeId, {
+      ...(fields.title === undefined ? {} : { title: fields.title }),
+      audioSourceFormat: authorized.audio.format,
+      ...(fields.duration === undefined ? {} : { duration: fields.duration }),
+      ...(fields.season === undefined ? {} : { season: fields.season }),
+      ...(fields.episodeNumber === undefined ? {} : { episodeNumber: fields.episodeNumber }),
+      ...(fields.description === undefined ? {} : { description: fields.description }),
+      ...(fields.summary === undefined ? {} : { summary: fields.summary }),
+      // Back to `processing` explicitly, so a RETRY after a failed transcode
+      // does not leave the episode reading `failed` while its new audio is
+      // being packaged.
+      status: 'processing',
+    });
+
+    if (!updated) {
+      // Unreachable: `authorizeIngest` loaded this row. Treated as a failure
+      // rather than ignored, so the ticket is released instead of spent on a
+      // write that did not happen.
+      throw new Error(`ingestEpisodeAudio: episode ${episodeId} vanished mid-redemption`);
+    }
+
+    enqueueEpisodeIngest(episodeId);
+
+    /**
+     * Serialized as a NON-OWNER, on purpose.
+     *
+     * The redeemer holds a capability, not the owner's identity — so the
+     * response carries what any listener would see and not `hlsMasterKey` or
+     * `cache.s3Key`. A worker has no use for storage keys, and handing them
+     * back would quietly turn a write capability into a read of internal
+     * layout.
+     *
+     * 202, not 201: the episode exists but its audio is still being packaged.
+     */
+    const shows = await loadShowContext([updated]);
+    const [dto] = await toEpisodeDtos([updated], undefined, shows);
+    res.status(202).json({ data: dto });
+  } catch (err) {
+    await releaseIngestTicket(authorized.jti).catch((releaseErr) =>
+      logger.error('[podcasts] failed to release an ingest ticket', {
+        episodeId,
+        err: describeErrorSafely(releaseErr),
+      }),
+    );
+    logger.error('[podcasts] episode ingest redemption failed', {
+      episodeId,
+      err: describeErrorSafely(err),
+    });
+    if (!res.headersSent) res.status(500).json({ error: 'Failed to ingest episode audio' });
+  }
 }
 
 // ── Abandon ───────────────────────────────────────────────────────────────────
@@ -539,13 +618,13 @@ export async function abandonEpisodeIngest(req: AuthRequest, res: Response): Pro
 
   const authorized = await authorizeTicket(req, episodeId);
   if (!authorized.ok) {
-    res.status(authorized.refusal.status).json({ error: authorized.refusal.error });
+    res.status(authorized.refusal.status).json(refusalBody(authorized.refusal));
     return;
   }
 
   const claimed = await claimIngestTicket(getDb(), authorized.jti, episodeId);
   if (!claimed) {
-    res.status(409).json({ error: 'Ingest ticket already used or expired' });
+    res.status(409).json({ error: SPENT_TICKET });
     return;
   }
 

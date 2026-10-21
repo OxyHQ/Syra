@@ -119,10 +119,17 @@ function AlbumPicker({
   );
 }
 
-function UploadProgress({ phase }: { phase: 'uploading' | 'processing' }) {
+function UploadProgress({
+  phase,
+  progress,
+}: {
+  phase: 'uploading' | 'processing';
+  /** Fraction of the file sent (0–1). */
+  progress: number;
+}) {
   const label =
     phase === 'uploading'
-      ? 'Uploading your track…'
+      ? `Uploading your track… ${Math.round(progress * 100)}%`
       : 'Processing audio (transcoding for streaming)…';
   return (
     <View className="flex-row items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3 mb-4">
@@ -245,7 +252,7 @@ function UploadTrackForm({
     >
       {uploadsDisabled ? <UploadDisabledNotice /> : null}
       {uploadTrack.phase === 'uploading' || uploadTrack.phase === 'processing' ? (
-        <UploadProgress phase={uploadTrack.phase} />
+        <UploadProgress phase={uploadTrack.phase} progress={uploadTrack.progress} />
       ) : null}
 
       <AudioPicker file={audioFile} onPick={pickAudio} disabled={busy || uploadsDisabled} />

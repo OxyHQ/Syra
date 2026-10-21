@@ -8,11 +8,11 @@ jest.mock('@/utils/api', () => ({
   },
 }));
 
-// The multipart assembly is platform-split, and only the web branch can run
-// under jsdom: the native branch appends a `{uri,name,type}` descriptor, which
-// is a React Native extension that a spec-compliant `FormData` rejects. The
-// error-recovery behaviour under test is identical on both.
-jest.mock('react-native', () => ({ Platform: { OS: 'web' } }));
+// The transfer to storage is `directAudioUpload.test.ts`'s subject; here the
+// file has already landed, and what is under test is the routed request.
+jest.mock('@/services/directAudioUpload', () => ({
+  uploadAudioDirect: jest.fn(async () => ({ uploadId: 'upload-1', fileName: 'a.mp3' })),
+}));
 
 const audioFile = {
   uri: 'blob:local/a.mp3',
@@ -156,6 +156,18 @@ describe('uploadsService.createUpload', () => {
     expect(outcome.outcome).toBe('blocked');
   });
 
+  it('routes the file by uploadId — the bytes never travel in this request', async () => {
+    mockApiPost.mockResolvedValueOnce({ data: { outcome: 'matched', trackId: 't1' } });
+
+    await uploadsService.createUpload(audioFile, { destination: 'private', title: ' Song ' });
+
+    expect(mockApiPost).toHaveBeenCalledWith(
+      '/uploads',
+      { uploadId: 'upload-1', fileName: 'a.mp3', destination: 'private', title: 'Song' },
+      { timeout: 10 * 60 * 1000 },
+    );
+  });
+
   it('re-throws a genuine failure that carries no outcome', async () => {
     // A 500 with no outcome is not a refusal, and swallowing it as one would
     // report a server fault to the uploader as a decision about their file.
@@ -178,8 +190,8 @@ describe('uploadsService.createUpload', () => {
       isrc: '  ES-A09-26-07944  ',
     });
 
-    const body = mockApiPost.mock.calls[0]?.[1] as FormData;
-    expect(body.get('isrc')).toBe('ES-A09-26-07944');
+    const body = mockApiPost.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(body.isrc).toBe('ES-A09-26-07944');
   });
 
   it('omits the field entirely when no code was typed', async () => {
@@ -189,6 +201,8 @@ describe('uploadsService.createUpload', () => {
 
     await uploadsService.createUpload(audioFile, { destination: 'private', isrc: '   ' });
 
-    expect((mockApiPost.mock.calls[0]?.[1] as FormData).has('isrc')).toBe(false);
+    const body = mockApiPost.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(body).toBeDefined();
+    expect('isrc' in body).toBe(false);
   });
 });

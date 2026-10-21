@@ -1,4 +1,5 @@
 import {
+  audioUploadTarget,
   checkResponse,
   checkRow,
   episodeDeleted,
@@ -30,6 +31,15 @@ import type {
   PublicPodcastCardsResponse,
 } from './types';
 import { SyraApiError, SyraResponseError } from './errors';
+import {
+  appendUpload,
+  audioMimeType,
+  payloadBlob,
+  sendAudioUpload,
+  type UploadPayload,
+} from './upload';
+
+export type { UploadPayload } from './upload';
 
 /** Default base URL of the public Syra API. */
 export const DEFAULT_SYRA_BASE_URL = 'https://api.syra.fm';
@@ -219,16 +229,6 @@ export interface IngestEpisodeInput {
   description?: string;
   summary?: string;
 }
-
-/**
- * An audio or image payload, in the shapes the three supported runtimes give you.
- *
- * `Blob`/`File` covers browsers and Node 18+. React Native's `FormData` accepts
- * a `{ uri, name, type }` descriptor instead, which is not a `Blob` at all — it
- * is named here so an RN caller does not have to cast, and so this SDK never has
- * to import anything from React Native to support it.
- */
-export type UploadPayload = Blob | { uri: string; name?: string; type?: string };
 
 export interface SyraClient {
   /**
@@ -447,6 +447,11 @@ export interface SyraClient {
   /**
    * `POST /api/podcasts/episodes/:id/ingest` — redeem a draft's ticket by
    * attaching the audio.
+   *
+   * The audio is sent straight to storage on a PUT presigned for the ticket's
+   * episode (`POST …/ingest/upload`), then the ticket is redeemed by naming the
+   * upload — so an episode of any size Syra accepts (500 MB) works, where a
+   * request body to the API stops at 100 MB. Three requests, one redemption.
    *
    * Takes the whole {@link EpisodeDraft} rather than a loose id and token, so the
    * two cannot be paired up wrongly by a caller holding several drafts.
@@ -684,29 +689,6 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-  }
-
-  /**
-   * Append an upload to a `FormData`, in whichever shape the runtime gave us.
-   *
-   * The RN `{ uri, name, type }` descriptor is not a `Blob` and the DOM
-   * `FormData.append` signature does not admit it, so it goes through one cast
-   * confined to this function — rather than every call site, or a `declare
-   * module` shim that would shadow the real DOM types in every consumer.
-   */
-  function appendUpload(
-    form: FormData,
-    field: string,
-    payload: UploadPayload,
-    filename?: string,
-  ): void {
-    if (typeof Blob !== 'undefined' && payload instanceof Blob) {
-      form.append(field, payload, filename);
-      return;
-    }
-    const descriptor = payload as { uri: string; name?: string; type?: string };
-    const name = filename ?? descriptor.name ?? field;
-    form.append(field, descriptor as unknown as Blob, name);
   }
 
   /** Drop `undefined` fields so a partial input never sends `"key": null`. */
@@ -1108,30 +1090,48 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
     },
 
     async ingestEpisode(draft, audio, input = {}, filename) {
-      const form = new FormData();
-      // `audioFile` is the field name the ingest endpoint reads.
-      appendUpload(form, 'audioFile', audio, filename ?? 'episode.mp3');
-      for (const [key, value] of Object.entries(defined({ ...input }))) {
-        form.append(key, String(value));
-      }
+      const name = filename ?? 'episode.mp3';
+      const episodePath = `/api/podcasts/episodes/${encodeURIComponent(draft.episodeId)}`;
+      /**
+       * `anonymous` on all three requests, and it is load-bearing rather than
+       * tidy: they are authenticated by the TICKET alone, which is the whole
+       * reason the draft/ingest pair exists. Without it a worker that HAPPENS to
+       * hold a user token would send both credentials — behaving differently
+       * from one that does not, and leaving the server's answer ambiguous about
+       * which authorized the write. Caught by a test, not by review.
+       */
+      const ticketJson = {
+        'Content-Type': 'application/json',
+        'X-Ingest-Ticket': draft.ingestTicket,
+      };
 
       /**
-       * `anonymous`, and it is load-bearing rather than tidy: this request is
-       * authenticated by the TICKET alone, which is the whole reason the
-       * draft/ingest pair exists. Without it a worker that HAPPENS to hold a user
-       * token would send both credentials — behaving differently from one that
-       * does not, and leaving the server's answer ambiguous about which
-       * authorized the write. Caught by a test, not by review.
+       * The audio goes STRAIGHT to storage, never through the API: the API
+       * refuses request bodies over 100 MB and an episode may be 500 MB. The
+       * PUT is signed for the ticket's episode; asking for it spends nothing.
        */
-      const json = (await request(
-        `/api/podcasts/episodes/${encodeURIComponent(draft.episodeId)}/ingest`,
-        {
-          method: 'POST',
-          anonymous: true,
-          headers: { 'X-Ingest-Ticket': draft.ingestTicket },
-          body: form,
-        },
-      )) as { data?: unknown };
+      const doFetch = resolveFetch();
+      // The exact size is signed into the URL, so it is known before asking.
+      const body = await payloadBlob(audio, doFetch);
+      const signed = (await request(`${episodePath}/ingest/upload`, {
+        method: 'POST',
+        anonymous: true,
+        headers: ticketJson,
+        body: JSON.stringify({ mimeType: audioMimeType(audio, name), sizeBytes: body.size }),
+      })) as { data?: unknown };
+      const target = checkResponse(audioUploadTarget, signed?.data, 'ingestEpisode');
+
+      await sendAudioUpload(target, body, { fetch: doFetch });
+
+      // The redemption: the ticket's one use, naming the upload instead of
+      // carrying the file. `defined()` keeps an absent field an absent KEY — an
+      // omitted title means "keep the draft's", never the string `undefined`.
+      const json = (await request(`${episodePath}/ingest`, {
+        method: 'POST',
+        anonymous: true,
+        headers: ticketJson,
+        body: JSON.stringify(defined({ ...input, uploadId: target.uploadId, fileName: name })),
+      })) as { data?: unknown };
       return checkResponse(episodeSummary, json?.data, 'ingestEpisode');
     },
 

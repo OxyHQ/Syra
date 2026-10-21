@@ -1,4 +1,3 @@
-import { Platform } from 'react-native';
 import { z } from 'zod';
 import {
   uploadOutcomeSchema,
@@ -9,6 +8,7 @@ import {
   type UserUploadAsTrack,
 } from '@syra/shared-types';
 import { api } from '@/utils/api';
+import { uploadAudioDirect } from '@/services/directAudioUpload';
 import { normalizeTrackImages, resolveCatalogImageUrl } from '@/utils/catalogImages';
 
 /**
@@ -29,7 +29,11 @@ import { normalizeTrackImages, resolveCatalogImageUrl } from '@/utils/catalogIma
  *    thrown error with no outcome in it is a real failure and is re-thrown.
  */
 
-/** Uploads move whole files; the API client's 5s default would abort every one. */
+/**
+ * The locker route reads the whole file back from storage and runs ffprobe,
+ * fpcalc and the identification lookups before it answers; the API client's 5s
+ * default would abort every one.
+ */
 const UPLOAD_TIMEOUT_MS = 10 * 60 * 1000;
 
 const uploadListResponseSchema = z.object({
@@ -151,33 +155,16 @@ function blockedOutcomeFromError(error: unknown): UploadOutcome | null {
   return null;
 }
 
-/** Append the audio file under the field name multer expects (`audioFile`). */
-async function appendAudioFile(formData: FormData, audioFile: UploadAudioFile): Promise<void> {
-  if (Platform.OS === 'web') {
-    // Web: prefer the picked File; otherwise fetch the blob the uri points at.
-    const blob = audioFile.file ?? (await (await fetch(audioFile.uri)).blob());
-    formData.append('audioFile', blob, audioFile.name);
-    return;
-  }
-
-  // React Native FormData accepts a { uri, name, type } descriptor, which is not
-  // part of the DOM FormData.append signature, so it goes through a typed Blob view.
-  const rnFilePart = {
-    uri: audioFile.uri,
-    name: audioFile.name,
-    type: audioFile.mimeType,
-  } as unknown as Blob;
-  formData.append('audioFile', rnFilePart, audioFile.name);
-}
-
-/** Multipart carries strings only; an absent override is simply not appended. */
-function appendOverrides(formData: FormData, request: Omit<UploadRequest, 'destination'>): void {
-  if (request.title?.trim()) formData.append('title', request.title.trim());
-  if (request.artistName?.trim()) formData.append('artistName', request.artistName.trim());
-  if (request.albumName?.trim()) formData.append('albumName', request.albumName.trim());
-  if (request.isrc?.trim()) formData.append('isrc', request.isrc.trim());
-  if (request.coverArt) formData.append('coverArt', request.coverArt);
-  if (request.attestation) formData.append('attestation', request.attestation);
+/** The overrides the uploader actually set; an absent one means "keep the tag". */
+function overridesOf(request: Omit<UploadRequest, 'destination'>): Record<string, string> {
+  const overrides: Record<string, string> = {};
+  if (request.title?.trim()) overrides.title = request.title.trim();
+  if (request.artistName?.trim()) overrides.artistName = request.artistName.trim();
+  if (request.albumName?.trim()) overrides.albumName = request.albumName.trim();
+  if (request.isrc?.trim()) overrides.isrc = request.isrc.trim();
+  if (request.coverArt) overrides.coverArt = request.coverArt;
+  if (request.attestation) overrides.attestation = request.attestation;
+  return overrides;
 }
 
 export const uploadsService = {
@@ -188,16 +175,22 @@ export const uploadsService = {
    * refusal is information the uploader is owed, not an exception. Only a
    * genuine failure (network, 5xx, a body that is not an outcome) rejects.
    */
-  async createUpload(audioFile: UploadAudioFile, request: UploadRequest): Promise<UploadOutcome> {
-    const formData = new FormData();
-    await appendAudioFile(formData, audioFile);
-    formData.append('destination', request.destination);
-    appendOverrides(formData, request);
+  async createUpload(
+    audioFile: UploadAudioFile,
+    request: UploadRequest,
+    onProgress?: (fraction: number) => void,
+  ): Promise<UploadOutcome> {
+    // Straight to storage — the API refuses request bodies over 100 MB and a
+    // locker file may be 200 MB — then routed by `uploadId` exactly as a
+    // multipart file was.
+    const upload = await uploadAudioDirect('locker', audioFile, onProgress);
 
     try {
-      const response = await api.post<unknown>('/uploads', formData, {
-        timeout: UPLOAD_TIMEOUT_MS,
-      });
+      const response = await api.post<unknown>(
+        '/uploads',
+        { ...upload, destination: request.destination, ...overridesOf(request) },
+        { timeout: UPLOAD_TIMEOUT_MS },
+      );
       return parse(uploadOutcomeSchema, response.data, 'upload');
     } catch (error) {
       const blocked = blockedOutcomeFromError(error);
@@ -218,13 +211,14 @@ export const uploadsService = {
     uploadId: string,
     request: Omit<UploadRequest, 'destination'>,
   ): Promise<UploadOutcome> {
-    const formData = new FormData();
-    appendOverrides(formData, request);
-
     try {
-      const response = await api.post<unknown>(`/uploads/${uploadId}/promote`, formData, {
-        timeout: UPLOAD_TIMEOUT_MS,
-      });
+      const response = await api.post<unknown>(
+        `/uploads/${uploadId}/promote`,
+        overridesOf(request),
+        {
+          timeout: UPLOAD_TIMEOUT_MS,
+        },
+      );
       return parse(uploadOutcomeSchema, response.data, 'upload promotion');
     } catch (error) {
       const blocked = blockedOutcomeFromError(error);

@@ -30,6 +30,7 @@ import {
 import {
   abandonEpisodeIngest,
   createEpisodeDraft,
+  createEpisodeIngestUpload,
   ingestEpisodeAudio,
 } from '../controllers/podcastIngest.controller';
 import { streamMediaCors } from '../middleware/streamMediaCors';
@@ -76,6 +77,12 @@ router.post('/episodes/:id/ingest', ingestEpisodeAudio);
  * never read as an `:id`.
  */
 router.post('/episodes/:id/ingest/abandon', abandonEpisodeIngest);
+/**
+ * A presigned PUT to send the episode's audio to, straight to storage — the
+ * ticket's checks without its claim; `ingest` stays the one redemption. Four
+ * segments like `abandon`, so it cannot collide with `ingest`.
+ */
+router.post('/episodes/:id/ingest/upload', createEpisodeIngestUpload);
 
 // Browse + create
 router.get('/', browsePodcasts);

@@ -1,7 +1,10 @@
-import { Platform } from 'react-native';
 import { z } from 'zod';
 import { episodeSchema, type Episode, type EpisodeType } from '@syra/shared-types';
 import { api } from '@/utils/api';
+import { uploadAudioDirect } from '@/services/directAudioUpload';
+
+/** Creating the episode waits on the server copying the file into place. */
+const UPLOAD_COMPLETE_TIMEOUT_MS = 10 * 60 * 1000;
 
 const episodeResponseSchema = episodeSchema.passthrough();
 const uploadEpisodeResponseSchema = z.object({ data: episodeResponseSchema });
@@ -45,49 +48,47 @@ export interface UploadEpisodeMetadata {
 }
 
 /**
- * Episode API service. The backend expects multipart form data with the audio
- * under the `audioFile` field (multer `.single('audioFile')`); the episode is
- * created with `status: 'processing'` and transitions to `ready` once HLS
- * ingest finishes.
+ * Episode API service. The audio is sent straight to storage
+ * (`uploadAudioDirect` — the API refuses request bodies over 100 MB and an
+ * episode may be 500 MB), then the episode is created by `uploadId` at the same
+ * route as always, with `status: 'processing'`; it transitions to `ready` once
+ * HLS ingest finishes.
  */
 export const episodeService = {
   async uploadEpisode(
     podcastId: string,
     audioFile: EpisodeAudioFile,
     metadata: UploadEpisodeMetadata,
+    onProgress?: (fraction: number) => void,
   ): Promise<Episode> {
-    const formData = new FormData();
+    const upload = await uploadAudioDirect(
+      'episode',
+      {
+        uri: audioFile.uri,
+        name: audioFile.name || `episode-${Date.now()}.mp3`,
+        mimeType: audioFile.type || 'audio/mpeg',
+        file: audioFile.file,
+      },
+      onProgress,
+    );
 
-    const fileName = audioFile.name || `episode-${Date.now()}.mp3`;
-    const fileType = audioFile.type || 'audio/mpeg';
-
-    if (Platform.OS === 'web') {
-      // Web: prefer the picked File; otherwise fetch the blob URL.
-      const blob = audioFile.file ?? (await (await fetch(audioFile.uri)).blob());
-      formData.append('audioFile', blob, fileName);
-    } else {
-      // React Native FormData accepts a { uri, name, type } descriptor, which is
-      // not part of the DOM FormData.append signature, so it goes through a typed
-      // Blob view.
-      const rnFilePart = { uri: audioFile.uri, name: fileName, type: fileType } as unknown as Blob;
-      formData.append('audioFile', rnFilePart, fileName);
-    }
-
-    formData.append('title', metadata.title);
-    if (metadata.description) formData.append('description', metadata.description);
-    if (metadata.summary) formData.append('summary', metadata.summary);
-    if (metadata.season !== undefined) formData.append('season', String(metadata.season));
-    if (metadata.episodeNumber !== undefined)
-      formData.append('episodeNumber', String(metadata.episodeNumber));
-    if (metadata.episodeType) formData.append('episodeType', metadata.episodeType);
-    if (metadata.explicit !== undefined) formData.append('explicit', String(metadata.explicit));
-    if (metadata.duration !== undefined) formData.append('duration', String(metadata.duration));
-    // Multipart can't carry arrays cleanly; the backend parses these as a JSON
-    // string (or comma-separated) into the validated id list.
-    if (metadata.hosts?.length) formData.append('hosts', JSON.stringify(metadata.hosts));
-    if (metadata.guests?.length) formData.append('guests', JSON.stringify(metadata.guests));
-
-    const response = await api.post<unknown>(`/podcasts/${podcastId}/episodes`, formData);
+    const response = await api.post<unknown>(
+      `/podcasts/${podcastId}/episodes`,
+      {
+        ...upload,
+        title: metadata.title,
+        ...(metadata.description ? { description: metadata.description } : {}),
+        ...(metadata.summary ? { summary: metadata.summary } : {}),
+        ...(metadata.season !== undefined ? { season: metadata.season } : {}),
+        ...(metadata.episodeNumber !== undefined ? { episodeNumber: metadata.episodeNumber } : {}),
+        ...(metadata.episodeType ? { episodeType: metadata.episodeType } : {}),
+        ...(metadata.explicit !== undefined ? { explicit: metadata.explicit } : {}),
+        ...(metadata.duration !== undefined ? { duration: metadata.duration } : {}),
+        ...(metadata.hosts?.length ? { hosts: metadata.hosts } : {}),
+        ...(metadata.guests?.length ? { guests: metadata.guests } : {}),
+      },
+      { timeout: UPLOAD_COMPLETE_TIMEOUT_MS },
+    );
     const parsed = uploadEpisodeResponseSchema.safeParse(response.data);
     if (!parsed.success) {
       throw new Error(`Invalid upload episode response: ${parsed.error.message}`);

@@ -1,4 +1,3 @@
-import { Platform } from 'react-native';
 import { z } from 'zod';
 import {
   albumSchema,
@@ -8,6 +7,13 @@ import {
   type Track,
 } from '@syra/shared-types';
 import { api } from '@/utils/api';
+import { uploadAudioDirect } from '@/services/directAudioUpload';
+
+/**
+ * Creating the track waits on the server reading the whole file back (ffprobe,
+ * the tags) before it answers, so the client default would abort a large one.
+ */
+const UPLOAD_COMPLETE_TIMEOUT_MS = 10 * 60 * 1000;
 
 const trackResponseSchema = trackSchema.passthrough();
 const albumResponseSchema = albumSchema.passthrough();
@@ -43,47 +49,45 @@ export interface UploadTrackMetadata {
 /**
  * Studio music API service.
  *
- * `uploadTrack` posts multipart form data with the audio under the `audioFile`
- * field (multer `.single('audioFile')` in the backend tracks controller); the
- * track is created with `status: 'processing'` and transitions to `ready` once
- * HLS ingest finishes. Web sends the picked `File`/blob, native sends the RN
- * `{ uri, name, type }` descriptor — the same universal pattern as
- * `episodeService.uploadEpisode`.
+ * `uploadTrack` sends the audio straight to storage (`uploadAudioDirect` — the
+ * API refuses request bodies over 100 MB and a track may be 200 MB), then
+ * creates the track by `uploadId` at the same route as always; the track is
+ * created with `status: 'processing'` and transitions to `ready` once HLS ingest
+ * finishes.
  *
  * Duration is deliberately absent from the payload: the backend measures it with
  * ffprobe from the uploaded file, so a client value would be ignored anyway.
  */
 export const musicService = {
-  async uploadTrack(audioFile: TrackAudioFile, metadata: UploadTrackMetadata): Promise<Track> {
-    const formData = new FormData();
+  async uploadTrack(
+    audioFile: TrackAudioFile,
+    metadata: UploadTrackMetadata,
+    onProgress?: (fraction: number) => void,
+  ): Promise<Track> {
+    const upload = await uploadAudioDirect(
+      'track',
+      {
+        uri: audioFile.uri,
+        name: audioFile.name || `track-${Date.now()}.mp3`,
+        mimeType: audioFile.type || 'audio/mpeg',
+        file: audioFile.file,
+      },
+      onProgress,
+    );
 
-    const fileName = audioFile.name || `track-${Date.now()}.mp3`;
-    const fileType = audioFile.type || 'audio/mpeg';
-
-    if (Platform.OS === 'web') {
-      // Web: prefer the picked File; otherwise fetch the blob URL.
-      const blob = audioFile.file ?? (await (await fetch(audioFile.uri)).blob());
-      formData.append('audioFile', blob, fileName);
-    } else {
-      // React Native FormData accepts a { uri, name, type } descriptor, which is
-      // not part of the DOM FormData.append signature, so it goes through a
-      // typed Blob view.
-      const rnFilePart = { uri: audioFile.uri, name: fileName, type: fileType } as unknown as Blob;
-      formData.append('audioFile', rnFilePart, fileName);
-    }
-
-    formData.append('title', metadata.title);
-    formData.append('artistId', metadata.artistId);
-    if (metadata.albumId) formData.append('albumId', metadata.albumId);
-    if (metadata.coverArt) formData.append('coverArt', metadata.coverArt);
-    // The backend reads `genre` as a repeated field into a string[].
-    if (metadata.genre?.length) {
-      for (const g of metadata.genre) formData.append('genre', g);
-    }
-    if (metadata.isExplicit !== undefined)
-      formData.append('isExplicit', String(metadata.isExplicit));
-
-    const response = await api.post<unknown>('/tracks/upload', formData);
+    const response = await api.post<unknown>(
+      '/tracks/upload',
+      {
+        ...upload,
+        title: metadata.title,
+        artistId: metadata.artistId,
+        ...(metadata.albumId ? { albumId: metadata.albumId } : {}),
+        ...(metadata.coverArt ? { coverArt: metadata.coverArt } : {}),
+        ...(metadata.genre?.length ? { genre: metadata.genre } : {}),
+        ...(metadata.isExplicit !== undefined ? { isExplicit: metadata.isExplicit } : {}),
+      },
+      { timeout: UPLOAD_COMPLETE_TIMEOUT_MS },
+    );
     return parse(trackResponseSchema, response.data, 'track upload');
   },
 

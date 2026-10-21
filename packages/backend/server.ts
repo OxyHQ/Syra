@@ -37,6 +37,7 @@ import libraryRoutes from './src/routes/library.routes';
 import audioRoutes from './src/routes/audio.routes';
 import queueRoutes from './src/routes/queue.routes';
 import uploadsRoutes from './src/routes/uploads.routes';
+import audioUploadsRoutes from './src/routes/audioUploads.routes';
 import musicPreferencesRoutes from './src/routes/musicPreferences.routes';
 import copyrightRoutes from './src/routes/copyright.routes';
 import artistClaimsRoutes from './src/routes/artistClaims.routes';
@@ -66,6 +67,7 @@ import { startRecommendationScheduler } from './src/services/recommendations/sch
 import { startPodcastRefreshScheduler } from './src/services/podcasts/podcastRefreshScheduler';
 import { startIngestWorker } from './src/services/ingest/ingestQueue';
 import { startExpirySweeper } from './src/services/uploads/expirySweeper';
+import { startAbandonedAudioUploadSweeper } from './src/services/uploads/directAudioUpload';
 
 let activityReady = false;
 const activity = startPlatformActivity(() => activityReady && isPostgresConnected());
@@ -331,6 +333,10 @@ publicApiRouter.use('/stream', createOptionalOxyAuth(oxy), streamRoutes);
 // sub-resources are fetched by media players that carry a `?t=` stream token in
 // the URL and cannot set an Authorization header.
 publicApiRouter.use('/uploads', createOptionalOxyAuth(oxy), uploadsRoutes);
+// Direct audio uploads: a presigned PUT the client sends its file to, straight to
+// storage, because no request body to this API may exceed the proxy's 100 MB.
+// See services/uploads/directAudioUpload.ts.
+publicApiRouter.use('/audio-uploads', createOptionalOxyAuth(oxy), audioUploadsRoutes);
 publicApiRouter.use('/images', imagesPublicRoutes);
 publicApiRouter.use('/preview', createOptionalOxyAuth(oxy), previewRoutes);
 publicApiRouter.use('/lyrics', lyricsRoutes);
@@ -492,6 +498,11 @@ const bootServer = async () => {
   // must not depend on a second store that can be down while the deletes still
   // run. See `acquireSweepLock` in services/uploads/expirySweeper.ts.
   startExpirySweeper();
+
+  // Direct uploads that were sent to storage and never completed: deleted from
+  // `incoming/` a day after they landed. Unlocked — every instance may run it,
+  // and deleting an object twice is not an error.
+  startAbandonedAudioUploadSweeper();
 
   // Oxy Files (ADR 0043): deliver queued file references, reconcile them
   // nightly, and flush the legacy-image-read counts the bucket retirement waits

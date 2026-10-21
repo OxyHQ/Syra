@@ -42,9 +42,11 @@ import {
   S3_AUDIO_PREFIX,
   S3_BUCKET_NAME,
   S3_ENDPOINT,
+  S3_INCOMING_PREFIX,
   S3_REGION,
   store,
   getS3AudioKey,
+  getS3IncomingAudioKey,
   getS3HlsKey,
   getS3LockerAudioKey,
   getS3LockerHlsKey,
@@ -56,12 +58,15 @@ import {
   getS3PreviewKey,
 } from '../../config/s3.config';
 import {
+  copyWithinS3,
+  createPresignedUpload,
   deleteFromS3,
   deleteFromS3Batch,
   deleteS3Prefix,
   getObjectMetadata,
   getPresignedUrl,
   listS3Keys,
+  listS3Objects,
   objectExists,
   streamFromS3,
   uploadToS3,
@@ -84,6 +89,7 @@ import {
 export {
   getS3AudioKey,
   getS3HlsKey,
+  getS3IncomingAudioKey,
   getS3LockerAudioKey,
   getS3LockerHlsKey,
   getS3LockerHlsPrefix,
@@ -196,6 +202,48 @@ export function deleteAudioObjects(keys: readonly string[]): Promise<number> {
 /** Delete every object under a prefix. The caller owns the prefix being exactly one thing's. */
 export function deleteAudioPrefix(prefix: string): Promise<number> {
   return deleteS3Prefix(prefix);
+}
+
+// ── Direct uploads ───────────────────────────────────────────────────────
+//
+// A client too large for the API's request-body limit sends its file straight
+// to the bucket, under `incoming/` (`getS3IncomingAudioKey`), with a presigned PUT;
+// the route that completes the upload then reads it, writes the ORIGINAL where it
+// always did, and deletes the incoming object. `services/uploads/directAudioUpload.ts`
+// is the one caller of everything here.
+
+/** A presigned PUT admitting one incoming original of exactly this type and size. */
+export function presignIncomingAudio(
+  key: string,
+  options: { contentType: string; contentLength: number; expiresInSeconds: number },
+): Promise<{ url: string; headers: Record<string, string> }> {
+  return createPresignedUpload(key, options);
+}
+
+/**
+ * Make an incoming upload an ORIGINAL at `key` — the same object
+ * {@link putSourceAudio} would have written from the bytes, owner tag included —
+ * by a server-side copy, so a 500 MB episode never passes through this process.
+ * The incoming object is left for the caller to delete.
+ */
+export async function promoteIncomingAudio(
+  incomingKey: string,
+  key: string,
+  options: AudioPutOptions & { owner: AudioOwner },
+): Promise<void> {
+  const { owner, ...rest } = options;
+  await copyWithinS3(incomingKey, key, {
+    ...rest,
+    metadata: { ...(rest.metadata ?? {}), 'oxy-owner': ownerTag(owner) },
+  });
+}
+
+/** Every incoming upload, with when it landed — what the abandoned-upload sweep reads. */
+export function listIncomingAudio(): AsyncGenerator<{
+  key: string;
+  lastModified: Date | undefined;
+}> {
+  return listS3Objects(`${S3_INCOMING_PREFIX}/`);
 }
 
 // ── Room recordings ──────────────────────────────────────────────────────
