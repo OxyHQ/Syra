@@ -9,6 +9,7 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import {
+  LEGACY_IMAGE_PREFIXES,
   legacyStore,
   s3Client,
   S3_BUCKET_NAME,
@@ -39,6 +40,20 @@ function asAwsError(error: unknown): AwsSdkError {
     return error as AwsSdkError;
   }
   return { name: 'UnknownError', message: String(error) };
+}
+
+/**
+ * Where a key is READ from. Syra's legacy images (`LEGACY_IMAGE_PREFIXES`) are
+ * already in Oxy Files and are deleted from the S3 bucket once their retirement
+ * gate passes; they are never copied to R2. So while S3 is the legacy store,
+ * they are read from it directly — a read through R2 would make R2's on-read
+ * migration (Sippy) copy them in. Everything else is read from the store.
+ */
+function readerFor(key: string): Pick<ObjectStore, 'client' | 'bucket'> {
+  if (legacyStore && LEGACY_IMAGE_PREFIXES.some((prefix) => key.startsWith(prefix))) {
+    return legacyStore;
+  }
+  return { client: s3Client, bucket: S3_BUCKET_NAME };
 }
 
 /**
@@ -110,12 +125,13 @@ export async function uploadToS3(
  */
 export async function getPresignedUrl(key: string, expiresIn: number = 3600): Promise<string> {
   try {
+    const reader = readerFor(key);
     const command = new GetObjectCommand({
-      Bucket: S3_BUCKET_NAME,
+      Bucket: reader.bucket,
       Key: key,
     });
 
-    const url = await getSignedUrl(s3Client, command, { expiresIn });
+    const url = await getSignedUrl(reader.client, command, { expiresIn });
     logger.debug(`[S3Service] Generated pre-signed URL for: ${key}`);
     return url;
   } catch (error: unknown) {
@@ -145,12 +161,13 @@ export async function getObjectMetadata(key: string): Promise<{
   etag?: string;
 } | null> {
   try {
+    const reader = readerFor(key);
     const command = new HeadObjectCommand({
-      Bucket: S3_BUCKET_NAME,
+      Bucket: reader.bucket,
       Key: key,
     });
 
-    const response = await s3Client.send(command);
+    const response = await reader.client.send(command);
     return {
       contentLength: response.ContentLength,
       contentType: response.ContentType,
@@ -190,8 +207,9 @@ export async function streamFromS3(
   contentRange?: string;
 }> {
   try {
+    const reader = readerFor(key);
     const command = new GetObjectCommand({
-      Bucket: S3_BUCKET_NAME,
+      Bucket: reader.bucket,
       Key: key,
       Range:
         options.start !== undefined && options.end !== undefined
@@ -199,7 +217,7 @@ export async function streamFromS3(
           : undefined,
     });
 
-    const response = await s3Client.send(command);
+    const response = await reader.client.send(command);
 
     if (!response.Body) {
       throw new Error('No body in S3 response');

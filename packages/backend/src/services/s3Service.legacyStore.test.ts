@@ -96,6 +96,18 @@ describe('the legacy store while Syra migrates to R2', () => {
     expect(result).toEqual(['hls/a/t/master.m3u8', 'hls/a/t/seg0.ts', 'hls/a/t/seg1.ts']);
   });
 
+  it('a legacy image is read from S3, never through R2 (Sippy would copy it in)', () => {
+    const { sent } = run(
+      env,
+      `await service.streamFromS3('images/abc/original.jpg').catch(() => {}); await service.getObjectMetadata('images/abc/medium.jpg').catch(() => {}); await service.streamFromS3('hls/a/t/master.m3u8').catch(() => {});`,
+    );
+    expect(sent.map((call) => `${call.store} ${call.key}`)).toEqual([
+      's3 images/abc/original.jpg',
+      's3 images/abc/medium.jpg',
+      'r2 hls/a/t/master.m3u8',
+    ]);
+  });
+
   it('after the migration nothing is mirrored', () => {
     const { sent } = run(R2, `await service.deleteFromS3('k');`);
     expect(sent.map((call) => call.store)).toEqual(['r2']);
