@@ -60,6 +60,11 @@ const schema = z
     AWS_S3_BUCKET: z.string().optional(),
     AWS_S3_BUCKET_NAME: z.string().optional(),
     S3_BUCKET: z.string().optional(),
+    // Object storage on Cloudflare R2 (OxyHQ/oxy ADR 0047; `config/s3.config.ts`).
+    R2_BUCKET: z.string().optional(),
+    R2_ENDPOINT: z.string().optional(),
+    R2_ACCESS_KEY_ID: z.string().optional(),
+    R2_SECRET_ACCESS_KEY: z.string().optional(),
     S3_REGION: z.string().optional(),
     S3_AUDIO_PREFIX: z.string().default('audio'),
     S3_HLS_PREFIX: z.string().default('hls'),

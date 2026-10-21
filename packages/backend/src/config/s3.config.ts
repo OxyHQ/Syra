@@ -2,61 +2,119 @@ import { S3Client } from '@aws-sdk/client-s3';
 import { logger } from '../utils/logger';
 
 /**
- * S3 Client Configuration — AWS only (us-west-2, Fargate/ECS).
+ * Object storage: Cloudflare R2 (OxyHQ/oxy ADR 0047), through its S3 API.
  *
- * Credential chain:
- *   1. AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY env vars (local dev, CI)
- *   2. ECS task IAM role (production — credentials left undefined so the SDK
- *      falls back to the standard credential provider chain automatically)
+ *   R2_ENDPOINT            https://<account id>.r2.cloudflarestorage.com
+ *   R2_BUCKET              `syra-media`
+ *   R2_ACCESS_KEY_ID       } the bucket's R2 API token, SSM /oxy/syra/R2_*
+ *   R2_SECRET_ACCESS_KEY   }
  *
- * Local-dev escape hatch:
- *   Set AWS_ENDPOINT_URL to point at LocalStack or MinIO — forcePathStyle is
- *   enabled automatically in that case.
+ * While the bucket migrates, `AWS_S3_BUCKET` names the S3 bucket it migrates
+ * FROM — the LEGACY store below, reached with the task role. Without
+ * `R2_BUCKET` it is still the store itself (before the cutover, and local
+ * MinIO through `AWS_ENDPOINT_URL`). R2 is never configured through
+ * `AWS_ENDPOINT_URL` / `AWS_ACCESS_KEY_ID`: every AWS client in the process
+ * reads those (CloudWatch, the activity producer).
  */
 
 const DEFAULT_AWS_REGION = 'us-west-2';
 const AWS_REGION = process.env.AWS_REGION || DEFAULT_AWS_REGION;
 const AWS_ENDPOINT_URL = process.env.AWS_ENDPOINT_URL;
-
-const ACCESS_KEY_ID = process.env.AWS_ACCESS_KEY_ID;
-const SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY;
+const AWS_BUCKET = process.env.AWS_S3_BUCKET_NAME || process.env.AWS_S3_BUCKET || '';
 
 // When no explicit credentials are present the SDK uses the ECS task role —
 // do NOT pass an empty credentials object (that would override the role).
-const credentials =
-  ACCESS_KEY_ID && SECRET_ACCESS_KEY
-    ? { accessKeyId: ACCESS_KEY_ID, secretAccessKey: SECRET_ACCESS_KEY }
+const awsCredentials =
+  process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY
+    ? {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+      }
     : undefined;
 
-if (!credentials) {
-  logger.info('[S3Config] No explicit S3 credentials — relying on ECS task IAM role');
+export interface ObjectStore {
+  client: S3Client;
+  bucket: string;
+  region: string;
+  endpoint?: string;
+  /** Static credentials, when the store has them (R2; local MinIO). */
+  credentials?: { accessKeyId: string; secretAccessKey: string };
 }
 
-export const s3Client = new S3Client({
-  region: AWS_REGION,
-  credentials,
-  ...(AWS_ENDPOINT_URL ? { endpoint: AWS_ENDPOINT_URL, forcePathStyle: true } : {}),
-});
+// Checksums only where an operation requires one: the SDK's default since
+// 3.729 adds a CRC32 to every request, presigned URLs included.
+const CHECKSUMS = {
+  requestChecksumCalculation: 'WHEN_REQUIRED',
+  responseChecksumValidation: 'WHEN_REQUIRED',
+} as const;
 
-// Read bucket name from environment variable
-// Support both AWS_S3_BUCKET_NAME (documented) and AWS_S3_BUCKET (backwards compatibility)
-export const S3_BUCKET_NAME =
-  process.env.AWS_S3_BUCKET_NAME || process.env.AWS_S3_BUCKET || 'syra-audio';
+function awsStore(): ObjectStore {
+  return {
+    client: new S3Client({
+      region: AWS_REGION,
+      credentials: awsCredentials,
+      ...CHECKSUMS,
+      ...(AWS_ENDPOINT_URL ? { endpoint: AWS_ENDPOINT_URL, forcePathStyle: true } : {}),
+    }),
+    bucket: AWS_BUCKET || 'syra-audio',
+    region: AWS_REGION,
+    endpoint: AWS_ENDPOINT_URL,
+    credentials: awsCredentials,
+  };
+}
+
+function r2Store(bucket: string): ObjectStore {
+  const endpoint = process.env.R2_ENDPOINT?.trim() ?? '';
+  const accessKeyId = process.env.R2_ACCESS_KEY_ID?.trim() ?? '';
+  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY?.trim() ?? '';
+  const missing = Object.entries({
+    R2_ENDPOINT: endpoint,
+    R2_ACCESS_KEY_ID: accessKeyId,
+    R2_SECRET_ACCESS_KEY: secretAccessKey,
+  })
+    .filter(([, value]) => value === '')
+    .map(([name]) => name);
+  if (missing.length > 0) throw new Error(`R2_BUCKET is set but ${missing.join(', ')} is not`);
+  const credentials = { accessKeyId, secretAccessKey };
+  // R2 has one region; `auto` is what its S3 API expects.
+  return {
+    client: new S3Client({ region: 'auto', endpoint, credentials, ...CHECKSUMS }),
+    bucket,
+    region: 'auto',
+    endpoint,
+    credentials,
+  };
+}
+
+const r2Bucket = process.env.R2_BUCKET?.trim();
+
+/** Where every object is written and read. */
+export const store: ObjectStore = r2Bucket ? r2Store(r2Bucket) : awsStore();
+
+/**
+ * The S3 bucket being migrated from, while R2 is the store and `AWS_S3_BUCKET`
+ * is still set: never written; every delete is repeated there (R2's on-read
+ * migration would copy a leftover back) and listings include it.
+ */
+export const legacyStore: ObjectStore | null = r2Bucket && AWS_BUCKET ? awsStore() : null;
+
+export const s3Client = store.client;
+export const S3_BUCKET_NAME = store.bucket;
 export const S3_AUDIO_PREFIX = process.env.S3_AUDIO_PREFIX || 'audio';
 export const S3_IMAGE_PREFIX = process.env.S3_IMAGE_PREFIX || 'images';
 
 // Export region and endpoint for error messages
-export const S3_REGION = AWS_REGION;
-export const S3_ENDPOINT = AWS_ENDPOINT_URL;
+export const S3_REGION = store.region;
+export const S3_ENDPOINT = store.endpoint;
 
-logger.info('[S3Config] S3 configuration:', {
+logger.info('[S3Config] Object storage:', {
   bucket: S3_BUCKET_NAME,
-  region: AWS_REGION,
-  endpoint: AWS_ENDPOINT_URL ?? 'default (AWS)',
+  region: S3_REGION,
+  endpoint: S3_ENDPOINT ?? 'default (AWS)',
+  legacyBucket: legacyStore?.bucket ?? null,
   audioPrefix: S3_AUDIO_PREFIX,
   imagePrefix: S3_IMAGE_PREFIX,
-  credentialsConfigured: !!credentials,
-  credentialSource: credentials ? 'AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY' : 'ECS task IAM role',
+  credentialSource: store.credentials ? 'static (R2 token or local keys)' : 'ECS task IAM role',
 });
 
 /**
