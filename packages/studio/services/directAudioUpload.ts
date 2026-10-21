@@ -1,9 +1,9 @@
 import { Platform } from 'react-native';
-import { File as DeviceFile, UploadType } from 'expo-file-system';
 import { z } from 'zod';
-import { sendAudioUpload, type AudioUploadTarget } from '@syra.fm/sdk';
+import { sendAudioUpload } from '@syra.fm/sdk';
 import { audioUploadTargetSchema, type AudioUploadPurpose } from '@syra/shared-types';
 import { api } from '@/utils/api';
+import { deviceAudioFile } from './deviceAudioFile';
 
 /**
  * Audio goes STRAIGHT to storage, never through the Syra API: the API refuses
@@ -33,30 +33,6 @@ export interface DirectAudioFile {
 }
 
 /**
- * Stream a file on the device to storage from disk — never into JavaScript
- * memory, which a 500 MB episode would not survive — the way the multipart
- * upload's `{ uri }` part did.
- */
-async function putFromDevice(
-  file: DeviceFile,
-  target: AudioUploadTarget,
-  onProgress?: (fraction: number) => void,
-): Promise<void> {
-  const result = await file.upload(target.url, {
-    httpMethod: target.method,
-    uploadType: UploadType.BINARY_CONTENT,
-    headers: target.headers,
-    onProgress: ({ bytesSent, totalBytes }) => {
-      if (totalBytes > 0) onProgress?.(Math.min(1, bytesSent / totalBytes));
-    },
-  });
-  if (result.status < 200 || result.status >= 300) {
-    throw new Error(`Upload to storage failed (${result.status})`);
-  }
-  onProgress?.(1);
-}
-
-/**
  * Send `audio` to storage for the route `purpose` names, and resolve with what
  * that route needs to complete the upload. `onProgress` receives the fraction of
  * bytes sent (0–1).
@@ -70,7 +46,7 @@ export async function uploadAudioDirect(
   // disk. Either way its exact size is known before asking — it is signed.
   const blob =
     Platform.OS === 'web' ? (audio.file ?? (await (await fetch(audio.uri)).blob())) : undefined;
-  const deviceFile = blob ? undefined : new DeviceFile(audio.uri);
+  const deviceFile = blob ? null : deviceAudioFile(audio.uri);
   const sizeBytes = blob ? blob.size : (deviceFile?.size ?? 0);
 
   const response = await api.post<unknown>('/audio-uploads', {
@@ -84,7 +60,7 @@ export async function uploadAudioDirect(
   }
   const target = parsed.data.data;
 
-  if (deviceFile) await putFromDevice(deviceFile, target, onProgress);
+  if (deviceFile) await deviceFile.put(target, onProgress);
   else if (blob) await sendAudioUpload(target, blob, { onProgress });
 
   return { uploadId: target.uploadId, fileName: audio.name };
