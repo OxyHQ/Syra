@@ -4,9 +4,15 @@ Every image Syra serves — catalogue artwork, a person's uploaded cover, a hous
 avatar, a show cover — is stored in **Oxy Files** from this release on. Audio
 has its own procedure: `docs/runbooks/oxy-files-audio.md`.
 
-The steps below are one-time, ordered, and each is safe to re-run. Nothing runs
-against production except through `.github/workflows/run-backend-script.yml`,
-and every script previews unless given `--apply`.
+> **Status: COMPLETE (2026-10-21).** Every image is an Oxy file, the bucket's
+> image prefixes are deleted, and the legacy read path, its counter, the
+> one-time scripts of steps 2, 3 and 6 and the `s3_key` / house and series URL
+> columns are gone (step 7). Steps 0–6 are kept as the record of what ran; the
+> scripts they name no longer exist.
+
+The steps below were one-time and ordered. Nothing ran against production
+except through `.github/workflows/run-backend-script.yml`, and every script
+previewed unless given `--apply`.
 
 ---
 
@@ -27,10 +33,11 @@ entity type (`referenceReconcile.ts`, always applied) repairs the rest.
 Oxy's file events (`POST /webhooks/oxy/files`) stop serving a deleted, trashed,
 private or blocked file at once.
 
-Reads are dual: the Oxy file first (`/api/images/:id` redirects to Oxy's CDN; DTO
-variants carry `fileId`/`variant` for clients with Oxy's resolver), the legacy
-bucket object only when a row has none — and every such read is counted
-(`oxy_files_legacy_reads`, EMF metric `Syra/OxyFiles` · `LegacyImageReads`).
+Reads: `/api/images/:id` redirects to the row's Oxy file on Oxy's CDN; DTO
+variants carry `fileId`/`variant` for clients with Oxy's resolver. Every
+`image_assets` row names its file (`oxy_file_id` is NOT NULL); there is no other
+store. (While the images migrated, a row with no file was streamed from the
+bucket and counted in `oxy_files_legacy_reads`; both went in step 7.)
 
 ---
 
@@ -128,9 +135,24 @@ With `--apply` on a passing gate it clears `s3_key` on rows now in Oxy, deletes
 the unreferenced bucket-only rows, and deletes the objects under the prefixes.
 **Irreversible.** The bucket stays: it holds all audio.
 
-## 7. Afterwards (a follow-up change)
+## 7. Afterwards — DONE (2026-10-21)
 
-Remove the legacy read path (`resolveImageAsset`'s bucket fallback,
-`spaceImageUrl`'s URL branch, `utils/spaces.ts`), the legacy-read counter, and
-— in a `post` migration — `image_assets.s3_key` and the houses/rooms/series URL
-columns.
+Removed once production showed no row left to serve from the bucket (0 of
+505,085 `image_assets` rows with an `s3_key` or without an `oxy_file_id`, none
+`missing`; no house or series URL image):
+
+- the legacy read path: `resolveImageAsset`'s bucket stream, `spaceImageUrl`'s
+  URL branch, `utils/spaces.ts`, and the S3 layer's image-prefix read routing;
+- the legacy-read counter (`legacyReads.ts`) and its table;
+- the one-time scripts `migrate-images-to-oxy`, `migrate-alia-covers` and
+  `retire-legacy-image-storage` (with its dated soak waiver), their helpers
+  (`legacyObjects.ts`, `writePacer.ts`), and `restoreUploadedTracks.ts`, whose
+  export named bucket image keys;
+- in migration `0038_retire_legacy_image_storage` (`post`):
+  `image_assets.s3_key` (and `oxy_file_id` made NOT NULL), the `missing`
+  serving status, `houses.avatar`, `houses.cover_image`, `series.cover_image` and
+  `oxy_files_legacy_reads`.
+
+A house or series image is set only by its upload route now; a create or PATCH
+that names a URL is refused, and `null` removes the image. `rooms.stream_image`
+stays — it is a stream's own thumbnail link, never Syra's storage.

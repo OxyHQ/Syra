@@ -274,19 +274,8 @@ export const houses = pgTable(
     name: text().notNull(),
     description: text(),
     /**
-     * A raw S3 CDN URL string, NOT an `image_assets` reference — unlike every
-     * `coverArt`/`image` field in `catalog.ts`/`podcasts.ts`.
-     * `routes/houses.routes.ts:761-770` assigns `house.avatar = cdnUrl`
-     * directly with no `ObjectId` validation. RELATIONS.md fact 5 names this
-     * exact distinction and lists these two columns on the non-`ImageAsset`
-     * side of it.
-     */
-    avatar: text(),
-    coverImage: text(),
-    /**
-     * The avatar and cover as Oxy files owned by the house's creator (ADR 0043).
-     * `avatar`/`coverImage` above are the LEGACY bucket URLs, read only while a
-     * house has no file here; an upload writes the file and clears the URL.
+     * The avatar and cover as Oxy files owned by the house's creator (ADR 0043)
+     * — the only place a house image is stored.
      */
     avatarFileId: text(),
     coverImageFileId: text(),
@@ -395,8 +384,6 @@ export const series = pgTable(
     id: generatedId(),
     title: text().notNull(),
     description: text(),
-    /** A raw S3 CDN URL string, not an `image_assets` reference — see `houses.avatar`. */
-    coverImage: text(),
     /** The cover as an Oxy file owned by the series' creator — see `houses.avatarFileId`. */
     coverImageFileId: text(),
     houseId: text().references(() => houses.id, { onDelete: 'set null' }),
@@ -599,6 +586,11 @@ export const rooms = pgTable(
     /** Internal stream credential — see `activeIngressId`. */
     activeStreamUrl: text(),
     streamTitle: text(),
+    /**
+     * The image a stream's own metadata names (a URL ingress's thumbnail) or
+     * its host supplies as a link — never Syra's to store. An uploaded image is
+     * `streamImageFileId` instead, and wins.
+     */
     streamImage: text(),
     /** The stream image as an Oxy file owned by the host — see `houses.avatarFileId`. */
     streamImageFileId: text(),

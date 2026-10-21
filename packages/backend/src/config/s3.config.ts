@@ -101,7 +101,6 @@ export const legacyStore: ObjectStore | null = r2Bucket && AWS_BUCKET ? awsStore
 export const s3Client = store.client;
 export const S3_BUCKET_NAME = store.bucket;
 export const S3_AUDIO_PREFIX = process.env.S3_AUDIO_PREFIX || 'audio';
-export const S3_IMAGE_PREFIX = process.env.S3_IMAGE_PREFIX || 'images';
 
 // Export region and endpoint for error messages
 export const S3_REGION = store.region;
@@ -113,7 +112,6 @@ logger.info('[S3Config] Object storage:', {
   endpoint: S3_ENDPOINT ?? 'default (AWS)',
   legacyBucket: legacyStore?.bucket ?? null,
   audioPrefix: S3_AUDIO_PREFIX,
-  imagePrefix: S3_IMAGE_PREFIX,
   credentialSource: store.credentials ? 'static (R2 token or local keys)' : 'ECS task IAM role',
 });
 
@@ -300,20 +298,6 @@ export function getS3PodcastShowPrefixes(podcastId: string): readonly string[] {
     `${S3_PODCAST_PREFIX}/cache/${podcastId}/`,
   ];
 }
-
-/**
- * Every prefix Syra's images were written under before they moved to Oxy Files
- * (ADR 0043): `image_assets` objects, and the house / room / series images.
- * Nothing writes under them any more; `scripts/retireLegacyImageStorage.ts`
- * deletes them once the legacy-read gate is met. Each ends with `/`, so a prefix
- * can never match a sibling that merely starts with the same characters.
- */
-export const LEGACY_IMAGE_PREFIXES: readonly string[] = [
-  `${S3_IMAGE_PREFIX}/`,
-  'agora/houses/',
-  'agora/rooms/',
-  'agora/series/',
-];
 
 export const S3_PREVIEW_PREFIX = process.env.S3_PREVIEW_PREFIX || 'previews';
 

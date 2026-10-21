@@ -77,7 +77,7 @@ export function toSeriesView(row: SeriesRow, episodes: readonly SeriesEpisodeRow
     id: row.id,
     title: row.title,
     description: row.description,
-    coverImage: spaceImageUrl(row.coverImageFileId, row.coverImage, 'series_cover'),
+    coverImage: spaceImageUrl(row.coverImageFileId),
     coverImageFileId: row.coverImageFileId,
     houseId: row.houseId,
     createdBy: row.createdBy,
@@ -183,7 +183,6 @@ export async function listActiveSeriesForHouse(
 export interface CreateSeriesInput {
   readonly title: string;
   readonly description?: string | null;
-  readonly coverImage?: string | null;
   readonly houseId?: string | null;
   readonly createdBy: string;
   readonly recurrence: Recurrence;
@@ -199,7 +198,6 @@ export async function createSeries(
     .values({
       title: input.title,
       description: input.description ?? null,
-      coverImage: input.coverImage ?? null,
       houseId: input.houseId ?? null,
       createdBy: input.createdBy,
       recurrenceType: input.recurrence.type,
@@ -231,8 +229,7 @@ export async function createSeries(
 export type UpdateSeriesInput = Partial<{
   title: string;
   description: string | null;
-  coverImage: string | null;
-  /** The cover as an Oxy file (ADR 0043); writing it clears the legacy URL. */
+  /** The cover as an Oxy file (ADR 0043) — set by an upload, cleared with `null`. */
   coverImageFileId: string | null;
   isActive: boolean;
   recurrenceType: RecurrenceType;
@@ -257,11 +254,6 @@ export async function updateSeries(
     .update(series)
     .set({
       ...input,
-      // One cover at a time: an Oxy file clears the legacy URL, a URL the file.
-      ...(input.coverImage !== undefined && input.coverImageFileId === undefined
-        ? { coverImageFileId: null }
-        : {}),
-      ...(input.coverImageFileId ? { coverImage: null } : {}),
       updatedAt: new Date(),
     })
     .where(eq(series.id, id))

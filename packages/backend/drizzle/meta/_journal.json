@@ -267,6 +267,13 @@
       "when": 1792230213279,
       "tag": "0037_glorious_clint_barton",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1792599771333,
+      "tag": "0038_retire_legacy_image_storage",
+      "breakpoints": true
     }
   ]
 }

@@ -115,7 +115,7 @@ async function makeAlbum(): Promise<string> {
     .insert(imageAssets)
     .values({
       id: coverArtId,
-      s3Key: `k/${coverArtId}`,
+      oxyFileId: `k/${coverArtId}`,
       filename: 'c.jpg',
       contentType: 'image/jpeg',
       byteSize: 1,

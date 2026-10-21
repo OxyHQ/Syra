@@ -99,7 +99,7 @@ async function seedEpisodeMirroredAsset(): Promise<void> {
     .insert(imageAssets)
     .values({
       id: EPISODE_IMAGE_ID,
-      s3Key: `images/${EPISODE_IMAGE_ID}.jpg`,
+      oxyFileId: `images/${EPISODE_IMAGE_ID}.jpg`,
       filename: 'episode-one-cover.jpg',
       contentType: 'image/jpeg',
       byteSize: 1024,

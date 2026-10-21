@@ -108,7 +108,7 @@ async function seedCoverArt(): Promise<string> {
     .insert(imageAssets)
     .values({
       id,
-      s3Key: `covers/${id}.jpg`,
+      oxyFileId: `covers/${id}.jpg`,
       filename: 'cover.jpg',
       contentType: 'image/jpeg',
       byteSize: 1000,

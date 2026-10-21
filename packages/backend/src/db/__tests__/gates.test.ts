@@ -1012,7 +1012,7 @@ describe('catalog dedup constraints (Task 19a)', () => {
     const [asset] = await getDb()
       .insert(imageAssets)
       .values({
-        s3Key: `CHECK-fixture-${marker}-key`,
+        oxyFileId: `CHECK-fixture-${marker}-key`,
         filename: `${marker}.jpg`,
         contentType: 'image/jpeg',
         byteSize: 1024,
@@ -1573,7 +1573,7 @@ describe('podcasts schema (Task 4)', () => {
     const [coverArt] = await db
       .insert(imageAssets)
       .values({
-        s3Key: 'CHECK-fixture-cross-vertical-cover-key',
+        oxyFileId: 'CHECK-fixture-cross-vertical-cover-key',
         filename: 'cover.jpg',
         contentType: 'image/jpeg',
         byteSize: 1,

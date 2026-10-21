@@ -88,7 +88,7 @@ async function seedMirroredAsset(): Promise<void> {
     .insert(imageAssets)
     .values({
       id: SYRA_IMAGE_ID,
-      s3Key: `images/${SYRA_IMAGE_ID}.jpg`,
+      oxyFileId: `file-${SYRA_IMAGE_ID}`,
       filename: 'the-daily-cover.jpg',
       contentType: 'image/jpeg',
       byteSize: 1024,
@@ -138,7 +138,7 @@ async function seedEpisodeMirroredAsset(): Promise<void> {
     .insert(imageAssets)
     .values({
       id: EPISODE_IMAGE_ID,
-      s3Key: `images/${EPISODE_IMAGE_ID}.jpg`,
+      oxyFileId: `file-${EPISODE_IMAGE_ID}`,
       filename: 'episode-one-cover.jpg',
       contentType: 'image/jpeg',
       byteSize: 1024,
@@ -170,7 +170,7 @@ const candidate: PodcastDirectoryCandidate = {
 const ORDERED_CATEGORIES = ['News', 'Daily News', 'Business'];
 
 describe('importFeed — cover re-host (search/bulk-import deep path)', () => {
-  it('replaces the external cover URL with a Syra S3 image id + sizes + primaryColor', async () => {
+  it('replaces the external cover URL with a Syra image id + sizes + primaryColor', async () => {
     await seedMirroredAsset();
     setCatalogImageMirrorImplementationForTests(async (_images, context) => {
       expect(context.entityType).toBe('podcast'); // re-host runs as a podcast cover
@@ -214,6 +214,7 @@ describe('importFeed — cover re-host (search/bulk-import deep path)', () => {
     expect(dto?.imageSizes?.large).toEqual({
       id: SYRA_IMAGE_ID,
       url: `/api/images/${SYRA_IMAGE_ID}`,
+      fileId: `file-${SYRA_IMAGE_ID}`,
       width: 640,
       height: 640,
     });

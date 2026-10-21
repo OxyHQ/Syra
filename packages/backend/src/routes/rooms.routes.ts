@@ -73,7 +73,6 @@ import {
   mapLiveKitIngressError,
   shouldRetryIngressAfterDeletingExisting,
 } from '../utils/livekitErrors';
-import { deleteObject, cdnUrlToKey } from '../utils/spaces';
 import { recordingStorage } from '../services/oxyFiles/audioStorage';
 import { oxyFileUrl } from '../services/oxyFiles/client';
 import { spaceImageUrl, uploadSpaceImage } from '../services/oxyFiles/spaceImages';
@@ -183,8 +182,7 @@ function emitStreamStarted(
   const roomPayload = {
     roomId,
     title: room.streamTitle || undefined,
-    image:
-      spaceImageUrl(room.streamImageFileId, room.streamImage, 'room_stream_image') ?? undefined,
+    image: spaceImageUrl(room.streamImageFileId) ?? room.streamImage ?? undefined,
     description: room.streamDescription || undefined,
     // Progress-card inputs: when the stream started (ISO) and its total length
     // (seconds) when known. The client can render elapsed/total from these
@@ -2998,9 +2996,6 @@ router.post(
       // The host's file (see `services/oxyFiles/spaceImages.ts`).
       const file = await uploadSpaceImage(room.host, image, 'room-image');
       await updateRoom(room.id, { streamImageFileId: file.id });
-
-      const oldStreamImageKey = cdnUrlToKey(room.streamImage);
-      if (oldStreamImageKey) deleteObject(oldStreamImageKey).catch(() => {});
 
       res.json({ streamImage: oxyFileUrl(file.id), streamImageFileId: file.id });
     } catch (error) {

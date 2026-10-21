@@ -1,7 +1,7 @@
 /**
  * Reconcile every Oxy reference entity type now (OxyHQ/oxy ADR 0043 D6) — the
  * nightly run, on demand, for an operator who has just moved data
- * (`migrate-images-to-oxy`, `migrate-audio-to-oxy`) and wants the counts.
+ * (`migrate-audio-to-oxy`) and wants the counts.
  *
  * Preview by default: Oxy computes what it would add and remove and changes
  * nothing, and the preview is not recorded as a run (it would push the night's

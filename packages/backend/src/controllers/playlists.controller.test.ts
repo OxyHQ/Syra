@@ -111,7 +111,7 @@ async function makeImageAsset(primaryColor?: string): Promise<string> {
     .insert(imageAssets)
     .values({
       id,
-      s3Key: `k/${id}`,
+      oxyFileId: `k/${id}`,
       filename: 'c.jpg',
       contentType: 'image/jpeg',
       byteSize: 1,

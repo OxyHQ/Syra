@@ -172,7 +172,7 @@ async function seed(tx: Tx): Promise<void> {
   await executeRows(
     tx,
     sql.raw(`
-    insert into image_assets (id, s3_key, filename, content_type, byte_size, owner_type, width, height)
+    insert into image_assets (id, oxy_file_id, filename, content_type, byte_size, owner_type, width, height)
     select '${MARKER}-img-' || g, '${MARKER}/' || g, g || '.jpg', 'image/jpeg', 1000, 'album', 640, 640
     from generate_series(1, 500) g`),
   );

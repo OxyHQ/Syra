@@ -3,17 +3,12 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
 /**
- * Syra's bucket has exactly two kinds of caller left, and this holds it to that:
- *
- * - AUDIO, through `services/oxyFiles/audioStorage.ts` only — the one seam that
- *   decides whether audio is stored in and played from Oxy Files or the bucket
- *   (ADR 0043 stage 4c). A route or service that imported the S3 layer, or the
- *   Oxy half of the seam (`oxyAudio.ts`), directly would be a second place to
- *   change, and the one that gets missed.
- * - the LEGACY IMAGE read path, kept only until the image prefixes are retired:
- *   `imageAssetService.ts` (the dual read), `oxyFiles/legacyObjects.ts` (the
- *   migrations' reader), `utils/spaces.ts` (old space-image URLs) and
- *   `scripts/retireLegacyImageStorage.ts` (the retirement itself).
+ * Syra's bucket holds audio only, and has one caller: `services/oxyFiles/audioStorage.ts`
+ * — the one seam that decides whether audio is stored in and played from Oxy
+ * Files or the bucket (ADR 0043 stage 4c). A route or service that imported the
+ * S3 layer, or the Oxy half of the seam (`oxyAudio.ts`), directly would be a
+ * second place to change, and the one that gets missed. Images are Oxy files
+ * and never touch the bucket.
  *
  * Nothing else may import `services/s3Service` or `config/s3.config`.
  */
@@ -23,10 +18,6 @@ const SRC = join(__dirname, '..', '..');
 const ALLOWED = new Set([
   'services/s3Service.ts',
   'services/oxyFiles/audioStorage.ts',
-  'services/imageAssetService.ts',
-  'services/oxyFiles/legacyObjects.ts',
-  'utils/spaces.ts',
-  'scripts/retireLegacyImageStorage.ts',
   'config/s3.config.ts',
 ]);
 
@@ -47,8 +38,8 @@ function sourceFiles(dir: string): string[] {
   return out;
 }
 
-describe('the S3 layer has only its two kinds of caller', () => {
-  it('is imported by the audio adapter and the legacy image path, and nothing else', () => {
+describe('the S3 layer has only the audio seam as its caller', () => {
+  it('is imported by the audio adapter, and nothing else', () => {
     const offenders = sourceFiles(SRC)
       .filter((path) => S3_IMPORT.test(readFileSync(path, 'utf8')))
       .map((path) => relative(SRC, path))

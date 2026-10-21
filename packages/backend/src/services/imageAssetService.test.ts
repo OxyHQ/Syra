@@ -1,42 +1,21 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
-import { Readable } from 'stream';
 import sharp from 'sharp';
 import { eq } from 'drizzle-orm';
 import { clearDb, connectDb, disconnectDb } from '../test/postgres';
 import { installFakeOxyFiles, resetOxyFiles, type FakeOxyFiles } from '../test/fakeOxyFiles';
 import { getDb } from '../db/postgres';
 import { imageAssets } from '../db/schema/catalog';
-import { pendingLegacyReads } from './oxyFiles/legacyReads';
-import {
-  resolveImageAsset,
-  setLegacyImageReaderForTests,
-  storeImageAsset,
-} from './imageAssetService';
+import { resolveImageAsset, storeImageAsset } from './imageAssetService';
 
-/**
- * Writes go to Oxy Files only; reads take the Oxy file first and the legacy
- * bucket object only when there is none — and count that fallback, because the
- * bucket's retirement waits for the count to reach zero.
- */
+/** Every image is an Oxy file: written there, and served by redirecting to it. */
 
 beforeAll(connectDb);
 let oxy: FakeOxyFiles;
-const legacyKeysRead: string[] = [];
 beforeEach(() => {
   oxy = installFakeOxyFiles();
-  legacyKeysRead.length = 0;
-  setLegacyImageReaderForTests(async (key) => {
-    legacyKeysRead.push(key);
-    return {
-      stream: Readable.from([Buffer.from('legacy')]),
-      contentLength: 6,
-      contentType: 'image/jpeg',
-    };
-  });
 });
 afterEach(async () => {
   resetOxyFiles();
-  setLegacyImageReaderForTests(null);
   await clearDb();
 });
 afterAll(disconnectDb);
@@ -62,7 +41,6 @@ describe('storeImageAsset', () => {
     expect(row).toMatchObject({
       oxyFileId: stored.fileId,
       oxyVariant: null,
-      s3Key: null,
       uploadedBy: 'person-1',
       width: 64,
       height: 48,
@@ -94,8 +72,10 @@ describe('storeImageAsset', () => {
   });
 });
 
-describe('resolveImageAsset — Oxy first, the bucket only as a fallback', () => {
-  async function row(values: Partial<typeof imageAssets.$inferInsert>): Promise<string> {
+describe('resolveImageAsset', () => {
+  async function row(
+    values: Partial<typeof imageAssets.$inferInsert> & { oxyFileId: string },
+  ): Promise<string> {
     const [inserted] = await getDb()
       .insert(imageAssets)
       .values({
@@ -109,34 +89,19 @@ describe('resolveImageAsset — Oxy first, the bucket only as a fallback', () =>
     return inserted!.id;
   }
 
-  it("redirects to the Oxy file's rendition when the row has one, even with a bucket copy", async () => {
-    const id = await row({ oxyFileId: 'file-1', oxyVariant: 'w320', s3Key: 'images/a/b' });
+  it("redirects to the Oxy file's rendition", async () => {
+    const id = await row({ oxyFileId: 'file-1', oxyVariant: 'w320' });
     expect(await resolveImageAsset(id)).toEqual({
       kind: 'oxy',
       url: 'https://cloud.test/file-1?variant=w320',
     });
-    expect(legacyKeysRead).toEqual([]);
   });
 
-  it('streams a legacy row from the bucket and counts it', async () => {
-    const before = pendingLegacyReads().get('image_asset') ?? 0;
-    const id = await row({ s3Key: 'images/legacy/cover.jpg' });
-    const resolved = await resolveImageAsset(id);
-    expect(resolved?.kind).toBe('legacy');
-    expect(legacyKeysRead).toEqual(['images/legacy/cover.jpg']);
-    expect(pendingLegacyReads().get('image_asset')).toBe(before + 1);
-  });
-
-  it('never falls back to the bucket for an image Oxy will not serve', async () => {
-    const blocked = await row({
-      oxyFileId: 'file-2',
-      s3Key: 'images/x/y',
-      servingStatus: 'blocked',
-    });
-    const missing = await row({ s3Key: 'images/gone', servingStatus: 'missing' });
+  it('answers unavailable for an image Oxy will not serve', async () => {
+    const blocked = await row({ oxyFileId: 'file-2', servingStatus: 'blocked' });
+    const trashed = await row({ oxyFileId: 'file-3', servingStatus: 'unavailable' });
     expect(await resolveImageAsset(blocked)).toEqual({ kind: 'unavailable' });
-    expect(await resolveImageAsset(missing)).toEqual({ kind: 'unavailable' });
-    expect(legacyKeysRead).toEqual([]);
+    expect(await resolveImageAsset(trashed)).toEqual({ kind: 'unavailable' });
   });
 
   it('answers null for an id that names no row', async () => {

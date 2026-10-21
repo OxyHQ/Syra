@@ -542,7 +542,7 @@ async function shutdown() {
   const httpClosed = new Promise<void>((resolve) => server.close(() => resolve()));
   await Promise.all([httpClosed, new Promise<void>((resolve) => io.close(() => resolve()))]);
   await activity?.stop();
-  await stopOxyFilesWorkers();
+  stopOxyFilesWorkers();
   clearTimeout(timeout);
   process.exit(0);
 }

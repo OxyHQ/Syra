@@ -108,7 +108,7 @@ async function makeAlbum(
   const [asset] = await getDb()
     .insert(imageAssets)
     .values({
-      s3Key: `fixtures/${suffix}.jpg`,
+      oxyFileId: `fixtures/${suffix}.jpg`,
       filename: 'c.jpg',
       contentType: 'image/jpeg',
       byteSize: 1,

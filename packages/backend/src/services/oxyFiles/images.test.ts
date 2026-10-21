@@ -70,7 +70,6 @@ describe('the six-row set', () => {
 
     const rows = await getDb().select().from(imageAssets).where(eq(imageAssets.oxyFileId, file.id));
     expect(rows).toHaveLength(6);
-    expect(rows.every((row) => row.s3Key === null)).toBe(true);
     expect(new Set(rows.map((row) => row.oxyVariant))).toEqual(
       new Set(['thumb', 'w320', 'w640', 'w1280', null]),
     );
