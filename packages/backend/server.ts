@@ -276,7 +276,7 @@ const roomsNamespace = initializeRoomSocket(io);
 });
 
 musicNamespace.on('connection', (socket: Socket) => {
-  logger.info('Client connected to music namespace', { ip: socket.handshake.address });
+  logger.info('Client connected to music namespace', { socketId: socket.id });
 
   socket.on('error', (error: Error) => {
     logger.error('Music socket error', { err: error });
@@ -292,7 +292,7 @@ musicNamespace.on('connection', (socket: Socket) => {
 });
 
 io.on('connection', (socket: Socket) => {
-  logger.info('Client connected', { ip: socket.handshake.address });
+  logger.info('Client connected', { socketId: socket.id });
 
   socket.on('error', (error: Error) => {
     logger.error('Socket error', { err: error });

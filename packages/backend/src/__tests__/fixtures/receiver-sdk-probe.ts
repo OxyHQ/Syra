@@ -112,13 +112,22 @@ async function run(): Promise<void> {
       assert.equal(admitted, before);
     }
 
-    // revalidates on the next call and refuses revocation without a cached admit
+    // A revocation lands when the cached validation is dropped. Since core 6.5
+    // (`server/session.ts`) a SUCCESSFUL validation is reused per session and
+    // bearer for at most 30 s — the documented max staleness — so within it the
+    // next call is admitted without a round trip; dropping the entry
+    // (`invalidateSessionValidations`, what an `oxy:user:invalidate` event or a
+    // logout does) makes the next call revalidate, and the revoked session is
+    // refused without a cached admit.
     {
       active = true;
       assert.equal((await request(bearer())).status, 200);
-      const before = admitted;
       const checks = validations;
       active = false;
+      assert.equal((await request(bearer())).status, 200);
+      assert.equal(validations, checks);
+      const before = admitted;
+      oxy.invalidateSessionValidations({ sessionId: 'receiver-session' });
       assert.equal((await request(bearer())).status, 401);
       assert.equal(validations, checks + 1);
       assert.equal(admitted, before);
