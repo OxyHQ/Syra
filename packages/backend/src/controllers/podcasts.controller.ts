@@ -19,7 +19,6 @@
  * client as a 500.
  */
 
-import multer from 'multer';
 import type { Response } from 'express';
 import { and, eq } from 'drizzle-orm';
 import { isLiveEntityId, uuidv7 } from '@oxy.so/db';
@@ -32,7 +31,6 @@ import {
   episodeTypeSchema,
   importFeedRequestSchema,
   updatePodcastRequestSchema,
-  type AudioSource,
   type EpisodePerson,
 } from '@syra/shared-types';
 import { env } from '../config/env';
@@ -88,7 +86,8 @@ import {
 import { generatePodcastRss } from '../services/podcasts/podcastRssGenerator';
 import { deletePodcastCompletely } from '../services/podcasts/deletePodcast';
 import type { PodcastRow } from '../db/podcasts/serialize';
-import { getS3PodcastEpisodeAudioKey, putSourceAudio } from '../services/oxyFiles/audioStorage';
+import { getS3PodcastEpisodeAudioKey } from '../services/oxyFiles/audioStorage';
+import { audioIntake, multipartAudioParser } from '../services/uploads/directAudioUpload';
 import { oxy } from '../oxyClient';
 import { describeErrorSafely } from '../utils/error';
 
@@ -100,18 +99,6 @@ const LIST_LIMIT_MAX = 50;
 const RECENT_EPISODES_ON_SHOW = 20;
 /** Cap on items in a generated public RSS feed. */
 const RSS_EPISODE_CAP = 300;
-
-const AUDIO_FORMAT_BY_MIME: Record<string, AudioSource['format']> = {
-  'audio/mpeg': 'mp3',
-  'audio/mp3': 'mp3',
-  'audio/flac': 'flac',
-  'audio/ogg': 'ogg',
-  'audio/vorbis': 'ogg',
-  'audio/mp4': 'm4a',
-  'audio/x-m4a': 'm4a',
-  'audio/wav': 'wav',
-  'audio/x-wav': 'wav',
-};
 
 /**
  * The numeric/enum metadata `POST /:id/episodes` accepts, parsed from MULTIPART.
@@ -128,18 +115,13 @@ const uploadEpisodeFieldsSchema = z.object({
   episodeType: episodeTypeSchema.optional(),
 });
 
-const episodeAudioUpload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 500 * 1024 * 1024 }, // 500MB — podcast episodes run long
-  fileFilter: (_req, file, cb) => {
-    if (AUDIO_FORMAT_BY_MIME[file.mimetype]) cb(null, true);
-    else cb(new Error('Invalid file type. Only audio files are allowed.'));
-  },
-}).single('audioFile');
-
-interface AudioUploadRequest extends AuthRequest {
-  file?: Express.Multer.File;
-}
+/**
+ * An episode's audio: a multipart file (`audioFile`) or, for a file sent
+ * straight to storage, `uploadId` — `services/uploads/directAudioUpload` owns
+ * both ways in, the 500 MB cap and the type allowlist. Disk, not memory: a
+ * 500 MB episode held as a Buffer per request does not survive upload volume.
+ */
+const episodeAudioUpload = multipartAudioParser('episode');
 
 function parsePage(raw: unknown): number {
   const parsed = typeof raw === 'string' ? parseInt(raw, 10) : NaN;
@@ -709,6 +691,10 @@ export async function uploadEpisode(req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
+    // Owns every copy of the audio — the multipart temp file and the incoming
+    // object — and removes them in the `finally` below, on every exit.
+    const intake = audioIntake(req, 'episode');
+
     try {
       const userId = getRequiredOxyUserId(req);
       const id = getParam(req, 'id');
@@ -725,11 +711,16 @@ export async function uploadEpisode(req: AuthRequest, res: Response): Promise<vo
         return;
       }
 
-      const file = (req as AudioUploadRequest).file;
-      if (!file) {
+      const received = await intake.receive({ kind: 'account', oxyUserId: userId });
+      if (received.kind === 'missing') {
         res.status(400).json({ error: 'Audio file is required' });
         return;
       }
+      if (received.kind === 'refused') {
+        res.status(received.refusal.status).json(received.refusal.body);
+        return;
+      }
+      const audio = received.audio;
 
       const title = typeof req.body?.title === 'string' ? req.body.title.trim() : '';
       if (!title) {
@@ -756,7 +747,7 @@ export async function uploadEpisode(req: AuthRequest, res: Response): Promise<vo
         episodePersons = built.persons;
       }
 
-      const format = AUDIO_FORMAT_BY_MIME[file.mimetype] ?? 'mp3';
+      const format = audio.format;
       const durationRaw = Number(req.body?.duration);
       const duration = Number.isFinite(durationRaw) && durationRaw > 0 ? durationRaw : 0;
 
@@ -783,8 +774,8 @@ export async function uploadEpisode(req: AuthRequest, res: Response): Promise<vo
       const pubDate = new Date();
 
       const audioKey = getS3PodcastEpisodeAudioKey(episodeId, podcast.id, format);
-      await putSourceAudio(audioKey, file.buffer, {
-        contentType: file.mimetype,
+      await audio.storeAsSource(audioKey, {
+        contentType: audio.mimeType,
         owner: { kind: 'account', oxyUserId: userId },
       });
 
@@ -837,6 +828,8 @@ export async function uploadEpisode(req: AuthRequest, res: Response): Promise<vo
     } catch (err) {
       logger.error('[podcasts] episode upload failed', { err: describeErrorSafely(err) });
       if (!res.headersSent) res.status(500).json({ error: 'Failed to upload episode' });
+    } finally {
+      await intake.dispose();
     }
   });
 }

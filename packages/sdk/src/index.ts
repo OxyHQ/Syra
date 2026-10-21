@@ -8,6 +8,8 @@ export {
   DEFAULT_SYRA_BASE_URL,
   DEFAULT_SYRA_WEB_BASE_URL,
 } from './client';
+export { sendAudioUpload } from './upload';
+export type { SendAudioUploadOptions } from './upload';
 export type {
   SyraClient,
   SyraClientOptions,
@@ -33,6 +35,7 @@ export type {
   EpisodeAudioSource,
   EpisodeStatus,
   EpisodeDraft,
+  AudioUploadTarget,
   EpisodeStream,
   PodcastDeleted,
   EpisodeDeleted,

@@ -3,6 +3,7 @@ import {
   EPISODE_STATUSES,
   PODCAST_VISIBILITIES,
   PUBLIC_API_ERROR_CODES,
+  type AudioUploadTarget,
   type CoverArtSizes,
   type CoverArtVariant,
   type EpisodeAudioSource,
@@ -27,6 +28,7 @@ import {
   object,
   oneOf,
   optional,
+  record,
   refine,
   string,
   type Validator,
@@ -116,6 +118,15 @@ export const episodeSummary = object<EpisodeSummary>({
 export const episodeDraft = object<EpisodeDraft>({
   episodeId: string,
   ingestTicket: string,
+  expiresAt: string,
+});
+
+export const audioUploadTarget = object<AudioUploadTarget>({
+  uploadId: string,
+  url: string,
+  method: oneOf(['PUT'] as const),
+  headers: record(string),
+  maxBytes: number,
   expiresAt: string,
 });
 

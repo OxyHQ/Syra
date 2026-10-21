@@ -121,6 +121,28 @@ agree('episode draft', schemas.episodeDraftSchema, responses.episodeDraft, [
   ...NOT_OBJECTS,
 ]);
 
+const uploadTarget = {
+  uploadId: 'u',
+  url: 'https://syra-media.acct.r2.cloudflarestorage.com/incoming/x?X-Amz-Signature=s',
+  method: 'PUT',
+  headers: { 'Content-Type': 'audio/mpeg' },
+  maxBytes: 100,
+  expiresAt: '2026',
+};
+
+agree('audio upload target', schemas.audioUploadTargetSchema, responses.audioUploadTarget, [
+  uploadTarget,
+  { ...uploadTarget, headers: {} },
+  { ...uploadTarget, extra: true },
+  { ...uploadTarget, method: 'POST' },
+  { ...uploadTarget, headers: { 'Content-Type': 1 } },
+  { ...uploadTarget, headers: [] },
+  { ...uploadTarget, headers: null },
+  { ...uploadTarget, maxBytes: '100' },
+  { ...uploadTarget, url: undefined },
+  ...NOT_OBJECTS,
+]);
+
 agree('podcast deleted', schemas.podcastDeletedSchema, responses.podcastDeleted, [
   { id: 'p', episodesDeleted: 0, objectsDeleted: 0 },
   { id: 'p', episodesDeleted: 1, objectsDeleted: '2' },

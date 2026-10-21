@@ -1,12 +1,15 @@
 /**
- * What Syra accepts as an audio upload — one definition, two controllers.
+ * What Syra accepts as an audio upload — one definition, every controller.
  *
- * `tracks.controller` (creator upload) and `uploads.controller` (listener locker
- * and public contribution) each construct their own multer instance, which is
+ * `tracks.controller` (creator upload), `uploads.controller` (listener locker
+ * and public contribution) and the two episode routes (`podcasts.controller`,
+ * `podcastIngest.controller`) each construct their own multer instance, which is
  * right: they differ in field name, auth and what happens after the parse. What
- * they must NOT differ on is which files are allowed in and how big they may be,
- * and the day someone adds a format to one controller is the day the two silently
- * disagree about what Syra accepts.
+ * they must NOT differ on is which files are allowed in, and the day someone
+ * adds a format to one controller is the day they silently disagree about what
+ * Syra accepts. (Three of them did: the locker and both episode routes each kept
+ * a copy of this table, and each had drifted from it.) The direct upload
+ * (`services/uploads/directAudioUpload.ts`) reads the same table.
  *
  * The mime allowlist and the mime→format mapping are the SAME object on purpose.
  * As two lists, adding a mime to the allowlist while forgetting the map is a
@@ -14,13 +17,27 @@
  * under the wrong container format.
  */
 
-import type { AudioFormat } from '@syra/shared-types';
+import type { AudioFormat, AudioUploadPurpose } from '@syra/shared-types';
 
 /**
  * Upload cap. A 5-minute FLAC is around 30MB and a long lossless track can pass
  * 100MB, so the earlier 50MB ceiling rejected legitimate uploads.
  */
 export const MAX_AUDIO_UPLOAD_BYTES = 200 * 1024 * 1024;
+
+/** Episode cap: podcast episodes run long. */
+export const MAX_EPISODE_UPLOAD_BYTES = 500 * 1024 * 1024;
+
+/**
+ * The cap for each route an upload can be completed by — one table, read by the
+ * multipart parsers AND by the direct upload, so the two ways in to one
+ * route cannot disagree about how big a file it takes.
+ */
+export const MAX_UPLOAD_BYTES_BY_PURPOSE: Readonly<Record<AudioUploadPurpose, number>> = {
+  track: MAX_AUDIO_UPLOAD_BYTES,
+  locker: MAX_AUDIO_UPLOAD_BYTES,
+  episode: MAX_EPISODE_UPLOAD_BYTES,
+};
 
 /**
  * Every mime type Syra accepts, mapped to the container format it is stored as.

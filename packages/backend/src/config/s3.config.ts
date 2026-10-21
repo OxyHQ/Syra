@@ -169,6 +169,29 @@ export function getS3LockerAudioKey(
   return `${S3_UPLOADS_PREFIX}/${ownerOxyUserId}/${uploadId}${extension}`;
 }
 
+/**
+ * Where a DIRECT upload lands before the route that completes it has looked at
+ * it: `incoming/{purpose}/{principal}/{uploadId}`.
+ *
+ * Transient by construction. The completing route reads the object, writes the
+ * ORIGINAL to the same key it always used (`audio/…`, `uploads/…`,
+ * `podcasts/audio/…`) and deletes this one on every exit — accepted, refused or
+ * failed — so nothing Syra keeps ever lives here, and the abandoned-upload sweep
+ * may delete anything old enough under this prefix without asking a row first.
+ * `principal` (`account/{oxyUserId}` or `ticket/{episodeId}`) is a whole path
+ * segment, so a completing route derives the key from ITS caller and cannot
+ * reach somebody else's object by naming its id.
+ */
+export const S3_INCOMING_PREFIX = 'incoming';
+
+export function getS3IncomingAudioKey(
+  purpose: string,
+  principal: string,
+  uploadId: string,
+): string {
+  return `${S3_INCOMING_PREFIX}/${purpose}/${principal}/${uploadId}`;
+}
+
 export const S3_HLS_PREFIX = process.env.S3_HLS_PREFIX || 'hls';
 
 /**

@@ -177,6 +177,22 @@ export interface EpisodeSummary {
   imageSourceUrl?: string;
 }
 
+/**
+ * A presigned PUT for ONE audio file, straight to storage — what an upload's
+ * first request answers with. PUT the file's raw bytes to `url` with `headers`
+ * ({@link sendAudioUpload} does exactly that). Its type and exact size are
+ * signed, so storage refuses any other, and the URL stops working at
+ * `expiresAt`. Then complete the upload by `uploadId`.
+ */
+export interface AudioUploadTarget {
+  uploadId: string;
+  url: string;
+  method: 'PUT';
+  headers: Record<string, string>;
+  maxBytes: number;
+  expiresAt: string;
+}
+
 /** What `createEpisodeDraft` hands back: the episode to fill, and the capability to fill it. */
 export interface EpisodeDraft {
   episodeId: string;

@@ -153,6 +153,29 @@ export function looseObject<T>(shape: Shape<T>): Validator<T> {
   };
 }
 
+/**
+ * A string-keyed map whose every value passes `inner` — every key kept, since a
+ * map has no shape to drop keys against. Own properties are defined rather than
+ * assigned, so a key like `__proto__` stays a key.
+ */
+export function record<T>(inner: Validator<T>): Validator<Record<string, T>> {
+  return (input, path) => {
+    if (!isRecord(input)) return fail(path, `expected object, received ${describe(input)}`);
+    const out: Record<string, T> = {};
+    for (const [key, value] of Object.entries(input)) {
+      const checked = inner(value, [...path, key]);
+      if (!checked.ok) return checked;
+      Object.defineProperty(out, key, {
+        value: checked.value,
+        enumerable: true,
+        writable: true,
+        configurable: true,
+      });
+    }
+    return ok(out);
+  };
+}
+
 /** `a.b[0].c` — for messages. */
 export function formatPath(path: (string | number)[]): string {
   let out = '';

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   EPISODE_STATUSES,
   PODCAST_VISIBILITIES,
+  type AudioUploadTarget,
   type CoverArtSizes,
   type CoverArtVariant,
   type EpisodeAudioSource,
@@ -118,6 +119,15 @@ export const episodeDraftSchema = z.object({
   expiresAt: z.string(),
 });
 
+export const audioUploadTargetSchema = z.object({
+  uploadId: z.string(),
+  url: z.string(),
+  method: z.literal('PUT'),
+  headers: z.record(z.string(), z.string()),
+  maxBytes: z.number(),
+  expiresAt: z.string(),
+});
+
 export const podcastDeletedSchema = z.object({
   id: z.string(),
   episodesDeleted: z.number(),
@@ -160,6 +170,7 @@ export type SchemaMatchesType = [
   Assert<Same<z.output<typeof episodeStatusSchema>, EpisodeStatus>>,
   Assert<Same<z.output<typeof episodeSummarySchema>, EpisodeSummary>>,
   Assert<Same<z.output<typeof episodeDraftSchema>, EpisodeDraft>>,
+  Assert<Same<z.output<typeof audioUploadTargetSchema>, AudioUploadTarget>>,
   Assert<Same<z.output<typeof podcastDeletedSchema>, PodcastDeleted>>,
   Assert<Same<z.output<typeof episodeDeletedSchema>, EpisodeDeleted>>,
   Assert<Same<z.output<typeof episodeStreamSchema>, EpisodeStream>>,

@@ -38,7 +38,6 @@ import os from 'os';
 import path from 'path';
 import { and, eq, sql } from 'drizzle-orm';
 import { describeDriverError, isLiveEntityId, isUniqueViolation, uuidv7 } from '@oxy.so/db';
-import multer from 'multer';
 import sharp from 'sharp';
 import type { Response, NextFunction } from 'express';
 import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
@@ -112,6 +111,7 @@ import { deleteUploadStoredObjects } from '../services/compliance/takedown';
 import { computeUploadExpiry, recordUploadPlay } from '../services/uploads/expirySweeper';
 
 import { openAudioObject, putSourceAudio } from '../services/oxyFiles/audioStorage';
+import { audioIntake, multipartAudioParser } from '../services/uploads/directAudioUpload';
 import { decideOxyPlayback } from '../services/stream/oxyPlayback';
 import { uploadTrackAudio } from '../services/audioStorageService';
 import { enqueueIngest, enqueueUploadIngest } from '../services/ingest/ingestQueue';
@@ -152,44 +152,13 @@ const LOCKER_STREAM_SESSION_TTL_SEC = 3600;
  */
 const LOCKER_MAX_BITRATE_KBPS = Math.max(...LOCKER_HLS_BITRATES_KBPS);
 
-/** Matches the creator upload cap: a 5-minute FLAC is ~30MB, a long one far more. */
-const MAX_AUDIO_UPLOAD_BYTES = 200 * 1024 * 1024;
-
-const AUDIO_MIME_TO_FORMAT: Readonly<Record<string, AudioFormat>> = {
-  'audio/mpeg': 'mp3',
-  'audio/mp3': 'mp3',
-  'audio/mpeg3': 'mp3',
-  'audio/x-mpeg-3': 'mp3',
-  'audio/flac': 'flac',
-  'audio/ogg': 'ogg',
-  'audio/vorbis': 'ogg',
-  'audio/mp4': 'm4a',
-  'audio/x-m4a': 'm4a',
-  'audio/wav': 'wav',
-  'audio/x-wav': 'wav',
-};
-
 /**
- * Disk storage, not memory: `ffprobe`, `fpcalc` and `music-metadata` all want a
- * path, and a 200MB Buffer per in-flight request does not survive consumer upload
- * volume. Multer removes its own temp file when the multipart parse fails; every
- * path after a successful parse is cleaned up in the handler's `finally`.
+ * The audio of a locker upload: a multipart file (`audioFile`) or, for a file
+ * sent straight to storage, `uploadId` — `services/uploads/directAudioUpload`
+ * owns both ways in, the cap and the type allowlist (shared with the creator
+ * upload, so the two cannot drift on what Syra accepts).
  */
-const lockerUpload = multer({
-  storage: multer.diskStorage({ destination: os.tmpdir() }),
-  limits: { fileSize: MAX_AUDIO_UPLOAD_BYTES },
-  fileFilter: (_req, file, cb) => {
-    if (AUDIO_MIME_TO_FORMAT[file.mimetype]) {
-      cb(null, true);
-      return;
-    }
-    cb(new Error('Invalid file type. Only audio files (mp3, flac, ogg, m4a, wav) are allowed.'));
-  },
-}).single('audioFile');
-
-interface AudioUploadRequest extends AuthRequest {
-  file?: Express.Multer.File;
-}
+const lockerUpload = multipartAudioParser('locker');
 
 // ── Serialisation ────────────────────────────────────────────────────────────
 //
@@ -1642,8 +1611,9 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
       return;
     }
 
-    const file = (req as AudioUploadRequest).file;
-    const tempPath = file?.path;
+    // Owns every copy of the audio — the multipart temp file, a staged copy, the
+    // incoming object — and removes them in the one `finally` below.
+    const intake = audioIntake(req, 'locker');
 
     try {
       if (!isPostgresConnected()) {
@@ -1653,10 +1623,16 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
 
       const userId = getRequiredOxyUserId(req);
 
-      if (!file) {
+      const received = await intake.receive({ kind: 'account', oxyUserId: userId });
+      if (received.kind === 'missing') {
         res.status(400).json({ error: 'Missing file', message: 'An audio file is required' });
         return;
       }
+      if (received.kind === 'refused') {
+        res.status(received.refusal.status).json(received.refusal.body);
+        return;
+      }
+      const audio = received.audio;
 
       const rawBody: Record<string, unknown> = req.body ?? {};
       const parsed = uploadTrackRequestSchema.safeParse(normalizeMultipartFields(rawBody));
@@ -1674,18 +1650,18 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
         return;
       }
 
-      const format = AUDIO_MIME_TO_FORMAT[file.mimetype];
-      if (!format) {
-        res.status(400).json({ error: 'Unsupported audio format' });
-        return;
-      }
+      // Checked against the allowlist on the way in, whichever way it came.
+      const format = audio.format;
+      // Staged only now, once the request itself is known to be valid: for a
+      // direct upload this is the one download of the file.
+      const filePath = await audio.localPath();
 
       // 1. Read the file. ffprobe is the authority for duration and bitrate, so a
       //    file it cannot demux is refused here rather than stored and left
       //    describing itself with numbers nothing measured.
       let metadata: ExtractedMetadata;
       try {
-        metadata = await extractMetadata(file.path);
+        metadata = await extractMetadata(filePath);
       } catch (extractError: unknown) {
         logger.warn('[uploads] could not read uploaded audio', {
           message: getErrorMessage(extractError),
@@ -1711,7 +1687,7 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
       // both end in the same place, an upload screened without an acoustic
       // signal. The consequences are bounded and already handled downstream:
       // dedup tier 3 and the foreign-artist marker simply do not contribute.
-      const fingerprintResult = await fingerprintFile(file.path);
+      const fingerprintResult = await fingerprintFile(filePath);
       if (fingerprintResult.status !== 'ok') {
         logger.warn('[uploads] acoustic screening skipped', {
           status: fingerprintResult.status,
@@ -1829,8 +1805,8 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
             artistId: acousticNeighbour.artistId,
             artistName: acousticNeighbour.artistName,
           },
-          fileName: file.originalname,
-          relativePath: file.originalname.includes('/') ? file.originalname : undefined,
+          fileName: audio.originalName,
+          relativePath: audio.originalName.includes('/') ? audio.originalName : undefined,
         });
 
         const result = await storeLockerUpload({
@@ -1838,8 +1814,8 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
           metadata,
           overrides,
           format,
-          filePath: file.path,
-          originalName: file.originalname,
+          filePath,
+          originalName: audio.originalName,
           fingerprint,
           report,
           resolvedArtistId:
@@ -2059,10 +2035,10 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
         uploaderOxyUserId: userId,
         metadata,
         declaredArtistName: request.artistName,
-        fileName: file.originalname,
+        fileName: audio.originalName,
         // A directory-picker upload sends the path inside the chosen folder as
         // the field name, which is tier 7's `Artist/Album/01 Title.mp3`.
-        relativePath: file.originalname.includes('/') ? file.originalname : undefined,
+        relativePath: audio.originalName.includes('/') ? audio.originalName : undefined,
         acoustic: acousticNeighbour && {
           artistId: acousticNeighbour.artistId,
           artistName: acousticNeighbour.artistName,
@@ -2096,7 +2072,7 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
           isExplicit: request.isExplicit,
         },
         format,
-        filePath: file.path,
+        filePath,
         fingerprint,
         report,
         identity,
@@ -2146,14 +2122,7 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
         });
       }
     } finally {
-      if (tempPath) {
-        await fs.promises.rm(tempPath, { force: true }).catch((rmError: unknown) =>
-          logger.warn('[uploads] failed to remove upload temp file', {
-            tempPath,
-            message: getErrorMessage(rmError),
-          }),
-        );
-      }
+      await intake.dispose();
     }
   });
 };

@@ -12,6 +12,7 @@ export {
   episodeAudioSourceSchema,
   episodeStatusSchema,
   episodeDraftSchema,
+  audioUploadTargetSchema,
   episodeStreamSchema,
   podcastDeletedSchema,
   episodeDeletedSchema,

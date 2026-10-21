@@ -59,6 +59,30 @@ export async function claimIngestTicket(
 }
 
 /**
+ * Whether a ticket could still be claimed — a READ, for the steps that come
+ * before a redemption (signing an upload form, looking at the uploaded object).
+ * It decides nothing: two callers can both see `true`, and only
+ * {@link claimIngestTicket} settles which one redeems. What it buys is that a
+ * spent ticket is refused as spent (409) before anything else is looked at, and
+ * cannot keep obtaining upload forms.
+ */
+export async function isIngestTicketRedeemable(jti: string, episodeId: string): Promise<boolean> {
+  const [row] = await getDb()
+    .select({ jti: episodeIngestTickets.jti })
+    .from(episodeIngestTickets)
+    .where(
+      and(
+        eq(episodeIngestTickets.jti, jti),
+        eq(episodeIngestTickets.episodeId, episodeId),
+        isNull(episodeIngestTickets.consumedAt),
+        sql`${episodeIngestTickets.expiresAt} > now()`,
+      ),
+    )
+    .limit(1);
+  return row !== undefined;
+}
+
+/**
  * Hand a claimed ticket back after a redemption that did NOT take effect.
  *
  * The compensating half of {@link claimIngestTicket}, and the reason the claim

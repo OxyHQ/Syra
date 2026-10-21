@@ -55,11 +55,14 @@ function isTerminal(status: Track['status']): boolean {
 export function useUploadTrack() {
   const queryClient = useQueryClient();
   const [phase, setPhase] = useState<TrackUploadPhase>('idle');
+  /** Fraction of the file sent to storage (0–1) while `phase` is 'uploading'. */
+  const [progress, setProgress] = useState(0);
 
   const mutation = useMutation({
     mutationFn: async ({ audioFile, metadata }: UploadTrackVariables): Promise<Track> => {
       setPhase('uploading');
-      const created = await musicService.uploadTrack(audioFile, metadata);
+      setProgress(0);
+      const created = await musicService.uploadTrack(audioFile, metadata, setProgress);
 
       if (isTerminal(created.status)) {
         setPhase(created.status);
@@ -91,8 +94,9 @@ export function useUploadTrack() {
 
   const reset = useCallback(() => {
     setPhase('idle');
+    setProgress(0);
     mutation.reset();
   }, [mutation]);
 
-  return { ...mutation, phase, reset };
+  return { ...mutation, phase, progress, reset };
 }
