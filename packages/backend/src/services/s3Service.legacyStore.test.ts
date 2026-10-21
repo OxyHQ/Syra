@@ -62,18 +62,6 @@ function run(
 describe('the legacy store while Syra migrates to R2', () => {
   const env = { ...R2, AWS_S3_BUCKET: 'oxy-syra-media-usw2' };
 
-  it('a URL of the S3 bucket is still recognised as ours', () => {
-    const { result } = run(
-      env,
-      `const spaces = await import('./src/utils/spaces.ts');
-       return [
-         spaces.cdnUrlToKey('https://oxy-syra-media-usw2.s3.us-west-2.amazonaws.com/agora/houses/h/a.webp'),
-         spaces.cdnUrlToKey('https://elsewhere.example/agora/houses/h/a.webp'),
-       ];`,
-    );
-    expect(result).toEqual(['agora/houses/h/a.webp', null]);
-  });
-
   it('a delete reaches both stores', () => {
     const { sent } = run(env, `await service.deleteFromS3('audio/a/t.mp3');`);
     expect(sent.map((call) => `${call.store} ${call.name} ${call.bucket} ${call.key}`)).toEqual([
@@ -108,14 +96,14 @@ describe('the legacy store while Syra migrates to R2', () => {
     expect(result).toEqual(['hls/a/t/master.m3u8', 'hls/a/t/seg0.ts', 'hls/a/t/seg1.ts']);
   });
 
-  it('a legacy image is read from S3, never through R2 (Sippy would copy it in)', () => {
+  it('every read goes to R2 — what it lacks, its on-read migration copies from S3', () => {
     const { sent } = run(
       env,
-      `await service.streamFromS3('images/abc/original.jpg').catch(() => {}); await service.getObjectMetadata('images/abc/medium.jpg').catch(() => {}); await service.streamFromS3('hls/a/t/master.m3u8').catch(() => {});`,
+      `await service.streamFromS3('audio/a/t.mp3').catch(() => {}); await service.getObjectMetadata('previews/t/0.mp3').catch(() => {}); await service.getPresignedUrl('hls/a/t/master.m3u8').catch(() => {}); await service.streamFromS3('hls/a/t/master.m3u8').catch(() => {});`,
     );
     expect(sent.map((call) => `${call.store} ${call.key}`)).toEqual([
-      's3 images/abc/original.jpg',
-      's3 images/abc/medium.jpg',
+      'r2 audio/a/t.mp3',
+      'r2 previews/t/0.mp3',
       'r2 hls/a/t/master.m3u8',
     ]);
   });

@@ -89,7 +89,7 @@ async function makeImageAsset(ownerType: 'album' | 'artist'): Promise<string> {
   const [asset] = await getDb()
     .insert(imageAssets)
     .values({
-      s3Key: `fixtures/${uuidv7()}.jpg`,
+      oxyFileId: `fixtures/${uuidv7()}.jpg`,
       filename: 'c.jpg',
       contentType: 'image/jpeg',
       byteSize: 1,

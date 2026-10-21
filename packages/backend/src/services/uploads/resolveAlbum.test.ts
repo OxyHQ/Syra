@@ -31,7 +31,7 @@ beforeEach(async () => {
   const [asset] = await getDb()
     .insert(imageAssets)
     .values({
-      s3Key: `fixtures/${suffix}.jpg`,
+      oxyFileId: `fixtures/${suffix}.jpg`,
       filename: 'cover.jpg',
       contentType: 'image/jpeg',
       byteSize: 1024,

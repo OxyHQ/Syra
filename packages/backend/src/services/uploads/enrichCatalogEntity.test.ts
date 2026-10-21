@@ -66,7 +66,7 @@ async function makeImageAsset(): Promise<string> {
     .insert(imageAssets)
     .values({
       id,
-      s3Key: `fixtures/${id}.jpg`,
+      oxyFileId: `fixtures/${id}.jpg`,
       filename: `${id}.jpg`,
       contentType: 'image/jpeg',
       byteSize: 1,

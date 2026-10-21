@@ -171,7 +171,6 @@ const TABLES_WITHOUT_DTO: Record<string, string> = {
   oxyFileEvents: 'server-internal — dedupe log of Oxy file events (ADR 0043)',
   oxyFileReconcileRuns: 'server-internal — the nightly Oxy reference reconciliation log',
   oxyFileReferenceOps: 'server-internal — the Oxy file-reference outbox, written by triggers',
-  oxyFilesLegacyReads: 'server-internal — legacy bucket read counts, the retirement gate',
   recentlyPlayed: 'server-internal — derived history',
   trackFingerprints: 'server-internal — acoustic index',
   trackKeys: 'server-internal — AES keys, never serialised',

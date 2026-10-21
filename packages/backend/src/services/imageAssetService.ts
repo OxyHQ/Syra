@@ -2,18 +2,14 @@
  * The `image_assets` store — Syra's id for every image it serves.
  *
  * ## Where the bytes are
+
+ * In Oxy Files (OxyHQ/oxy ADR 0043), always — `services/oxyFiles/images.ts`
+ * explains who owns which. Every row names its Oxy file (`oxy_file_id`, NOT
+ * NULL); the bucket copies Syra kept while the images migrated are gone, with
+ * the column that named them (`docs/runbooks/oxy-files-images.md`).
  *
- * In Oxy Files (OxyHQ/oxy ADR 0043) for every image written since the move —
- * `services/oxyFiles/images.ts` explains who owns which — and, for the rows the
- * migration has not copied yet, still in Syra's own bucket (`s3_key`). A row
- * holds one or both; {@link resolveImageAsset} reads the Oxy file FIRST and falls
- * back to the bucket, counting every fallback (`oxyFiles/legacyReads.ts`). When
- * that count has been zero long enough, the bucket's image prefixes are retired
- * (`docs/runbooks/oxy-files-images.md`) and the fallback goes with them.
- *
- * Nothing new is written to the bucket. There is no second write path to fall
- * back to: a store that cannot reach Oxy fails, loudly, rather than creating a
- * row the migration would have to find later.
+ * There is no second store to fall back to: a write that cannot reach Oxy
+ * fails, loudly.
  *
  * ## Ordering: the file first, then the row
  *
@@ -25,7 +21,6 @@
  * or delete, exactly as ADR 0043 D5 decides.
  */
 
-import type { Readable } from 'stream';
 import { eq } from 'drizzle-orm';
 import { getDb } from '../db/postgres';
 import { imageAssets, type ImageAssetOwnerType } from '../db/schema/catalog';
@@ -37,8 +32,6 @@ import {
   uploadUserImage,
   type ImagePixels,
 } from './oxyFiles/images';
-import { recordLegacyRead } from './oxyFiles/legacyReads';
-import { streamFromS3 } from './s3Service';
 
 export interface StoreImageAssetInput {
   buffer: Buffer;
@@ -85,50 +78,23 @@ export async function storeImageAsset(input: StoreImageAssetInput): Promise<{
   return { id, fileId: file.id, pixels };
 }
 
-/** Opens a legacy bucket object. The S3 layer in production; a double in tests. */
-export type LegacyImageReader = (key: string) => Promise<{
-  stream: Readable;
-  contentLength: number;
-  contentType?: string;
-}>;
-
-let legacyReader: LegacyImageReader = (key) => streamFromS3(key);
-
-export function setLegacyImageReaderForTests(reader: LegacyImageReader | null): void {
-  legacyReader = reader ?? ((key) => streamFromS3(key));
-}
-
 /** How `GET /api/images/:id` answers for one row. */
-export type ResolvedImageAsset =
-  | { kind: 'oxy'; url: string }
-  | {
-      kind: 'legacy';
-      stream: Readable;
-      contentLength: number;
-      contentType?: string;
-    }
-  | { kind: 'unavailable' };
+export type ResolvedImageAsset = { kind: 'oxy'; url: string } | { kind: 'unavailable' };
 
 /**
- * Where an image's bytes are: the Oxy file first, the legacy bucket object only
- * when there is no file yet. `null` for an id that names no row.
- *
- * An Oxy-backed row is answered with its public URL — the client is redirected
- * to Oxy's CDN rather than proxied through Syra. A row Oxy has said it will not
- * serve (`serving_status` other than `active`) is `unavailable`, never a stale
- * copy from the bucket: a taken-down image must not come back through the
- * fallback.
+ * Where an image's bytes are: its Oxy file's public URL — the client is
+ * redirected to Oxy's CDN rather than proxied through Syra. `null` for an id
+ * that names no row; `unavailable` for a row Oxy has said it will not serve
+ * (`serving_status` other than `active`).
  */
 export async function resolveImageAsset(imageId: string): Promise<ResolvedImageAsset | null> {
   // No id-shape pre-check: `image_assets.id` is `text`, so a malformed id
   // simply matches no row and the query answers the question a guard used to.
   const [asset] = await getDb()
     .select({
-      s3Key: imageAssets.s3Key,
       oxyFileId: imageAssets.oxyFileId,
       oxyVariant: imageAssets.oxyVariant,
       servingStatus: imageAssets.servingStatus,
-      contentType: imageAssets.contentType,
     })
     .from(imageAssets)
     .where(eq(imageAssets.id, imageId))
@@ -136,19 +102,7 @@ export async function resolveImageAsset(imageId: string): Promise<ResolvedImageA
 
   if (!asset) return null;
   if (asset.servingStatus !== 'active') return { kind: 'unavailable' };
-  if (asset.oxyFileId !== null) {
-    return { kind: 'oxy', url: oxyFileUrl(asset.oxyFileId, asset.oxyVariant) };
-  }
-  if (asset.s3Key === null) return { kind: 'unavailable' };
-
-  recordLegacyRead('image_asset');
-  const result = await legacyReader(asset.s3Key);
-  return {
-    kind: 'legacy',
-    stream: result.stream,
-    contentLength: result.contentLength,
-    contentType: result.contentType ?? asset.contentType,
-  };
+  return { kind: 'oxy', url: oxyFileUrl(asset.oxyFileId, asset.oxyVariant) };
 }
 
 export async function getImageAssetColors(

@@ -17,8 +17,6 @@
  * - `oxy_file_reconcile_runs` records the nightly inventory each entity type
  *   sends to Oxy (ADR 0043 D6) — the safety net under the outbox.
  * - `oxy_file_events` deduplicates Oxy's file events (at-least-once delivery).
- * - `oxy_files_legacy_reads` counts reads still answered from the old bucket,
- *   per day and kind — the number the bucket's retirement is gated on.
  */
 
 import { sql } from 'drizzle-orm';
@@ -26,7 +24,6 @@ import {
   bigint,
   boolean,
   check,
-  date,
   index,
   integer,
   pgTable,
@@ -79,17 +76,6 @@ export type OxyAudioOwnerKind = (typeof OXY_AUDIO_OWNER_KINDS)[number];
 
 export const OXY_REFERENCE_OPS = ['add', 'remove'] as const;
 export type OxyReferenceOp = (typeof OXY_REFERENCE_OPS)[number];
-
-/** The kinds of image read still served from the legacy bucket. */
-export const LEGACY_IMAGE_READ_KINDS = [
-  'image_asset',
-  'house_avatar',
-  'house_cover',
-  'room_stream_image',
-  'series_cover',
-] as const;
-
-export type LegacyImageReadKind = (typeof LEGACY_IMAGE_READ_KINDS)[number];
 
 export const oxyFileReferenceOps = pgTable(
   'oxy_file_reference_ops',
@@ -163,24 +149,6 @@ export const oxyFileEvents = pgTable(
     receivedAt: timestamptz().notNull().defaultNow(),
   },
   (t) => [index('oxy_file_events_received_at_idx').on(t.receivedAt)],
-);
-
-export const oxyFilesLegacyReads = pgTable(
-  'oxy_files_legacy_reads',
-  {
-    day: date({ mode: 'string' }).notNull(),
-    kind: text({ enum: LEGACY_IMAGE_READ_KINDS }).notNull(),
-    reads: integer().notNull().default(0),
-    updatedAt: updatedAt(),
-  },
-  (t) => [
-    primaryKey({ columns: [t.day, t.kind] }),
-    check(
-      'oxy_files_legacy_reads_kind_check',
-      sql`${t.kind} in (${sql.raw(inList(LEGACY_IMAGE_READ_KINDS))})`,
-    ),
-    check('oxy_files_legacy_reads_reads_check', sql`${t.reads} >= 0`),
-  ],
 );
 
 /**

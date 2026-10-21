@@ -259,10 +259,8 @@ export const OXY_IMAGE_VARIANTS = Object.keys(IMAGE_VARIANTS) as ImageVariantNam
  *
  * - `unavailable`: Oxy says the file is in trash, deleted or no longer public.
  * - `blocked`: taken down after a content claim (ADR 0043 D10).
- * - `missing`: a legacy row whose object is not in the bucket (found by the
- *   migration; there is nothing to copy).
  */
-export const IMAGE_SERVING_STATUSES = ['active', 'unavailable', 'blocked', 'missing'] as const;
+export const IMAGE_SERVING_STATUSES = ['active', 'unavailable', 'blocked'] as const;
 export type ImageServingStatus = (typeof IMAGE_SERVING_STATUSES)[number];
 
 // ── image_assets ─────────────────────────────────────────────────────────
@@ -272,17 +270,12 @@ export const imageAssets = pgTable(
   {
     id: generatedId(),
     /**
-     * The LEGACY storage: an object in Syra's own bucket. Null once the image is
-     * in Oxy Files; the bucket's image prefixes are retired when no row needs one
-     * (`docs/runbooks/oxy-files-images.md`).
-     */
-    s3Key: text(),
-    /**
      * The Oxy file holding the bytes (ADR 0043) — Syra's own file for catalogue
      * artwork, the uploader's for a person's upload. Several rows name one file:
      * a catalogue image is ONE file whose renditions are the six size rows.
+     * Every image is in Oxy Files; there is no other store.
      */
-    oxyFileId: text(),
+    oxyFileId: text().notNull(),
     /** The Oxy rendition this row serves; null is the original. */
     oxyVariant: text({ enum: OXY_IMAGE_VARIANTS as [ImageVariantName, ...ImageVariantName[]] }),
     servingStatus: text({ enum: IMAGE_SERVING_STATUSES }).notNull().default('active'),
@@ -311,10 +304,6 @@ export const imageAssets = pgTable(
     updatedAt: updatedAt(),
   },
   (t) => [
-    unique('image_assets_s3_key_key').on(t.s3Key),
-    // Every row is stored SOMEWHERE: the legacy bucket, Oxy Files, or (during
-    // the soak) both.
-    check('image_assets_storage_check', sql`${t.s3Key} is not null or ${t.oxyFileId} is not null`),
     check(
       'image_assets_oxy_variant_check',
       sql`${t.oxyVariant} is null or (${t.oxyFileId} is not null and ${t.oxyVariant} in (${sql.raw(inList(OXY_IMAGE_VARIANTS))}))`,

@@ -118,24 +118,6 @@ describe('applyFileEvent', () => {
     const [house] = await getDb().select().from(houses).where(eq(houses.id, 'h-1'));
     expect(house).toMatchObject({ avatarFileId: 'trashed', coverImageFileId: null });
   });
-
-  it('never revives a legacy row found missing', async () => {
-    const [row] = await getDb()
-      .insert(imageAssets)
-      .values({
-        s3Key: 'images/x',
-        oxyFileId: 'file-9',
-        servingStatus: 'missing',
-        filename: 'f',
-        contentType: 'image/png',
-        byteSize: 1,
-        ownerType: 'album',
-      })
-      .returning({ id: imageAssets.id });
-    await applyFileEvent(event('file.restored', 'file-9'));
-    const [after] = await getDb().select().from(imageAssets).where(eq(imageAssets.id, row!.id));
-    expect(after?.servingStatus).toBe('missing');
-  });
 });
 
 describe('POST /webhooks/oxy/files', () => {

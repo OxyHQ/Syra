@@ -39,7 +39,6 @@ import { describeErrorSafely } from '../utils/error';
 import { getParam } from '../utils/reqParams';
 import { logger } from '../utils/logger';
 import { processImage } from '../utils/imageProcessor';
-import { deleteObject, cdnUrlToKey } from '../utils/spaces';
 import { oxyFileUrl } from '../services/oxyFiles/client';
 import { uploadSpaceImage } from '../services/oxyFiles/spaceImages';
 
@@ -61,6 +60,10 @@ const upload = multer({
 });
 
 const router = Router();
+
+/** A house image is an Oxy file, stored by its upload route — never a link. */
+const IMAGE_BY_UPLOAD_ONLY =
+  'Upload a house image to POST /houses/:id/avatar or /houses/:id/cover; `null` removes one.';
 
 /**
  * Narrow a client-supplied value to one of an axis's allowed strings, or
@@ -130,6 +133,10 @@ router.post('/', async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Name is required' });
     }
 
+    if (avatar || coverImage) {
+      return res.status(400).json({ message: IMAGE_BY_UPLOAD_ONLY });
+    }
+
     const resolvedVisibility = resolveVisibility(visibility, DEFAULT_HOUSE_VISIBILITY);
     if ('error' in resolvedVisibility) {
       return res.status(400).json({ message: resolvedVisibility.error });
@@ -141,8 +148,6 @@ router.post('/', async (req: AuthRequest, res: Response) => {
     const { house, members } = await createHouse({
       name: name.trim(),
       description: description ? String(description).trim() : null,
-      avatar: avatar ? String(avatar).trim() : null,
-      coverImage: coverImage ? String(coverImage).trim() : null,
       createdBy: userId,
       visibility: resolvedVisibility.visibility,
       tags: Array.isArray(tags) ? tags.map((t: unknown) => String(t).trim()).filter(Boolean) : [],
@@ -291,12 +296,12 @@ router.patch('/:id', async (req: AuthRequest, res: Response) => {
     if (description !== undefined) {
       update.description = description ? String(description).trim() : null;
     }
-    if (avatar !== undefined) {
-      update.avatar = avatar ? String(avatar).trim() : null;
+    // An image is set by uploading it; here it can only be removed.
+    if (avatar || coverImage) {
+      return res.status(400).json({ message: IMAGE_BY_UPLOAD_ONLY });
     }
-    if (coverImage !== undefined) {
-      update.coverImage = coverImage ? String(coverImage).trim() : null;
-    }
+    if (avatar !== undefined) update.avatarFileId = null;
+    if (coverImage !== undefined) update.coverImageFileId = null;
     if (tags !== undefined && Array.isArray(tags)) {
       update.tags = tags.map((t: unknown) => String(t).trim()).filter(Boolean);
     }
@@ -770,11 +775,6 @@ router.post('/:id/avatar', upload.single('file'), async (req: AuthRequest, res: 
     const file = await uploadSpaceImage(found.house.createdBy, image, 'house-avatar');
     await updateHouse(found.house.id, { avatarFileId: file.id });
 
-    // The legacy bucket copy, if the previous avatar was one, is no longer
-    // anybody's: removed only now that the new one is in place.
-    const oldAvatarKey = cdnUrlToKey(found.house.avatar);
-    if (oldAvatarKey) deleteObject(oldAvatarKey).catch(() => {});
-
     res.json({ avatar: oxyFileUrl(file.id), avatarFileId: file.id });
   } catch (error) {
     logger.error('Error uploading house avatar:', {
@@ -806,9 +806,6 @@ router.post('/:id/cover', upload.single('file'), async (req: AuthRequest, res: R
     const image = await processImage(req.file.buffer, 'cover');
     const file = await uploadSpaceImage(found.house.createdBy, image, 'house-cover');
     await updateHouse(found.house.id, { coverImageFileId: file.id });
-
-    const oldCoverKey = cdnUrlToKey(found.house.coverImage);
-    if (oldCoverKey) deleteObject(oldCoverKey).catch(() => {});
 
     res.json({ coverImage: oxyFileUrl(file.id), coverImageFileId: file.id });
   } catch (error) {

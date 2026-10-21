@@ -74,7 +74,7 @@ async function seedImageAsset(id: string): Promise<void> {
     .insert(imageAssets)
     .values({
       id,
-      s3Key: `images/${id}.jpg`,
+      oxyFileId: `images/${id}.jpg`,
       filename: `${id}.jpg`,
       contentType: 'image/jpeg',
       byteSize: 1024,

@@ -21,9 +21,6 @@ on:
           - backfill-fingerprints
           - backfill-track-audio-keys
           - backfill-podcast-covers
-          - migrate-images-to-oxy
-          - migrate-alia-covers
-          - retire-legacy-image-storage
           - migrate-audio-to-oxy
           - retire-legacy-audio-ladders
           - reconcile-oxy-file-references
@@ -32,10 +29,10 @@ on:
           Optional flags, space-separated. Only --dry-run, --apply, --limit <n>
           and --concurrency <n> are accepted; anything else is refused.
           --concurrency affects backfill-episode-images, backfill-podcast-covers
-          migrate-images-to-oxy and migrate-audio-to-oxy (default 4; the other
-          scripts ignore it). The five Oxy Files scripts PREVIEW unless given
-          --apply (docs/runbooks/oxy-files-images.md,
-          docs/runbooks/oxy-files-audio.md); --limit bounds their units.
+          and migrate-audio-to-oxy (default 4; the other scripts ignore it).
+          The three Oxy Files scripts PREVIEW unless given --apply
+          (docs/runbooks/oxy-files-images.md, docs/runbooks/oxy-files-audio.md);
+          --limit bounds their units.
         type: string
         required: false
         default: ''
@@ -110,9 +107,6 @@ jobs:
             backfill-fingerprints) path="packages/backend/dist/src/scripts/backfillTrackFingerprints.js" ;;
             backfill-track-audio-keys) path="packages/backend/dist/src/scripts/backfillTrackAudioKeys.js" ;;
             backfill-podcast-covers) path="packages/backend/dist/src/scripts/backfillPodcastCovers.js" ;;
-            migrate-images-to-oxy) path="packages/backend/dist/src/scripts/migrateImagesToOxy.js" ;;
-            migrate-alia-covers) path="packages/backend/dist/src/scripts/migrateAliaCovers.js" ;;
-            retire-legacy-image-storage) path="packages/backend/dist/src/scripts/retireLegacyImageStorage.js" ;;
             migrate-audio-to-oxy) path="packages/backend/dist/src/scripts/migrateAudioToOxy.js" ;;
             retire-legacy-audio-ladders) path="packages/backend/dist/src/scripts/retireLegacyAudioLadders.js" ;;
             reconcile-oxy-file-references) path="packages/backend/dist/src/scripts/reconcileOxyFileReferences.js" ;;

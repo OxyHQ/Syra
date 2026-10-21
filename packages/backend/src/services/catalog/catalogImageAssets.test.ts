@@ -68,7 +68,6 @@ describe('mirrorCatalogImage', () => {
     expect(row).toMatchObject({
       catalogProvider: 'rss',
       catalogEntityType: 'episode',
-      s3Key: null,
     });
   });
 

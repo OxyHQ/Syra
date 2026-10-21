@@ -59,8 +59,6 @@ const HOUSE_COLUMNS = {
   id: houses.id,
   name: houses.name,
   description: houses.description,
-  avatar: houses.avatar,
-  coverImage: houses.coverImage,
   avatarFileId: houses.avatarFileId,
   coverImageFileId: houses.coverImageFileId,
   createdBy: houses.createdBy,
@@ -443,8 +441,6 @@ export async function houseIdsWithRoomsHiddenFrom(
 export interface CreateHouseInput {
   readonly name: string;
   readonly description?: string | null;
-  readonly avatar?: string | null;
-  readonly coverImage?: string | null;
   readonly createdBy: string;
   readonly visibility: HouseVisibility;
   readonly tags: string[];
@@ -467,8 +463,6 @@ export async function createHouse(
       .values({
         name: input.name,
         description: input.description ?? null,
-        avatar: input.avatar ?? null,
-        coverImage: input.coverImage ?? null,
         createdBy: input.createdBy,
         visibilityDiscovery: input.visibility.discovery,
         visibilityRooms: input.visibility.rooms,
@@ -500,9 +494,7 @@ export async function createHouse(
 export type UpdateHouseInput = Partial<{
   name: string;
   description: string | null;
-  avatar: string | null;
-  coverImage: string | null;
-  /** The Oxy files (ADR 0043); writing one also clears its legacy URL — see `updateHouse`. */
+  /** The Oxy files (ADR 0043) — set by an upload, cleared with `null`. */
   avatarFileId: string | null;
   coverImageFileId: string | null;
   tags: string[];
@@ -519,17 +511,8 @@ export async function updateHouse(
     .set({
       name: input.name,
       description: input.description,
-      // A new image is ONE of the two: an Oxy file clears the legacy URL, and a
-      // URL replaces the file. Otherwise the dual read would keep showing
-      // whichever one is older.
-      avatar: input.avatarFileId ? null : input.avatar,
-      coverImage: input.coverImageFileId ? null : input.coverImage,
-      avatarFileId:
-        input.avatar !== undefined && input.avatarFileId === undefined ? null : input.avatarFileId,
-      coverImageFileId:
-        input.coverImage !== undefined && input.coverImageFileId === undefined
-          ? null
-          : input.coverImageFileId,
+      avatarFileId: input.avatarFileId,
+      coverImageFileId: input.coverImageFileId,
       tags: input.tags,
       visibilityDiscovery: input.visibility?.discovery,
       visibilityRooms: input.visibility?.rooms,

@@ -27,7 +27,7 @@
  * bring the image back.
  */
 
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import type { FileEvent } from '@oxy.so/core/server';
 import { getDb } from '../../db/postgres';
 import { imageAssets, type ImageServingStatus } from '../../db/schema/catalog';
@@ -104,14 +104,7 @@ export async function applyFileEvent(event: FileEvent): Promise<AppliedFileEvent
     const updated = await tx
       .update(imageAssets)
       .set({ servingStatus: status, updatedAt: sql`date_trunc('milliseconds', now())` })
-      .where(
-        and(
-          eq(imageAssets.oxyFileId, event.file.id),
-          // A legacy object found missing stays missing: no event can bring
-          // back bytes that are not in Oxy.
-          inArray(imageAssets.servingStatus, ['active', 'unavailable', 'blocked']),
-        ),
-      )
+      .where(eq(imageAssets.oxyFileId, event.file.id))
       .returning({ id: imageAssets.id });
 
     // An audio file's state, which every play and every key authorization reads:

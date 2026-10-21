@@ -685,31 +685,27 @@ describe('the delete responses match the schemas @syra.fm/sdk parses them with',
   it('never deletes cover artwork bytes — the cover is released through its Oxy reference', async () => {
     /**
      * The claim the SDK's doc comment makes to Alia, asserted rather than
-     * described: a show delete sweeps audio trees only. Artwork is an Oxy file
-     * now (ADR 0043), released by the delete's queued reference removal — never
-     * by deleting bytes another show may share — and a legacy cover's objects
-     * live under `images/{imageId}/`, which is not one of the three trees a show
-     * delete sweeps.
+     * described: a show delete touches its audio trees only. Artwork is an Oxy
+     * file (ADR 0043), released by the delete's queued reference removal —
+     * never by deleting bytes another show may share.
      *
-     * It matters because Alia is about to call this for real and needs to know
-     * what storage survives. Asserted on the SWEPT PREFIXES rather than on the
-     * asset row, because the prefixes are what decide whether bytes go: a future
-     * change that started sweeping `images/` would leave the row alone and still
-     * destroy artwork shared with another show.
+     * Asserted on EVERY key and prefix the delete touched, each of which must
+     * sit inside one of the show's three audio trees: a future change that
+     * deleted anything else would leave the asset row alone and still destroy
+     * something the show does not own alone.
      */
     const showId = await seedShow();
     await seedEpisode(showId);
 
     await request(`/api/podcasts/${showId}`, 'DELETE', OWNER);
 
-    expect(`swept an images/ tree: ${deletedPrefixes.some((p) => p.startsWith('images/'))}`).toBe(
-      'swept an images/ tree: false',
-    );
-    expect(`deleted an images/ object: ${deletedKeys.some((k) => k.startsWith('images/'))}`).toBe(
-      'deleted an images/ object: false',
-    );
-    // The positive control: the audio trees WERE swept, so "no images/ prefix"
-    // is not just this delete having touched nothing at all.
+    const audioTrees = [`hls/${showId}/`, `podcasts/audio/${showId}/`, `podcasts/cache/${showId}/`];
+    const outside = deletedKeys
+      .concat(deletedPrefixes)
+      .filter((target) => !audioTrees.some((tree) => target.startsWith(tree)));
+    expect(outside).toEqual([]);
+    // The positive control: the audio trees WERE swept, so "nothing outside
+    // them" is not just this delete having touched nothing at all.
     expect(
       `swept the audio tree: ${deletedPrefixes.some((p) => p.startsWith('podcasts/audio/'))}`,
     ).toBe('swept the audio tree: true');

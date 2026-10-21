@@ -366,7 +366,7 @@ describe('PATCH /api/uploads/:id', () => {
     const [colourless] = await getDb()
       .insert(imageAssets)
       .values({
-        s3Key: 'images/cover/colourless.jpg',
+        oxyFileId: 'images/cover/colourless.jpg',
         filename: 'colourless.jpg',
         contentType: 'image/jpeg',
         byteSize: 2048,

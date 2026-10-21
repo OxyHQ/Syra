@@ -109,14 +109,8 @@ export function stripInternalStreamFields(
     }
   }
 
-  // The stream image's Oxy file wins over its legacy URL (ADR 0043 dual read).
-  if (room.streamImageFileId || room.streamImage) {
-    sanitized.streamImage = spaceImageUrl(
-      room.streamImageFileId,
-      room.streamImage,
-      'room_stream_image',
-    );
-  }
+  // An uploaded stream image (an Oxy file) wins over a linked one.
+  if (room.streamImageFileId) sanitized.streamImage = spaceImageUrl(room.streamImageFileId);
 
   return {
     ...sanitized,
@@ -220,8 +214,8 @@ export function serializeHouseFor(
     id: house.id,
     name: house.name,
     description: house.description,
-    avatar: spaceImageUrl(house.avatarFileId, house.avatar, 'house_avatar'),
-    coverImage: spaceImageUrl(house.coverImageFileId, house.coverImage, 'house_cover'),
+    avatar: spaceImageUrl(house.avatarFileId),
+    coverImage: spaceImageUrl(house.coverImageFileId),
     avatarFileId: house.avatarFileId,
     coverImageFileId: house.coverImageFileId,
     createdBy: house.createdBy,

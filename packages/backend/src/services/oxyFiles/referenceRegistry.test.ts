@@ -34,10 +34,10 @@ async function ops(): Promise<Op[]> {
   ];
 }
 
-async function image(id: string, fileId: string | null): Promise<void> {
+async function image(id: string, fileId: string): Promise<void> {
   await getDb().execute(sql`
-    insert into image_assets (id, s3_key, oxy_file_id, filename, content_type, byte_size, owner_type)
-    values (${id}, ${fileId === null ? `images/${id}/x` : null}, ${fileId}, 'f', 'image/png', 1, 'upload')
+    insert into image_assets (id, oxy_file_id, filename, content_type, byte_size, owner_type)
+    values (${id}, ${fileId}, 'f', 'image/png', 1, 'upload')
   `);
 }
 
@@ -205,29 +205,24 @@ describe('every write queues the files it starts or stops using', () => {
     expect(after.filter((op) => op.entity_type === 'house')).toHaveLength(1);
   });
 
-  it('queues nothing for a legacy image, and everything once the migration repoints it', async () => {
-    await image('legacy-1', null);
+  it('moves every reference when an image is repointed to another file (a repair)', async () => {
+    await image('img-r', 'F-new');
     await getDb().execute(sql`
       insert into playlists (id, name, owner_oxy_user_id, owner_username, cover_art_id)
-      values ('playlist-2', 'P', 'u', 'u', 'legacy-1')
+      values ('playlist-2', 'P', 'u', 'u', 'img-r')
     `);
     await getDb().execute(sql`
       insert into catalog_entities (id, type, name, name_key, source, image_suggestions)
       values ('ce-2', 'artist', 'B', 'b', 'upload',
-        ${JSON.stringify([{ image: { origin: 'upload', url: 'legacy-1' } }])}::jsonb)
+        ${JSON.stringify([{ image: { origin: 'upload', url: 'img-r' } }])}::jsonb)
     `);
-    expect(await ops()).toEqual([]);
-
-    await getDb().execute(sql`update image_assets set oxy_file_id = 'F-new' where id = 'legacy-1'`);
     expect(await ops()).toEqual([
       { file_id: 'F-new', entity_type: 'catalog_entity', entity_id: 'ce-2', op: 'add' },
       { file_id: 'F-new', entity_type: 'playlist', entity_id: 'playlist-2', op: 'add' },
     ]);
 
     // Repointed again (a repair): the old file is let go, the new one taken.
-    await getDb().execute(
-      sql`update image_assets set oxy_file_id = 'F-newer' where id = 'legacy-1'`,
-    );
+    await getDb().execute(sql`update image_assets set oxy_file_id = 'F-newer' where id = 'img-r'`);
     const after = await ops();
     expect(after.filter((op) => op.file_id === 'F-new').map((op) => op.op)).toEqual([
       'remove',

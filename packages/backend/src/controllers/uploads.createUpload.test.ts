@@ -350,7 +350,7 @@ async function seedImageAsset(): Promise<string> {
   const [asset] = await getDb()
     .insert(imageAssets)
     .values({
-      s3Key: `images/cover/large-${imageCounter++}.jpg`,
+      oxyFileId: `images/cover/large-${imageCounter++}.jpg`,
       filename: 'large.jpg',
       contentType: 'image/jpeg',
       byteSize: 4096,

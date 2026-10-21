@@ -107,7 +107,7 @@ async function makeImage(colors?: {
   const [row] = await getDb()
     .insert(imageAssets)
     .values({
-      s3Key: `images/cover/${Math.random().toString(36).slice(2)}.jpg`,
+      oxyFileId: `images/cover/${Math.random().toString(36).slice(2)}.jpg`,
       filename: 'cover.jpg',
       contentType: 'image/jpeg',
       byteSize: 2048,

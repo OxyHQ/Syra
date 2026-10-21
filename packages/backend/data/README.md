@@ -11,7 +11,3 @@ them: 1,358 unique feed URLs. Re-import drives them through the same path the ap
 uses (`src/scripts/reimportPodcastFeeds.ts`, `POST /api/podcasts/import`, or
 `importFeed` directly), which is idempotent, so running it twice is safe and
 resuming a half-finished run needs no bookkeeping.
-
-`uploaded-tracks.json` is the other input here: the creator-uploaded track rows
-`src/scripts/restoreUploadedTracks.ts` writes back. Uploads cannot rebuild
-themselves the way RSS can — nobody but the creator has the original.

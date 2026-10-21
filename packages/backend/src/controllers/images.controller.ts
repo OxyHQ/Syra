@@ -2,7 +2,6 @@ import { isPostgresConnected } from '../db/postgres';
 import type { Request, Response, NextFunction } from 'express';
 import { isLiveEntityId } from '@oxy.so/db';
 import { logger } from '../utils/logger';
-import { getErrorMessage } from '../utils/error';
 import { getParam } from '../utils/reqParams';
 import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
 import { resolveImageAsset, storeImageAsset } from '../services/imageAssetService';
@@ -123,67 +122,23 @@ export const getImage = async (req: Request, res: Response, next: NextFunction) 
       });
     }
 
-    try {
-      const resolved = await resolveImageAsset(id);
-
-      if (!resolved || resolved.kind === 'unavailable') {
-        return res.status(404).json({
-          error: 'Image not found',
-          message: 'The requested image does not exist',
-        });
-      }
-
-      /**
-       * Stored in Oxy Files: send the client to Oxy's CDN rather than proxying
-       * the bytes through Syra. The redirect is cacheable for a day, not a year:
-       * the row is Syra's id and the file behind it can change (a re-import, a
-       * takedown), so the answer must be allowed to change too — the bytes at
-       * the target carry their own long cache.
-       */
-      if (resolved.kind === 'oxy') {
-        res.setHeader('Cache-Control', 'public, max-age=86400');
-        return res.redirect(302, resolved.url);
-      }
-
-      const asset = resolved;
-
-      asset.stream.on('error', (streamError: Error) => {
-        const code = (streamError as NodeJS.ErrnoException).code;
-        if (code === 'ENOENT' || streamError.message.includes('FileNotFound')) {
-          logger.debug('[ImagesController] Image not found', { id });
-          return res.status(404).json({
-            error: 'Image not found',
-            message: 'The requested image does not exist',
-          });
-        }
-        logger.error('[ImagesController] Error reading image stream:', streamError);
-        if (!res.headersSent) {
-          res.status(500).json({
-            error: 'Internal server error',
-            message: 'Failed to read image',
-          });
-        }
+    const resolved = await resolveImageAsset(id);
+    if (!resolved || resolved.kind === 'unavailable') {
+      return res.status(404).json({
+        error: 'Image not found',
+        message: 'The requested image does not exist',
       });
-
-      res.setHeader('Content-Type', asset.contentType || 'image/jpeg');
-      if (asset.contentLength > 0) {
-        res.setHeader('Content-Length', String(asset.contentLength));
-      }
-      res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
-      res.setHeader('Accept-Ranges', 'bytes');
-
-      asset.stream.pipe(res);
-    } catch (error: unknown) {
-      const msg = getErrorMessage(error);
-      const code = error instanceof Error ? (error as NodeJS.ErrnoException).code : undefined;
-      if (msg.includes('not found') || code === 'ENOENT') {
-        return res.status(404).json({
-          error: 'Image not found',
-          message: 'The requested image does not exist',
-        });
-      }
-      throw error;
     }
+
+    /**
+     * Send the client to Oxy's CDN rather than proxying the bytes through Syra.
+     * The redirect is cacheable for a day, not a year: the row is Syra's id and
+     * the file behind it can change (a re-import, a takedown), so the answer
+     * must be allowed to change too — the bytes at the target carry their own
+     * long cache.
+     */
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    return res.redirect(302, resolved.url);
   } catch (error: unknown) {
     logger.error('[ImagesController] Error getting image:', { error: describeErrorSafely(error) });
     next(error);

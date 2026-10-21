@@ -27,7 +27,6 @@ import { describeErrorSafely } from '../utils/error';
 import { getParam } from '../utils/reqParams';
 import { logger } from '../utils/logger';
 import { processImage } from '../utils/imageProcessor';
-import { deleteObject, cdnUrlToKey } from '../utils/spaces';
 import { oxyFileUrl } from '../services/oxyFiles/client';
 import { uploadSpaceImage } from '../services/oxyFiles/spaceImages';
 
@@ -49,6 +48,9 @@ const upload = multer({
 });
 
 const router = Router();
+
+/** A series cover is an Oxy file, stored by its upload route — never a link. */
+const COVER_BY_UPLOAD_ONLY = 'Upload a series cover to POST /series/:id/cover; `null` removes it.';
 
 /**
  * Whether `userId` may modify `series` — its creator, or an admin+ of the house
@@ -88,6 +90,10 @@ router.post('/', async (req: AuthRequest, res: Response) => {
 
     if (!title || typeof title !== 'string' || title.trim().length === 0) {
       return res.status(400).json({ message: 'Title is required' });
+    }
+
+    if (coverImage) {
+      return res.status(400).json({ message: COVER_BY_UPLOAD_ONLY });
     }
 
     if (!recurrence || typeof recurrence !== 'object') {
@@ -149,7 +155,6 @@ router.post('/', async (req: AuthRequest, res: Response) => {
     const row = await createSeries({
       title: title.trim(),
       description: description ? String(description).trim() : null,
-      coverImage: coverImage ? String(coverImage).trim() : null,
       houseId: houseId || null,
       createdBy: userId,
       recurrence: {
@@ -272,9 +277,11 @@ router.patch('/:id', async (req: AuthRequest, res: Response) => {
     if (description !== undefined) {
       update.description = description ? String(description).trim() : null;
     }
-    if (coverImage !== undefined) {
-      update.coverImage = coverImage ? String(coverImage).trim() : null;
+    // A cover is set by uploading it; here it can only be removed.
+    if (coverImage) {
+      return res.status(400).json({ message: COVER_BY_UPLOAD_ONLY });
     }
+    if (coverImage !== undefined) update.coverImageFileId = null;
     if (typeof isActive === 'boolean') {
       update.isActive = isActive;
     }
@@ -518,9 +525,6 @@ router.post('/:id/cover', upload.single('file'), async (req: AuthRequest, res: R
     // The series creator's file (see `services/oxyFiles/spaceImages.ts`).
     const file = await uploadSpaceImage(series.createdBy, image, 'series-cover');
     await updateSeries(series.id, { coverImageFileId: file.id });
-
-    const oldCoverKey = cdnUrlToKey(series.coverImage);
-    if (oldCoverKey) deleteObject(oldCoverKey).catch(() => {});
 
     res.json({ coverImage: oxyFileUrl(file.id), coverImageFileId: file.id });
   } catch (error) {
