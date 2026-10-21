@@ -1,4 +1,4 @@
-import { S3_BUCKET_NAME, S3_REGION, S3_ENDPOINT } from '../config/s3.config';
+import { legacyStore, S3_BUCKET_NAME, S3_REGION, S3_ENDPOINT } from '../config/s3.config';
 import { deleteFromS3 } from '../services/s3Service';
 
 /**
@@ -31,6 +31,11 @@ export function cdnUrlToKey(url: string | undefined | null): string | null {
     S3_PUBLIC_BASE_URL,
     S3_ENDPOINT ? `${S3_ENDPOINT.replace(/\/+$/, '')}/${S3_BUCKET_NAME}` : undefined,
     `https://${S3_BUCKET_NAME}.s3.${S3_REGION}.amazonaws.com`,
+    // Once R2 is the store, every URL Syra ever produced still names the S3
+    // bucket — now the legacy store — and must still be recognised as ours.
+    legacyStore
+      ? `https://${legacyStore.bucket}.s3.${legacyStore.region}.amazonaws.com`
+      : undefined,
   ];
   for (const base of bases) {
     if (base && url.startsWith(`${base}/`)) {

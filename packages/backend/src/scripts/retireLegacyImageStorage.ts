@@ -9,7 +9,8 @@
  *
  * ## The gate — every condition, checked here, every time
  *
- * 1. **Zero legacy reads for {@link SOAK_DAYS} whole days**, and a counted row
+ * 1. **Zero legacy reads for {@link SOAK_DAYS} whole days** ({@link SOAK_WAIVER}
+ *    shortened that once, for a dated window), and a counted row
  *    for every one of those days: `oxy_files_legacy_reads` gets a row per day
  *    and kind from every running instance even when the count is zero
  *    (`legacyReads.ts`), so "no reads" is told apart from "nothing counting".
@@ -48,6 +49,25 @@ import { describeErrorSafely } from '../utils/error';
 /** Whole days of zero legacy reads the gate requires. */
 export const SOAK_DAYS = 14;
 
+/**
+ * The owner's waiver of the full soak for THIS retirement — dated, and void
+ * outside its window, so it cannot quietly shorten a later run.
+ *
+ * Granted 2026-10-21 by the product owner. Measured that day in production
+ * (`oxy_files_legacy_reads`): the only legacy reads since the images moved were
+ * the migration's own — 83 140 `image_asset` reads on 2026-10-17, Oxy importing
+ * each set's original through `GET /api/images/:id` — and 2026-10-18, -19 and
+ * -20 counted zero on every kind. The soak is those three days; every other
+ * condition of the gate is unchanged.
+ */
+export const SOAK_WAIVER = { from: '2026-10-21', until: '2026-10-25', days: 3 } as const;
+
+/** The soak the gate requires at `now`: {@link SOAK_DAYS}, or the waiver's inside its window. */
+export function soakDaysAt(now: Date): number {
+  const day = now.toISOString().slice(0, 10);
+  return day >= SOAK_WAIVER.from && day < SOAK_WAIVER.until ? SOAK_WAIVER.days : SOAK_DAYS;
+}
+
 export interface RetirementGate {
   passed: boolean;
   /** Each condition, by name, and what was measured. */
@@ -58,17 +78,18 @@ export interface RetirementGate {
   };
 }
 
-/** The UTC days `[today - SOAK_DAYS, today)`, oldest first. */
-function soakDays(now: Date): string[] {
+/** The UTC days `[today - soak, today)`, oldest first. */
+function soakDays(now: Date, soak: number): string[] {
   const days: string[] = [];
-  for (let back = SOAK_DAYS; back >= 1; back -= 1) {
+  for (let back = soak; back >= 1; back -= 1) {
     days.push(new Date(now.getTime() - back * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
   }
   return days;
 }
 
 export async function checkRetirementGate(now: Date = new Date()): Promise<RetirementGate> {
-  const days = soakDays(now);
+  const soak = soakDaysAt(now);
+  const days = soakDays(now, soak);
   const [reads] = [
     ...(await getDb().execute<{ reads: number; days_counted: number }>(sql`
       select coalesce(sum(reads), 0)::int as reads,
@@ -82,10 +103,10 @@ export async function checkRetirementGate(now: Date = new Date()): Promise<Retir
     `)),
   ];
   const legacyReads = {
-    days: SOAK_DAYS,
+    days: soak,
     daysCounted: reads?.days_counted ?? 0,
     reads: reads?.reads ?? 0,
-    passed: (reads?.reads ?? 0) === 0 && (reads?.days_counted ?? 0) === SOAK_DAYS,
+    passed: (reads?.reads ?? 0) === 0 && (reads?.days_counted ?? 0) === soak,
   };
 
   const [referenced] = [
