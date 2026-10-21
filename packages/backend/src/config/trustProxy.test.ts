@@ -24,17 +24,48 @@ afterAll(async () => {
   await new Promise<void>((resolve) => server.close(() => resolve()));
 });
 
-/** What the ALB forwards: the client's own header, then the peer it saw. */
-const viaAlb = (spoofed: string) => ({ 'X-Forwarded-For': `${spoofed}, 203.0.113.7` });
+/**
+ * The test client connects from loopback — a private peer, which is what the
+ * ALB is to the task — so each case is the header the ALB would forward.
+ */
+const CLIENT = '203.0.113.7';
+/** An address inside Cloudflare's published 172.64.0.0/13. */
+const CLOUDFLARE_EDGE = '172.70.1.2';
+
+async function ipFor(forwardedFor: string): Promise<string> {
+  const response = await fetch(`${baseURL}/ip`, { headers: { 'X-Forwarded-For': forwardedFor } });
+  return ((await response.json()) as { ip: string }).ip;
+}
 
 describe('trust proxy', () => {
-  it('keys a client by the address the load balancer appended, not one it sent', async () => {
-    const response = await fetch(`${baseURL}/ip`, { headers: viaAlb('198.51.100.1') });
-    expect(await response.json()).toEqual({ ip: '203.0.113.7' });
+  it('DNS-only (grey): the address the load balancer appended is the client', async () => {
+    expect(await ipFor(CLIENT)).toBe(CLIENT);
+  });
 
-    const post = (spoofed: string) =>
-      fetch(`${baseURL}/cards`, { method: 'POST', headers: viaAlb(spoofed), body: '{' });
-    expect((await post('198.51.100.1')).status).toBe(400);
-    expect((await post('198.51.100.2')).status).toBe(429);
+  it('proxied (orange): the client is the entry before Cloudflare’s edge, not the edge', async () => {
+    expect(await ipFor(`${CLIENT}, ${CLOUDFLARE_EDGE}`)).toBe(CLIENT);
+  });
+
+  it('never believes an entry the client wrote', async () => {
+    // Grey: the client prepends a forged address; the ALB appends the real one.
+    expect(await ipFor(`198.51.100.1, ${CLIENT}`)).toBe(CLIENT);
+    // Orange: forged entries to the left of the client Cloudflare saw.
+    expect(await ipFor(`198.51.100.1, ${CLIENT}, ${CLOUDFLARE_EDGE}`)).toBe(CLIENT);
+    // A non-Cloudflare address claiming to be the hop before the ALB is the client.
+    expect(await ipFor(`${CLIENT}, 198.51.100.9`)).toBe('198.51.100.9');
+  });
+
+  it('keys the public-cards limiter by that client, whatever it forges', async () => {
+    const post = (forwardedFor: string) =>
+      fetch(`${baseURL}/cards`, {
+        method: 'POST',
+        headers: { 'X-Forwarded-For': forwardedFor },
+        body: '{',
+      });
+    expect((await post(`198.51.100.1, ${CLIENT}, ${CLOUDFLARE_EDGE}`)).status).toBe(400);
+    // A fresh forged entry is the same client and the same bucket.
+    expect((await post(`198.51.100.2, ${CLIENT}, ${CLOUDFLARE_EDGE}`)).status).toBe(429);
+    // Control: a different client behind the same edge has its own bucket.
+    expect((await post(`203.0.113.8, ${CLOUDFLARE_EDGE}`)).status).toBe(400);
   });
 });
