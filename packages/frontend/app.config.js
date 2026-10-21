@@ -178,9 +178,10 @@ module.exports = function (_config) {
                 deploymentTarget: '16.4',
               },
               android: {
-                compileSdkVersion: 36,
-                targetSdkVersion: 36,
-                buildToolsVersion: '36.0.0',
+                // compileSdk / targetSdk / build tools come from the Expo SDK
+                // template (SDK 58: 37 / 36 / 37.0.0). SDK 58's Expo modules
+                // require compileSdk 37; a pinned 36 fails the release build
+                // in :expo:checkReleaseAarMetadata.
                 enableProguardInReleaseBuilds: true,
                 enableShrinkResourcesInReleaseBuilds: true,
                 useLegacyPackaging: false,
@@ -225,6 +226,11 @@ module.exports = function (_config) {
             'react-native-google-cast',
             {
               receiverAppId: 'CC1AD845', // Google default media receiver (HLS-capable)
+              // The plugin defaults to '+' (latest). Cast framework 23.0.0 is
+              // compiled with Kotlin 2.4 metadata, which RN 0.88's Kotlin 2.2
+              // cannot read: the Android release build failed in
+              // :app:compileReleaseKotlin. Pin the newest 22.x.
+              androidPlayServicesCastFrameworkVersion: '22.3.1',
               iosLocalNetworkUsageDescription:
                 'Syra usa la red local para encontrar dispositivos Cast y altavoces cercanos.',
             },
