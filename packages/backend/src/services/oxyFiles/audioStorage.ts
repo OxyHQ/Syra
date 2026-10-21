@@ -43,6 +43,7 @@ import {
   S3_BUCKET_NAME,
   S3_ENDPOINT,
   S3_REGION,
+  store,
   getS3AudioKey,
   getS3HlsKey,
   getS3LockerAudioKey,
@@ -213,15 +214,20 @@ export function getRecordingObjectKey(roomId: string, recordingId: string): stri
  * recording target ({@link recordingStorage}).
  */
 export function recordingEgressTarget(objectKey: string) {
-  const accessKey = process.env.AWS_ACCESS_KEY_ID;
-  const secret = process.env.AWS_SECRET_ACCESS_KEY;
+  // The store's own static credentials when it has them: R2's bucket token
+  // (OxyHQ/oxy ADR 0047) — the LiveKit host's instance role reaches only S3 —
+  // or local MinIO's keys. LiveKit redacts them from the egress info it reports.
+  const credentials = store.credentials;
   return {
-    ...(accessKey && secret ? { accessKey, secret } : {}),
+    ...(credentials
+      ? { accessKey: credentials.accessKeyId, secret: credentials.secretAccessKey }
+      : {}),
     bucket: S3_BUCKET_NAME,
     region: S3_REGION,
     endpoint: S3_ENDPOINT,
     filepath: objectKey,
-    forcePathStyle: Boolean(S3_ENDPOINT),
+    // Path-style only for a local MinIO; R2 and AWS take virtual-hosted URLs.
+    forcePathStyle: Boolean(S3_ENDPOINT) && store.region !== 'auto',
   };
 }
 
