@@ -62,6 +62,18 @@ function run(
 describe('the legacy store while Syra migrates to R2', () => {
   const env = { ...R2, AWS_S3_BUCKET: 'oxy-syra-media-usw2' };
 
+  it('a URL of the S3 bucket is still recognised as ours', () => {
+    const { result } = run(
+      env,
+      `const spaces = await import('./src/utils/spaces.ts');
+       return [
+         spaces.cdnUrlToKey('https://oxy-syra-media-usw2.s3.us-west-2.amazonaws.com/agora/houses/h/a.webp'),
+         spaces.cdnUrlToKey('https://elsewhere.example/agora/houses/h/a.webp'),
+       ];`,
+    );
+    expect(result).toEqual(['agora/houses/h/a.webp', null]);
+  });
+
   it('a delete reaches both stores', () => {
     const { sent } = run(env, `await service.deleteFromS3('audio/a/t.mp3');`);
     expect(sent.map((call) => `${call.store} ${call.name} ${call.bucket} ${call.key}`)).toEqual([

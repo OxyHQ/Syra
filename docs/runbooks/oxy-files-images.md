@@ -118,6 +118,9 @@ Retires the bucket's image prefixes (`images/`, `agora/houses/`,
 - zero legacy reads on each of the last **14** whole days, with every kind
   counted every day (the counter writes zeros, so silence is told apart from a
   counter that was not running);
+  (the owner shortened it to the three zero days 2026-10-18..20 for the run on
+  2026-10-21 — `SOAK_WAIVER`, void outside 2026-10-21..24 — after the only reads
+  since the move proved to be the migration's own imports on 2026-10-17);
 - no referenced image still bucket-only;
 - no house/room/series image still a bucket URL.
 

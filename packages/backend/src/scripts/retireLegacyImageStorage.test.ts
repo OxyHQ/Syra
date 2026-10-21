@@ -9,6 +9,8 @@ import {
   checkRetirementGate,
   retireLegacyImageStorage,
   SOAK_DAYS,
+  SOAK_WAIVER,
+  soakDaysAt,
 } from './retireLegacyImageStorage';
 
 /**
@@ -23,9 +25,13 @@ afterAll(disconnectDb);
 
 const NOW = new Date('2026-11-30T12:00:00Z');
 
-async function countedDays(days: number, readsOnDay?: { daysAgo: number; reads: number }) {
+async function countedDays(
+  days: number,
+  readsOnDay?: { daysAgo: number; reads: number },
+  now: Date = NOW,
+) {
   for (let back = 1; back <= days; back += 1) {
-    const day = new Date(NOW.getTime() - back * 86_400_000).toISOString().slice(0, 10);
+    const day = new Date(now.getTime() - back * 86_400_000).toISOString().slice(0, 10);
     for (const kind of LEGACY_IMAGE_READ_KINDS) {
       const reads = readsOnDay?.daysAgo === back && kind === 'image_asset' ? readsOnDay.reads : 0;
       await getDb().execute(sql`
@@ -85,6 +91,35 @@ describe('checkRetirementGate', () => {
       rows: 1,
       passed: false,
     });
+  });
+});
+
+describe('the dated soak waiver', () => {
+  const INSIDE = new Date(`${SOAK_WAIVER.from}T12:00:00Z`);
+
+  it('applies only inside its window', () => {
+    expect(soakDaysAt(new Date(`${SOAK_WAIVER.from}T00:00:00Z`))).toBe(SOAK_WAIVER.days);
+    expect(soakDaysAt(new Date(`${SOAK_WAIVER.until}T00:00:00Z`))).toBe(SOAK_DAYS);
+    expect(soakDaysAt(new Date('2026-10-20T23:59:59Z'))).toBe(SOAK_DAYS);
+    expect(soakDaysAt(NOW)).toBe(SOAK_DAYS);
+  });
+
+  it('inside the window, passes on the waived soak and still fails on a read in it', async () => {
+    await countedDays(SOAK_WAIVER.days, undefined, INSIDE);
+    expect((await checkRetirementGate(INSIDE)).checks.legacyReads).toEqual({
+      days: SOAK_WAIVER.days,
+      daysCounted: SOAK_WAIVER.days,
+      reads: 0,
+      passed: true,
+    });
+    await clearDb();
+    await countedDays(SOAK_WAIVER.days, { daysAgo: 2, reads: 1 }, INSIDE);
+    expect((await checkRetirementGate(INSIDE)).checks.legacyReads.passed).toBe(false);
+  });
+
+  it('inside the window, still fails on an uncounted day', async () => {
+    await countedDays(SOAK_WAIVER.days - 1, undefined, INSIDE);
+    expect((await checkRetirementGate(INSIDE)).checks.legacyReads.passed).toBe(false);
   });
 });
 
