@@ -318,7 +318,14 @@ jobs:
           # Files setting (docs/runbooks/oxy-files-images.md step 0). Changing it
           # is `aws ssm put-parameter --overwrite` plus a redeploy: ECS resolves
           # the parameter at task launch.
-          TASK_SECRET_OVERRIDES_JSON: '{"DATABASE_URL":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/DATABASE_URL","INGEST_TOKEN_SECRET":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/INGEST_TOKEN_SECRET","SYRA_COVER_APPLICATION_IDS":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/SYRA_COVER_APPLICATION_IDS"}'
+          #
+          # R2_* make Cloudflare R2 (`syra-media`) the object store, with the S3
+          # bucket (AWS_S3_BUCKET, still on the revision) as the legacy store
+          # deletes are mirrored into while it migrates (OxyHQ/oxy ADR 0047;
+          # oxy-infra docs/runbooks/61-r2-object-storage.md). R2_BUCKET and
+          # R2_ENDPOINT are not secrets; they live beside the bucket token in
+          # SSM because this is the one binding a release re-asserts.
+          TASK_SECRET_OVERRIDES_JSON: '{"DATABASE_URL":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/DATABASE_URL","INGEST_TOKEN_SECRET":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/INGEST_TOKEN_SECRET","SYRA_COVER_APPLICATION_IDS":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/SYRA_COVER_APPLICATION_IDS","R2_BUCKET":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/R2_BUCKET","R2_ENDPOINT":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/R2_ENDPOINT","R2_ACCESS_KEY_ID":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/R2_ACCESS_KEY_ID","R2_SECRET_ACCESS_KEY":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/R2_SECRET_ACCESS_KEY"}'
 
           # The Oxy service credential Syra no longer holds.
           #
