@@ -133,7 +133,7 @@ const SettingsScreen: React.FC = () => {
       logger.error('Failed to change language', { error });
       Alert.alert(t('common.error'), t('settings.alerts.languageError'));
     }
-  }, []);
+  }, [t]);
 
   const requirePrivateSession = useCallback((): boolean => {
     if (canUsePrivateApi) return true;
@@ -143,7 +143,7 @@ const SettingsScreen: React.FC = () => {
       t('settings.alerts.signInRequired.message'),
     );
     return false;
-  }, [canUsePrivateApi, openAccountDialog]);
+  }, [canUsePrivateApi, openAccountDialog, t]);
 
   const handleViewProfile = useCallback(() => {
     if (!username) return;
@@ -246,7 +246,7 @@ const SettingsScreen: React.FC = () => {
       logger.error('Logout failed', { error });
       Alert.alert(t('common.error'), t('settings.alerts.logoutError'));
     }
-  }, [logout, router]);
+  }, [logout, router, t]);
 
   const handleClearCache = useCallback(async () => {
     const confirmed = await confirmDialog({
@@ -274,7 +274,7 @@ const SettingsScreen: React.FC = () => {
       logger.error('Clear cache failed', { error });
       Alert.alert(t('common.error'), t('settings.alerts.clearCacheError'));
     }
-  }, []);
+  }, [t]);
 
   // Terminal auth failure — the session never resolved within the gate's bound.
   if (gate.isTimedOut) {

@@ -135,7 +135,7 @@ export const MobilePlayerBar: React.FC = () => {
         },
       }),
     };
-  }, [insets.bottom, theme.colors.primary, SPACING]);
+  }, [insets.bottom]);
 
   return (
     <View className="bg-primary" style={containerStyle}>

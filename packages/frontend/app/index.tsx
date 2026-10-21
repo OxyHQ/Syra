@@ -188,7 +188,7 @@ const HomeScreen: React.FC = () => {
       addTracksLocally([toPlayableItem(track)], 'last');
       toast.success(t('home.toasts.addedToQueue'));
     },
-    [addTracksLocally],
+    [addTracksLocally, t],
   );
 
   const addAlbumToQueue = useCallback(
@@ -206,7 +206,7 @@ const HomeScreen: React.FC = () => {
         toast.error(t('home.toasts.addToQueueFailed'));
       }
     },
-    [addTracksLocally],
+    [addTracksLocally, t],
   );
 
   const addPlaylistToQueue = useCallback(
@@ -224,7 +224,7 @@ const HomeScreen: React.FC = () => {
         toast.error(t('home.toasts.addToQueueFailed'));
       }
     },
-    [addTracksLocally],
+    [addTracksLocally, t],
   );
 
   const addArtistToQueue = useCallback(
@@ -244,7 +244,7 @@ const HomeScreen: React.FC = () => {
         toast.error(t('home.toasts.addToQueueFailed'));
       }
     },
-    [addTracksLocally],
+    [addTracksLocally, t],
   );
 
   // Compute quick access items from real data (mix of albums, artists, playlists)

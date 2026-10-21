@@ -11,10 +11,12 @@ export function useOptimizedMediaQuery(query: {
   minHeight?: number;
   maxHeight?: number;
 }) {
-  // Memoize the query object to prevent unnecessary rerenders
+  // Memoize the query object to prevent unnecessary rerenders. react-responsive
+  // skips undefined keys, so rebuilding it from the four fields is equivalent.
+  const { minWidth, maxWidth, minHeight, maxHeight } = query;
   const stableQuery = useMemo(
-    () => query,
-    [query.minWidth, query.maxWidth, query.minHeight, query.maxHeight],
+    () => ({ minWidth, maxWidth, minHeight, maxHeight }),
+    [minWidth, maxWidth, minHeight, maxHeight],
   );
 
   return useMediaQuery(stableQuery);

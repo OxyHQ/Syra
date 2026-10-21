@@ -26,7 +26,7 @@ import { PLAYER_BAR_HEIGHT } from '@/constants/layout';
 // Hooks
 import { useKeyboardVisibility } from '@/hooks/useKeyboardVisibility';
 import { useIsScreenNotMobile, useIsDesktop } from '@/hooks/useOptimizedMediaQuery';
-import { BloomThemeProvider, useTheme } from '@oxy.so/bloom/theme';
+import { BloomThemeProvider, } from '@oxy.so/bloom/theme';
 import { LayoutScrollProvider, useLayoutScroll } from '@/context/LayoutScrollContext';
 import { usePlayerStore } from '@/stores/playerStore';
 import { useUIStore } from '@/stores/uiStore';
@@ -87,7 +87,6 @@ if (Platform.OS !== 'web') {
  * - Bottom player bar (always visible, fixed position)
  */
 const MainLayout: React.FC<MainLayoutProps> = memo(({ isScreenNotMobile }) => {
-  const theme = useTheme();
   const { forwardWheelEvent } = useLayoutScroll();
   const isDesktop = useIsDesktop();
   const keyboardVisible = useKeyboardVisibility();
@@ -196,7 +195,6 @@ const MainLayout: React.FC<MainLayoutProps> = memo(({ isScreenNotMobile }) => {
       }),
     [
       isScreenNotMobile,
-      theme.colors.background,
       gapSize,
       outerPadding,
       panelHeight,
@@ -297,7 +295,6 @@ export default function RootLayout() {
 
   // Hooks
   const isScreenNotMobile = useIsScreenNotMobile();
-  const keyboardVisible = useKeyboardVisibility();
 
   // Font loading is owned entirely by Bloom's `BloomThemeProvider`/`FontLoader`:
   // it loads the Bloom font families on native (and sets the default `Text`
@@ -328,7 +325,7 @@ export default function RootLayout() {
   useEffect(() => {
     AppInitializer.loadEagerSettings();
     prefetchHomeBrowse(queryClient);
-  }, [queryClient]);
+  }, []);
 
   // React Query managers - setup once on mount
   useEffect(() => {
@@ -396,14 +393,7 @@ export default function RootLayout() {
         ) : null}
       </AppProviders>
     );
-  }, [
-    appIsReady,
-    startFade,
-    isScreenNotMobile,
-    keyboardVisible,
-    handleSplashFadeComplete,
-    // oxyServices is stable (imported singleton), but included for completeness
-  ]);
+  }, [appIsReady, startFade, isScreenNotMobile, handleSplashFadeComplete]);
 
   return (
     <BloomThemeProvider

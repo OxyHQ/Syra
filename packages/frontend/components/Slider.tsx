@@ -45,15 +45,15 @@ export const Slider: React.FC<SliderProps> = ({
 
   // Update position when value changes externally
   useEffect(() => {
-    if (!isDragging.value && width > 0) {
+    if (!isDragging.get() && width > 0) {
       const safeMin = getFiniteValue(minimumValue, 0);
       const safeMax = getFiniteValue(maximumValue, 1);
       const range = safeMax - safeMin;
       const safeValue = clamp(getFiniteValue(value, safeMin), safeMin, safeMax);
       const percentage = range > 0 ? (safeValue - safeMin) / range : 0;
-      translateX.value = clamp(percentage * width, 0, width);
+      translateX.set(clamp(percentage * width, 0, width));
     }
-  }, [value, width, minimumValue, maximumValue]);
+  }, [value, width, minimumValue, maximumValue, isDragging, translateX]);
 
   const gesture = useMemo(() => {
     const safeMin = getFiniteValue(minimumValue, 0);
@@ -78,42 +78,38 @@ export const Slider: React.FC<SliderProps> = ({
       .minDistance(0)
       .onStart((e) => {
         'worklet';
-        // eslint-disable-next-line react-hooks/immutability -- Reanimated SharedValue write inside a worklet; the React Compiler rule does not model SharedValue mutation.
-        isDragging.value = true;
-        if (widthSV.value > 0) {
-          const newPos = Math.min(widthSV.value, Math.max(0, e.x));
-          // eslint-disable-next-line react-hooks/immutability -- Reanimated SharedValue write inside a worklet; the React Compiler rule does not model SharedValue mutation.
-          translateX.value = newPos;
+        isDragging.set(true);
+        if (widthSV.get() > 0) {
+          const newPos = Math.min(widthSV.get(), Math.max(0, e.x));
+          translateX.set(newPos);
 
-          runOnJS(onValueChange)(positionToValue(newPos, widthSV.value));
+          runOnJS(onValueChange)(positionToValue(newPos, widthSV.get()));
         }
       })
       .onUpdate((e) => {
         'worklet';
-        if (widthSV.value > 0) {
-          const newPos = Math.min(widthSV.value, Math.max(0, e.x));
-          // eslint-disable-next-line react-hooks/immutability -- Reanimated SharedValue write inside a worklet; the React Compiler rule does not model SharedValue mutation.
-          translateX.value = newPos;
+        if (widthSV.get() > 0) {
+          const newPos = Math.min(widthSV.get(), Math.max(0, e.x));
+          translateX.set(newPos);
 
-          runOnJS(onValueChange)(positionToValue(newPos, widthSV.value));
+          runOnJS(onValueChange)(positionToValue(newPos, widthSV.get()));
         }
       })
       .onEnd(() => {
         'worklet';
-        // eslint-disable-next-line react-hooks/immutability -- Reanimated SharedValue write inside a worklet; the React Compiler rule does not model SharedValue mutation.
-        isDragging.value = false;
+        isDragging.set(false);
       });
   }, [disabled, minimumValue, maximumValue, step, onValueChange, widthSV, isDragging, translateX]);
 
   const thumbStyle = useAnimatedStyle(() => {
     return {
-      transform: [{ translateX: translateX.value }],
+      transform: [{ translateX: translateX.get() }],
     };
   });
 
   const fillStyle = useAnimatedStyle(() => {
     return {
-      width: translateX.value,
+      width: translateX.get(),
     };
   });
 
@@ -144,8 +140,7 @@ export const Slider: React.FC<SliderProps> = ({
           onLayout={(e) => {
             const newWidth = Math.max(0, e.nativeEvent.layout.width - THUMB_SIZE);
             setWidth(newWidth);
-            // eslint-disable-next-line react-hooks/immutability -- Reanimated SharedValue write; the React Compiler rule does not model SharedValue mutation.
-            widthSV.value = newWidth;
+            widthSV.set(newWidth);
           }}
         >
           <View className="bg-border" style={[styles.track, disabled && { opacity: 0.5 }]} />

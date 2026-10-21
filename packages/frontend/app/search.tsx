@@ -284,7 +284,7 @@ const SearchScreen: React.FC = () => {
       { value: SearchCategory.PEOPLE, label: t('common.people') },
       { value: SearchCategory.USERS, label: t('common.users') },
     ],
-    [],
+    [t],
   );
 
   // Memoized computed values

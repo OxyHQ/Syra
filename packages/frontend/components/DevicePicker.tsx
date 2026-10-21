@@ -101,7 +101,7 @@ export const DevicePicker: React.FC<DevicePickerProps> = ({ visible, activeDevic
 
   const backdropStyle = useMemo(() => [styles.backdrop], []);
 
-  const sheetStyle = useMemo(() => [styles.sheet], [theme.colors.card, theme.colors.border]);
+  const sheetStyle = useMemo(() => [styles.sheet], []);
 
   const handleTransfer = (deviceId: string) => {
     transferTo(deviceId);

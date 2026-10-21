@@ -57,6 +57,7 @@ export const NowPlaying: React.FC = () => {
   const nextTracks = queue?.tracks.slice(Math.max((queue.current ?? -1) + 1, 0)) ?? [];
 
   // Fetch album and artist details if track exists
+  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on the track id on purpose — a new `currentTrack` object for the same track (a store update) must not refetch.
   useEffect(() => {
     const fetchDetails = async () => {
       if (currentTrack) {

@@ -50,7 +50,6 @@ export function OfflineBanner() {
     getIsOnlineForServer,
   );
   const insets = useSafeAreaInsets();
-  const theme = useTheme();
 
   const styles = useMemo(
     () =>
@@ -80,7 +79,7 @@ export function OfflineBanner() {
           textAlign: 'center',
         },
       }),
-    [insets.top, theme.colors.backgroundTertiary, theme.colors.border, theme.colors.text],
+    [insets.top],
   );
 
   if (isOnline) {

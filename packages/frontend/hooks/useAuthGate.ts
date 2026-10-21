@@ -65,6 +65,7 @@ export function useAuthGate(): AuthGate {
   // the episode — the session resolving, `retry` bumping `attempt`, or unmount
   // — is what clears the timed-out verdict, so a session that goes pending
   // again later starts from a full, fresh window rather than an expired one.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `attempt` is read by no line of the effect on purpose — bumping it is how `retry` restarts the timer.
   useEffect(() => {
     if (!isPrivateApiPending) {
       return;

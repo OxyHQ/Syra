@@ -123,7 +123,7 @@ const CreatePlaylistScreen: React.FC = () => {
     }
 
     createPlaylistMutation.mutate(formData);
-  }, [createPlaylistMutation, isAuthenticated, validateForm]);
+  }, [createPlaylistMutation, isAuthenticated, validateForm, t]);
 
   const handleGoBack = useCallback(() => {
     if (!isCreating) {
