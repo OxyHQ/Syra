@@ -44,8 +44,10 @@ config.resolver = {
     // Block documentation files
     /\.md$/,
     /README/,
-    // Block source maps in production (they can be large)
-    /\.map$/,
+    // Block source maps (they can be large). Only `.js.map`/`.css.map` files:
+    // a bare /\.map$/ also matched the `array.prototype.map` package, which
+    // LiveKit's promise.allsettled requires, and broke the native bundle.
+    /\.(js|mjs|cjs|css)\.map$/,
   ],
   // Resolve from studio node_modules first, then root (for workspaces)
   nodeModulesPaths: [
