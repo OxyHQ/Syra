@@ -21,7 +21,7 @@ import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { MenuProvider } from 'react-native-popup-menu';
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { OxyProvider, useOxy } from '@oxy.so/services/ui/client';
+import { OxyProvider, useAccountColor, useOxy } from '@oxy.so/services/ui/client';
 import type { OxyServices } from '@oxy.so/core';
 import { ImageResolverProvider, type ImageResolver } from '@oxy.so/bloom/image-resolver';
 import { LiveConfigProvider, LiveRoomProvider } from '@syra.fm/sdk';
@@ -61,12 +61,13 @@ function LiveRoomsProvider({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * Non-rendering bridge that pushes the user's saved appearance settings into the
- * Bloom theme. Must live inside both BloomThemeProvider (for `useBloomTheme`)
- * and OxyProvider (for `useAuth`).
+ * Non-rendering bridge that pushes the user's saved theme mode and their Oxy
+ * account colour into the Bloom theme. Must live inside both BloomThemeProvider
+ * (for `useBloomTheme`) and OxyProvider (for `useAuth`).
  */
 function AppearanceSync(): null {
   useServerAppearanceSync();
+  useAccountColor();
   return null;
 }
 

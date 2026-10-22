@@ -187,6 +187,7 @@
       "colorModeHint": "Choose how Syra follows your device theme",
       "accentColor": "Accent color",
       "accentColorHint": "Applies to controls and highlighted surfaces",
+      "accentColorSaveFailed": "অ্যাকসেন্ট রঙ সংরক্ষণ করা যায়নি",
       "language": "Language",
       "languageHint": "App display language"
     },
