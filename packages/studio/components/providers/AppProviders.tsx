@@ -9,12 +9,12 @@
  */
 
 import { memo, useCallback, useMemo, type ReactNode } from 'react';
-import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
+import { type QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { OxyProvider } from '@oxy.so/services/ui/client';
+import { OxyProvider, useAccountColor } from '@oxy.so/services/ui/client';
 import type { OxyServices } from '@oxy.so/core';
 import { ImageResolverProvider, type ImageResolver } from '@oxy.so/bloom/image-resolver';
 import { LiveConfigProvider, LiveRoomProvider } from '@syra.fm/sdk';
@@ -47,6 +47,12 @@ function LiveRoomsProvider({ children }: { children: ReactNode }) {
   );
 }
 
+/** Applies the Oxy account colour to the Bloom theme; below both providers. */
+function AccountColor(): null {
+  useAccountColor();
+  return null;
+}
+
 export const AppProviders = memo(function AppProviders({
   children,
   oxyServices,
@@ -74,6 +80,7 @@ export const AppProviders = memo(function AppProviders({
               storageKeyPrefix="oxy_syra_creators"
             >
               <ImageResolverProvider value={resolveImage}>
+                <AccountColor />
                 <BottomSheetModalProvider>
                   <LiveRoomsProvider>{children}</LiveRoomsProvider>
                   <StatusBar style="auto" />

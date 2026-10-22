@@ -1,9 +1,10 @@
-import React, { useCallback } from 'react';
+import type React from 'react';
+import { useCallback } from 'react';
 import { Alert, Linking, ScrollView, StyleSheet, Text, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useMutation } from '@tanstack/react-query';
 import { getAccountDisplayName } from '@oxy.so/core';
-import { useOxy } from '@oxy.so/services/ui/client';
+import { useAccountColorSave, useOxy } from '@oxy.so/services/ui/client';
 import { SettingsListGroup, SettingsListItem } from '@oxy.so/bloom/settings-list';
 import { Switch } from '@oxy.so/bloom/switch';
 import {
@@ -11,7 +12,16 @@ import {
   SegmentedControlItem,
   SegmentedControlItemText,
 } from '@oxy.so/bloom/segmented-control';
-import { APP_COLOR_PRESETS, useBloomTheme, type AppColorName } from '@oxy.so/bloom/theme';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectItemText,
+  SelectTrigger,
+  SelectValue,
+} from '@oxy.so/bloom/select';
+import { COLOR_PRESET_REGISTRY, useBloomTheme } from '@oxy.so/bloom/theme';
+import { toast } from '@oxy.so/bloom/toast';
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import SEO from '@/components/SEO';
@@ -20,7 +30,6 @@ import { ThemedView } from '@/components/ThemedView';
 import { EmptyState } from '@/components/common/EmptyState';
 import { useAuthGate } from '@/hooks/useAuthGate';
 import { Slider } from '@/components/Slider';
-import { ColorSwatchPicker } from '@/components/settings/ColorSwatchPicker';
 import { RowIcon } from '@/components/settings/RowIcon';
 import { useMusicPreferences } from '@/hooks/useMusicPreferences';
 import {
@@ -28,7 +37,7 @@ import {
   useUpdatePrivacySettingsCache,
   type PrivacySettings,
 } from '@/hooks/usePrivacySettings';
-import { useMyAppearanceSettings, useUpdateMyAppearanceSettings } from '@/store/appearanceStore';
+import { useUpdateMyAppearanceSettings } from '@/store/appearanceStore';
 import { STORAGE_KEYS } from '@/lib/constants';
 import i18n from '@/lib/i18n';
 import { useTranslation } from 'react-i18next';
@@ -112,9 +121,12 @@ const SettingsScreen: React.FC = () => {
     useMusicPreferences();
   const privacySettings = useCurrentUserPrivacySettings();
   const updatePrivacySettingsCache = useUpdatePrivacySettingsCache();
-  const { data: appearanceSettings } = useMyAppearanceSettings(canUsePrivateApi);
   const { mutateAsync: updateAppearanceSettings } = useUpdateMyAppearanceSettings();
-  const { colorPreset, mode: bloomMode, setMode, setColorPreset } = useBloomTheme();
+  const { mode: bloomMode, setMode } = useBloomTheme();
+  const { colors: allowedColors, value: colorValue, saveColor } = useAccountColorSave();
+  const colorOptions = COLOR_PRESET_REGISTRY.filter(({ name }) => allowedColors.includes(name)).map(
+    ({ name, displayName }) => ({ value: name, label: displayName }),
+  );
 
   const appVersion = Constants.expoConfig?.version ?? '2.0.0';
   const userName = getAccountDisplayName(user);
@@ -172,37 +184,21 @@ const SettingsScreen: React.FC = () => {
       if (!requirePrivateSession()) return;
       setMode(mode);
       void updateAppearanceSettings({
-        appearance: {
-          themeMode: mode,
-          primaryColor: appearanceSettings?.appearance?.primaryColor,
-        },
+        appearance: { themeMode: mode },
       });
     },
-    [
-      appearanceSettings?.appearance?.primaryColor,
-      requirePrivateSession,
-      setMode,
-      updateAppearanceSettings,
-    ],
+    [requirePrivateSession, setMode, updateAppearanceSettings],
   );
 
   const handleColorChange = useCallback(
-    (name: AppColorName) => {
-      if (!requirePrivateSession()) return;
-      setColorPreset(name);
-      void updateAppearanceSettings({
-        appearance: {
-          themeMode: appearanceSettings?.appearance?.themeMode ?? 'system',
-          primaryColor: APP_COLOR_PRESETS[name].hex,
-        },
-      });
+    (value: string) => {
+      const next = colorOptions.find((option) => option.value === value);
+      if (!next || !requirePrivateSession()) return;
+      saveColor(next.value).catch(() =>
+        toast.error(t('settings.preferences.accentColorSaveFailed')),
+      );
     },
-    [
-      appearanceSettings?.appearance?.themeMode,
-      requirePrivateSession,
-      setColorPreset,
-      updateAppearanceSettings,
-    ],
+    [colorOptions, requirePrivateSession, saveColor, t],
   );
 
   const updatePrivacySettingsMutation = useMutation({
@@ -415,7 +411,19 @@ const SettingsScreen: React.FC = () => {
                 title={t('settings.preferences.accentColor')}
                 description={t('settings.preferences.accentColorHint')}
               >
-                <ColorSwatchPicker value={colorPreset} onChange={handleColorChange} />
+                <Select value={colorValue} onValueChange={handleColorChange}>
+                  <SelectTrigger label={t('settings.preferences.accentColor')}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent
+                    items={colorOptions}
+                    renderItem={(item) => (
+                      <SelectItem value={item.value} label={item.label}>
+                        <SelectItemText>{item.label}</SelectItemText>
+                      </SelectItem>
+                    )}
+                  />
+                </Select>
               </SettingsControlBlock>
 
               <SettingsControlBlock

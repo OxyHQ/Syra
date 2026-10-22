@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useAuth } from '@oxy.so/services/ui/client';
-import { useBloomTheme, hexToAppColorName, type ThemeMode } from '@oxy.so/bloom/theme';
+import { useBloomTheme, type ThemeMode } from '@oxy.so/bloom/theme';
 import { useMyAppearanceSettings } from '@/store/appearanceStore';
 
 const VALID_THEME_MODES: ReadonlySet<ThemeMode> = new Set<ThemeMode>([
@@ -15,18 +15,19 @@ function isValidThemeMode(value: string | undefined): value is ThemeMode {
 }
 
 /**
- * Bridges the persisted appearance settings (theme mode + primary color, stored
- * on the user's Oxy profile) into the live Bloom theme so the saved preference
- * actually drives `BloomThemeProvider`.
+ * Bridges the persisted theme mode (stored in Syra's appearance settings) into
+ * the live Bloom theme so the saved preference actually drives
+ * `BloomThemeProvider`. The accent colour is the Oxy account colour and is owned
+ * by `useAccountColor`, not by these settings.
  *
- * Loading server settings and pushing them into Bloom's imperative
- * `setMode`/`setColorPreset` API are synchronisations with external systems,
+ * Loading server settings and pushing them into Bloom's imperative `setMode`
+ * API are synchronisations with external systems,
  * which is one of the few legitimate uses of `useEffect`.
  */
 export function useServerAppearanceSync(): void {
   const { canUsePrivateApi } = useAuth();
   const { data: mySettings } = useMyAppearanceSettings(canUsePrivateApi);
-  const { setMode, setColorPreset } = useBloomTheme();
+  const { setMode } = useBloomTheme();
 
   useEffect(() => {
     const appearance = mySettings?.appearance;
@@ -35,9 +36,5 @@ export function useServerAppearanceSync(): void {
     if (isValidThemeMode(appearance.themeMode)) {
       setMode(appearance.themeMode);
     }
-
-    if (appearance.primaryColor && appearance.primaryColor.length > 0) {
-      setColorPreset(hexToAppColorName(appearance.primaryColor));
-    }
-  }, [mySettings, setMode, setColorPreset]);
+  }, [mySettings, setMode]);
 }

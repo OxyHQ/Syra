@@ -187,6 +187,7 @@
       "colorModeHint": "Elige cómo Syra sigue el tema de tu dispositivo",
       "accentColor": "Color de acento",
       "accentColorHint": "Se aplica a los controles y a las superficies destacadas",
+      "accentColorSaveFailed": "No se pudo guardar el color de énfasis",
       "language": "Idioma",
       "languageHint": "Idioma de la aplicación"
     },

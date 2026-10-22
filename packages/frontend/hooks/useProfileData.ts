@@ -28,7 +28,6 @@ export interface ProfileDesign {
   avatar?: string;
   coverPhotoEnabled: boolean;
   minimalistMode: boolean;
-  primaryColor?: string;
 }
 
 export interface ProfileData extends Omit<UserEntity, 'avatar'> {
@@ -68,7 +67,6 @@ function computeDesign(oxyProfile: UserEntity, appearance?: UserAppearance): Pro
     avatar: oxyProfile?.avatar,
     coverPhotoEnabled: customization?.coverPhotoEnabled ?? true,
     minimalistMode: customization?.minimalistMode ?? false,
-    primaryColor: appearance?.appearance?.primaryColor,
   };
 }
 
