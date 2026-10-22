@@ -17,11 +17,11 @@
  * | event | serving status |
  * |---|---|
  * | `file.blocked` | `blocked` — a takedown; nothing may serve it |
- * | `file.deleted`, `file.trashed` | `unavailable` |
+ * | `file.deleted`, `file.lost`, `file.trashed` | `unavailable` |
  * | `file.restored`, `file.unblocked`, `file.visibility_changed` | `active` while the file is `active` and public or unlisted, `unavailable` otherwise |
  *
  * A house, room or series image is an Oxy file id with no row of its own. A
- * terminal event (`deleted`, `blocked`) clears the column — the trigger then
+ * terminal event (`deleted`, `lost`, `blocked`) clears the column — the trigger then
  * drops Syra's reference — and a reversible one leaves it: Oxy already refuses
  * to serve a trashed or private file, and keeping the id is what lets a restore
  * bring the image back.
@@ -41,6 +41,7 @@ export function servingStatusAfter(event: FileEvent): ImageServingStatus {
     case 'file.blocked':
       return 'blocked';
     case 'file.deleted':
+    case 'file.lost':
     case 'file.trashed':
       return 'unavailable';
     case 'file.restored':
@@ -64,6 +65,7 @@ export function audioStatusAfter(event: FileEvent): OxyAudioFileStatus {
     case 'file.blocked':
       return 'blocked';
     case 'file.deleted':
+    case 'file.lost':
     case 'file.trashed':
       return 'unavailable';
     case 'file.restored':
@@ -74,7 +76,9 @@ export function audioStatusAfter(event: FileEvent): OxyAudioFileStatus {
 }
 
 function isTerminal(event: FileEvent): boolean {
-  return event.type === 'file.deleted' || event.type === 'file.blocked';
+  return (
+    event.type === 'file.deleted' || event.type === 'file.lost' || event.type === 'file.blocked'
+  );
 }
 
 export interface AppliedFileEvent {
