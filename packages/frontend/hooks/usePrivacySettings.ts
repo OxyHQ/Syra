@@ -1,8 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useOxy } from '@oxy.so/services/ui/client';
 import { z } from 'zod';
-import { api, isNotFoundError, isUnauthorizedError } from '@/utils/api';
+import { api, isNotFoundError } from '@/utils/api';
 import { createScopedLogger } from '@/utils/logger';
 
 const PRIVACY_SETTINGS_CACHE_KEY = '@syra_privacy_settings';
@@ -42,109 +43,62 @@ const parsePrivacySettings = (value: unknown): PrivacySettings | null => {
   return parsed.success ? parsed.data : null;
 };
 
-const readCachedPrivacySettings = async (): Promise<PrivacySettings | null> => {
-  try {
-    const cached = await AsyncStorage.getItem(PRIVACY_SETTINGS_CACHE_KEY);
-    if (!cached) return null;
-    return parsePrivacySettings(JSON.parse(cached));
-  } catch (error) {
-    logger.debug('Failed to load cached privacy settings', { error });
-    return null;
-  }
-};
+/** OxyProvider owns account-scoped persistence; never read the former global cache. */
+function usePrivacyViewer() {
+  const context = useOxy();
+  const [epoch, setEpoch] = useState(0);
+  const { oxyServices } = context;
+  useEffect(() => {
+    void AsyncStorage.removeItem(PRIVACY_SETTINGS_CACHE_KEY).catch(() => undefined);
+    return oxyServices.session.onChange(() => setEpoch((value) => value + 1));
+  }, [oxyServices]);
+  return { ...context, accountId: context.user?.id ?? null, epoch };
+}
 
-const writeCachedPrivacySettings = async (privacySettings: PrivacySettings) => {
-  try {
-    await AsyncStorage.setItem(PRIVACY_SETTINGS_CACHE_KEY, JSON.stringify(privacySettings));
-  } catch (error) {
-    logger.debug('Failed to cache privacy settings', { error });
-  }
-};
-
-/**
- * Hook to fetch privacy settings for a specific user.
- */
+/** Privacy belongs to both the verified viewer and requested profile. */
 export function usePrivacySettings(userId?: string | null): PrivacySettings | null {
-  const { isAuthenticated, isAuthResolved, canUsePrivateApi } = useOxy();
+  const { accountId, epoch, oxyServices, canUsePrivateApi } = usePrivacyViewer();
   const { data = null } = useQuery({
-    queryKey: ['privacySettings', userId],
-    enabled: !!userId && canUsePrivateApi,
+    queryKey: ['privacySettings', accountId, userId, epoch],
+    enabled: !!accountId && !!userId && canUsePrivateApi,
     staleTime: PRIVACY_SETTINGS_STALE_TIME_MS,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
+      if (!accountId || oxyServices.session.userId !== accountId) return null;
       try {
         const response = await api.get<{ privacy?: PrivacySettings }>(
-          `/profile/settings/${userId}`,
+          `/profile/settings/${encodeURIComponent(userId!)}`,
+          undefined,
+          { signal },
         );
+        if (signal.aborted || oxyServices.session.userId !== accountId) return null;
         const parsed = privacyResponseSchema.safeParse(response.data);
         return parsed.success && parsed.data.privacy
           ? parsed.data.privacy
           : DEFAULT_PRIVACY_SETTINGS;
       } catch (error) {
-        if (isNotFoundError(error)) {
-          return DEFAULT_PRIVACY_SETTINGS;
-        }
+        if (signal.aborted || oxyServices.session.userId !== accountId) return null;
+        if (isNotFoundError(error)) return DEFAULT_PRIVACY_SETTINGS;
         logger.debug('Could not load privacy settings', { error });
         return null;
       }
     },
   });
-
-  return data ?? (isAuthResolved && !isAuthenticated ? DEFAULT_PRIVACY_SETTINGS : null);
+  return accountId && canUsePrivateApi && oxyServices.session.userId === accountId ? data : null;
 }
 
-/**
- * Hook to fetch current user's privacy settings.
- */
 export function useCurrentUserPrivacySettings(): PrivacySettings | null {
-  const { isAuthenticated, isPrivateApiPending, canUsePrivateApi } = useOxy();
-  const { data = null } = useQuery({
-    queryKey: ['privacySettings', 'me', isAuthenticated],
-    enabled: !isPrivateApiPending,
-    staleTime: PRIVACY_SETTINGS_STALE_TIME_MS,
-    queryFn: async () => {
-      const cached = await readCachedPrivacySettings();
-
-      if (!canUsePrivateApi) {
-        return cached ?? DEFAULT_PRIVACY_SETTINGS;
-      }
-
-      try {
-        const response = await api.get<{ privacy?: PrivacySettings }>('/profile/settings/me');
-        const parsed = privacyResponseSchema.safeParse(response.data);
-        const freshSettings =
-          parsed.success && parsed.data.privacy ? parsed.data.privacy : DEFAULT_PRIVACY_SETTINGS;
-
-        await writeCachedPrivacySettings(freshSettings);
-        return freshSettings;
-      } catch (error) {
-        if (isUnauthorizedError(error)) {
-          return cached ?? DEFAULT_PRIVACY_SETTINGS;
-        }
-        if (isNotFoundError(error)) {
-          await writeCachedPrivacySettings(DEFAULT_PRIVACY_SETTINGS);
-          return DEFAULT_PRIVACY_SETTINGS;
-        }
-        logger.debug('Could not load current user privacy settings', { error });
-        return cached ?? DEFAULT_PRIVACY_SETTINGS;
-      }
-    },
-  });
-
-  return data;
-}
-
-export async function updatePrivacySettingsCache(privacySettings: PrivacySettings) {
-  const parsed = parsePrivacySettings(privacySettings);
-  if (!parsed) return;
-  await writeCachedPrivacySettings(parsed);
+  const { user } = useOxy();
+  return usePrivacySettings(user?.id);
 }
 
 export function useUpdatePrivacySettingsCache() {
   const queryClient = useQueryClient();
-
+  const { user, oxyServices } = useOxy();
+  const accountId = user?.id;
   return async (privacySettings: PrivacySettings) => {
-    await updatePrivacySettingsCache(privacySettings);
-    queryClient.setQueryData(['privacySettings', 'me', true], privacySettings);
-    queryClient.setQueryData(['privacySettings', 'me', false], privacySettings);
+    const parsed = parsePrivacySettings(privacySettings);
+    if (!parsed || !accountId || oxyServices.session.userId !== accountId) return;
+    // Refresh only this verified account. The provider handles switch/logout disposal.
+    await queryClient.invalidateQueries({ queryKey: ['privacySettings', accountId] });
   };
 }

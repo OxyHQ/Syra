@@ -17,7 +17,7 @@ remain bounded; a Syra brand or local owner identifier never supplies user autho
 | Asynchronous podcast/locker ingest → Files | Original task persisted at verified draft/upload admission | Ticket contract unchanged; old missing-proof rows cannot create new personal files |
 | Syra moderation → CrowdSource | Own outbox uses injected shared OxyServer; delivery signature retained | Publish/pin CrowdSource SDK including 44d2a2972; receiver first; preserve durable outbox |
 | Other apps → Syra SDK | Separate source branch `657e15d` has linked session factory | Publish/pin and integrate SDK source; no deployment claimed |
-| Syra frontend/studio → own API | Existing shared linked client; further account-switch audit pending | Verify caches and receiver composition with core 7 |
+| Syra frontend/studio → own API | Shared linked clients; privacy reads separated by verified viewer and session change; Studio uses provider account cache | Verify caches and receiver composition with core 7 |
 
 Application-owned audio and audio referenced by Syra keep the Files application
 entitlement lane. Listener IDs are attribution, not requester proof. The signed
@@ -94,3 +94,12 @@ cascade deletion, replacement, failed insertion and ordinary owner re-upload.
 The schema/public-field suites passed 113 tests. Backend source and test types,
 build, changed-file Biome and AGENTS checks passed. Local candidates were used
 only for validation; production deployment and registry pins remain pending.
+
+
+Frontend account review: the unscoped privacy AsyncStorage cache is retired and
+never read. Queries include the verified viewer, target profile and session epoch;
+a response from an earlier account cannot populate the current view. Offline or
+signed-out reads do not fall back to another account's settings. Studio now gives
+its existing QueryClient to OxyProvider with all account queries scoped, matching
+the main app. Two real React Query regressions cover account switch/logout and a
+late response. Frontend and Studio typechecks pass with the candidate core.
