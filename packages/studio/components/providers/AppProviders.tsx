@@ -74,6 +74,8 @@ export const AppProviders = memo(function AppProviders({
             <OxyProvider
               oxyServices={oxyServices}
               clientId={OXY_CLIENT_ID}
+              queryClient={queryClient}
+              accountQueries={{ roots: 'all' }}
               // Intentionally kept as "oxy_syra_creators" for session continuity —
               // this is the persisted session storage key; renaming it would log
               // every existing user out. Do not change on the Studio rebrand.
