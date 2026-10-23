@@ -9,22 +9,22 @@ import { logger } from '../utils/logger';
  *   R2_ACCESS_KEY_ID       } the bucket's R2 API token, SSM /oxy/syra/R2_*
  *   R2_SECRET_ACCESS_KEY   }
  *
- * While the bucket migrates, `AWS_S3_BUCKET` names the S3 bucket it migrates
- * FROM — the LEGACY store below, reached with the task role. Without
- * `R2_BUCKET` it is still the store itself (before the cutover, and local
- * MinIO through `AWS_ENDPOINT_URL`). R2 is never configured through
- * `AWS_ENDPOINT_URL` / `AWS_ACCESS_KEY_ID`: every AWS client in the process
- * reads those (CloudWatch, the activity producer).
+ * R2 is the ONLY store a deployment uses. Without `R2_BUCKET` the store is a
+ * local S3-compatible emulator — MinIO in local development and in
+ * `controllers/uploads.e2e.test.ts` — named by `AWS_ENDPOINT_URL`,
+ * `AWS_S3_BUCKET_NAME` and the `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`
+ * pair. R2 is never configured through those: every AWS client in the process
+ * reads them (CloudWatch, the activity producer).
  */
 
 const DEFAULT_AWS_REGION = 'us-west-2';
 const AWS_REGION = process.env.AWS_REGION || DEFAULT_AWS_REGION;
 const AWS_ENDPOINT_URL = process.env.AWS_ENDPOINT_URL;
-const AWS_BUCKET = process.env.AWS_S3_BUCKET_NAME || process.env.AWS_S3_BUCKET || '';
+const LOCAL_BUCKET = process.env.AWS_S3_BUCKET_NAME || 'syra-audio';
 
-// When no explicit credentials are present the SDK uses the ECS task role —
-// do NOT pass an empty credentials object (that would override the role).
-const awsCredentials =
+// Only when both are set: an empty credentials object would replace the SDK's
+// default chain rather than fall back to it.
+const localCredentials =
   process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY
     ? {
         accessKeyId: process.env.AWS_ACCESS_KEY_ID,
@@ -37,7 +37,7 @@ export interface ObjectStore {
   bucket: string;
   region: string;
   endpoint?: string;
-  /** Static credentials, when the store has them (R2; local MinIO). */
+  /** Static credentials, when the store has them (R2's token; local MinIO's keys). */
   credentials?: { accessKeyId: string; secretAccessKey: string };
 }
 
@@ -48,18 +48,19 @@ const CHECKSUMS = {
   responseChecksumValidation: 'WHEN_REQUIRED',
 } as const;
 
-function awsStore(): ObjectStore {
+/** The local emulator (MinIO) a checkout without `R2_BUCKET` writes to. */
+function localStore(): ObjectStore {
   return {
     client: new S3Client({
       region: AWS_REGION,
-      credentials: awsCredentials,
+      credentials: localCredentials,
       ...CHECKSUMS,
       ...(AWS_ENDPOINT_URL ? { endpoint: AWS_ENDPOINT_URL, forcePathStyle: true } : {}),
     }),
-    bucket: AWS_BUCKET || 'syra-audio',
+    bucket: LOCAL_BUCKET,
     region: AWS_REGION,
     endpoint: AWS_ENDPOINT_URL,
-    credentials: awsCredentials,
+    credentials: localCredentials,
   };
 }
 
@@ -89,14 +90,7 @@ function r2Store(bucket: string): ObjectStore {
 const r2Bucket = process.env.R2_BUCKET?.trim();
 
 /** Where every object is written and read. */
-export const store: ObjectStore = r2Bucket ? r2Store(r2Bucket) : awsStore();
-
-/**
- * The S3 bucket being migrated from, while R2 is the store and `AWS_S3_BUCKET`
- * is still set: never written; every delete is repeated there (R2's on-read
- * migration would copy a leftover back) and listings include it.
- */
-export const legacyStore: ObjectStore | null = r2Bucket && AWS_BUCKET ? awsStore() : null;
+export const store: ObjectStore = r2Bucket ? r2Store(r2Bucket) : localStore();
 
 export const s3Client = store.client;
 export const S3_BUCKET_NAME = store.bucket;
@@ -110,9 +104,8 @@ logger.info('[S3Config] Object storage:', {
   bucket: S3_BUCKET_NAME,
   region: S3_REGION,
   endpoint: S3_ENDPOINT ?? 'default (AWS)',
-  legacyBucket: legacyStore?.bucket ?? null,
   audioPrefix: S3_AUDIO_PREFIX,
-  credentialSource: store.credentials ? 'static (R2 token or local keys)' : 'ECS task IAM role',
+  credentialSource: store.credentials ? 'static (R2 token or local keys)' : 'AWS default chain',
 });
 
 /**

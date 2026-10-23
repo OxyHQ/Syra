@@ -410,6 +410,21 @@ describe('runtime secrets come from SSM, and no workflow writes one', () => {
       expect(Object.keys(overrides), `${name} is both injected and removed`).not.toContain(name);
     }
   });
+
+  /**
+   * Plain environment carries forward from the RUNNING definition exactly like
+   * secrets do, so a retired variable leaves only by being named. AWS_S3_BUCKET
+   * named the S3 bucket Syra's media was migrated from; R2 is the only store
+   * (`config/s3.config.ts`) and the bucket is being deleted.
+   */
+  it('removes the retired environment from every revision it registers', () => {
+    const deployStep = workflow.jobs.deploy.steps.find((step) =>
+      step.name?.startsWith('Register immutable task definition'),
+    );
+    expect(deployStep, 'the deploy step is gone').toBeDefined();
+    const removals = (deployStep?.env?.TASK_ENV_REMOVALS ?? '').split(/\s+/).filter(Boolean);
+    expect(removals).toEqual(['AWS_S3_BUCKET']);
+  });
 });
 
 /**

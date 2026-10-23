@@ -23,7 +23,7 @@ TDD steps right before it is executed**, following the Phase 1 shape and the spe
    `audioSource` optional) + `upsertTrack` dedup/provenance (ISRC → fuzzy). _Detailed below._
 2. **Ingest → encrypted-HLS pipeline** — on upload/import: ffmpeg transcode AAC 96/160/320,
    EBU R128 loudness normalization, package HLS, **AES-128 encrypt** (Shaka Packager/Bento4),
-   store renditions in `oxy-syra-media-usw2`; set `Track.status`. Async job. Tests: pipeline
+   store renditions in the object store (R2 `syra-media`); set `Track.status`. Async job. Tests: pipeline
    on a sample file → asserts manifests + encrypted segments + key artifact + status flip.
 3. **Delivery + unified resolver** — CloudFront signed URLs/cookies (key pair in SSM);
    `GET /api/stream/:trackId` → `{ url, type, expiresAt }` (Syra-hosted HLS for uploads,

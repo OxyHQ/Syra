@@ -45,8 +45,7 @@
  *
  * A browser PUTs cross-origin, so the store's CORS must admit `PUT` with a
  * `Content-Type` request header from `https://syra.fm` and
- * `https://studio.syra.fm` — on R2's `syra-media` once it is the store, and on
- * the S3 media bucket while it still is. React Native and a server-side SDK
+ * `https://studio.syra.fm` — on R2's `syra-media`. React Native and a server-side SDK
  * caller send no `Origin` and are not subject to CORS. The URL is signed with
  * the store's own credential, which needs only PutObject, plus the
  * Get/Copy/Delete/List the completing route and the abandoned-upload sweep use.

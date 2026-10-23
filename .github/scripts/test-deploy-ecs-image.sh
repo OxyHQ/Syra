@@ -29,6 +29,8 @@ export DEPLOY_TEST_EXPECT_TASK_SECRET_ARN=false
 # empty to assert nothing. A name rather than a boolean, so the assertion below
 # checks the one the case actually removed.
 export DEPLOY_TEST_EXPECT_SECRET_REMOVED=
+# The same, for a plain environment variable named in TASK_ENV_REMOVALS.
+export DEPLOY_TEST_EXPECT_ENV_REMOVED=
 export DEPLOY_TEST_SERVICE_DESIRED_COUNT=1
 export DEPLOY_TEST_ROLLOUT_SCENARIO=healthy
 
@@ -132,6 +134,10 @@ aws() {
           "name": "deploy-test",
           "image": "example.invalid/deploy-test:old",
           "essential": true,
+          "environment": [
+            { "name": "DOOMED_TASK_ENV", "value": "retired" },
+            { "name": "KEPT_TASK_ENV", "value": "keep-me" }
+          ],
           "secrets": [
             {
               "name": "DOOMED_TASK_SECRET",
@@ -243,6 +249,29 @@ aws() {
           printf 'secret-removed:MISMATCH\n' >>"$DEPLOY_TEST_LOG"
         fi
       fi
+      if [[ "$DEPLOY_TEST_EXPECT_ENV_REMOVED" != "" ]]; then
+        local previous_argument=""
+        local input_json=""
+        local argument
+        for argument in "$@"; do
+          if [[ "$previous_argument" == "--cli-input-json" ]]; then
+            input_json="${argument#file://}"
+            break
+          fi
+          previous_argument="$argument"
+        done
+        # Two verdicts, as for secrets: the removed name is gone AND the one
+        # beside it survived, so a render that dropped the whole environment
+        # cannot pass.
+        if jq -e --arg name "$DEPLOY_TEST_EXPECT_ENV_REMOVED" '
+          [.containerDefinitions[] | select(.name == "deploy-test") | .environment[] | .name]
+          | (index($name) | not) and (index("KEPT_TASK_ENV") != null)
+        ' "$input_json" >/dev/null; then
+          printf 'env-removed\n' >>"$DEPLOY_TEST_LOG"
+        else
+          printf 'env-removed:MISMATCH\n' >>"$DEPLOY_TEST_LOG"
+        fi
+      fi
       printf '%s\n' "arn:aws:ecs:test:task-definition/deploy-test:2"
       ;;
     "ecs update-service")
@@ -331,7 +360,7 @@ export -f aws
 # Raise this with the case count; lower it ONLY alongside a deletion you can
 # name. A floor quietly adjusted to match whatever ran is not a floor.
 cases_run=0
-MINIMUM_CASES=16
+MINIMUM_CASES=18
 
 run_release() {
   cases_run=$((cases_run + 1))
@@ -356,16 +385,18 @@ run_release() {
   DEPLOY_TEST_EXPECT_METRICS_ARN="$inject_internal_metrics"
   DEPLOY_TEST_TASK_EXIT_CODE="$task_exit_code"
   DEPLOY_TEST_EXPECT_TASK_SECRET_ARN="$inject_task_secret"
-  # Not a run_release parameter: the two cases that use it set it as a prefix
-  # assignment, the same way they set TASK_SECRET_REMOVALS. Defaulted here so it
-  # cannot leak from one case into the next.
+  # Not run_release parameters: the cases that use them set them as prefix
+  # assignments, the same way they set TASK_SECRET_REMOVALS / TASK_ENV_REMOVALS.
+  # Defaulted here so they cannot leak from one case into the next.
   DEPLOY_TEST_EXPECT_SECRET_REMOVED="${DEPLOY_TEST_EXPECT_SECRET_REMOVED:-}"
+  DEPLOY_TEST_EXPECT_ENV_REMOVED="${DEPLOY_TEST_EXPECT_ENV_REMOVED:-}"
   DEPLOY_TEST_SERVICE_DESIRED_COUNT="$service_desired_count"
   DEPLOY_TEST_ROLLOUT_SCENARIO="$rollout_scenario"
   export DEPLOY_TEST_LOG DEPLOY_TEST_EXPECT_METRICS_ARN
   export DEPLOY_TEST_TASK_EXIT_CODE
   export DEPLOY_TEST_EXPECT_TASK_SECRET_ARN
   export DEPLOY_TEST_EXPECT_SECRET_REMOVED
+  export DEPLOY_TEST_EXPECT_ENV_REMOVED
   export DEPLOY_TEST_SERVICE_DESIRED_COUNT
   export DEPLOY_TEST_ROLLOUT_SCENARIO
 
@@ -846,6 +877,29 @@ TASK_SECRET_REMOVALS=EXTRA_TASK_SECRET \
 grep -q 'in both TASK_SECRET_OVERRIDES_JSON and TASK_SECRET_REMOVALS' \
   "$test_directory/secret-conflict/output.log" || {
   echo "The conflicting-name refusal must name BOTH lists, or it is indistinguishable from any other failure." >&2
+  exit 1
+}
+
+# A variable NAMED in TASK_ENV_REMOVALS must leave the registered definition,
+# and the one beside it must stay. Environment carries forward from the RUNNING
+# definition exactly like secrets do, so this is the only way a variable ever
+# leaves production (Syra's retired AWS_S3_BUCKET did not, for that reason).
+DEPLOY_TEST_EXPECT_ENV_REMOVED=DOOMED_TASK_ENV \
+  TASK_ENV_REMOVALS=DOOMED_TASK_ENV \
+  run_release env-removal true '' false 0 false
+grep -qx 'env-removed' "$test_directory/env-removal/aws.log" || {
+  echo "TASK_ENV_REMOVALS did not remove the variable from the registered definition." >&2
+  grep -n 'env-removed' "$test_directory/env-removal/aws.log" >&2 || true
+  exit 1
+}
+
+# A variable the script itself writes cannot also be removed: refused, naming
+# both, rather than resolved by whichever operation the render happens to run last.
+TASK_ENV_REMOVALS=INTERNAL_METRICS_ENABLED \
+  run_release env-conflict false '' true
+grep -q 'INTERNAL_METRICS_ENABLED is in TASK_ENV_REMOVALS while INTERNAL_METRICS_PARAMETER sets it' \
+  "$test_directory/env-conflict/output.log" || {
+  echo "The conflicting-name refusal must name BOTH settings, or it is indistinguishable from any other failure." >&2
   exit 1
 }
 

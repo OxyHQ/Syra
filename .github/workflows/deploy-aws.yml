@@ -319,12 +319,11 @@ jobs:
           # is `aws ssm put-parameter --overwrite` plus a redeploy: ECS resolves
           # the parameter at task launch.
           #
-          # R2_* make Cloudflare R2 (`syra-media`) the object store, with the S3
-          # bucket (AWS_S3_BUCKET, still on the revision) as the legacy store
-          # deletes are mirrored into while it migrates (OxyHQ/oxy ADR 0047;
-          # oxy-infra docs/runbooks/61-r2-object-storage.md). R2_BUCKET and
-          # R2_ENDPOINT are not secrets; they live beside the bucket token in
-          # SSM because this is the one binding a release re-asserts.
+          # R2_* make Cloudflare R2 (`syra-media`) the object store — the only
+          # one (OxyHQ/oxy ADR 0047; oxy-infra docs/runbooks/61-r2-object-storage.md).
+          # R2_BUCKET and R2_ENDPOINT are not secrets; they live beside the
+          # bucket token in SSM because this is the one binding a release
+          # re-asserts.
           TASK_SECRET_OVERRIDES_JSON: '{"DATABASE_URL":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/DATABASE_URL","INGEST_TOKEN_SECRET":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/INGEST_TOKEN_SECRET","SYRA_COVER_APPLICATION_IDS":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/SYRA_COVER_APPLICATION_IDS","R2_BUCKET":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/R2_BUCKET","R2_ENDPOINT":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/R2_ENDPOINT","R2_ACCESS_KEY_ID":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/R2_ACCESS_KEY_ID","R2_SECRET_ACCESS_KEY":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/R2_SECRET_ACCESS_KEY"}'
 
           # The Oxy service credential Syra no longer holds.
@@ -348,6 +347,12 @@ jobs:
           # OXY_FILES_RECONCILE is retired too: the nightly reference
           # reconciliation always applies, with no mode to set.
           TASK_SECRET_REMOVALS: OXY_SERVICE_API_KEY OXY_SERVICE_API_SECRET OXY_FILES_RECONCILE
+
+          # Plain environment variables this release takes off the revision —
+          # they carry forward from the RUNNING definition exactly like secrets,
+          # so only this list removes one. AWS_S3_BUCKET named the S3 bucket R2
+          # was migrated from; R2 is the only store now and nothing reads it.
+          TASK_ENV_REMOVALS: AWS_S3_BUCKET
 
           # PRE_DEPLOY_TASK_COMMAND_JSON / POST_DEPLOY_TASK_COMMAND_JSON are NOT
           # set here: whichever selector step above ran put them in $GITHUB_ENV,
