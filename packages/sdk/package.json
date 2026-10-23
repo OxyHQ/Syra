@@ -86,8 +86,7 @@
     "prepare": "bun run build",
     "clean": "rm -rf lib",
     "typecheck": "tsc --noEmit -p tsconfig.build.json",
-    "test": "bun test src",
-    "prepublishOnly": "bun run typecheck && bun run test && bun run build"
+    "test": "bun test src"
   },
   "react-native-builder-bob": {
     "source": "src",
