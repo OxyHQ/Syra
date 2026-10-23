@@ -61,6 +61,8 @@ export interface SyraClientOptions {
    * React Native). Inject one (e.g. `node-fetch`) when no global is available.
    */
   fetch?: typeof fetch;
+  /** Own authenticated transport. It owns session refresh and account selection. */
+  transport?: { fetch: typeof fetch };
   /**
    * Supplies the caller's Oxy access token. Called BEFORE EVERY REQUEST, never
    * cached here, because an access token is short-lived and the host
@@ -556,10 +558,11 @@ interface EpisodeDetailResponseShape {
 }
 
 /**
- * Create a headless client for the public Syra API. Public reads only — there
- * is no authentication in this version.
+ * Create a headless client for public reads and authenticated account operations.
  */
 export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
+  if (options.transport && (options.fetch || options.getAccessToken))
+    throw new TypeError('@syra.fm/sdk: transport cannot be combined with fetch or getAccessToken');
   const baseURL = (options.baseURL ?? DEFAULT_SYRA_BASE_URL).replace(/\/+$/, '');
   const webBaseURL = (options.webBaseURL ?? DEFAULT_SYRA_WEB_BASE_URL).replace(/\/+$/, '');
 
@@ -656,12 +659,12 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
   }
 
   async function request(path: string, init: RequestInit_ = {}): Promise<unknown> {
-    const doFetch = resolveFetch();
+    const doFetch = options.transport && !init.anonymous ? options.transport.fetch : resolveFetch();
     const headers: Record<string, string> = { Accept: 'application/json', ...init.headers };
 
-    if (init.requires) {
+    if (init.requires && !options.transport) {
       headers.Authorization = `Bearer ${await requireToken(init.requires)}`;
-    } else if (!init.anonymous) {
+    } else if (!init.anonymous && !options.transport) {
       // Sent when available even on public reads — it is what lets an owner see
       // their own private show through the same method everyone else calls.
       const token = await currentToken();
@@ -670,6 +673,7 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
 
     const response = await doFetch(`${baseURL}${path}`, {
       method: init.method ?? 'GET',
+      ...(options.transport ? { redirect: 'error' as const } : {}),
       headers,
       ...(init.signal === undefined ? {} : { signal: init.signal }),
       ...(init.body === undefined ? {} : { body: init.body }),

@@ -1,0 +1,6 @@
+{
+  "extends": "./tsconfig.build.json",
+  "compilerOptions": { "noEmit": true, "types": ["bun", "react", "node", "nativewind/types"] },
+  "include": ["src/oxy.test.ts"],
+  "exclude": []
+}
