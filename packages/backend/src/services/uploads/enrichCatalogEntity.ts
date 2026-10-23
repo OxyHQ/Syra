@@ -1,3 +1,4 @@
+import type { RequesterProof } from '@oxy.so/core/server';
 /**
  * Filling in an artist profile that was created from the tags of an MP3.
  *
@@ -604,6 +605,7 @@ export interface ArtistPhotoSuggestionInput {
   pictures: ReadonlyArray<ExtractedPicture>;
   /** The uploader whose file carried the picture — the evidence trail. */
   proposedByOxyUserId?: string;
+  requester?: RequesterProof;
   sourceUploadId?: string;
 }
 
@@ -654,6 +656,7 @@ export async function suggestArtistPhotosFromUpload(
         filename: `artist-suggestion.${probed.format ?? 'jpg'}`,
         contentType: picture.mimeType,
         ownerType: 'upload',
+        requester: input.requester,
         ...(input.proposedByOxyUserId && { uploadedBy: input.proposedByOxyUserId }),
       });
 

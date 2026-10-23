@@ -211,6 +211,8 @@ beforeAll(async () => {
   app.use((req, _res, next) => {
     if (currentUserId) {
       (req as express.Request & { user?: { id: string } }).user = { id: currentUserId };
+      (req as express.Request & { accessToken?: string }).accessToken =
+        `verified-session:${currentUserId}`;
     }
     next();
   });

@@ -213,6 +213,7 @@ beforeAll(async () => {
     const viewer = req.headers[VIEWER_HEADER];
     if (typeof viewer === 'string' && viewer.length > 0) {
       (req as AuthRequest).user = { id: viewer };
+      (req as AuthRequest).accessToken = `verified-session:${viewer}`;
     }
     next();
   });

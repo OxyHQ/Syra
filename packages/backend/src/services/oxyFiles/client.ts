@@ -3,12 +3,13 @@
  * personal writes additionally require the original requester proof.
  */
 
-import type { ServerAssetsApi } from '@oxy.so/core/server';
+import type { RequesterProof, ServerAssetsApi } from '@oxy.so/core/server';
 import { oxy } from '../../oxyClient';
 
 /** What Syra uses of `OxyServer.assets`. Narrow on purpose: a test double implements exactly this. */
 export type OxyFilesApi = Pick<
   ServerAssetsApi,
+  | 'withRequester'
   | 'uploadAppFile'
   | 'importAppFile'
   // Batch import (50 URLs a call): what the image migration copies sets with.

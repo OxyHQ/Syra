@@ -23,7 +23,8 @@
     "db:check-locks": "oxy-db-check-migration-locks --migrations=drizzle --after=36 --hot-tables=catalog_entities,tracks,albums,playlists,podcasts,episodes,track_keys,track_hls_renditions",
     "test": "rm -rf dist && bun test src",
     "clean": "rm -rf dist",
-    "test:platform": "bun test src/services/notifications src/services/oxyFiles src/services/platformActivity.test.ts src/moderation/config.test.ts"
+    "test:platform": "bun test src/services/notifications src/services/oxyFiles src/services/platformActivity.test.ts src/moderation/config.test.ts",
+    "test:personal-files": "bun test src/services/imageAssetService.test.ts src/services/oxyFiles/images.test.ts src/services/oxyFiles/requester.test.ts src/controllers/uploads.createUpload.test.ts src/routes/directAudioUpload.test.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1087.0",
