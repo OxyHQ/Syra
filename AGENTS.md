@@ -1,11 +1,6 @@
 # Syra
 
-> **Budget: under 12 KB**, enforced by `scripts/check-agents-md-size.mjs`
-> (`bun run validate:agents-md`). It is prepended to EVERY agent session, so its
-> bytes are paid on every task forever, and it grows by accretion — one
-> reasonable paragraph at a time, invisible per-commit. An addition that pushes
-> it over is paid for in the SAME edit: compress something, or move it to
-> `docs/` and leave a pointer.
+> **Budget: under 12 KB**, enforced by `bun run validate:agents-md`. Keep detailed evidence in `docs/` and link it here.
 
 > Org-wide engineering standards (TypeScript, React, naming, error handling, security, testing, git, bun) live at <https://github.com/OxyHQ/engineering/blob/main/AGENTS.md> and are not repeated here. This file holds ONLY Syra-specific content.
 
@@ -55,6 +50,8 @@ rather than folding it into "tests pass" — the two are not the same check.
 Production: web `https://syra.fm`, API/WebSocket `https://api.syra.fm` / `wss://api.syra.fm`. Do not restore retired Syra oxy.so hosts in runtime config, CORS, EAS env, universal links, or deployment scripts.
 
 ## Oxy Integration
+
+- Own service calls use the shared workload provider, without internal scopes or client keys; personal Files writes need original requester proof. Status and cutover: `docs/architecture/first-party-platform.md`.
 
 - Gate private API calls (library, playlists, artist profile, privacy, preferences, recommendations) with `useAuth().canUsePrivateApi` / `isPrivateApiPending` — not app-local token helpers.
 - `utils/api.ts` owns the linked frontend client; cross-product callers use `syraForOxySession` (`docs/first-party-sdk.md`). No local token/refresh plumbing.

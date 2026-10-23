@@ -16,6 +16,7 @@
       "version": "1.0.0",
       "dependencies": {
         "@aws-sdk/client-s3": "^3.1087.0",
+        "@aws-sdk/credential-provider-node": "3.972.84",
         "@aws-sdk/s3-request-presigner": "^3.1087.0",
         "@crowdsource.you/contracts": "1.1.0",
         "@crowdsource.you/core": "3.0.3",

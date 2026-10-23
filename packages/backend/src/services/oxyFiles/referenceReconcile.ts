@@ -46,7 +46,6 @@ import {
   oxyFileReconcileRuns,
   type OxyReferenceEntityType,
 } from '../../db/schema/oxyFiles';
-import { canAuthenticateAsOxyService } from '../../oxyClient';
 import { logger } from '../../utils/logger';
 import { describeErrorSafely } from '../../utils/error';
 import { oxyFiles } from './client';
@@ -241,10 +240,7 @@ let first: ReturnType<typeof setTimeout> | null = null;
 
 export function startReferenceReconciler(): void {
   if (timer || first) return;
-  if (!canAuthenticateAsOxyService()) {
-    logger.warn('[OxyFiles] no Oxy service identity: nightly reference reconciliation is off');
-    return;
-  }
+
   const tick = () => {
     if (!isPostgresConnected()) return;
     void runDueReconciliations().catch((error: unknown) =>

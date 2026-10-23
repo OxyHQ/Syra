@@ -28,14 +28,6 @@ describe('Syra ecosystem activity', () => {
     process.env.OXY_ECOSYSTEM_ACTIVITY_ENABLED = 'true';
     process.env.AWS_REGION = 'us-west-2';
     process.env.OXY_API_URL = 'https://collector.example.test';
-    // A pair here because this test mocks `/auth/service-token`, not because a
-    // deployment carries one: `createEcosystemTraffic` accepts any of an
-    // OXY_ACTIVITY_* pair, an OXY_SERVICE_API_* pair, or an attestable task role
-    // (oxy ADR 0026), and production takes the third. Attesting instead would
-    // mean standing up a container credentials endpoint to prove a branch that
-    // belongs to @oxy.so/core's own suite.
-    process.env.OXY_SERVICE_API_KEY = 'test-key';
-    process.env.OXY_SERVICE_API_SECRET = 'test-secret';
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       const path = new URL(String(input)).pathname;
       publications.push({
@@ -44,14 +36,22 @@ describe('Syra ecosystem activity', () => {
       });
       return new Response(
         JSON.stringify(
-          path === '/auth/service-token' ? { token: 'test-token', expiresIn: 3600 } : { ok: true },
+          path === '/auth/service-token/workload/challenge'
+            ? { nonce: 'fixture' }
+            : path === '/auth/service-token/workload'
+              ? { token: 'test-token', expiresIn: 3600 }
+              : { ok: true },
         ),
         { headers: { 'content-type': 'application/json' } },
       );
     }) as typeof fetch;
-    let traffic: ReturnType<typeof startPlatformActivity> = undefined;
+    let traffic: ReturnType<typeof startPlatformActivity>;
     try {
-      traffic = startPlatformActivity(() => true);
+      traffic = startPlatformActivity(
+        () => true,
+        'syra',
+        async () => ({ AccessKeyId: 'ASIA_TEST', SecretAccessKey: 'fixture', Token: 'temporary' }),
+      );
       expect(traffic).toBeDefined();
       const response = new EventEmitter();
       traffic!.observeHttp(
@@ -64,6 +64,9 @@ describe('Syra ecosystem activity', () => {
       const batch = publications.find((item) => item.path === '/internal/activity')?.body as Array<
         Record<string, unknown>
       >;
+      expect(
+        publications.find((item) => item.path === '/auth/service-token/workload')?.body,
+      ).toMatchObject({ protocolVersion: 2 });
       expect(batch).toHaveLength(2);
       expect(
         batch.map((event) => [event.service, event.direction, event.scope, event.activityType]),
@@ -82,13 +85,7 @@ describe('Syra ecosystem activity', () => {
     } finally {
       await traffic?.stop();
       globalThis.fetch = previousFetch;
-      for (const key of [
-        'OXY_ECOSYSTEM_ACTIVITY_ENABLED',
-        'AWS_REGION',
-        'OXY_API_URL',
-        'OXY_SERVICE_API_KEY',
-        'OXY_SERVICE_API_SECRET',
-      ]) {
+      for (const key of ['OXY_ECOSYSTEM_ACTIVITY_ENABLED', 'AWS_REGION', 'OXY_API_URL']) {
         if (saved[key] === undefined) delete process.env[key];
         else process.env[key] = saved[key];
       }
