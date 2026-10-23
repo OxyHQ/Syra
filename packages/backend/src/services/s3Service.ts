@@ -9,14 +9,7 @@ import {
   CopyObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import {
-  legacyStore,
-  s3Client,
-  S3_BUCKET_NAME,
-  S3_REGION,
-  S3_ENDPOINT,
-  type ObjectStore,
-} from '../config/s3.config';
+import { s3Client, S3_BUCKET_NAME, S3_REGION, S3_ENDPOINT } from '../config/s3.config';
 import { logger } from '../utils/logger';
 import { getErrorMessage } from '../utils/error';
 import type { Readable } from 'stream';
@@ -245,13 +238,6 @@ export async function deleteFromS3(key: string): Promise<void> {
     });
 
     await s3Client.send(command);
-    // Both stores while R2 migrates from S3: a copy left in S3 would be copied
-    // back on the next read (OxyHQ/oxy ADR 0047).
-    if (legacyStore) {
-      await legacyStore.client.send(
-        new DeleteObjectCommand({ Bucket: legacyStore.bucket, Key: key }),
-      );
-    }
     logger.debug(`[S3Service] Deleted file from S3: ${key}`);
   } catch (error: unknown) {
     const e = asAwsError(error);
@@ -291,9 +277,17 @@ export async function deleteS3Prefix(prefix: string): Promise<number> {
   }
 
   try {
-    const deleted = await deletePrefixIn({ client: s3Client, bucket: S3_BUCKET_NAME }, prefix);
-    // The legacy store's own listing: an object not migrated yet is only there.
-    if (legacyStore) await deletePrefixIn(legacyStore, prefix);
+    let deleted = 0;
+    for await (const keys of listKeyPages(prefix)) {
+      if (keys.length === 0) continue;
+      await s3Client.send(
+        new DeleteObjectsCommand({
+          Bucket: S3_BUCKET_NAME,
+          Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: true },
+        }),
+      );
+      deleted += keys.length;
+    }
     logger.debug(`[S3Service] Deleted ${deleted} object(s) under prefix: ${prefix}`);
     return deleted;
   } catch (error: unknown) {
@@ -312,38 +306,36 @@ export async function deleteS3Prefix(prefix: string): Promise<number> {
   }
 }
 
-async function deletePrefixIn(
-  target: Pick<ObjectStore, 'client' | 'bucket'>,
+/**
+ * Every object under `prefix`, one listing page at a time (S3 answers at most
+ * 1000 a page). Each page is listed before the caller acts on it, so a caller
+ * that deletes a page does not disturb the continuation token of the next.
+ */
+async function* listObjectPages(
   prefix: string,
-): Promise<number> {
-  let deleted = 0;
+): AsyncGenerator<Array<{ key: string; lastModified: Date | undefined }>> {
   let continuationToken: string | undefined;
   do {
-    const listed = await target.client.send(
+    const listed = await s3Client.send(
       new ListObjectsV2Command({
-        Bucket: target.bucket,
+        Bucket: S3_BUCKET_NAME,
         Prefix: prefix,
         ContinuationToken: continuationToken,
       }),
     );
-
-    const keys = (listed.Contents ?? [])
-      .map((object) => object.Key)
-      .filter((key): key is string => typeof key === 'string');
-
-    if (keys.length > 0) {
-      await target.client.send(
-        new DeleteObjectsCommand({
-          Bucket: target.bucket,
-          Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: true },
-        }),
-      );
-      deleted += keys.length;
+    const page: Array<{ key: string; lastModified: Date | undefined }> = [];
+    for (const object of listed.Contents ?? []) {
+      if (typeof object.Key === 'string') {
+        page.push({ key: object.Key, lastModified: object.LastModified });
+      }
     }
-
+    yield page;
     continuationToken = listed.IsTruncated ? listed.NextContinuationToken : undefined;
   } while (continuationToken);
-  return deleted;
+}
+
+async function* listKeyPages(prefix: string): AsyncGenerator<string[]> {
+  for await (const page of listObjectPages(prefix)) yield page.map((object) => object.key);
 }
 
 /**
@@ -354,35 +346,7 @@ export async function* listS3Keys(prefix: string): AsyncGenerator<string> {
   if (!prefix) {
     throw new Error('listS3Keys requires a non-empty prefix');
   }
-  const seen = legacyStore ? new Set<string>() : null;
-  for await (const key of listKeysIn({ client: s3Client, bucket: S3_BUCKET_NAME }, prefix)) {
-    seen?.add(key);
-    yield key;
-  }
-  // While R2 migrates from S3, a key not migrated yet is only in S3.
-  if (legacyStore && seen) {
-    for await (const key of listKeysIn(legacyStore, prefix)) if (!seen.has(key)) yield key;
-  }
-}
-
-async function* listKeysIn(
-  target: Pick<ObjectStore, 'client' | 'bucket'>,
-  prefix: string,
-): AsyncGenerator<string> {
-  let continuationToken: string | undefined;
-  do {
-    const listed = await target.client.send(
-      new ListObjectsV2Command({
-        Bucket: target.bucket,
-        Prefix: prefix,
-        ContinuationToken: continuationToken,
-      }),
-    );
-    for (const object of listed.Contents ?? []) {
-      if (typeof object.Key === 'string') yield object.Key;
-    }
-    continuationToken = listed.IsTruncated ? listed.NextContinuationToken : undefined;
-  } while (continuationToken);
+  for await (const keys of listKeyPages(prefix)) yield* keys;
 }
 
 /**
@@ -406,14 +370,6 @@ export async function deleteFromS3Batch(keys: readonly string[]): Promise<number
           Delete: { Objects: batch.map((Key) => ({ Key })), Quiet: true },
         }),
       );
-      if (legacyStore) {
-        await legacyStore.client.send(
-          new DeleteObjectsCommand({
-            Bucket: legacyStore.bucket,
-            Delete: { Objects: batch.map((Key) => ({ Key })), Quiet: true },
-          }),
-        );
-      }
       deleted += batch.length;
     }
 
@@ -448,9 +404,8 @@ export async function objectExists(key: string): Promise<boolean> {
 }
 
 /**
- * Every object under `prefix` with when it was last written, page by page —
- * the store's, then (while R2 migrates from S3) what only the legacy store
- * holds. Read-only, like {@link listS3Keys}; for a caller that decides by age.
+ * Every object under `prefix` with when it was last written, page by page.
+ * Read-only, like {@link listS3Keys}; for a caller that decides by age.
  */
 export async function* listS3Objects(
   prefix: string,
@@ -458,38 +413,7 @@ export async function* listS3Objects(
   if (!prefix) {
     throw new Error('listS3Objects requires a non-empty prefix');
   }
-  const seen = legacyStore ? new Set<string>() : null;
-  for await (const object of listObjectsIn({ client: s3Client, bucket: S3_BUCKET_NAME }, prefix)) {
-    seen?.add(object.key);
-    yield object;
-  }
-  if (legacyStore && seen) {
-    for await (const object of listObjectsIn(legacyStore, prefix)) {
-      if (!seen.has(object.key)) yield object;
-    }
-  }
-}
-
-async function* listObjectsIn(
-  target: Pick<ObjectStore, 'client' | 'bucket'>,
-  prefix: string,
-): AsyncGenerator<{ key: string; lastModified: Date | undefined }> {
-  let continuationToken: string | undefined;
-  do {
-    const listed = await target.client.send(
-      new ListObjectsV2Command({
-        Bucket: target.bucket,
-        Prefix: prefix,
-        ContinuationToken: continuationToken,
-      }),
-    );
-    for (const object of listed.Contents ?? []) {
-      if (typeof object.Key === 'string') {
-        yield { key: object.Key, lastModified: object.LastModified };
-      }
-    }
-    continuationToken = listed.IsTruncated ? listed.NextContinuationToken : undefined;
-  } while (continuationToken);
+  for await (const page of listObjectPages(prefix)) yield* page;
 }
 
 export interface PresignedUploadOptions {
@@ -508,7 +432,7 @@ export interface PresignedUploadOptions {
  * host`), so storage refuses a body of any other length or a request declaring
  * any other type — the signature no longer matches. A PUT rather than a POST
  * policy because the store is Cloudflare R2 (OxyHQ/oxy ADR 0047), whose S3 API
- * has no browser-form uploads; the same URL works against S3. Signing needs no
+ * has no browser-form uploads; the same URL works against local MinIO. Signing needs no
  * request to storage.
  */
 export async function createPresignedUpload(

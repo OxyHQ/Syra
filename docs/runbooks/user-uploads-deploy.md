@@ -51,7 +51,7 @@ bun run backfill:fingerprints -- --limit 500
 bun run backfill:fingerprints
 ```
 
-It streams every track's audio out of S3 and runs `fpcalc`, so it is long-running
+It streams every track's audio out of the object store (R2) and runs `fpcalc`, so it is long-running
 and **will** be interrupted. It skips tracks that already have a row, so
 re-running resumes rather than restarts.
 

@@ -43,7 +43,7 @@ changes the URL behind a unified resolver.
   (`.m4a` segments + multivariant `.m3u8`), **AES-128 encrypt** (`#EXT-X-KEY`) via Shaka
   Packager / Bento4. ffmpeg (audio — no GPU).
 - **Loudness normalization** (EBU R128 / ReplayGain) at transcode (Spotify's "normalize volume").
-- Store renditions in `oxy-syra-media-usw2-237343248947`; serve via **CloudFront** with
+- Store renditions in the object store (Cloudflare R2 `syra-media` since OxyHQ/oxy ADR 0047); serve via **CloudFront** with
   **signed URLs/cookies** that expire.
 - Async job per upload/import; track `status` (`processing` | `ready` | `failed`).
 

@@ -71,13 +71,12 @@ NODE_ENV=development
 # Optional operational notifications
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 
-# Amazon S3 audio storage. ECS uses the task IAM role.
+# Object storage: a local S3 emulator (MinIO). Deployments use R2_* instead.
 AWS_REGION=us-west-2
 AWS_S3_BUCKET_NAME=syra-audio
-# Optional local development credentials/emulator:
 # AWS_ACCESS_KEY_ID=test
 # AWS_SECRET_ACCESS_KEY=test
-# AWS_ENDPOINT_URL=http://localhost:4566
+# AWS_ENDPOINT_URL=http://localhost:9000
 
 S3_AUDIO_PREFIX=audio
 ```
@@ -335,15 +334,18 @@ See `AGENTS.md` for AWS ECS deployment with Fargate. The workflow at `.github/wo
 
 ## Audio File Storage
 
-Audio files are stored in Amazon S3. The API uploads media, signs playback URLs,
-and keeps the catalogue metadata in PostgreSQL.
+Media is stored in Cloudflare R2 (bucket `syra-media`, OxyHQ/oxy ADR 0047)
+through its S3 API; `src/config/s3.config.ts` is the one place the store is
+chosen. The API writes originals and HLS output, signs playback and direct-upload
+URLs, and keeps the catalogue metadata in PostgreSQL.
 
-Set `AWS_REGION` and `AWS_S3_BUCKET_NAME` (or `AWS_S3_BUCKET`). ECS uses its task
-IAM role; local sessions can provide `AWS_ACCESS_KEY_ID` and
-`AWS_SECRET_ACCESS_KEY`. `S3_AUDIO_PREFIX` defaults to `audio`.
+A deployment sets `R2_BUCKET`, `R2_ENDPOINT`, `R2_ACCESS_KEY_ID` and
+`R2_SECRET_ACCESS_KEY` (ECS binds them from SSM `/oxy/syra/R2_*`); `R2_BUCKET`
+without the other three refuses to boot. `S3_AUDIO_PREFIX` defaults to `audio`.
 
-Leave `AWS_ENDPOINT_URL` unset in AWS. For a local S3 emulator, set it to the
-emulator origin, for example `http://localhost:4566`.
+Without `R2_BUCKET` the store is a local S3 emulator such as MinIO: set
+`AWS_ENDPOINT_URL` to its origin, `AWS_S3_BUCKET_NAME` (default `syra-audio`) and
+its `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`.
 
 ## Troubleshooting Guide
 

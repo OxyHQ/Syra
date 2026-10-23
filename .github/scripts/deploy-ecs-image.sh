@@ -36,6 +36,14 @@ TASK_SECRET_OVERRIDES_JSON="${TASK_SECRET_OVERRIDES_JSON:-}"
 # Ported from Mention's copy of this script, which is the same file; the two are
 # kept convergeable rather than forked.
 TASK_SECRET_REMOVALS="${TASK_SECRET_REMOVALS:-}"
+# Plain environment variable NAMES to REMOVE from the rendered task definition,
+# space-separated. Environment carries forward exactly like secrets do: every
+# revision is rendered from the RUNNING task definition, so a variable nobody
+# names again stays there for ever, and deleting it from a workflow file does
+# nothing at all. Naming it here is how a variable actually leaves production,
+# re-asserted on every deploy. Mention's copy of this script implements the same
+# list.
+TASK_ENV_REMOVALS="${TASK_ENV_REMOVALS:-}"
 AWS_ACCOUNT_ID="${AWS_ACCOUNT_ID:-}"
 AWS_PARTITION="${AWS_PARTITION:-aws}"
 POST_DEPLOY_SMOKE_SCRIPT="${POST_DEPLOY_SMOKE_SCRIPT:-}"
@@ -134,6 +142,20 @@ if ! jq -e '
   echo "::error::TASK_SECRET_OVERRIDES_JSON must map environment variable names to complete SSM parameter ARNs."
   exit 1
 fi
+for removal_name in $TASK_ENV_REMOVALS; do
+  if ! [[ "$removal_name" =~ ^[A-Z][A-Z0-9_]{0,127}$ ]]; then
+    echo "::error::TASK_ENV_REMOVALS must be space-separated environment variable names; got '$removal_name'."
+    exit 1
+  fi
+  # Refused rather than resolved, for the reason the secrets side gives: this
+  # script also WRITES INTERNAL_METRICS_ENABLED when INTERNAL_METRICS_PARAMETER
+  # is set, and a name both written and removed has an outcome that depends on
+  # the order of two operations nobody is reading.
+  if [[ "$removal_name" == "INTERNAL_METRICS_ENABLED" && -n "$INTERNAL_METRICS_PARAMETER" ]]; then
+    echo "::error::INTERNAL_METRICS_ENABLED is in TASK_ENV_REMOVALS while INTERNAL_METRICS_PARAMETER sets it. Remove it from one."
+    exit 1
+  fi
+done
 
 service_json="$(aws ecs describe-services --cluster "$CLUSTER" --services "$APP")"
 if [[ "$(jq '.failures | length' <<<"$service_json")" != "0" ||
@@ -467,6 +489,7 @@ task_secret_overrides="$(jq -c '
 # The removals ride the SAME filter as the overrides — both are "drop any secret
 # with this name" — and only the overrides are concatenated back afterwards.
 task_secret_removals="$(jq -cRn '[inputs | select(length > 0)]' <<<"$(printf '%s\n' $TASK_SECRET_REMOVALS)")"
+task_env_removals="$(jq -cRn '[inputs | select(length > 0)]' <<<"$(printf '%s\n' $TASK_ENV_REMOVALS)")"
 
 aws ecs describe-task-definition \
   --task-definition "$current_task_definition" \
@@ -486,6 +509,7 @@ jq \
   --arg internalMetricsSecretArn "$internal_metrics_secret_arn" \
   --argjson taskSecretOverrides "$task_secret_overrides" \
   --argjson taskSecretRemovals "$task_secret_removals" \
+  --argjson taskEnvRemovals "$task_env_removals" \
   '
     del(
       .taskDefinitionArn,
@@ -525,6 +549,15 @@ jq \
                     )
                   ))
               + $taskSecretOverrides
+            )
+          | .environment = (
+              (.environment // [])
+              | map(
+                  select(
+                    .name as $existingName
+                    | ($taskEnvRemovals | index($existingName)) == null
+                  )
+                )
             )
         else . end
       )

@@ -253,18 +253,15 @@ export function getRecordingObjectKey(roomId: string, recordingId: string): stri
 }
 
 /**
- * The legacy egress output: a room recording straight into the bucket. It
- * passes the `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` pair only when both
- * are set (local MinIO). Production sets neither: with no credentials in the
- * request, LiveKit's S3 uploader uses the AWS default chain on the LiveKit host,
- * whose instance role (`oxy-livekit` in oxy-infra) may put only under
- * `agora/recordings/`. Used in `legacy` mode, and whenever Oxy refuses a
- * recording target ({@link recordingStorage}).
+ * The bucket egress output: a room recording straight into the store, under
+ * `agora/recordings/`. LiveKit's S3 uploader is handed the store's own static
+ * credentials — R2's bucket token in a deployment (OxyHQ/oxy ADR 0047), local
+ * MinIO's keys on a checkout — so nothing depends on any role or grant on the
+ * LiveKit host. LiveKit redacts them from the egress info it reports. Used in
+ * `legacy` mode, and whenever Oxy refuses a recording target
+ * ({@link recordingStorage}).
  */
 export function recordingEgressTarget(objectKey: string) {
-  // The store's own static credentials when it has them: R2's bucket token
-  // (OxyHQ/oxy ADR 0047) — the LiveKit host's instance role reaches only S3 —
-  // or local MinIO's keys. LiveKit redacts them from the egress info it reports.
   const credentials = store.credentials;
   return {
     ...(credentials

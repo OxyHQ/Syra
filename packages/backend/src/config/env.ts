@@ -54,12 +54,12 @@ const schema = z
       ),
 
     AWS_REGION: z.string().optional(),
+    // The local object store (MinIO) when R2_BUCKET is unset; a deployment's
+    // store is R2, below. The key pair is every local AWS client's credential.
     AWS_ENDPOINT_URL: z.string().optional(),
     AWS_ACCESS_KEY_ID: z.string().optional(),
     AWS_SECRET_ACCESS_KEY: z.string().optional(),
-    AWS_S3_BUCKET: z.string().optional(),
     AWS_S3_BUCKET_NAME: z.string().optional(),
-    S3_BUCKET: z.string().optional(),
     // Object storage on Cloudflare R2 (OxyHQ/oxy ADR 0047; `config/s3.config.ts`).
     R2_BUCKET: z.string().optional(),
     R2_ENDPOINT: z.string().optional(),
