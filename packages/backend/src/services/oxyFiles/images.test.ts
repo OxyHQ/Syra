@@ -95,7 +95,10 @@ describe('ownership', () => {
     oxy.localUsers.add('person-1');
     const bytes = await png(10, 10);
     const app = await uploadAppImage(bytes, 'image/png', 'a.png');
-    const person = await uploadUserImage('person-1', bytes, 'image/png', 'a.png');
+    const person = await uploadUserImage('person-1', bytes, 'image/png', 'a.png', {
+      requesterToken: 'verified-session',
+      accountId: 'person-1',
+    });
 
     expect(oxy.files.get(app.id)?.ownerApplicationId).toBe(oxy.applicationId);
     expect(oxy.files.get(person.id)?.ownerUserId).toBe('person-1');

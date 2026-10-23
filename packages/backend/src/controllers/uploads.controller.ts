@@ -1,3 +1,5 @@
+import { personalFilesRequester } from '../services/oxyFiles/requester';
+import type { RequesterProof } from '@oxy.so/core/server';
 /**
  * Listener uploads — the private locker, and the door to the public catalogue.
  *
@@ -545,6 +547,7 @@ interface StoredCoverArt {
 async function storeEmbeddedCoverArt(
   metadata: ExtractedMetadata,
   uploaderOxyUserId: string,
+  requester: RequesterProof,
 ): Promise<StoredCoverArt | undefined> {
   const picture = selectEmbeddedCoverArt(metadata.pictures);
   if (!picture || isArtistPicture(picture)) return undefined;
@@ -560,6 +563,7 @@ async function storeEmbeddedCoverArt(
       contentType: picture.mimeType,
       ownerType: 'upload',
       uploadedBy: uploaderOxyUserId,
+      requester,
     });
 
     return {
@@ -1776,7 +1780,7 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
        */
       const embeddedCover = request.coverArt
         ? undefined
-        : await storeEmbeddedCoverArt(metadata, userId);
+        : await storeEmbeddedCoverArt(metadata, userId, personalFilesRequester(req));
 
       const overrides = {
         title: request.title,

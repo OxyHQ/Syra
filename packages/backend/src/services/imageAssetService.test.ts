@@ -34,6 +34,7 @@ describe('storeImageAsset', () => {
       contentType: 'image/png',
       ownerType: 'upload',
       uploadedBy: 'person-1',
+      requester: { requesterToken: 'verified-session', accountId: 'person-1' },
     });
 
     expect(oxy.files.get(stored.fileId)?.ownerUserId).toBe('person-1');
@@ -106,5 +107,41 @@ describe('resolveImageAsset', () => {
 
   it('answers null for an id that names no row', async () => {
     expect(await resolveImageAsset('no-such-id')).toBeNull();
+  });
+});
+
+describe('personal requester isolation', () => {
+  it('binds the ephemeral session to the uploader without persisting it', async () => {
+    oxy.localUsers.add('person-1');
+    const proof = { requesterToken: 'private-session-proof', accountId: 'person-1' };
+    const stored = await storeImageAsset({
+      buffer: await png(),
+      filename: 'a.png',
+      contentType: 'image/png',
+      ownerType: 'upload',
+      uploadedBy: 'person-1',
+      requester: proof,
+    });
+    expect(oxy.calls.find((call) => call.method === 'withRequester')?.args).toEqual([proof]);
+    const [row] = await getDb().select().from(imageAssets).where(eq(imageAssets.id, stored.id));
+    expect(JSON.stringify(row)).not.toContain(proof.requesterToken);
+  });
+  it('refuses another account or missing proof before opening a personal upload', async () => {
+    const input = {
+      buffer: await png(),
+      filename: 'a.png',
+      contentType: 'image/png',
+      ownerType: 'upload' as const,
+      uploadedBy: 'person-1',
+    };
+    await expect(storeImageAsset(input)).rejects.toThrow('requester');
+    await expect(
+      storeImageAsset({
+        ...input,
+        requester: { requesterToken: 'other-session', accountId: 'person-2' },
+      }),
+    ).rejects.toThrow('requester');
+    expect(oxy.calls.some((call) => call.method === 'uploadUserMedia')).toBe(false);
+    expect(await getDb().select().from(imageAssets)).toHaveLength(0);
   });
 });

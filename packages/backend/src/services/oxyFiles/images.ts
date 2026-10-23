@@ -1,3 +1,4 @@
+import type { RequesterProof } from '@oxy.so/core/server';
 /**
  * Images stored in Oxy Files (OxyHQ/oxy ADR 0043), as `image_assets` rows.
  *
@@ -320,7 +321,13 @@ export async function uploadUserImage(
   bytes: Buffer,
   mime: string,
   originalName: string,
+  requester: RequesterProof,
 ): Promise<StoredOxyFile> {
-  const file = await oxyFiles().uploadUserMedia(ownerOxyUserId, bytes, mime, { originalName });
+  if (!requester || requester.accountId !== ownerOxyUserId) {
+    throw new Error('Personal image requires its original requester account proof');
+  }
+  const file = await oxyFiles()
+    .withRequester(requester)
+    .uploadUserMedia(ownerOxyUserId, bytes, mime, { originalName });
   return { id: file.id, sha256: file.sha256, size: file.size, mime: file.mime };
 }

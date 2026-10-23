@@ -1,3 +1,4 @@
+import { personalFilesRequester } from '../services/oxyFiles/requester';
 import { isPostgresConnected } from '../db/postgres';
 import type { Request, Response, NextFunction } from 'express';
 import { isLiveEntityId } from '@oxy.so/db';
@@ -52,6 +53,7 @@ export const uploadImage = async (req: AuthRequest, res: Response, next: NextFun
       contentType: file.mimetype,
       ownerType: 'upload',
       uploadedBy: uploaderId,
+      requester: personalFilesRequester(req),
     });
 
     logger.debug('[ImagesController] Image uploaded successfully', { imageId: result.id });

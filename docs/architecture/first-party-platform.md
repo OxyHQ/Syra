@@ -11,7 +11,8 @@ remain bounded; a Syra brand or local owner identifier never supplies user autho
 | Syra → Oxy notifications | Shared workload protocol-2 transport, existing suppression and failure behavior | Core 7 release/pin, receiver first, canary |
 | Syra → Oxy Files application media/references/play sessions | Shared OxyServer AWS workload provider; no key fallback or ECS-only readiness gate | Core 7 release/pin, receiver first, outbox and signed playback canary |
 | Syra activity → Oxy | Shared traffic publisher with temporary workload provider | Core 7 release/pin and producer canary |
-| Personal image/audio uploads → Files | Pending original requester/session/task propagation | No owner-ID fallback; retain account isolation and revocation |
+| Personal image uploads → Files | Foreground requester proof bound to verified effective account; never persisted | Core 7 release/pin; managed-account and revocation canary |
+| Personal audio uploads → Files | Pending durable original task propagation | No owner-ID fallback; retain account isolation and revocation |
 | House/room/series images → Files | New assets application-owned; historical file IDs unchanged | Same local roles, reference replacement, no deletion of personal owner's file |
 | Asynchronous podcast/locker ingest → Files | Pending root persisted at verified request admission | Ticket contract unchanged; old missing-proof rows cannot create new personal files |
 | Syra moderation → CrowdSource | Own outbox uses injected shared OxyServer; delivery signature retained | Publish/pin CrowdSource SDK including 44d2a2972; receiver first; preserve durable outbox |
@@ -49,3 +50,8 @@ admin upload that replaces a personal image reference without deleting the file,
 a denied non-admin upload, and own moderation configuration without a customer
 key. Backend source/test types and changed-file Biome passed. Registry pins await
 the released CrowdSource outbox provider addition.
+
+Personal image checkpoint: 82 image, upload and direct-audio regression tests
+passed, plus backend source/test typecheck. Tests reject missing/cross-account
+proof before a personal write and verify the transient session is absent from
+stored rows. Embedded artwork uses the same original upload session.
