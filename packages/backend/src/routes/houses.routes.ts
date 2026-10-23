@@ -771,8 +771,8 @@ router.post('/:id/avatar', upload.single('file'), async (req: AuthRequest, res: 
     }
 
     const image = await processImage(req.file.buffer, 'avatar');
-    // The house owner's file (see `services/oxyFiles/spaceImages.ts`).
-    const file = await uploadSpaceImage(found.house.createdBy, image, 'house-avatar');
+    // Shared resource artwork; replacement only releases the previous reference.
+    const file = await uploadSpaceImage(image, 'house-avatar');
     await updateHouse(found.house.id, { avatarFileId: file.id });
 
     res.json({ avatar: oxyFileUrl(file.id), avatarFileId: file.id });
@@ -804,7 +804,7 @@ router.post('/:id/cover', upload.single('file'), async (req: AuthRequest, res: R
     }
 
     const image = await processImage(req.file.buffer, 'cover');
-    const file = await uploadSpaceImage(found.house.createdBy, image, 'house-cover');
+    const file = await uploadSpaceImage(image, 'house-cover');
     await updateHouse(found.house.id, { coverImageFileId: file.id });
 
     res.json({ coverImage: oxyFileUrl(file.id), coverImageFileId: file.id });
