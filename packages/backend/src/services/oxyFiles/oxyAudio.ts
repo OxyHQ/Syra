@@ -1,3 +1,4 @@
+import type { RequesterProof } from '@oxy.so/core/server';
 /**
  * Syra's audio in Oxy Files (OxyHQ/oxy ADR 0043, stage 4c) — the Oxy half of
  * the audio seam. Imported by `audioStorage.ts` ONLY
@@ -253,6 +254,7 @@ async function markLadderReady(fileId: string): Promise<void> {
 // ── Storing ──────────────────────────────────────────────────────────────────
 
 export interface StoreAudioInput {
+  requester?: RequesterProof;
   entity: AudioEntity;
   /** The original, on local disk. */
   localPath: string;
@@ -272,11 +274,17 @@ export interface StoreAudioInput {
  * {@link mirrorAudioToOxy}.
  */
 export async function storeAudioInOxy(input: StoreAudioInput): Promise<StoredOxyAudio> {
+  if (
+    input.owner.kind === 'account' &&
+    (!input.requester || input.requester.accountId !== input.owner.oxyUserId)
+  ) {
+    throw new Error('Personal audio copy awaits original requester authority');
+  }
   const size = statSync(input.localPath).size;
   const sha256 = input.sha256 ?? (await sha256OfFile(input.localPath));
   const entityType = AUDIO_REFERENCE_ENTITY_TYPES[input.entity.kind];
   const audio = { previewStartSeconds: input.previewStartSeconds ?? 0 };
-  const api = oxyFiles();
+  const api = input.requester ? oxyFiles().withRequester(input.requester) : oxyFiles();
 
   let stored: StoredOxyAudio;
   if (size <= SINGLE_REQUEST_MAX_BYTES) {

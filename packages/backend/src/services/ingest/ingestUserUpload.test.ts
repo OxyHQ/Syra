@@ -206,3 +206,33 @@ describe('ingestUserUpload', () => {
     ).rejects.toThrow(/upload not found/i);
   });
 });
+
+describe('personal copy authority', () => {
+  it('does not promote an old locker owner identifier into a requester proof', async () => {
+    const id = await createUpload();
+    let copies = 0;
+    await ingestUserUpload(id, {
+      ...happyDeps,
+      mirrorToOxy: async () => {
+        copies++;
+        throw new Error('no original root');
+      },
+    });
+    expect(copies).toBe(0);
+    expect((await reload(id)).status).toBe('ready');
+    expect((await reload(id)).audioFileId).toBeNull();
+  });
+  it('uses the admitted original task and leaves a rejected copy on the existing legacy path', async () => {
+    const id = await createUpload({ oxyTaskId: 'original-task' });
+    let proof: unknown;
+    await ingestUserUpload(id, {
+      ...happyDeps,
+      mirrorToOxy: async (input) => {
+        proof = input.requester;
+        return null;
+      },
+    });
+    expect(proof).toEqual({ taskId: 'original-task', accountId: OWNER_ID });
+    expect((await reload(id)).status).toBe('ready');
+  });
+});

@@ -343,3 +343,33 @@ describe('ingestEpisode — a private show gets no HLS ladder', () => {
     expect(untouched?.hlsMasterKey).toBe('hls/already/master.m3u8');
   });
 });
+
+describe('legacy personal audio provenance', () => {
+  it('keeps existing playback/legacy ingest without guessing authority for a new personal copy', async () => {
+    const previous = process.env.OXY_AUDIO;
+    process.env.OXY_AUDIO = 'oxy';
+    try {
+      const episode = await createEpisode();
+      await getDb()
+        .update(podcasts)
+        .set({ ownerOxyUserId: 'original-owner', visibility: 'private' })
+        .where(eq(podcasts.id, PODCAST_ID));
+      let copied = false;
+      await ingestEpisode(episode.id, {
+        ...happyDeps,
+        mirrorToOxy: async () => {
+          copied = true;
+          throw new Error('must not copy without proof');
+        },
+      });
+      expect(copied).toBe(false);
+      expect((await findEpisodeById(episode.id))?.episode.status).toBe('ready');
+      expect((await findEpisodeById(episode.id))?.episode.audioSourceUrl).toBe(
+        episode.audioSourceUrl,
+      );
+    } finally {
+      if (previous === undefined) delete process.env.OXY_AUDIO;
+      else process.env.OXY_AUDIO = previous;
+    }
+  });
+});

@@ -63,6 +63,7 @@ export const PROTECTED_COLUMNS_BY_TABLE = {
   playlist_invites: ['tokenHash'],
   catalog_entities: ['images', 'imageSuggestions'],
   tracks: ['images', 'sha256'],
+  episodes: ['oxyTaskId'],
   /**
    * `rawTags*` is the file's native tag block, which must never reach a
    * client. `fingerprint` and `sha256` are registered too: the model's own doc comment calls the
@@ -76,6 +77,7 @@ export const PROTECTED_COLUMNS_BY_TABLE = {
    * verticals. See `schema/creators.ts`'s file-level doc comment.
    */
   user_uploads: [
+    'oxyTaskId',
     'rawTagsFormat',
     'rawTagsJson',
     'rawTagsTruncated',

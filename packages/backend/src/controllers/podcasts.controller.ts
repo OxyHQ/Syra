@@ -1,3 +1,4 @@
+import { withFileTask } from '../services/oxyFiles/taskAuthority';
 /**
  * Podcasts controller — catalog reads (DB-first), discovery (directory →
  * on-the-fly import), user subscriptions, and the creator (Syra-hosted) surface:
@@ -779,31 +780,35 @@ export async function uploadEpisode(req: AuthRequest, res: Response): Promise<vo
         owner: { kind: 'account', oxyUserId: userId },
       });
 
-      const episode = await insertEpisode(
-        {
-          id: episodeId,
-          podcastId: podcast.id,
-          podcastTitle: podcast.title,
-          title,
-          description: typeof req.body?.description === 'string' ? req.body.description : undefined,
-          summary: typeof req.body?.summary === 'string' ? req.body.summary : undefined,
-          guid: episodeId,
-          duration,
-          pubDate,
-          season: fields.season,
-          episodeNumber: fields.episodeNumber,
-          episodeType: fields.episodeType ?? 'full',
-          explicit: req.body?.explicit === 'true' || req.body?.explicit === true,
-          aiGenerated: req.body?.aiGenerated === 'true' || req.body?.aiGenerated === true,
-          source: 'syra',
-          audioSourceUrl: `/api/podcasts/episodes/${episodeId}/audio`,
-          audioSourceFormat: format,
-          status: 'processing',
-        },
-        { persons: episodePersons },
-        // The show's `episode_count`/`last_episode_at` move in the SAME
-        // transaction as the row they describe — see `insertEpisode`.
-        { recordOnShow: true },
+      const episode = await withFileTask(req, episodeId, (oxyTaskId) =>
+        insertEpisode(
+          {
+            id: episodeId,
+            oxyTaskId,
+            podcastId: podcast.id,
+            podcastTitle: podcast.title,
+            title,
+            description:
+              typeof req.body?.description === 'string' ? req.body.description : undefined,
+            summary: typeof req.body?.summary === 'string' ? req.body.summary : undefined,
+            guid: episodeId,
+            duration,
+            pubDate,
+            season: fields.season,
+            episodeNumber: fields.episodeNumber,
+            episodeType: fields.episodeType ?? 'full',
+            explicit: req.body?.explicit === 'true' || req.body?.explicit === true,
+            aiGenerated: req.body?.aiGenerated === 'true' || req.body?.aiGenerated === true,
+            source: 'syra',
+            audioSourceUrl: `/api/podcasts/episodes/${episodeId}/audio`,
+            audioSourceFormat: format,
+            status: 'processing',
+          },
+          { persons: episodePersons },
+          // The show's `episode_count`/`last_episode_at` move in the SAME
+          // transaction as the row they describe — see `insertEpisode`.
+          { recordOnShow: true },
+        ),
       );
 
       /**

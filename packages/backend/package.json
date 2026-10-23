@@ -24,7 +24,9 @@
     "test": "rm -rf dist && bun test src",
     "clean": "rm -rf dist",
     "test:platform": "bun test src/services/notifications src/services/oxyFiles src/services/platformActivity.test.ts src/moderation/config.test.ts",
-    "test:personal-files": "bun test src/services/imageAssetService.test.ts src/services/oxyFiles/images.test.ts src/services/oxyFiles/requester.test.ts src/controllers/uploads.createUpload.test.ts src/routes/directAudioUpload.test.ts"
+    "test:personal-files": "bun test src/services/imageAssetService.test.ts src/services/oxyFiles/images.test.ts src/services/oxyFiles/requester.test.ts src/controllers/uploads.createUpload.test.ts src/routes/directAudioUpload.test.ts",
+    "test:audio-authority": "bun test src/services/oxyFiles/taskAuthority.test.ts src/services/oxyFiles/oxyAudio.test.ts src/services/ingest/ingestUserUpload.test.ts src/services/podcasts/ingestEpisode.test.ts src/routes/podcastIngest.test.ts src/routes/podcastEpisodeMetadata.test.ts src/routes/directAudioUpload.test.ts src/controllers/uploads.createUpload.test.ts",
+    "test:platform-schema": "bun test src/db/__tests__/gates.test.ts src/db/__tests__/zodPathsExistInDrizzle.test.ts src/controllers/serverOnlyFields.leak.test.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1087.0",

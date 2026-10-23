@@ -290,6 +290,8 @@ export const userUploads = pgTable(
     id: generatedId(),
     /** An Oxy account id — no foreign key. */
     ownerOxyUserId: text().notNull(),
+    /** Original Oxy task authority for background personal Files copies. Never a bearer. */
+    oxyTaskId: text(),
 
     title: text().notNull(),
     /**
