@@ -523,7 +523,7 @@ router.post('/:id/cover', upload.single('file'), async (req: AuthRequest, res: R
 
     const image = await processImage(req.file.buffer, 'cover');
     // The series creator's file (see `services/oxyFiles/spaceImages.ts`).
-    const file = await uploadSpaceImage(series.createdBy, image, 'series-cover');
+    const file = await uploadSpaceImage(image, 'series-cover');
     await updateSeries(series.id, { coverImageFileId: file.id });
 
     res.json({ coverImage: oxyFileUrl(file.id), coverImageFileId: file.id });

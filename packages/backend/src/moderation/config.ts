@@ -4,46 +4,10 @@ import type {
 } from '@crowdsource.you/core/outbox';
 import { logger } from '../utils/logger';
 
-/**
- * Everything this deployment knows about CrowdSource.
- *
- * Read here rather than in `config/env.ts`, which parses every other Syra setting
- * once at import. That is right for the rest and wrong for this one, for two
- * reasons that go together:
- *
- * - The enabled flag, the service credential and the webhook secret only mean
- *   anything TOGETHER. A deployment with a service key and no webhook secret
- *   sends reports that can never come back — cases open, juries decide, and Syra
- *   never learns the outcome, with nothing failing anywhere to say so. Every
- *   later stage sees only its own half, so this is the one place it can be
- *   caught, and a per-field schema cannot express it.
- * - That combination therefore has to be RE-DERIVABLE rather than frozen at first
- *   import, which is what {@link resetCrowdSourceConfig} exists for.
- *
- * There is deliberately no `CROWDSOURCE_APP_ID`, and one must never be added:
- * `applicationId` is read off the service credential by the SDK, which exposes no
- * option through which one could be passed. A variable holding it could only ever
- * disagree with the credential — and a tenant id the caller can choose is not
- * isolation, it is an IDOR.
- *
- * ## Syra still holds a CrowdSource service key, and that is upstream's half
- *
- * `@crowdsource.you/core` exports `crowdSourceForOxyService()`, which presents
- * the Oxy service token this process already mints and lets CrowdSource resolve
- * the tenant from the Oxy application that token names — no key, nothing to
- * rotate. Mention, Homiio and Allo each took it, because each held its OWN copy
- * of the client wrapper and could swap that copy for the call.
- *
- * Syra never had a copy: `createModerationIntegration()` builds the client, and
- * the outbox half builds it from `crowdSource.serviceKey` unless the connection
- * config says `auth: 'oxy-service'` (added in `@crowdsource.you/core` 1.4.0).
- * Syra does not say so yet, so the key stays — and it is NOT the Oxy service
- * credential, which Syra has stopped carrying (`src/oxyClient.ts`). Switching is
- * its own change (this file's `enabled` still requires the key); removing the
- * key without it would disable delivery, silently, in the one direction nothing
- * fails on.
- */
+import { oxy } from '../oxyClient';
 
+/** Own moderation uses the shared workload identity. The signed decision webhook
+ * remains required: delivery without its verified return path is incomplete. */
 const ENFORCEMENT_MODES: readonly ModerationEnforcementMode[] = ['observe', 'manual', 'automatic'];
 
 const DEFAULT_OUTBOX_BATCH_SIZE = 50;
@@ -61,8 +25,6 @@ const MAX_OUTBOX_BATCH_SIZE = 500;
  */
 export interface CrowdSourceConfig extends CrowdSourceConnectionConfig {
   readonly enabled: boolean;
-  /** `applicationId:credentialId:secret`, ONE opaque value. Never split here. */
-  readonly serviceKey?: string;
   /** Optional; the SDK defaults to the one deployment. */
   readonly baseUrl?: string;
   readonly webhookSecret?: string;
@@ -110,15 +72,13 @@ function enforcementMode(value: string | undefined): ModerationEnforcementMode {
 
 function readConfig(): CrowdSourceConfig {
   const requested = trimmed(process.env.CROWDSOURCE_ENABLED) === 'true';
-  const serviceKey = trimmed(process.env.CROWDSOURCE_SERVICE_KEY);
   const webhookSecret = trimmed(process.env.CROWDSOURCE_WEBHOOK_SECRET);
-  const enabled = requested && serviceKey !== undefined && webhookSecret !== undefined;
+  const enabled = requested && webhookSecret !== undefined;
 
   if (requested && !enabled) {
     logger.error(
       '[CrowdSource] CROWDSOURCE_ENABLED=true but the integration is half-configured; staying off',
       {
-        hasServiceKey: serviceKey !== undefined,
         hasWebhookSecret: webhookSecret !== undefined,
       },
     );
@@ -129,7 +89,8 @@ function readConfig(): CrowdSourceConfig {
 
   return {
     enabled,
-    ...(serviceKey === undefined ? {} : { serviceKey }),
+    auth: 'oxy-service',
+    oxy,
     ...(baseUrl === undefined ? {} : { baseUrl }),
     ...(webhookSecret === undefined ? {} : { webhookSecret }),
     ...(webhookPreviousSecret === undefined ? {} : { webhookPreviousSecret }),
