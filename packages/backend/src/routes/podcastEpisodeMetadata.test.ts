@@ -1,3 +1,8 @@
+import {
+  verifiedAudioSession,
+  installFileTaskAuthorityFixture,
+  resetFileTaskAuthorityFixture,
+} from '../test/fileTaskAuthority';
 /**
  * Three things the ingest task fixed or added that are not the capability:
  * the metadata `uploadEpisode` was DROPPING, the order a numbered series comes
@@ -87,6 +92,7 @@ let server: Server;
 let baseUrl: string;
 
 beforeAll(async () => {
+  installFileTaskAuthorityFixture();
   armed = true;
   await connectDb();
 
@@ -95,7 +101,7 @@ beforeAll(async () => {
   app.use((req, _res, next) => {
     const viewer = req.headers[VIEWER_HEADER];
     if (typeof viewer === 'string' && viewer.length > 0) {
-      (req as AuthRequest).user = { id: viewer };
+      verifiedAudioSession(req, viewer);
     }
     next();
   });
@@ -115,6 +121,7 @@ afterEach(async () => {
 });
 
 afterAll(async () => {
+  resetFileTaskAuthorityFixture();
   armed = false;
   await new Promise<void>((resolve) => server.close(() => resolve()));
   await disconnectDb();

@@ -12,9 +12,9 @@ remain bounded; a Syra brand or local owner identifier never supplies user autho
 | Syra → Oxy Files application media/references/play sessions | Shared OxyServer AWS workload provider; no key fallback or ECS-only readiness gate | Core 7 release/pin, receiver first, outbox and signed playback canary |
 | Syra activity → Oxy | Shared traffic publisher with temporary workload provider | Core 7 release/pin and producer canary |
 | Personal image uploads → Files | Foreground requester proof bound to verified effective account; never persisted | Core 7 release/pin; managed-account and revocation canary |
-| Personal audio uploads → Files | Pending durable original task propagation | No owner-ID fallback; retain account isolation and revocation |
+| Personal audio uploads → Files | Original task admitted with verified session; only its handle is stored | No owner-ID fallback; retain account isolation and revocation |
 | House/room/series images → Files | New assets application-owned; historical file IDs unchanged | Same local roles, reference replacement, no deletion of personal owner's file |
-| Asynchronous podcast/locker ingest → Files | Pending root persisted at verified request admission | Ticket contract unchanged; old missing-proof rows cannot create new personal files |
+| Asynchronous podcast/locker ingest → Files | Original task persisted at verified draft/upload admission | Ticket contract unchanged; old missing-proof rows cannot create new personal files |
 | Syra moderation → CrowdSource | Own outbox uses injected shared OxyServer; delivery signature retained | Publish/pin CrowdSource SDK including 44d2a2972; receiver first; preserve durable outbox |
 | Other apps → Syra SDK | Separate source branch `657e15d` has linked session factory | Publish/pin and integrate SDK source; no deployment claimed |
 | Syra frontend/studio → own API | Existing shared linked client; further account-switch audit pending | Verify caches and receiver composition with core 7 |
@@ -55,3 +55,42 @@ Personal image checkpoint: 82 image, upload and direct-audio regression tests
 passed, plus backend source/test typecheck. Tests reject missing/cross-account
 proof before a personal write and verify the transient session is absent from
 stored rows. Embedded artwork uses the same original upload session.
+
+
+Personal audio task checkpoint (source only): locker and podcast admissions create
+an Oxy goal with the original requester and effective account, expiring after 24
+hours. Background ingest passes that exact task to Files; it never stores a user
+bearer. The existing single-use podcast ingest ticket retains its 24-hour domain
+contract. A managed account keeps its human requester separate from the account
+whose audio is stored. Missing or revoked proof cannot authorize a personal copy;
+existing legacy audio playback remains available under the existing entitlement.
+An ordinary owner re-upload can renew an uncopied locker item's task using a
+compare-and-set update without changing the item's identity or asking for Oxy
+permissions. Historical podcast copies without proof remain pending; no owner is
+inferred from the show record to create authority.
+
+Migration `0039_magenta_otto_octavius` adds nullable task handles and a durable
+revocation queue. Database triggers retain the old handle on replacement, direct
+deletion and parent cascade; a failed admission also queues its new handle.
+Delivery retries until Oxy confirms revocation. Task handles are server-only
+protected columns and do not enter public episode or locker responses.
+
+The completed rollout boundary is `0038_retire_legacy_image_storage`, whose
+SHA-256 is `aef8f91aa9bb0beae0648f84c441d4fb1a4454795fb5314af9f932597bfe7632`.
+A production read-only check at `2026-10-23T20:43:32.451Z` found exactly one matching
+row in `drizzle.__drizzle_migrations` (running source `oxy-syra:169`). Operational
+receipt: `.scratch/first-party-root/syra-migration-0038-readback.json` in the shared
+workspace. The check's task exited successfully and its temporary definition was
+retired. This evidence closes the historical rollout window, not the frozen
+`0024_ambitious_xorn` genesis boundary. The gate validates ordering within both
+windows. A fresh disposable PostgreSQL database created from `template0` applied
+all 40 migrations, `0000` through `0039`; none were skipped. Runtime migration
+selection still uses the target database's actual journal. Migration 0039 has
+only been applied to disposable test databases, not production.
+
+Audio checkpoint validation: 150 audio, admission, ingest and task-authority tests
+passed, including real HTTP workload minting, managed accounts, revocation,
+cascade deletion, replacement, failed insertion and ordinary owner re-upload.
+The schema/public-field suites passed 113 tests. Backend source and test types,
+build, changed-file Biome and AGENTS checks passed. Local candidates were used
+only for validation; production deployment and registry pins remain pending.

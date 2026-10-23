@@ -1,3 +1,4 @@
+import { drainFileTaskRevocations } from './taskAuthority';
 /**
  * Sends the queued file references to Oxy (`oxy_file_reference_ops`).
  *
@@ -191,7 +192,10 @@ export function startReferenceOutbox(): void {
     if (stopped) return;
     let claimed = 0;
     try {
-      if (isPostgresConnected()) claimed = await drainReferenceOutboxOnce();
+      if (isPostgresConnected()) {
+        await drainFileTaskRevocations();
+        claimed = await drainReferenceOutboxOnce();
+      }
     } catch (error) {
       logger.error('[OxyFiles] reference outbox tick failed', {
         error: describeErrorSafely(error),

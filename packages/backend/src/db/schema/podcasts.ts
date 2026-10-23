@@ -605,6 +605,8 @@ export const episodes = pgTable(
   'episodes',
   {
     id: generatedId(),
+    /** Original Oxy task authority admitted with the creator's verified session. */
+    oxyTaskId: text(),
     podcastId: text()
       .notNull()
       .references(() => podcasts.id, { onDelete: 'cascade' }),
