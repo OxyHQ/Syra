@@ -1,11 +1,10 @@
-import { env } from '../../config/env';
 import { logger } from '../../utils/logger';
 import {
   claimSuppression,
   isEventDisabled,
   type SyraNotificationEvent,
 } from '../../db/user/notifications';
-import { getOxyServiceToken } from './oxyServiceToken';
+import { oxyTransport } from '../../oxyClient';
 
 /**
  * The ONE chokepoint for emitting a Syra notification.
@@ -14,7 +13,7 @@ import { getOxyServiceToken } from './oxyServiceToken';
  * the preference checks, the anti-spam rules and the failure handling exist in exactly one
  * place and cannot be forgotten by the next trigger someone adds.
  *
- * Delivery is Oxy's: `POST /notifications` (service-token + `notifications:write` scope)
+ * Delivery is Oxy's: `POST /notifications` through the shared workload transport
  * persists the notification and emits it in real time. Syra deliberately does NOT store
  * notifications or register push tokens — those live upstream, and a second registry is
  * what the shared-SDK rule exists to prevent.
@@ -64,16 +63,9 @@ export type NotifyResult =
   | { emitted: true }
   | { emitted: false; reason: 'event-disabled' | 'duplicate' | 'coalesced' | 'failed' };
 
-/**
- * Injectable seam for the Oxy service token.
- *
- * Exists so tests can drive the suppression logic without real credentials, rather than
- * globally mocking the token module — a global module mock leaks into every other test
- * file in the same process, which silently broke the credential-absent test that is the
- * whole point of failing honestly.
- */
+/** Isolated transport seam: suppression tests never replace a process-wide auth module. */
 export interface NotifierDeps {
-  getToken: () => Promise<string>;
+  fetch: (input: string, init: RequestInit) => Promise<Response>;
 }
 
 /**
@@ -82,7 +74,7 @@ export interface NotifierDeps {
  * Order matters: the cheapest local checks run before anything touches the network.
  */
 export async function notifyUser(input: NotifyInput, deps?: NotifierDeps): Promise<NotifyResult> {
-  const resolvedDeps: NotifierDeps = deps ?? { getToken: getOxyServiceToken };
+  const resolvedDeps: NotifierDeps = deps ?? oxyTransport;
   try {
     if (await isEventDisabled(input.recipientId, input.event)) {
       return { emitted: false, reason: 'event-disabled' };
@@ -123,13 +115,10 @@ export async function notifyUser(input: NotifyInput, deps?: NotifierDeps): Promi
  * already holds one — that is a successful outcome, not an error, so it is not logged as one.
  */
 async function postNotification(input: NotifyInput, deps: NotifierDeps): Promise<void> {
-  const token = await deps.getToken();
-
-  const response = await fetch(`${env.OXY_API_URL}/notifications`, {
+  const response = await deps.fetch('/notifications', {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({
       recipientId: input.recipientId,

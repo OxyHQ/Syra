@@ -6,10 +6,8 @@ import { notificationPreferences, notificationSuppressions } from '../../db/sche
 
 import { notifyUser } from './notifier';
 
-// The token is injected rather than module-mocked: bun's `mock.module` is process-global,
-// so stubbing the token module here silently disabled the credential-absent test in
-// oxyServiceToken.test.ts — the one test whose entire purpose is proving we fail loudly.
-const testDeps = { getToken: async () => 'test-service-token' };
+// The real transport is covered separately; suppression tests inject delivery only.
+const testDeps = { fetch: (input: string, init: RequestInit) => fetch(input, init) };
 
 const RECIPIENT = 'oxy-listener-1';
 
@@ -27,7 +25,7 @@ afterAll(async () => {
 beforeEach(() => {
   posted = [];
   failNextPost = false;
-  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+  globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
     if (failNextPost) {
       throw new Error('network down');
     }
@@ -38,7 +36,7 @@ beforeEach(() => {
 
 afterEach(clearDb);
 
-/** Always inject the stub token so no test reaches the real credential path. */
+/** Inject delivery so suppression tests never mint credentials. */
 function notifyUserT(input: Parameters<typeof notifyUser>[0]) {
   return notifyUser(input, testDeps);
 }
