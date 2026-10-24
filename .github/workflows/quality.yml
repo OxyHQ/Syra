@@ -261,6 +261,11 @@ jobs:
       # @expo/vector-icons import instead.
       - name: SDK tests
         run: bun run --filter @syra.fm/sdk test
+      - name: Built SDK with published Oxy transport
+        run: |
+          bun install --cwd tests/sdk-transport --frozen-lockfile --minimum-release-age=0
+          bun run --cwd tests/sdk-transport typecheck
+          bun run --cwd tests/sdk-transport test
       # Biome formats and lints EVERY package (root `biome.json`). `biome ci`
       # fails on formatting drift and on error-level rules, not on warnings, so
       # the baselined backlog (rules set to "warn" when Biome was adopted) does

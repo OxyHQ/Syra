@@ -62,8 +62,28 @@ createSyraClient({
 });
 ```
 
-`fetch` defaults to the global `fetch`. It is the seam through which an
-authenticated transport can be layered in a future version.
+`fetch` defaults to the global `fetch`. External clients can continue supplying
+`getAccessToken` for their existing bounded credentials.
+
+Own product frontends use the existing Oxy session directly with `@oxy.so/core`
+7 or newer within major 7 (`@oxy.so/services` 13 supplies that client). The
+factory needs the linked client's `fetch` transport, which core 6 does not expose:
+
+```ts
+import { syraForOxySession } from '@syra.fm/sdk/client';
+
+const syra = syraForOxySession(oxyServices);
+const shows = await syra.listMyPodcasts();
+syra.dispose(); // does not dispose the shared Oxy session
+```
+
+The linked transport requires Oxy core 7 and follows account switches, renewal
+and revocation without copying a bearer into app state. It refuses redirects
+and cannot be mixed with `getAccessToken` or a raw `fetch` override. The helper
+is structural and adds no Oxy, React or native runtime dependency to the
+headless entry. Ticket-authorized episode ingest and signed storage uploads
+retain their own credential and never attach the person's session as a second
+credential. See [the rollout record](../../docs/first-party-sdk.md).
 
 ## API
 

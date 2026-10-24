@@ -57,7 +57,7 @@ Production: web `https://syra.fm`, API/WebSocket `https://api.syra.fm` / `wss://
 ## Oxy Integration
 
 - Gate private API calls (library, playlists, artist profile, privacy, preferences, recommendations) with `useAuth().canUsePrivateApi` / `isPrivateApiPending` — not app-local token helpers.
-- `packages/frontend/utils/api.ts` owns the linked authenticated Syra API client via `oxyServices.createLinkedClient(...)`. Components/hooks must not hand-roll auth headers, refresh, CSRF probing, or session invalidation.
+- `utils/api.ts` owns the linked frontend client; cross-product callers use `syraForOxySession` (`docs/first-party-sdk.md`). No local token/refresh plumbing.
 
 ## Files: images and audio in Oxy Files
 
