@@ -28,26 +28,33 @@ describe('Syra ecosystem activity', () => {
     process.env.OXY_ECOSYSTEM_ACTIVITY_ENABLED = 'true';
     process.env.AWS_REGION = 'us-west-2';
     process.env.OXY_API_URL = 'https://collector.example.test';
-    // A pair here because this test mocks `/auth/service-token`, not because a
-    // deployment carries one: `createEcosystemTraffic` accepts any of an
-    // OXY_ACTIVITY_* pair, an OXY_SERVICE_API_* pair, or an attestable task role
-    // (oxy ADR 0026), and production takes the third. Attesting instead would
-    // mean standing up a container credentials endpoint to prove a branch that
-    // belongs to @oxy.so/core's own suite.
-    process.env.OXY_SERVICE_API_KEY = 'test-key';
-    process.env.OXY_SERVICE_API_SECRET = 'test-secret';
+    // The publisher takes the lane production takes: an attestable task role
+    // (oxy ADR 0026). Since @oxy.so/core 7 an own publisher never reads an
+    // OXY_SERVICE_API_* or OXY_ACTIVITY_* pair, so the container credentials
+    // endpoint, the challenge and the attested mint are all answered here.
+    process.env.AWS_CONTAINER_CREDENTIALS_FULL_URI = 'http://credentials.example.test/role';
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-      const path = new URL(String(input)).pathname;
+      const url = new URL(String(input));
+      const path = url.pathname;
       publications.push({
         path,
         body: typeof init?.body === 'string' ? JSON.parse(init.body) : null,
       });
-      return new Response(
-        JSON.stringify(
-          path === '/auth/service-token' ? { token: 'test-token', expiresIn: 3600 } : { ok: true },
-        ),
-        { headers: { 'content-type': 'application/json' } },
-      );
+      const answer =
+        url.host === 'credentials.example.test'
+          ? {
+              AccessKeyId: 'test-access-key',
+              SecretAccessKey: 'test-secret',
+              Token: 'test-session',
+            }
+          : path === '/auth/service-token/workload/challenge'
+            ? { nonce: 'test-nonce' }
+            : path === '/auth/service-token/workload'
+              ? { token: 'test-token', expiresIn: 3600 }
+              : { ok: true };
+      return new Response(JSON.stringify(answer), {
+        headers: { 'content-type': 'application/json' },
+      });
     }) as typeof fetch;
     let traffic: ReturnType<typeof startPlatformActivity> = undefined;
     try {
@@ -73,7 +80,7 @@ describe('Syra ecosystem activity', () => {
       ]);
       expect(batch[0].sourceRegion).toBe('edge-mad');
       expect(batch[1].targetRegion).toBe('edge-mad');
-      expect(JSON.stringify(batch)).not.toMatch(/private-track-id|test-secret/);
+      expect(JSON.stringify(batch)).not.toMatch(/private-track-id|test-secret|test-session/);
       const members = publications
         .filter((item) => item.path === '/internal/activity/infrastructure')
         .map((item) => item.body as Record<string, unknown>);
@@ -86,8 +93,7 @@ describe('Syra ecosystem activity', () => {
         'OXY_ECOSYSTEM_ACTIVITY_ENABLED',
         'AWS_REGION',
         'OXY_API_URL',
-        'OXY_SERVICE_API_KEY',
-        'OXY_SERVICE_API_SECRET',
+        'AWS_CONTAINER_CREDENTIALS_FULL_URI',
       ]) {
         if (saved[key] === undefined) delete process.env[key];
         else process.env[key] = saved[key];
