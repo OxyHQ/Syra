@@ -76,6 +76,13 @@ bun run --cwd packages/frontend ios
 bun run --cwd packages/frontend android
 ```
 
+An Android **release** build of either app is signed with the Oxy ecosystem key and fails
+without it (`@oxy.so/services/plugins/withOxySharedPermissions`). Provide
+`OXY_UPLOAD_STORE_FILE`, `OXY_UPLOAD_STORE_PASSWORD` (or `OXY_UPLOAD_STORE_PASSWORD_FILE`) and
+`OXY_UPLOAD_KEY_ALIAS` as Gradle properties (`~/.gradle/gradle.properties`, `-P`, or
+`ORG_GRADLE_PROJECT_<name>`), never from the repository. Debug builds keep Expo's debug key;
+`OXY_UPLOAD_SIGN_DEBUG=true` signs them with the ecosystem key too.
+
 <details>
 <summary><b>Builds, tests and lint</b></summary>
 
