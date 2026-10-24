@@ -65,7 +65,9 @@ createSyraClient({
 `fetch` defaults to the global `fetch`. External clients can continue supplying
 `getAccessToken` for their existing bounded credentials.
 
-Own product frontends use the existing Oxy session directly:
+Own product frontends use the existing Oxy session directly with `@oxy.so/core`
+7 or newer within major 7 (`@oxy.so/services` 13 supplies that client). The
+factory needs the linked client's `fetch` transport, which core 6 does not expose:
 
 ```ts
 import { syraForOxySession } from '@syra.fm/sdk/client';
