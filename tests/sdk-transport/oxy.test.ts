@@ -1,8 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
 import { OxyServices } from '@oxy.so/core';
 import type { Server } from 'bun';
-import { syraForOxySession } from './oxy';
-import { createSyraClient } from './client';
+import { syraForOxySession, createSyraClient } from '../../packages/sdk';
 
 const token = (sub: string) =>
   `e30.${Buffer.from(JSON.stringify({ sub, exp: Math.floor(Date.now() / 1000) + 3600 })).toString('base64url')}.fixture`;
