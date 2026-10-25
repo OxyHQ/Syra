@@ -1,7 +1,8 @@
 # First-party platform migration
 
-Source checkpoints only. Deployment and final published package pins are separate
-steps; the Oxy protocol-2 receiver must be live before this producer is deployed.
+The source is composed against published packages; runtime deployment remains a
+separate step. The coordinator verified the Oxy protocol-2 receiver live before
+this producer rollout.
 Oxy's first-party decision supersedes the internal scopes/key instructions in the
 historical image/audio migration runbooks. Customer credentials and external OAuth
 remain bounded; a Syra brand or local owner identifier never supplies user authority.
@@ -16,7 +17,7 @@ remain bounded; a Syra brand or local owner identifier never supplies user autho
 | House/room/series images → Files | New assets application-owned; historical file IDs unchanged | Same local roles, reference replacement, no deletion of personal owner's file |
 | Asynchronous podcast/locker ingest → Files | Original task persisted at verified draft/upload admission | Ticket contract unchanged; old missing-proof rows cannot create new personal files |
 | Syra moderation → CrowdSource | Own outbox uses injected shared OxyServer; delivery signature retained | Registry CrowdSource 3.1 pinned; receiver live; preserve durable outbox and verify canary |
-| Other apps → Syra SDK | Separate source branch `657e15d` has linked session factory | Publish/pin and integrate SDK source; no deployment claimed |
+| Other apps → Syra SDK | Main `8acbe2e` contains the linked factory; corrective SDK 0.23 release PR 255 is separate | Verify published 0.23 bytes before caller pins; 0.22 is the older artifact |
 | Syra frontend/studio → own API | Shared linked clients; privacy reads separated by verified viewer and session change; Studio uses provider account cache | Verify caches and receiver composition with core 7 |
 
 Application-owned audio and audio referenced by Syra keep the Files application
@@ -138,3 +139,27 @@ These are source/release gates, not a claim of runtime deployment. Apply the
 additive task-authority migration in its reviewed pre phase, then deploy and
 verify original-account uploads, durable ingest, revocation outbox and playback.
 Historical personal files are not converted or erased by this rollout.
+
+## Rolling deployment and rollback
+
+Apply migration 0039 in the normal pre phase before starting new API or ingest
+processes. It adds nullable columns, a revocation queue and triggers; existing
+processes can continue using the old schema projection. It does not backfill a
+task from an owner ID or change any existing file ownership. New admissions store
+only the task handle, and replacement/deletion queues revocation durably.
+
+During a mixed-version rollout an old writer may still create a row without a
+task. New workers preserve that row and any existing playable audio, but cannot
+copy it into personal Files until an ordinary verified owner action admits the
+original authority. Do not delete/reclassify those records to clear a queue.
+Verify that all API, ingest and scheduled/one-shot producers have switched before
+retiring Oxy's central finite compatibility cohort. Replaying pending revocations
+must remain enabled during the transition.
+
+Rollback keeps migration 0039 and its queued revocations: do not drop task columns
+or the outbox to match an older image. The earlier image is only a temporary
+rollback while its verified legacy workload remains accepted; it is not a way to
+regain broad personal-file authority after the compatibility cohort is removed.
+Any task already admitted still has its original account and expiry. Operational
+canaries must check new personal upload, existing audio playback, shared-space
+replacement without personal-file deletion, moderation delivery and task revocation.
