@@ -1,8 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
-import { useOxy } from '@oxy.so/services/ui/client';
+import { useAuth } from '@oxy.so/services/ui/client';
 import { playerSocketService } from '@/services/playerSocketService';
-import { oxyServices } from '@/lib/oxyServices';
 import { deviceDisplayName, deviceTypeForPlatform } from '@/utils/device';
 import { getDeviceId } from '@/utils/deviceId';
 
@@ -27,13 +26,16 @@ const CLIENT_CAPABILITIES = ['play', 'pause', 'seek', 'volume', 'next', 'prev', 
  * (re)connection.
  */
 export function usePlayerPresence(): void {
-  const { user, canUsePrivateApi } = useOxy();
+  const { user, canUsePrivateApi, oxyServices } = useAuth();
+  const [contextRevision, setContextRevision] = useState(0);
   const userId = user?.id;
 
   useEffect(() => {
     if (!canUsePrivateApi || !userId) return;
 
-    playerSocketService.connect(userId, () => oxyServices.session.accessToken);
+    const release = playerSocketService.connect(oxyServices, () => {
+      setContextRevision((value) => value + 1);
+    });
 
     let cancelled = false;
     let heartbeat: ReturnType<typeof setInterval> | null = null;
@@ -61,7 +63,7 @@ export function usePlayerPresence(): void {
         clearInterval(heartbeat);
         heartbeat = null;
       }
-      playerSocketService.releaseFromEffect();
+      release();
     };
-  }, [canUsePrivateApi, userId]);
+  }, [canUsePrivateApi, userId, oxyServices, contextRevision]);
 }

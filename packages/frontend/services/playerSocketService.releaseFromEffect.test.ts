@@ -13,26 +13,17 @@ jest.mock('../stores/queueStore', () => ({ useQueueStore: { getState: () => ({})
 
 import { playerSocketService } from './playerSocketService';
 
-/**
- * `releaseFromEffect` exists because `connect()`'s handshake guard fixes only
- * half the problem.
- *
- * That guard is on the CONNECT side, and React orders a dependency change as
- * cleanup-then-effect — so an unconditional `disconnect()` in the cleanup has
- * already killed an in-flight attempt before `connect()` ever looks at it. The
- * browser reports it as "WebSocket is closed before the connection is
- * established", which is exactly what production logged.
- *
- * The fixtures below are the point: `active && !connected` is the handshaking
- * state, and it is the ONLY one where the two behaviours differ. A test that
- * only exercised a connected socket, or only a null one, would pass against an
- * unconditional disconnect and prove nothing.
- */
-
-type FakeSocket = { active: boolean; connected: boolean; disconnect: () => void };
+/** Cleanup must cancel even a handshake whose shared refresh is still pending. */
+type FakeSocket = {
+  active: boolean;
+  connected: boolean;
+  disconnect: () => void;
+  removeAllListeners?: () => void;
+};
 
 function withSocket(socket: FakeSocket | null): { disconnected: () => boolean } {
   let disconnected = false;
+  if (socket) socket.removeAllListeners = () => {};
   if (socket)
     socket.disconnect = () => {
       disconnected = true;
@@ -48,12 +39,12 @@ afterEach(() => {
 });
 
 describe('releaseFromEffect', () => {
-  it('leaves a HANDSHAKING socket alone — the case the whole method exists for', () => {
+  it('cancels a handshaking socket when its owner unmounts', () => {
     const probe = withSocket({ active: true, connected: false, disconnect: () => {} });
 
     playerSocketService.releaseFromEffect();
 
-    expect(probe.disconnected()).toBe(false);
+    expect(probe.disconnected()).toBe(true);
   });
 
   it('tears down a CONNECTED socket, because a real teardown must still work', () => {

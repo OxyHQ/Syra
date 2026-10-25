@@ -47,24 +47,39 @@ export function useRoomConnection({
   const [isRecording, setIsRecording] = useState(false);
   const [activeRecordingId, setActiveRecordingId] = useState<string | null>(null);
   const hasJoined = useRef(false);
+  const [contextRevision, setContextRevision] = useState(0);
 
   const myParticipant = participants.find((p) => p.userId === userId);
   const myRole = myParticipant?.role ?? null;
 
   useEffect(() => {
+    // Reacquire after the shared session invalidates this generation.
+    void contextRevision;
     if (!enabled || !isAuthenticated || !isReady || !userId) return;
-    const token = oxyServices?.session.accessToken ?? undefined;
-    if (!token) return;
-    roomSocketService.connect(userId, token);
+    const release = roomSocketService.connectWithOxy(oxyServices, () => {
+      hasJoined.current = false;
+      setIsConnected(false);
+      setIsMuted(true);
+      setIsRoomEnded(false);
+      setParticipants([]);
+      setSpeakerRequests([]);
+      setActiveStream(null);
+      setIsRecording(false);
+      setActiveRecordingId(null);
+      setContextRevision((value) => value + 1);
+    });
     const interval = setInterval(() => {
       setIsConnected(roomSocketService.isConnected);
     }, 500);
     return () => {
       clearInterval(interval);
+      release();
     };
-  }, [enabled, isAuthenticated, isReady, userId, roomSocketService, oxyServices]);
+  }, [enabled, isAuthenticated, isReady, userId, roomSocketService, oxyServices, contextRevision]);
 
   useEffect(() => {
+    // Listener leases belong to the socket generation, even for the same account.
+    void contextRevision;
     if (!enabled) return;
     const unsubs: Array<() => void> = [];
 
@@ -141,11 +156,13 @@ export function useRoomConnection({
     return () => {
       unsubs.forEach((fn) => fn());
     };
-  }, [enabled, roomId, userId, roomSocketService]);
+  }, [enabled, roomId, userId, roomSocketService, contextRevision]);
 
   const join = useCallback(() => {
     if (hasJoined.current) return;
+    const epoch = oxyServices.http.getSessionEpoch();
     roomSocketService.joinRoom(roomId, (res) => {
+      if (oxyServices.http.getSessionEpoch() !== epoch) return;
       if (res.success && res.participants) {
         setParticipants(res.participants);
         hasJoined.current = true;
@@ -159,7 +176,7 @@ export function useRoomConnection({
         }
       }
     });
-  }, [roomId, roomSocketService, introSound]);
+  }, [roomId, roomSocketService, introSound, oxyServices]);
 
   const leave = useCallback(() => {
     roomSocketService.leaveRoom(roomId);

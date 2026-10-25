@@ -266,6 +266,12 @@ jobs:
           bun install --cwd tests/sdk-transport --frozen-lockfile --minimum-release-age=0
           bun run --cwd tests/sdk-transport typecheck
           bun run --cwd tests/sdk-transport test
+      - name: Packed live socket SDK with minimum published Oxy transport
+        run: |
+          bun run --cwd packages/sdk typecheck:socket-tests
+          bun install --cwd tests/sdk-sockets --frozen-lockfile --minimum-release-age=0
+          bun run --cwd tests/sdk-sockets typecheck
+          bun run --cwd tests/sdk-sockets test
       # Biome formats and lints EVERY package (root `biome.json`). `biome ci`
       # fails on formatting drift and on error-level rules, not on warnings, so
       # the baselined backlog (rules set to "warn" when Biome was adopted) does

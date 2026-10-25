@@ -1,6 +1,7 @@
-import { API_URL_SOCKET } from '@/config';
-import { io, Socket } from 'socket.io-client';
-import {
+import { API_URL_SOCKET, API_URL } from '@/config';
+import type { OxyServices } from '@oxy.so/core';
+import { io, type Socket } from 'socket.io-client';
+import type {
   ConnectPlaybackState,
   Queue,
   Device,
@@ -21,7 +22,10 @@ interface DeviceRegistration {
 class PlayerSocketService {
   private socket: Socket | null = null;
   private isConnected = false;
-  private currentUserId?: string;
+  private currentOxy?: OxyServices;
+  private epoch?: number;
+  private releaseSession?: () => void;
+  private sessionLeases = new Map<object, () => void>();
   /** Last device descriptor registered, re-sent automatically after reconnects. */
   private lastDeviceRegistration?: DeviceRegistration;
   /**
@@ -43,58 +47,60 @@ class PlayerSocketService {
     this.localDeviceId = deviceId;
   }
 
-  /**
-   * Connect to the player socket namespace.
-   *
-   * `getToken` is resolved lazily via a socket.io auth callback so a fresh
-   * access token is sent on every (re)connection — reconnects after a token
-   * refresh authenticate with the current token rather than a stale one.
-   */
-  connect(userId?: string, getToken?: () => string | null | undefined) {
-    // Switching users → fully tear down the previous session first.
-    if (userId && this.currentUserId && userId !== this.currentUserId) {
+  /** The app's one presence owner uses the shared session for each handshake. */
+  connect(oxy: OxyServices, onContextEnd: () => void = () => {}): () => void {
+    const epoch = oxy.http.getSessionEpoch();
+    if (this.currentOxy === oxy && this.epoch === epoch && this.socket?.active) {
+      return this.acquireLease(onContextEnd);
+    }
+    this.disconnect();
+    const linked = oxy.createLinkedClient({ baseURL: API_URL });
+    const controller = new AbortController();
+    const target = `${API_URL_SOCKET}/player`;
+    const current = io(target, {
+      transports: ['websocket', 'polling'],
+      auth: (callback) => {
+        void linked.getAccessToken(target, { signal: controller.signal }).then(
+          (token) => {
+            if (!controller.signal.aborted) callback({ token });
+          },
+          () => {
+            if (!controller.signal.aborted) callback({});
+          },
+        );
+      },
+      autoConnect: false,
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
+    });
+    this.socket = current;
+    this.currentOxy = oxy;
+    this.epoch = epoch;
+    const unsubscribe = oxy.http.addTokenChangeListener(() => {
+      if (oxy.http.getSessionEpoch() === epoch || this.socket !== current) return;
+      const callbacks = [...this.sessionLeases.values()];
       this.disconnect();
-    }
+      for (const callback of callbacks) callback();
+    });
+    this.releaseSession = () => {
+      controller.abort();
+      unsubscribe();
+      linked.dispose();
+    };
+    this.setupEventListeners();
+    current.connect();
+    return this.acquireLease(onContextEnd);
+  }
 
-    /**
-     * `active` as well as `connected`, and that is the whole fix.
-     *
-     * Checking only `connected` treated a socket that was still HANDSHAKING as
-     * stale, so the cleanup below tore it down mid-connection — which the
-     * browser reports as "WebSocket is closed before the connection is
-     * established". Two `connect()` calls in quick succession are ordinary
-     * here: the caller is an effect keyed on `canUsePrivateApi` and `userId`,
-     * both of which settle during boot, and React re-invokes effects in
-     * StrictMode. `active` is true while socket.io is connecting or retrying,
-     * so an in-flight attempt is now left alone to finish.
-     */
-    if (this.socket?.connected || this.socket?.active) {
-      return;
-    }
-
-    try {
-      if (userId) this.currentUserId = userId;
-
-      // Clean up a stale, non-connected socket before creating a new one.
-      if (this.socket) {
-        this.socket.disconnect();
-        this.socket = null;
-      }
-
-      // Connect to player namespace
-      this.socket = io(`${API_URL_SOCKET}/player`, {
-        transports: ['websocket', 'polling'],
-        auth: (cb) => cb({ token: getToken?.() ?? undefined }),
-        autoConnect: true,
-        reconnection: true,
-        reconnectionAttempts: 10,
-        reconnectionDelay: 1000,
-      });
-
-      this.setupEventListeners();
-    } catch (error) {
-      console.error('[PlayerSocket] Error connecting:', error);
-    }
+  private acquireLease(onContextEnd: () => void): () => void {
+    const current = this.socket;
+    const lease = {};
+    this.sessionLeases.set(lease, onContextEnd);
+    return () => {
+      this.sessionLeases.delete(lease);
+      if (this.socket === current && this.sessionLeases.size === 0) this.disconnect();
+    };
   }
 
   /**
@@ -250,35 +256,24 @@ class PlayerSocketService {
     }
   }
 
-  /**
-   * Release the socket from an effect cleanup, leaving an in-flight attempt alone.
-   *
-   * `connect()` already refuses to disturb a handshaking socket — see its comment,
-   * which names the browser's exact complaint. But that guard runs on the CONNECT
-   * side, and React orders a dependency change as cleanup-then-effect: by the time
-   * `connect()` looks, an unconditional `disconnect()` has already killed the
-   * in-flight attempt, and the browser reports "WebSocket is closed before the
-   * connection is established" all the same.
-   *
-   * `usePlayerPresence` is keyed on `canUsePrivateApi` and `userId`, both of which
-   * settle during Oxy's cold boot, so a benign re-run mid-handshake is ordinary
-   * rather than exceptional. Switching users is handled where it belongs —
-   * `connect()` tears down the previous session itself when the id differs.
-   */
+  /** An effect release also cancels an unfinished authentication handshake. */
   releaseFromEffect() {
-    if (this.socket?.active && !this.socket.connected) return;
     this.disconnect();
   }
 
-  /**
-   * Disconnect from socket
-   */
   disconnect() {
-    if (this.socket) {
-      this.socket.disconnect();
-      this.socket = null;
-      this.isConnected = false;
-    }
+    this.releaseSession?.();
+    this.releaseSession = undefined;
+    this.socket?.removeAllListeners();
+    this.socket?.disconnect();
+    this.socket = null;
+    this.isConnected = false;
+    this.currentOxy = undefined;
+    this.epoch = undefined;
+    this.lastDeviceRegistration = undefined;
+    this.localDeviceId = null;
+    this.sessionLeases.clear();
+    for (const callback of this.deviceListCallbacks) callback([]);
   }
 
   /**

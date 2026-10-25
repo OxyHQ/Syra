@@ -1,0 +1,18 @@
+{
+  "name": "syra-packed-socket-tests",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "test": "bun test socket.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@oxy.so/core": "7.1.0",
+    "@types/bun": "1.4.3",
+    "@types/node": "26.6.5",
+    "socket.io": "4.8.3",
+    "socket.io-client": "4.8.3",
+    "typescript": "6.0.3"
+  },
+  "type": "module"
+}
