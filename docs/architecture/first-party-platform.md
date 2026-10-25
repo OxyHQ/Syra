@@ -170,3 +170,13 @@ can be copied with that task; a historical row without proof remains unchanged.
 CI regression coverage includes both cases and the live ingest ticket refusing
 deletes. The isolated receiver probe disposes its OxyServer before exit so its
 background connections do not outlive the test; its timeout was not increased.
+
+
+## Alia client transport
+
+The frontend source uses the published `@alia.onl/sdk` 22.0.0 with the existing
+Core 7.3 / services 13 stack. Alia owns conversation, history, streaming and audio
+transport through the shared Oxy session; the app keeps its existing provider,
+agent selection and UI. No app-local bearer refresh or internal permission prompt
+is introduced. Package installation was checked against the published artifact;
+source adoption and deployment are separate rollout steps.
