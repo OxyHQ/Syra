@@ -163,3 +163,10 @@ regain broad personal-file authority after the compatibility cohort is removed.
 Any task already admitted still has its original account and expiry. Operational
 canaries must check new personal upload, existing audio playback, shared-space
 replacement without personal-file deletion, moderation delivery and task revocation.
+
+The operator audio migration uses the same stored original-task lookup as
+asynchronous ingest. A row readmitted through the ordinary verified owner flow
+can be copied with that task; a historical row without proof remains unchanged.
+CI regression coverage includes both cases and the live ingest ticket refusing
+deletes. The isolated receiver probe disposes its OxyServer before exit so its
+background connections do not outlive the test; its timeout was not increased.
