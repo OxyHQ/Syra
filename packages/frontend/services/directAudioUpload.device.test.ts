@@ -1,10 +1,10 @@
 import { File as DeviceFile } from 'expo-file-system';
-import { sendAudioUpload } from '@syra.fm/sdk';
+import { sendAudioUpload } from '@syra.fm/sdk/upload';
 import { uploadAudioDirect } from './directAudioUpload';
 import { api } from '@/utils/api';
 
 jest.mock('@/utils/api', () => ({ api: { post: jest.fn() } }));
-jest.mock('@syra.fm/sdk', () => ({ sendAudioUpload: jest.fn(async () => undefined) }));
+jest.mock('@syra.fm/sdk/upload', () => ({ sendAudioUpload: jest.fn(async () => undefined) }));
 jest.mock('expo-file-system', () => ({ File: jest.fn(), UploadType: { BINARY_CONTENT: 0 } }));
 // A device: the picker hands over a `file://` uri, not a DOM File.
 jest.mock('react-native', () => ({ Platform: { OS: 'ios' } }));

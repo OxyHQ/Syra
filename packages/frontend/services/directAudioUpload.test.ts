@@ -1,9 +1,9 @@
-import { sendAudioUpload } from '@syra.fm/sdk';
+import { sendAudioUpload } from '@syra.fm/sdk/upload';
 import { uploadAudioDirect } from './directAudioUpload';
 import { api } from '@/utils/api';
 
 jest.mock('@/utils/api', () => ({ api: { post: jest.fn() } }));
-jest.mock('@syra.fm/sdk', () => ({ sendAudioUpload: jest.fn(async () => undefined) }));
+jest.mock('@syra.fm/sdk/upload', () => ({ sendAudioUpload: jest.fn(async () => undefined) }));
 jest.mock('expo-file-system', () => ({ File: jest.fn(), UploadType: { BINARY_CONTENT: 0 } }));
 // The web branch: the picked DOM File is what is sent.
 jest.mock('react-native', () => ({ Platform: { OS: 'web' } }));

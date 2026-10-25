@@ -51,3 +51,6 @@ export type {
 // Zod (with its locales) is ~500 KiB of JavaScript for a check the client does
 // in plain TypeScript. Server consumers import them from `@syra.fm/sdk/schemas`.
 export { SyraApiError, SyraResponseError } from './errors';
+
+export { syraForOxySession } from './oxy';
+export type { SyraLinkedIdentity, SyraSessionOptions } from './oxy';
