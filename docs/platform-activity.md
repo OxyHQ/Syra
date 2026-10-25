@@ -15,14 +15,19 @@ is a network ingress location, not a visitor's physical location.
 
 `OXY_ECOSYSTEM_ACTIVITY_ENABLED=true` explicitly enables the deployed producer; it is disabled by default. Keep it false in local environments, even when using AWS storage.
 
-`AWS_REGION` supplies the process location. Publication is authenticated by the
-identity the process already has: in ECS the task role attests (oxy ADR 0026) and
-the deployment carries no key pair at all, and elsewhere an
-`OXY_ACTIVITY_API_KEY`/`OXY_ACTIVITY_API_SECRET` or
-`OXY_SERVICE_API_KEY`/`OXY_SERVICE_API_SECRET` pair does. Enabled producer configuration is validated before
-listening. Each process registers a fresh instance, refreshes its lease,
-and removes it during graceful shutdown. Crashed instances disappear when their
-lease expires. Oxy broadcasts authoritative snapshots over Socket.IO.
+`AWS_REGION` supplies the process location. Publication uses temporary workload
+identity through the shared Oxy producer and its AWS credential provider
+(`packages/backend/src/services/platformActivity.ts`). ECS task roles and other
+registered temporary assumed-role credentials are authenticated by Oxy's live
+workload binding; customer API keys are not an alternative for this own producer.
+Do not provision `OXY_ACTIVITY_API_KEY`/`OXY_ACTIVITY_API_SECRET` or
+`OXY_SERVICE_API_KEY`/`OXY_SERVICE_API_SECRET` for activity publication.
+
+Each process registers a fresh instance, refreshes its lease and removes it
+during graceful shutdown. Crashed instances disappear when their lease expires.
+Oxy broadcasts authoritative snapshots over Socket.IO. The activity field named
+`scope` classifies traffic as internal/external; it is not an OAuth permission
+or a per-application access grant.
 
 Counters describe observed application operations, not network bytes. Direct
 object-storage downloads, media transports, database wire protocols and third
