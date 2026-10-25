@@ -83,7 +83,9 @@ entry exposes the transport without loading React or native audio. Existing
 `connect(userId, token?)` remains the explicit external credential API; it is
 never used to infer first-party authority.
 
-The live transport requires published Oxy core >=7.1.0 <8.0.0 (optional peer).
+The live transport requires published Oxy core >=7.1.0 <8.0.0 and
+services >=13.0.0 <14.0.0 (optional peers). Old services 8–12 providers may
+embed core 6 and are no longer advertised for this shared-session live hook.
 Headless HTTP factories are unchanged. `tests/sdk-sockets` has its own frozen
 lock on core 7.1.0, extracts the actual `bun pm pack` artifact, imports its public
 socket entry and verifies connected account switches with real Socket.IO. It
