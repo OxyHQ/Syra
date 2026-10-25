@@ -53,3 +53,16 @@ gzip), translations 1,247,628 (424,993 gzip), other JavaScript 2,817,757 (800,54
 gzip). SDK 338 tests, six real HTTP transport tests, four frontend upload tests
 and frontend/SDK typechecks also pass. These measurements are local evidence;
 Actions still validates the release commit.
+
+
+## Public artifact correction
+
+Registry SDK 0.22.0 predates this implementation. Its npm provenance names source
+`039ea484411cd2c70729dd8add6cff4e216434cf` and Actions run 39952355499; its tarball
+has no session factory or focused `/live` and `/upload` entries and retains the
+older Zod floor. PR 251 source alone therefore did not make the factory available
+to external consumers. Version 0.23.0 publishes the reviewed additive factory and
+entries with patched Zod. After Actions publication, verify the tarball exports
+and declaration files before pinning consumers; a version lookup alone is not
+evidence that the desired artifact was released. This patch changes no backend
+workload implementation or app dependency pins.
