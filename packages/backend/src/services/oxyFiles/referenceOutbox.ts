@@ -1,3 +1,4 @@
+import { drainFileTaskRevocations } from './taskAuthority';
 /**
  * Sends the queued file references to Oxy (`oxy_file_reference_ops`).
  *
@@ -30,7 +31,6 @@ import { and, eq, sql } from 'drizzle-orm';
 import type { ServiceFileReference, ServiceFileReferenceResult } from '@oxy.so/core';
 import { getDb, isPostgresConnected } from '../../db/postgres';
 import { oxyFileReferenceOps, type OxyReferenceEntityType } from '../../db/schema/oxyFiles';
-import { canAuthenticateAsOxyService } from '../../oxyClient';
 import { logger } from '../../utils/logger';
 import { describeErrorSafely } from '../../utils/error';
 import { oxyFiles } from './client';
@@ -181,22 +181,21 @@ let stopped = true;
 let timer: ReturnType<typeof setTimeout> | null = null;
 
 /**
- * Start draining on this instance. Without an Oxy identity (a local checkout)
- * nothing is sent and the queue simply waits — it is durable, so a deployment
- * that gains its credential later delivers everything queued before.
+ * Start draining on this instance. The shared workload provider resolves identity
+ * at delivery time; failed attempts retain the durable queue and its retry policy.
  */
 export function startReferenceOutbox(): void {
   if (!stopped) return;
-  if (!canAuthenticateAsOxyService()) {
-    logger.warn('[OxyFiles] no Oxy service identity: file references stay queued, unsent');
-    return;
-  }
+
   stopped = false;
   const tick = async () => {
     if (stopped) return;
     let claimed = 0;
     try {
-      if (isPostgresConnected()) claimed = await drainReferenceOutboxOnce();
+      if (isPostgresConnected()) {
+        await drainFileTaskRevocations();
+        claimed = await drainReferenceOutboxOnce();
+      }
     } catch (error) {
       logger.error('[OxyFiles] reference outbox tick failed', {
         error: describeErrorSafely(error),

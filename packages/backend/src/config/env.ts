@@ -117,8 +117,6 @@ const schema = z
      * moment the SDK is asked. Both or neither — one alone, or either left blank,
      * REPLACES the attestation path with a credential that cannot mint.
      */
-    OXY_SERVICE_API_KEY: z.string().optional(),
-    OXY_SERVICE_API_SECRET: z.string().optional(),
 
     TELEGRAM_BOT_TOKEN: z.string().optional(),
 

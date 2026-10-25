@@ -380,6 +380,15 @@ export const ID_COLUMNS_WITHOUT_FOREIGN_KEY: readonly { column: string; reason: 
       'The Oxy account a notification was already emitted to — half of the unique claim key with ' +
       '`key` (RELATIONS.md: NotificationSuppression.oxyUserId).',
   },
+  {
+    column: 'episodes.oxy_task_id',
+    reason:
+      'Original task authority owned and revoked by Oxy; only an opaque handle is persisted locally.',
+  },
+  {
+    column: 'user_uploads.oxy_task_id',
+    reason: 'Original task authority owned and revoked by Oxy; not a local row or a bearer.',
+  },
   // ── CROSS-SERVICE: Oxy file ids, owned by oxy-api (ADR 0043), never a Syra row ──
   {
     column: 'image_assets.oxy_file_id',
@@ -390,16 +399,17 @@ export const ID_COLUMNS_WITHOUT_FOREIGN_KEY: readonly { column: string; reason: 
   {
     column: 'houses.avatar_file_id',
     reason:
-      "An Oxy file owned by the house's creator — same reasoning as image_assets.oxy_file_id.",
+      'A shared application asset (or unchanged historical personal file) — same reasoning as image_assets.oxy_file_id.',
   },
   {
     column: 'houses.cover_image_file_id',
     reason:
-      "An Oxy file owned by the house's creator — same reasoning as image_assets.oxy_file_id.",
+      'A shared application asset (or unchanged historical personal file) — same reasoning as image_assets.oxy_file_id.',
   },
   {
     column: 'rooms.stream_image_file_id',
-    reason: "An Oxy file owned by the room's host — same reasoning as image_assets.oxy_file_id.",
+    reason:
+      'A shared application asset (or unchanged historical personal file) — same reasoning as image_assets.oxy_file_id.',
   },
   {
     column: 'series.cover_image_file_id',

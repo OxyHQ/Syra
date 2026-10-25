@@ -1,3 +1,4 @@
+import { withFileTask } from '../services/oxyFiles/taskAuthority';
 /**
  * Asynchronous episode ingest: reserve an episode while a user's session is
  * live, attach the audio later with no session at all.
@@ -173,47 +174,50 @@ export async function createEpisodeDraft(req: AuthRequest, res: Response): Promi
     ownerOxyUserId: userId,
   });
 
-  await getDb().transaction(async (tx) => {
-    await insertEpisode(
-      {
-        id: episodeId,
-        podcastId: podcast.id,
-        podcastTitle: podcast.title,
-        title,
-        description: input.description,
-        summary: input.summary,
-        guid: episodeId,
-        // No audio yet, so no duration is known and none is guessed. The ticket
-        // holder supplies it with the file.
-        duration: 0,
-        pubDate: new Date(),
-        season: input.season,
-        episodeNumber: input.episodeNumber,
-        episodeType: input.episodeType ?? 'full',
-        explicit: input.explicit ?? false,
-        aiGenerated: input.aiGenerated ?? false,
-        source: 'syra',
-        /**
-         * The URL is written NOW even though the object does not exist yet.
-         * It is derived from the episode id, so it is knowable in advance, and
-         * `ingestEpisode` reads it as the "there is source audio" signal — an
-         * episode drafted and never ingested therefore fails its transcode
-         * loudly rather than being skipped as a row with nothing to do.
-         */
-        audioSourceUrl: `/api/podcasts/episodes/${episodeId}/audio`,
-        status: 'processing',
-      },
-      { persons },
-      { recordOnShow: true },
-      tx,
-    );
+  await withFileTask(req, episodeId, (oxyTaskId) =>
+    getDb().transaction(async (tx) => {
+      await insertEpisode(
+        {
+          id: episodeId,
+          oxyTaskId,
+          podcastId: podcast.id,
+          podcastTitle: podcast.title,
+          title,
+          description: input.description,
+          summary: input.summary,
+          guid: episodeId,
+          // No audio yet, so no duration is known and none is guessed. The ticket
+          // holder supplies it with the file.
+          duration: 0,
+          pubDate: new Date(),
+          season: input.season,
+          episodeNumber: input.episodeNumber,
+          episodeType: input.episodeType ?? 'full',
+          explicit: input.explicit ?? false,
+          aiGenerated: input.aiGenerated ?? false,
+          source: 'syra',
+          /**
+           * The URL is written NOW even though the object does not exist yet.
+           * It is derived from the episode id, so it is knowable in advance, and
+           * `ingestEpisode` reads it as the "there is source audio" signal — an
+           * episode drafted and never ingested therefore fails its transcode
+           * loudly rather than being skipped as a row with nothing to do.
+           */
+          audioSourceUrl: `/api/podcasts/episodes/${episodeId}/audio`,
+          status: 'processing',
+        },
+        { persons },
+        { recordOnShow: true },
+        tx,
+      );
 
-    await insertIngestTicket(tx, {
-      jti: ticket.claims.jti,
-      episodeId,
-      expiresAt: ticket.expiresAt,
-    });
-  });
+      await insertIngestTicket(tx, {
+        jti: ticket.claims.jti,
+        episodeId,
+        expiresAt: ticket.expiresAt,
+      });
+    }),
+  );
 
   res.status(201).json({
     data: {

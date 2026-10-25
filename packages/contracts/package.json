@@ -1,6 +1,6 @@
 {
   "name": "@syra.fm/contracts",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/OxyHQ/Syra.git",
@@ -16,7 +16,7 @@
     "test": "bun test src"
   },
   "dependencies": {
-    "zod": "^4.4.3"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "typescript": "~5.9.3"

@@ -1,3 +1,8 @@
+import {
+  verifiedAudioSession,
+  installFileTaskAuthorityFixture,
+  resetFileTaskAuthorityFixture,
+} from '../test/fileTaskAuthority';
 /**
  * The ingest capability at the ENDPOINT — what an authentic ticket may actually
  * do to an episode, and when.
@@ -110,6 +115,7 @@ let server: Server;
 let baseUrl: string;
 
 beforeAll(async () => {
+  installFileTaskAuthorityFixture();
   await connectDb();
 
   const app = express();
@@ -117,7 +123,7 @@ beforeAll(async () => {
   app.use((req, _res, next) => {
     const viewer = req.headers[VIEWER_HEADER];
     if (typeof viewer === 'string' && viewer.length > 0) {
-      (req as AuthRequest).user = { id: viewer };
+      verifiedAudioSession(req, viewer);
     }
     next();
   });
@@ -139,6 +145,7 @@ afterEach(async () => {
 });
 
 afterAll(async () => {
+  resetFileTaskAuthorityFixture();
   await new Promise<void>((resolve) => server.close(() => resolve()));
   await disconnectDb();
 });

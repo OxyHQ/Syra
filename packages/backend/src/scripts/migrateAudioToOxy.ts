@@ -1,3 +1,4 @@
+import { personalAudioRequester } from '../services/oxyFiles/taskAuthority';
 /**
  * One-shot: store the audio Syra already holds in Oxy Files (OxyHQ/oxy ADR 0043
  * stage 4c), and point each row at its file.
@@ -365,7 +366,13 @@ async function migrateUnit(
     if (!(await (deps.stage ?? stageAudioObject)(unit.objectKey, localPath))) {
       return { ...base, outcome: 'missing_object' };
     }
+    const requester =
+      unit.owner.kind === 'account' &&
+      (unit.entity.kind === 'episode' || unit.entity.kind === 'user_upload')
+        ? await personalAudioRequester(unit.entity.kind, unit.entity.id, unit.owner.oxyUserId)
+        : null;
     const stored = await (deps.store ?? storeAudioInOxy)({
+      ...(requester ? { requester } : {}),
       entity: unit.entity,
       localPath,
       mime: audioMimeFor(unit.format),

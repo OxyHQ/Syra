@@ -2993,8 +2993,8 @@ router.post(
       }
 
       const image = await processImage(req.file.buffer, 'roomImage');
-      // The host's file (see `services/oxyFiles/spaceImages.ts`).
-      const file = await uploadSpaceImage(room.host, image, 'room-image');
+      // Shared resource artwork; no authority over the host's personal files.
+      const file = await uploadSpaceImage(image, 'room-image');
       await updateRoom(room.id, { streamImageFileId: file.id });
 
       res.json({ streamImage: oxyFileUrl(file.id), streamImageFileId: file.id });

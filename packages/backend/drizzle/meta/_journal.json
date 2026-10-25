@@ -274,6 +274,13 @@
       "when": 1792599771333,
       "tag": "0038_retire_legacy_image_storage",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1792787644358,
+      "tag": "0039_magenta_otto_octavius",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,8 @@
 # Runbook — Syra's images move into Oxy Files (OxyHQ/oxy ADR 0043, phase 4)
 
+> Internal scopes and service-key setup below are historical. The current source
+> migration and deployment prerequisites are in [first-party platform](../architecture/first-party-platform.md).
+
 Every image Syra serves — catalogue artwork, a person's uploaded cover, a house
 avatar, a show cover — is stored in **Oxy Files** from this release on. Audio
 has its own procedure: `docs/runbooks/oxy-files-audio.md`.

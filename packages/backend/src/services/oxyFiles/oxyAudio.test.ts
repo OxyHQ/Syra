@@ -111,6 +111,7 @@ describe('storing audio', () => {
       localPath: original('u.flac'),
       mime: 'audio/flac',
       owner: { kind: 'account', oxyUserId: 'owner' },
+      requester: { taskId: 'original-task', accountId: 'owner' },
     });
     const file = fake.files.get(stored.fileId)!;
     expect(file.ownerUserId).toBe('owner');

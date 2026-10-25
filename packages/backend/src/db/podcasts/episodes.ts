@@ -1,3 +1,5 @@
+import { publicColumns } from '@oxy.so/db/assert';
+import { PROTECTED_COLUMNS_BY_TABLE } from '../schema/protectedColumns';
 /**
  * Episodes — every read and write of `episodes`, its three child tables, and
  * `episode_progress`.
@@ -111,7 +113,10 @@ export interface EpisodeWithShow {
  */
 export async function findEpisodeById(id: string): Promise<EpisodeWithShow | undefined> {
   const [row] = await getDb()
-    .select({ episode: getTableColumns(episodes), show: getTableColumns(podcasts) })
+    .select({
+      episode: publicColumns(episodes, PROTECTED_COLUMNS_BY_TABLE),
+      show: getTableColumns(podcasts),
+    })
     .from(episodes)
     .innerJoin(podcasts, eq(podcasts.id, episodes.podcastId))
     .where(eq(episodes.id, id))
@@ -137,7 +142,7 @@ export async function findEpisodesByIds(
 ): Promise<EpisodeRow[]> {
   if (ids.length === 0) return [];
   return getDb()
-    .select()
+    .select(publicColumns(episodes, PROTECTED_COLUMNS_BY_TABLE))
     .from(episodes)
     .where(
       and(
@@ -177,7 +182,7 @@ export function episodesByShowQuery(
   options: { visibility: SQL | undefined; offset?: number; limit: number },
 ) {
   return getDb()
-    .select()
+    .select(publicColumns(episodes, PROTECTED_COLUMNS_BY_TABLE))
     .from(episodes)
     .where(and(eq(episodes.podcastId, podcastId), options.visibility))
     .orderBy(descNullsLast(episodes.episodeNumber), descNullsLast(episodes.pubDate))
@@ -231,7 +236,7 @@ export async function countEpisodesByShow(
  */
 export async function findFeedEpisodes(podcastId: string, limit: number): Promise<EpisodeRow[]> {
   return getDb()
-    .select()
+    .select(publicColumns(episodes, PROTECTED_COLUMNS_BY_TABLE))
     .from(episodes)
     .where(and(eq(episodes.podcastId, podcastId), eq(episodes.status, 'ready')))
     .orderBy(descNullsLast(episodes.pubDate))
@@ -374,7 +379,7 @@ export async function searchEpisodeRows(
   limit: number,
 ): Promise<EpisodeRow[]> {
   return getDb()
-    .select()
+    .select(publicColumns(episodes, PROTECTED_COLUMNS_BY_TABLE))
     .from(episodes)
     .where(and(publiclyPlayableEpisodeFilter(), textSearch(episodes.searchVector, query)))
     .orderBy(descNullsLast(episodes.popularity), descNullsLast(episodes.pubDate))
@@ -396,7 +401,7 @@ export async function findEpisodesCreditingPerson(
   limit: number,
 ): Promise<EpisodeRow[]> {
   return getDb()
-    .select()
+    .select(publicColumns(episodes, PROTECTED_COLUMNS_BY_TABLE))
     .from(episodes)
     .where(and(episodeCreditsPerson(person), publiclyPlayableEpisodeFilter()))
     .orderBy(descNullsLast(episodes.pubDate))
@@ -465,7 +470,11 @@ export async function updateEpisode(
     if (Object.keys(set).length > 0) {
       [row] = await tx.update(episodes).set(set).where(eq(episodes.id, id)).returning();
     } else {
-      [row] = await tx.select().from(episodes).where(eq(episodes.id, id)).limit(1);
+      [row] = await tx
+        .select(publicColumns(episodes, PROTECTED_COLUMNS_BY_TABLE))
+        .from(episodes)
+        .where(eq(episodes.id, id))
+        .limit(1);
     }
 
     if (!row) return undefined;
@@ -507,7 +516,7 @@ export async function upsertEpisodeFromFeed(input: {
         // `status` (a creator may have unpublished it) or wipe its cache state.
         set: { ...set, updatedAt: new Date() },
       })
-      .returning({ ...getTableColumns(episodes), inserted: INSERTED });
+      .returning({ ...publicColumns(episodes, PROTECTED_COLUMNS_BY_TABLE), inserted: INSERTED });
 
     if (!upserted) throw new Error(`upsertEpisodeFromFeed: no row for guid ${input.insert.guid}`);
     const { inserted, ...row } = upserted;

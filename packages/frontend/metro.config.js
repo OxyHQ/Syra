@@ -13,5 +13,7 @@ config.transformer.minifierConfig.output.ascii_only = false;
 // Choose the shorter quote form for each string instead of preserving source
 // quotes. Translations containing quoted speech otherwise ship needless escapes.
 config.transformer.minifierConfig.output.quote_style = 0;
+// Keep only the parentheses JavaScript syntax requires around immediate calls.
+config.transformer.minifierConfig.output.wrap_iife = false;
 
 module.exports = config;

@@ -1,3 +1,4 @@
+import type { RequesterProof } from '@oxy.so/core/server';
 /**
  * The `image_assets` store — Syra's id for every image it serves.
  *
@@ -43,6 +44,8 @@ export interface StoreImageAssetInput {
    * stored in that person's account; absent, Syra owns it.
    */
   uploadedBy?: string;
+  /** Transient proof, never stored in image metadata. Required for personal uploads. */
+  requester?: RequesterProof;
   /** Already measured by the caller; measured here otherwise. */
   pixels?: ImagePixels;
 }
@@ -62,11 +65,20 @@ export async function storeImageAsset(input: StoreImageAssetInput): Promise<{
   fileId: string;
   pixels: ImagePixels;
 }> {
+  if (input.uploadedBy && (!input.requester || input.requester.accountId !== input.uploadedBy)) {
+    throw new Error('Personal image requires its original requester account proof');
+  }
   const pixels = input.pixels ?? (await measureImage(input.buffer));
   const file =
     input.uploadedBy === undefined
       ? await uploadAppImage(input.buffer, input.contentType, input.filename)
-      : await uploadUserImage(input.uploadedBy, input.buffer, input.contentType, input.filename);
+      : await uploadUserImage(
+          input.uploadedBy,
+          input.buffer,
+          input.contentType,
+          input.filename,
+          input.requester!,
+        );
 
   const { id } = await insertOxyImage({
     file,

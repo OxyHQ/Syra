@@ -76,7 +76,7 @@ import type { episodes, podcasts } from '../schema/podcasts';
 // serializer does not name rather than as a field that silently ships.
 
 export type PodcastRow = typeof podcasts.$inferSelect;
-export type EpisodeRow = typeof episodes.$inferSelect;
+export type EpisodeRow = Omit<typeof episodes.$inferSelect, 'oxyTaskId'>;
 
 /** Resolves an `image_assets` id to its rendered variant — `db/catalog/serialize.ts`'s. */
 export type ImageVariantLookup = (id: string | null) => CatalogImageVariant | undefined;

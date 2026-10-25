@@ -1,3 +1,6 @@
+import { withFileTask, refreshLockerFileTask } from '../services/oxyFiles/taskAuthority';
+import { personalFilesRequester } from '../services/oxyFiles/requester';
+import type { RequesterProof } from '@oxy.so/core/server';
 /**
  * Listener uploads — the private locker, and the door to the public catalogue.
  *
@@ -545,6 +548,7 @@ interface StoredCoverArt {
 async function storeEmbeddedCoverArt(
   metadata: ExtractedMetadata,
   uploaderOxyUserId: string,
+  requester: RequesterProof,
 ): Promise<StoredCoverArt | undefined> {
   const picture = selectEmbeddedCoverArt(metadata.pictures);
   if (!picture || isArtistPicture(picture)) return undefined;
@@ -560,6 +564,7 @@ async function storeEmbeddedCoverArt(
       contentType: picture.mimeType,
       ownerType: 'upload',
       uploadedBy: uploaderOxyUserId,
+      requester,
     });
 
     return {
@@ -642,6 +647,7 @@ interface DuplicateLocker {
 }
 
 interface StoreLockerParams {
+  requester: AuthRequest;
   ownerOxyUserId: string;
   metadata: ExtractedMetadata;
   overrides: {
@@ -780,11 +786,16 @@ async function storeLockerUpload(
      * behind it is a score nobody can explain, and an appeal quotes the marker
      * codes.
      */
-    saved = await getDb().transaction(async (tx) => {
-      const [row] = await tx.insert(userUploads).values(values).returning(UPLOAD_COLUMNS);
-      await setUploadProvenanceMarkers(tx, uploadId, report.markers);
-      return row;
-    });
+    saved = await withFileTask(params.requester, uploadId, (oxyTaskId) =>
+      getDb().transaction(async (tx) => {
+        const [row] = await tx
+          .insert(userUploads)
+          .values({ ...values, oxyTaskId })
+          .returning(UPLOAD_COLUMNS);
+        await setUploadProvenanceMarkers(tx, uploadId, report.markers);
+        return row;
+      }),
+    );
   } catch (err) {
     /**
      * Losing the race on THIS owner's copy of THESE bytes is the duplicate
@@ -1722,6 +1733,8 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
       }
 
       if (match.kind === 'upload') {
+        if (await refreshLockerFileTask(req, match.uploadId))
+          await enqueueUploadIngest(match.uploadId);
         const outcome: UploadOutcome = { outcome: 'duplicate', uploadId: match.uploadId };
         res.status(200).json(outcome);
         return;
@@ -1776,7 +1789,7 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
        */
       const embeddedCover = request.coverArt
         ? undefined
-        : await storeEmbeddedCoverArt(metadata, userId);
+        : await storeEmbeddedCoverArt(metadata, userId, personalFilesRequester(req));
 
       const overrides = {
         title: request.title,
@@ -1810,6 +1823,7 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
         });
 
         const result = await storeLockerUpload({
+          requester: req,
           ownerOxyUserId: userId,
           metadata,
           overrides,
@@ -1823,6 +1837,8 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
         });
 
         if ('duplicateUploadId' in result) {
+          if (await refreshLockerFileTask(req, result.duplicateUploadId))
+            await enqueueUploadIngest(result.duplicateUploadId);
           const outcome: UploadOutcome = {
             outcome: 'duplicate',
             uploadId: result.duplicateUploadId,

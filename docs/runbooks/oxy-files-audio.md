@@ -1,5 +1,8 @@
 # Runbook — Syra's audio moves into Oxy Files (OxyHQ/oxy ADR 0043, stage 4c)
 
+> Internal scopes and service-key setup below are historical. The current source
+> migration and deployment prerequisites are in [first-party platform](../architecture/first-party-platform.md).
+
 Syra plays a listener's audio from **Oxy Files**: every track, locker upload,
 hosted episode, cached enclosure and room recording becomes a PRIVATE Oxy file,
 Oxy renders its audio-only HLS ladder (AAC 64/128/256 kbps), waveform and

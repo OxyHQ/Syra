@@ -8,7 +8,7 @@ import { podcasts } from '../../../db/schema/podcasts';
 import { EPISODE_NOTIFY_MAX_AGE_MS, notifySubscribersOfNewEpisode } from './episodePublished';
 
 /** Injected so the trigger tests exercise fan-out, not the credential-absent path. */
-const testDeps = { getToken: async () => 'test-service-token' };
+const testDeps = { fetch: (input: string, init: RequestInit) => fetch(input, init) };
 
 /**
  * The age gate is the half of the anti-spam design that coalescing cannot provide:

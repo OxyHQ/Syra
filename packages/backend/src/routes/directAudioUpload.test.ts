@@ -1,3 +1,8 @@
+import {
+  verifiedAudioSession,
+  installFileTaskAuthorityFixture,
+  resetFileTaskAuthorityFixture,
+} from '../test/fileTaskAuthority';
 /**
  * Direct audio uploads, end to end over real HTTP: the signed form
  * (`POST /api/audio-uploads`, `POST /api/podcasts/episodes/:id/ingest/upload`)
@@ -204,6 +209,7 @@ let server: Server;
 let baseUrl: string;
 
 beforeAll(async () => {
+  installFileTaskAuthorityFixture();
   await connectDb();
   armed = true;
 
@@ -212,7 +218,8 @@ beforeAll(async () => {
   app.use((req, _res, next) => {
     const viewer = req.headers[VIEWER_HEADER];
     if (typeof viewer === 'string' && viewer.length > 0) {
-      (req as AuthRequest).user = { id: viewer };
+      verifiedAudioSession(req, viewer);
+      (req as AuthRequest).accessToken = `verified-session:${viewer}`;
     }
     next();
   });
@@ -239,6 +246,7 @@ afterEach(async () => {
 });
 
 afterAll(async () => {
+  resetFileTaskAuthorityFixture();
   armed = false;
   await new Promise<void>((resolve) => server.close(() => resolve()));
   await disconnectDb();

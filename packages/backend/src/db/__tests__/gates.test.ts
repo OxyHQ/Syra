@@ -4331,7 +4331,23 @@ describe('deploy-phase ordering (post-genesis)', () => {
       return { tag: entry.tag, phase };
     });
 
-    expect(findPostGenesisPhaseOrderingViolations(entries, LAST_GENESIS_MIGRATION_TAG)).toEqual([]);
+    // A completed post-deploy release closes a rollout window; it does not make
+    // later additive migrations post-deploy or move the frozen genesis boundary.
+    // Keep validating the complete historical window as well as the new one.
+    // Live 0038 hash receipt and full fresh-install validation are recorded in
+    // docs/architecture/first-party-platform.md; runtime always checks actual DB state.
+    const completed = '0038_retire_legacy_image_storage';
+    const completedIndex = entries.findIndex((entry) => entry.tag === completed);
+    expect(completedIndex).toBeGreaterThan(
+      entries.findIndex((entry) => entry.tag === LAST_GENESIS_MIGRATION_TAG),
+    );
+    expect(
+      findPostGenesisPhaseOrderingViolations(
+        entries.slice(0, completedIndex + 1),
+        LAST_GENESIS_MIGRATION_TAG,
+      ),
+    ).toEqual([]);
+    expect(findPostGenesisPhaseOrderingViolations(entries, completed)).toEqual([]);
   });
 
   /**

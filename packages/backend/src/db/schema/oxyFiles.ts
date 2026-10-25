@@ -198,3 +198,11 @@ export const oxyAudioFiles = pgTable(
     check('oxy_audio_files_size_check', sql`${t.sizeBytes} is null or ${t.sizeBytes} >= 0`),
   ],
 );
+
+/** Retain authority IDs after domain deletion until central revocation succeeds. */
+export const oxyFileTaskRevocations = pgTable('oxy_file_task_revocations', {
+  taskId: text().primaryKey(),
+  createdAt: createdAt(),
+  nextAttemptAt: timestamptz().notNull().defaultNow(),
+  attempts: integer().notNull().default(0),
+});

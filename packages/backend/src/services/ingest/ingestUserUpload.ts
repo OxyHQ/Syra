@@ -1,3 +1,4 @@
+import { personalAudioRequester } from '../oxyFiles/taskAuthority';
 /**
  * Locker ingest job orchestrator — the `UserUpload` twin of `ingestTrack`.
  *
@@ -146,13 +147,17 @@ export async function ingestUserUpload(uploadId: string, deps?: UploadIngestDeps
     // in their own account, stored for them by Syra — which is Syra's consent to
     // play it back to them, and theirs to withdraw from their file manager. In
     // `oxy` mode an accepted file needs no ladder of Syra's own.
-    const oxy = await (deps?.mirrorToOxy ?? mirrorAudioToOxy)({
-      entity: { kind: 'user_upload', id: uploadId },
-      localPath: fetched.localPath,
-      mime: audioMimeFor(audioSource.format),
-      owner: { kind: 'account', oxyUserId: upload.ownerOxyUserId },
-      filename: `${uploadId}.${audioSource.format}`,
-    });
+    const requester = await personalAudioRequester('user_upload', uploadId, upload.ownerOxyUserId);
+    const oxy = requester
+      ? await (deps?.mirrorToOxy ?? mirrorAudioToOxy)({
+          requester,
+          entity: { kind: 'user_upload', id: uploadId },
+          localPath: fetched.localPath,
+          mime: audioMimeFor(audioSource.format),
+          owner: { kind: 'account', oxyUserId: upload.ownerOxyUserId },
+          filename: `${uploadId}.${audioSource.format}`,
+        })
+      : null;
     if (oxy && oxyAudioMode() === 'oxy') {
       await getDb()
         .update(userUploads)
