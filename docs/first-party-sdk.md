@@ -66,3 +66,36 @@ entries with patched Zod. After Actions publication, verify the tarball exports
 and declaration files before pinning consumers; a version lookup alone is not
 evidence that the desired artifact was released. This patch changes no backend
 workload implementation or app dependency pins.
+
+## Live session sockets in 0.24.0
+
+`RoomSocketService.connectWithOxy(oxy, onContextEnd?)` obtains each Socket.IO
+handshake through `createLinkedClient().getAccessToken(target, { signal })`.
+It returns a release function for that consumer. Concurrent consumers share
+one connection for the same provider and session epoch; releasing one leaves
+other leases alive. The last release cancels a pending handshake. Account
+switch or logout immediately disconnects the old socket and notifies every
+lease; late releases cannot affect the next account's connection.
+
+The live React hook uses this method and clears previous participants and
+recording state when authority changes. The narrow `@syra.fm/sdk/live/socket`
+entry exposes the transport without loading React or native audio. Existing
+`connect(userId, token?)` remains the explicit external credential API; it is
+never used to infer first-party authority.
+
+The live transport requires published Oxy core >=7.1.0 <8.0.0 (optional peer).
+Headless HTTP factories are unchanged. `tests/sdk-sockets` has its own frozen
+lock on core 7.1.0, extracts the actual `bun pm pack` artifact, imports its public
+socket entry and verifies connected account switches with real Socket.IO. It
+keeps the minimum-version test independent from the app's newer core version.
+The earlier headless core 7.0 harness remains separate and unchanged.
+
+Syra's player presence also uses the shared target-bound handshake. Effect
+cleanup cancels pending authentication; old account device registration is
+cleared, and a late cleanup cannot disconnect the replacement socket. The
+normal device registration, reconnect registration and heartbeat protocol remain.
+
+Local gates: 342 SDK tests, 294 frontend tests, SDK/frontend/test typechecks,
+all SDK build formats and the packed core-7.1 composition test. Publication and
+Mention's subsequent registry pin are separate gates; this source does not
+activate legacy workload retirement.

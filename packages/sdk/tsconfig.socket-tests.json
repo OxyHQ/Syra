@@ -1,0 +1,6 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "types": ["bun", "node"] },
+  "include": ["src/live/services/spaceSocketService*.ts"],
+  "exclude": ["lib", "node_modules"]
+}

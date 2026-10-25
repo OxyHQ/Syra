@@ -180,3 +180,13 @@ transport through the shared Oxy session; the app keeps its existing provider,
 agent selection and UI. No app-local bearer refresh or internal permission prompt
 is introduced. Package installation was checked against the published artifact;
 source adoption and deployment are separate rollout steps.
+
+### Realtime session follow-up
+
+SDK 0.24.0 adds leased room sockets using shared Oxy session authority, with
+immediate account-epoch teardown and no copied bearer callback. Syra player
+presence uses the same shared getter contract and clears account-bound device
+registration on teardown. See `docs/first-party-sdk.md` for tests and the
+minimum published core version. Mention must adopt the verified registry
+artifact after Actions publishes it; the finite v1 bridge remains gated on
+all outstanding fleet and operational checks.
