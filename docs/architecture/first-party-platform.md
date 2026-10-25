@@ -8,14 +8,14 @@ remain bounded; a Syra brand or local owner identifier never supplies user autho
 
 | Edge | Source state | Remaining acceptance |
 | --- | --- | --- |
-| Syra → Oxy notifications | Shared workload protocol-2 transport, existing suppression and failure behavior | Core 7 release/pin, receiver first, canary |
-| Syra → Oxy Files application media/references/play sessions | Shared OxyServer AWS workload provider; no key fallback or ECS-only readiness gate | Core 7 release/pin, receiver first, outbox and signed playback canary |
-| Syra activity → Oxy | Shared traffic publisher with temporary workload provider | Core 7 release/pin and producer canary |
-| Personal image uploads → Files | Foreground requester proof bound to verified effective account; never persisted | Core 7 release/pin; managed-account and revocation canary |
+| Syra → Oxy notifications | Shared workload protocol-2 transport, existing suppression and failure behavior | Registry core 7.3 pinned; producer canary pending |
+| Syra → Oxy Files application media/references/play sessions | Shared OxyServer AWS workload provider; no key fallback or ECS-only readiness gate | Registry core 7.3 pinned; outbox and signed playback canary pending |
+| Syra activity → Oxy | Shared traffic publisher with temporary workload provider | Registry core 7.3 pinned; producer canary pending |
+| Personal image uploads → Files | Foreground requester proof bound to verified effective account; never persisted | Registry core 7.3 pinned; managed-account and revocation canary pending |
 | Personal audio uploads → Files | Original task admitted with verified session; only its handle is stored | No owner-ID fallback; retain account isolation and revocation |
 | House/room/series images → Files | New assets application-owned; historical file IDs unchanged | Same local roles, reference replacement, no deletion of personal owner's file |
 | Asynchronous podcast/locker ingest → Files | Original task persisted at verified draft/upload admission | Ticket contract unchanged; old missing-proof rows cannot create new personal files |
-| Syra moderation → CrowdSource | Own outbox uses injected shared OxyServer; delivery signature retained | Publish/pin CrowdSource SDK including 44d2a2972; receiver first; preserve durable outbox |
+| Syra moderation → CrowdSource | Own outbox uses injected shared OxyServer; delivery signature retained | Registry CrowdSource 3.1 pinned; receiver live; preserve durable outbox and verify canary |
 | Other apps → Syra SDK | Separate source branch `657e15d` has linked session factory | Publish/pin and integrate SDK source; no deployment claimed |
 | Syra frontend/studio → own API | Shared linked clients; privacy reads separated by verified viewer and session change; Studio uses provider account cache | Verify caches and receiver composition with core 7 |
 
@@ -103,3 +103,32 @@ signed-out reads do not fall back to another account's settings. Studio now give
 its existing QueryClient to OxyProvider with all account queries scoped, matching
 the main app. Two real React Query regressions cover account switch/logout and a
 late response. Frontend and Studio typechecks pass with the candidate core.
+
+
+## Registry composition, 2026-10-25
+
+The runtime is rebased on SDK release main `8acbe2e`, preserving the intervening
+Expo and Android changes. It pins public core 7.3.0, contracts 6.0.0, services
+13.0.0, protocol 1.5.1 and CrowdSource core 3.1.0/contracts 1.1.1. Candidate Oxy
+installations were removed; isolated-cache registry installation and frozen lock
+verification pass. The installed Oxy contracts declaration matches the real Zod 4
+registry bytes. Public Syra contracts 0.2.1 raises its runtime Zod floor to
+`^4.6.7`; the schema/API is unchanged. SDK 0.22.0 already has that patched floor.
+
+A fresh disposable PostgreSQL database applied all 40 migrations. Registry gates
+pass: 85 platform tests, 82 personal-file tests, 150 audio/task tests and 113
+schema/protected-column tests; suites overlap and are not a unique-test total.
+The two React Query account/session-isolation tests pass. Backend (464 files),
+frontend and Studio types, SDK build formats and backend build pass, together
+with Doctor, Biome and AGENTS checks.
+
+The clean frontend web export passes every unchanged budget: initial JavaScript
+7,899,833 bytes (2,014,907 gzip), deferred translations 1,247,628 (424,927 gzip),
+other JavaScript 2,817,634 (800,503 gzip). The minifier no longer adds optional
+parentheses around immediate function calls; JavaScript-required parentheses
+remain. This removes redundant output rather than increasing a budget.
+
+These are source/release gates, not a claim of runtime deployment. Apply the
+additive task-authority migration in its reviewed pre phase, then deploy and
+verify original-account uploads, durable ingest, revocation outbox and playback.
+Historical personal files are not converted or erased by this rollout.
