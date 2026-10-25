@@ -113,7 +113,13 @@ Expo and Android changes. It pins public core 7.3.0, contracts 6.0.0, services
 installations were removed; isolated-cache registry installation and frozen lock
 verification pass. The installed Oxy contracts declaration matches the real Zod 4
 registry bytes. Public Syra contracts 0.2.1 raises its runtime Zod floor to
-`^4.6.7`; the schema/API is unchanged. SDK 0.22.0 already has that patched floor.
+`^4.6.7`; the schema/API is unchanged. SDK source from PR 251 also has that
+patched floor. Registry 0.22.0 predates this source: its verified npm provenance
+points to `039ea484411cd2c70729dd8add6cff4e216434cf` and release run
+39952355499, and its tarball lacks the session factory and focused entries.
+External consumers must wait for the subsequent factory release and verify its
+actual exports; the version number alone is insufficient. This app's workspace
+build consumes the reviewed source, not that older public tarball.
 
 A fresh disposable PostgreSQL database applied all 40 migrations. Registry gates
 pass: 85 platform tests, 82 personal-file tests, 150 audio/task tests and 113
