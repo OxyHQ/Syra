@@ -17,7 +17,7 @@ remain bounded; a Syra brand or local owner identifier never supplies user autho
 | House/room/series images → Files | New assets application-owned; historical file IDs unchanged | Same local roles, reference replacement, no deletion of personal owner's file |
 | Asynchronous podcast/locker ingest → Files | Original task persisted at verified draft/upload admission | Ticket contract unchanged; old missing-proof rows cannot create new personal files |
 | Syra moderation → CrowdSource | Own outbox uses injected shared OxyServer; delivery signature retained | Registry CrowdSource 3.1 pinned; receiver live; preserve durable outbox and verify canary |
-| Other apps → Syra SDK | Main `8acbe2e` contains the linked factory; corrective SDK 0.23 release PR 255 is separate | Verify published 0.23 bytes before caller pins; 0.22 is the older artifact |
+| Other apps → Syra SDK | Main `772869c` contains the linked factory and corrective SDK 0.23 release | Verify published 0.23 bytes before caller pins; 0.22 is the older artifact |
 | Syra frontend/studio → own API | Shared linked clients; privacy reads separated by verified viewer and session change; Studio uses provider account cache | Verify caches and receiver composition with core 7 |
 
 Application-owned audio and audio referenced by Syra keep the Files application
@@ -108,7 +108,7 @@ late response. Frontend and Studio typechecks pass with the candidate core.
 
 ## Registry composition, 2026-10-25
 
-The runtime is rebased on SDK release main `8acbe2e`, preserving the intervening
+The runtime is rebased on SDK release main `772869c`, preserving the intervening
 Expo and Android changes. It pins public core 7.3.0, contracts 6.0.0, services
 13.0.0, protocol 1.5.1 and CrowdSource core 3.1.0/contracts 1.1.1. Candidate Oxy
 installations were removed; isolated-cache registry installation and frozen lock
@@ -118,8 +118,8 @@ registry bytes. Public Syra contracts 0.2.1 raises its runtime Zod floor to
 patched floor. Registry 0.22.0 predates this source: its verified npm provenance
 points to `039ea484411cd2c70729dd8add6cff4e216434cf` and release run
 39952355499, and its tarball lacks the session factory and focused entries.
-External consumers must wait for the subsequent factory release and verify its
-actual exports; the version number alone is insufficient. This app's workspace
+External consumers must verify the corrective 0.23 release and its actual
+exports before pinning; the version number alone is insufficient. This app's workspace
 build consumes the reviewed source, not that older public tarball.
 
 A fresh disposable PostgreSQL database applied all 40 migrations. Registry gates
