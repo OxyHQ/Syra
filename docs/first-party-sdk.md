@@ -1,6 +1,27 @@
 # First-party SDK transport
 
-Source implementation, 2026-10-23; not a claim of deployment.
+## Current contract — 2026-10-25
+
+Own HTTP callers use `syraForOxySession(existingOxyServices)`. Own live-room
+callers use SDK 0.24's `connectWithOxy` lease API, backed by the shared target-bound
+Oxy credential getter. No copied bearer, internal app scope or connection
+consent is part of either contract. External explicit credentials remain bounded
+and supported separately.
+
+Syra's current runtime source uses core 7.3.0 and services 13.0.0. The new live
+SDK requires core >=7.1.0 <8.0.0 and services >=13.0.0 <14.0.0; its packed
+composition test installs published core 7.1.0 independently. The headless HTTP
+factory still works with core 7.0.0 and has a separate minimum-version harness.
+SDK 0.23 is published; 0.24 is prepared in PR 258 and must pass CI/publication
+and registry-artifact verification before Mention adopts it. Neither this source
+nor an SDK release activates workload-v1 retirement.
+
+## Historical SDK 0.23 preparation — 2026-10-23
+
+The following records the isolated SDK release preparation, before the runtime
+migration. Its core-6 workspace pins and pending-release statements describe
+that snapshot, not current requirements or deployment state. The registry
+artifact correction below was verified on 2026-10-25.
 
 `syraForOxySession(existingOxyServices)` creates a linked authenticated client.
 Own apps must use this shared lifecycle instead of a copied bearer callback.
@@ -22,18 +43,18 @@ imported by the factory, so no runtime peer forces a version into those callers.
 The optional services peer accepts major 13, also validated in the earlier
 composition check. Runtime Zod requires the patched `^4.6.7` version.
 
-The SDK-only release preserves all runtime pins and global singleton overrides:
-core 6.15.1/contracts 5.7.0 and services 12.12.0 remain in the main workspace.
+That SDK-only branch preserved its then-existing runtime pins and global
+singleton overrides: core 6.15.1/contracts 5.7.0 and services 12.12.0.
 Oxy Doctor passes without disabling or weakening its duplicate-version checks.
-The separate consumer harness is necessary only while the runtime remains on
-core 6; it can be simplified after the core 7 runtime migration.
+The separate consumer harness originally avoided changing that core-6 runtime.
+It now remains as an explicit test of the headless factory's core-7.0 minimum.
 
 Release this SDK minor through Actions after CI, then adopt it in Mention and
 other frontends. Backend workload migration, audio/File streaming and other
 consumers remain a separate rollout. This SDK change does not mark them complete
 or retire Oxy's finite legacy workload bridge.
 
-Published dependency validation: 338 SDK tests plus six HTTP consumer tests,
+Historical preparation validation: 338 SDK tests plus six HTTP consumer tests,
 SDK and consumer typechecks and all build formats pass. The unchanged backend
 also passed its 458-file typecheck using core 6. Doctor, Biome and the agent
 instruction budget pass. CI and package publication remain pending; these local
@@ -55,7 +76,7 @@ and frontend/SDK typechecks also pass. These measurements are local evidence;
 Actions still validates the release commit.
 
 
-## Public artifact correction
+## SDK 0.23 artifact correction — verified 2026-10-25
 
 Registry SDK 0.22.0 predates this implementation. Its npm provenance names source
 `039ea484411cd2c70729dd8add6cff4e216434cf` and Actions run 39952355499; its tarball
