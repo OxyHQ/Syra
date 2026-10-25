@@ -190,3 +190,8 @@ registration on teardown. See `docs/first-party-sdk.md` for tests and the
 minimum published core version. Mention must adopt the verified registry
 artifact after Actions publishes it; the finite v1 bridge remains gated on
 all outstanding fleet and operational checks.
+
+A final tracked-source census found the old frontend `playlistSocketService`
+module had no importers or runtime callers (only a historical inventory mention
+in `AUDIT.md`). It has been removed, rather than retaining its unused copied-token
+transport. Active playlist HTTP/domain behavior is unchanged.
