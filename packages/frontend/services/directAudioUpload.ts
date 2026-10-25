@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 import { z } from 'zod';
-import { sendAudioUpload } from '@syra.fm/sdk';
+import { sendAudioUpload } from '@syra.fm/sdk/upload';
 import { audioUploadTargetSchema, type AudioUploadPurpose } from '@syra/shared-types';
 import { api } from '@/utils/api';
 import { deviceAudioFile } from './deviceAudioFile';

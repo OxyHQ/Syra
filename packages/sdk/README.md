@@ -191,3 +191,11 @@ import { createSyraClient } from '@syra.fm/sdk/client';
   is still the non-2xx error.
 - Response types (`TrackSummary`, `Room`, …) are plain interfaces instead of
   `z.infer<…>` aliases, with the same shapes.
+
+### Focused app imports
+
+Apps that use only rooms or direct audio uploads can import
+`@syra.fm/sdk/live` or `@syra.fm/sdk/upload`. These entries preserve the same
+implementations and native resolution while avoiding the headless catalogue and
+session factory in the initial app bundle. Existing root and `/client` imports
+remain supported. The live entry still requires its documented React/native peers.

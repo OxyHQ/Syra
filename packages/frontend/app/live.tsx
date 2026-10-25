@@ -14,7 +14,7 @@ import {
   type Room,
   type CreateRoomSheetRef,
   type CreateRoomFormState,
-} from '@syra.fm/sdk';
+} from '@syra.fm/sdk/live';
 
 import SEO from '@/components/SEO';
 import { refreshLiveRoomsWidget } from '@/modules/syra-widgets';

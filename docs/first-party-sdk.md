@@ -38,3 +38,18 @@ SDK and consumer typechecks and all build formats pass. The unchanged backend
 also passed its 458-file typecheck using core 6. Doctor, Biome and the agent
 instruction budget pass. CI and package publication remain pending; these local
 gates do not claim a deployed SDK or backend.
+
+The SDK also exposes focused `/live` and `/upload` entries. Syra's existing
+frontend uses those entries without changing its authentication or runtime pins;
+this keeps the new headless session factory out of its initial bundle. Direct
+upload tests and frontend types cover the equivalent imports. The web budget
+limits remain unchanged and CI checks the actual exported application.
+
+The existing Metro minifier now chooses the shorter quote form for strings,
+instead of preserving source quotes. This removes avoidable escaping in deferred
+translations without changing their text. A fresh frozen install and clean web
+export pass every unchanged budget: initial JavaScript 7,886,263 bytes (2,011,586
+gzip), translations 1,247,628 (424,993 gzip), other JavaScript 2,817,757 (800,547
+gzip). SDK 338 tests, six real HTTP transport tests, four frontend upload tests
+and frontend/SDK typechecks also pass. These measurements are local evidence;
+Actions still validates the release commit.
