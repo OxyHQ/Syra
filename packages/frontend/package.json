@@ -32,7 +32,7 @@
     }
   },
   "dependencies": {
-    "@alia.onl/sdk": "^21.5.0",
+    "@alia.onl/sdk": "^22.0.0",
     "@bitdrift/react-native": "^0.8.0",
     "@expo/app-integrity": "~58.0.2",
     "@expo/vector-icons": "^15.0.2",
