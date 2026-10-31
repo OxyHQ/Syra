@@ -442,3 +442,99 @@ it('rejects a retained A handler after the visible account becomes B before the 
   expect(mockToast.error).not.toHaveBeenCalled();
   expect(mockRouter.replace).not.toHaveBeenCalled();
 });
+
+it('rejects a retained A handler after visible A→B→A even if the bearer never changes', async () => {
+  await act(async () => {
+    renderer.root
+      .findByProps({ placeholder: 'createPlaylist.namePlaceholder' })
+      .props.onChangeText('Alice private playlist');
+  });
+  const oldPress = renderer.root.findByProps({ testID: 'create-playlist-submit' }).props.onPress;
+  mockVisibleUser = 'bob';
+  await act(async () => {
+    renderer.update(
+      <QueryClientProvider client={client}>
+        <CreatePlaylistScreen />
+      </QueryClientProvider>,
+    );
+    await tick();
+  });
+  mockVisibleUser = 'alice';
+  await act(async () => {
+    renderer.update(
+      <QueryClientProvider client={client}>
+        <CreatePlaylistScreen />
+      </QueryClientProvider>,
+    );
+    await tick();
+  });
+  await act(async () => {
+    oldPress();
+    await tick();
+  });
+  expect(globalThis.fetch).not.toHaveBeenCalled();
+  expect(mockToast.error).not.toHaveBeenCalled();
+  expect(mockRouter.replace).not.toHaveBeenCalled();
+});
+
+it('suppresses an in-flight A success after visible A→B→A without a token change', async () => {
+  let finish!: (response: Response) => void;
+  globalThis.fetch = jest.fn(
+    () =>
+      new Promise<Response>((resolve) => {
+        finish = resolve;
+      }),
+  ) as typeof fetch;
+  await act(async () => {
+    renderer.root
+      .findByProps({ placeholder: 'createPlaylist.namePlaceholder' })
+      .props.onChangeText('Alice private playlist');
+  });
+  await act(async () => {
+    renderer.root.findByProps({ testID: 'create-playlist-submit' }).props.onPress();
+    await tick();
+  });
+  mockVisibleUser = 'bob';
+  await act(async () => {
+    renderer.update(
+      <QueryClientProvider client={client}>
+        <CreatePlaylistScreen />
+      </QueryClientProvider>,
+    );
+    await tick();
+  });
+  mockVisibleUser = 'alice';
+  await act(async () => {
+    renderer.update(
+      <QueryClientProvider client={client}>
+        <CreatePlaylistScreen />
+      </QueryClientProvider>,
+    );
+    await tick();
+  });
+  await act(async () => {
+    finish(response());
+    await tick();
+  });
+  expect(mockToast.success).not.toHaveBeenCalled();
+  expect(mockRouter.replace).not.toHaveBeenCalled();
+});
+
+it('keeps queued work valid across a same-account rerender', async () => {
+  const mutation = await startOffline();
+  await act(async () => {
+    renderer.update(
+      <QueryClientProvider client={client}>
+        <CreatePlaylistScreen />
+      </QueryClientProvider>,
+    );
+    await tick();
+  });
+  await act(async () => {
+    onlineManager.setOnline(true);
+    await mutation.continue();
+    await tick();
+  });
+  expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  expect(mockToast.success).toHaveBeenCalledTimes(1);
+});
