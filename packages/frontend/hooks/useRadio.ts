@@ -1,6 +1,5 @@
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { RadioSeed, RadioSeedType } from '@syra/shared-types';
-import { nextUnvisitedCursor } from '@oxy.so/utils/paging';
 import { radioService } from '@/services/radioService';
 import { useAuthGate, type CatalogIdentity } from '@/hooks/useAuthGate';
 
@@ -16,7 +15,6 @@ import { useAuthGate, type CatalogIdentity } from '@/hooks/useAuthGate';
  */
 
 export const RADIO_QUERY_KEYS = {
-  all: ['radio'] as const,
   station: (identity: CatalogIdentity, seedType: RadioSeedType, seedId: string) =>
     ['radio', 'station', identity, seedType, seedId] as const,
 };
@@ -45,8 +43,9 @@ export function useRadioStation(seed: RadioSeed | null) {
       });
     },
     initialPageParam: null as string | null,
+    // Use the shared cursor helper once it has a lightweight entry point for Metro.
     getNextPageParam: (lastPage, _pages, _lastPageParam, pageParams) =>
-      nextUnvisitedCursor(lastPage.cursor, pageParams) ?? null,
+      lastPage.cursor && !pageParams.includes(lastPage.cursor) ? lastPage.cursor : null,
     enabled: isResolved && seed !== null,
     staleTime: Infinity,
     refetchOnWindowFocus: false,
