@@ -246,11 +246,11 @@ describe('total_signal', () => {
 });
 
 describe('the decay pass', () => {
-  /** Backdate a profile so the pass considers it due. */
+  /** Backdate by elapsed 24-hour days, independent of daylight saving time. */
   async function backdate(oxyUserId: string, days: number): Promise<void> {
     await getDb()
       .update(userTasteProfiles)
-      .set({ lastDecayAt: sql`now() - make_interval(days => ${days})` })
+      .set({ lastDecayAt: sql`now() - make_interval(secs => ${days * 86_400})` })
       .where(eq(userTasteProfiles.oxyUserId, oxyUserId));
   }
 
