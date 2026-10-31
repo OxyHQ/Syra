@@ -128,6 +128,10 @@
     "zustand": "^5.0.8"
   },
   "devDependencies": {
+    "@babel/core": "7.29.7",
+    "@babel/plugin-transform-react-jsx": "7.29.7",
+    "@babel/plugin-transform-typescript": "7.29.9",
+    "babel-preset-expo": "~58.0.20",
     "@babel/plugin-transform-modules-commonjs": "^7.27.1",
     "@react-native/jest-preset": "0.88.0",
     "@tailwindcss/postcss": "4.2.2",
