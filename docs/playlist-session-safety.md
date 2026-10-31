@@ -15,11 +15,18 @@ alone cannot fence that internal HTTP retry. A request already accepted by a
 server cannot be undone by changing sessions.
 
 This change does not clear unregistered mutations, migrate old persisted work,
-or protect other mutation screens. The SDK's existing shared persistence can
-still contain old or new unregistered mutation records. A queued action from a
-replaced session is rejected if it resumes; there is no promise that its input
-can be recovered as a draft. Preserving or attributing legacy work requires a
-separately reviewed migration and storage design.
+or protect other mutation screens. Syra supplies its own QueryClient; in both
+Services 13.0.0 and 13.13.0, OxyProvider skips its shared-query persistor for a
+supplied client. No app-owned shared persistor was found. The account persistor
+is still used, but Syra does not register playlist mutations, so it does not
+persist them as an account-owned offline queue. The observed A-to-B replay was
+in memory, not evidence of a shared-blob write or restart replay. Earlier
+versions or other persistence paths would need their own audit; Syra already
+has a separate legacy cleanup for `syra-react-query-` keys.
+
+A queued action from a replaced session is rejected if it resumes; there is no
+promise that its input can be recovered as a draft. Preserving or attributing any
+historical work requires a separately reviewed migration and storage design.
 
 The web export must continue to meet the existing `performance-budgets.json`.
 An isolated export after the SDK update but before the final UI change exceeded
