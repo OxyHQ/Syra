@@ -70,6 +70,8 @@ const CreatePlaylistScreen: React.FC = () => {
   const [visibility, setVisibility] = useState<PlaylistVisibility>(PlaylistVisibility.PRIVATE);
   const [errors, setErrors] = useState<FormErrors>({});
   const createPlaylistMutation = useMutation({
+    // The server cannot deduplicate a create whose response was lost.
+    retry: false,
     mutationFn: (input: z.infer<typeof createPlaylistFormSchema>) =>
       musicService.createPlaylist({
         name: input.name,
