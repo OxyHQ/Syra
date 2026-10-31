@@ -22,7 +22,7 @@
         "@crowdsource.you/core": "3.1.0",
         "@oxy.so/core": "7.3.0",
         "@oxy.so/db": "^1.3.0",
-        "@oxy.so/utils": "1.3.0",
+        "@oxy.so/utils": "1.4.0",
         "@socket.io/redis-adapter": "^8.2.0",
         "@syra.fm/contracts": "workspace:*",
         "@syra.fm/sdk": "workspace:*",
@@ -1167,7 +1167,7 @@
 
     "@oxy.so/telemetry": ["@oxy.so/telemetry@2.1.0", "", {}, "sha512-YxI/7XQLFf+WglPzUndec4LItM9cSJNsA67UZRLPj4w4mw38+bYNhV9hw/aOqXx4MXCD4Yk8CJ9mwcW72uAnwA=="],
 
-    "@oxy.so/utils": ["@oxy.so/utils@1.3.0", "", {}, "sha512-HY+LrU6AcM+BkXGTlcYUoVdzwrQvbjf9HpFYKpoiXB9D51B+NXJBvV/Nk29zCTKkt3SL67jb40eEFAbTjrgMEQ=="],
+    "@oxy.so/utils": ["@oxy.so/utils@1.4.0", "", {}, "sha512-139h31p24tlAIFsdVNy5XWcmuE+GffJpZyNBmEUbgrF7CbmyEE14gxhK+zLLJGyrj/zNmVuV1x24hmbHdQ2lPA=="],
 
     "@parcel/watcher": ["@parcel/watcher@2.6.0", "", { "dependencies": { "detect-libc": "^2.0.3", "is-glob": "^4.0.3", "node-addon-api": "^7.0.0", "picomatch": "^4.0.4" }, "optionalDependencies": { "@parcel/watcher-android-arm64": "2.6.0", "@parcel/watcher-darwin-arm64": "2.6.0", "@parcel/watcher-darwin-x64": "2.6.0", "@parcel/watcher-freebsd-x64": "2.6.0", "@parcel/watcher-linux-arm-glibc": "2.6.0", "@parcel/watcher-linux-arm-musl": "2.6.0", "@parcel/watcher-linux-arm64-glibc": "2.6.0", "@parcel/watcher-linux-arm64-musl": "2.6.0", "@parcel/watcher-linux-x64-glibc": "2.6.0", "@parcel/watcher-linux-x64-musl": "2.6.0", "@parcel/watcher-win32-arm64": "2.6.0", "@parcel/watcher-win32-x64": "2.6.0" } }, "sha512-7FNeNl8NCE7aINx7WXiKQrPYZWC/hvrTsmk6zmxbI7LTXE7hVek/n8AfVgpe2y82zl3w0HvCHN0bVKMBoJcC0w=="],
 
@@ -3634,8 +3634,6 @@
     "@redis/client/cluster-key-slot": ["cluster-key-slot@1.1.2", "", {}, "sha512-RMr0FhtfXemyinomL4hrWcYJxmX6deFdCxpJzhDttxgO1+bcCnkk+9drydLVDmAMG7NE6aN/fl4F7ucU/90gAA=="],
 
     "@socket.io/redis-adapter/debug": ["debug@4.3.7", "", { "dependencies": { "ms": "^2.1.3" }, "peerDependencies": { "supports-color": "*" }, "optionalPeers": ["supports-color"] }, "sha512-Er2nc/H7RrMXZBFCEim6TCmMk02Z8vLC2Rbi1KEBggpo0fS6l0S1nnapwmIi3yW/+GOJap1Krg4w0Hg80oCqgQ=="],
-
-    "@syra/frontend/@oxy.so/utils": ["@oxy.so/utils@1.4.0", "", {}, "sha512-139h31p24tlAIFsdVNy5XWcmuE+GffJpZyNBmEUbgrF7CbmyEE14gxhK+zLLJGyrj/zNmVuV1x24hmbHdQ2lPA=="],
 
     "@syra/frontend/typescript": ["typescript@6.0.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw=="],
 
