@@ -490,6 +490,7 @@
     "privacy": "Privacy",
     "signInRequired": "You must be logged in to create playlists",
     "sessionUnverified": "We can’t verify your account right now. Please try again.",
+    "verifyBeforeRetry": "Check whether the playlist was created before trying again.",
     "publicHint": "Anyone can find and play",
     "privateHint": "Only you can access",
     "unlistedHint": "Only accessible via link"

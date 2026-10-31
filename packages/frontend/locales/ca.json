@@ -490,6 +490,7 @@
     "privacy": "Privacy",
     "signInRequired": "You must be logged in to create playlists",
     "sessionUnverified": "No podem verificar el teu compte ara mateix. Torna-ho a provar.",
+    "verifyBeforeRetry": "Comprova si s’ha creat la llista abans de tornar-ho a provar.",
     "publicHint": "Anyone can find and play",
     "privateHint": "Only you can access",
     "unlistedHint": "Only accessible via link"
