@@ -7,7 +7,10 @@ success and error effects. It also resets the form when the session, bearer
 subject or visible account changes. The checks use Core's session subject and
 fail closed when it cannot be matched; the screen shows a localized message in
 that case. Tokens without `userId` or `id`, including opaque and sub-only
-bearers, therefore cannot create a playlist through this screen.
+bearers, therefore cannot create a playlist through this screen. The render
+owner uses a memoized identity and is committed in a layout effect. If React
+discards that memo without an account change, an older action may be rejected
+conservatively; it must not be reassigned to another account.
 
 The update to Core 7.9.1 is part of this protection: older Core could receive a
 late 401 from A, refresh using B, and retry A's request as B. This screen guard
