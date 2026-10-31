@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import { useState, useCallback, useLayoutEffect, useRef, type RefObject } from 'react';
 import {
   StyleSheet,
   View,
@@ -19,6 +19,12 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { CoverArtPicker } from '@/components/playlists/CoverArtPicker';
 import { PlaylistVisibility } from '@syra/shared-types';
 import { musicService } from '@/services/musicService';
+import {
+  isPlaylistSessionCurrent,
+  ownsPlaylistSession,
+  usePlaylistSessionKey,
+  usePlaylistSessionSubject,
+} from '@/lib/playlistSession';
 import { toast } from '@oxy.so/bloom/toast';
 import SEO from '@/components/SEO';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -57,7 +63,40 @@ function getErrorMessage(error: unknown): string | undefined {
  * Create Playlist Screen
  * Spotify-like playlist creation interface
  */
-const CreatePlaylistScreen: React.FC = () => {
+function CreatePlaylistScreen() {
+  const sessionKey = usePlaylistSessionKey();
+  const subject = usePlaylistSessionSubject();
+  const { user } = useOxy();
+  const accountId = user?.id ?? null;
+  const currentAccount = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    currentAccount.current = accountId;
+    return () => {
+      currentAccount.current = null;
+    };
+  }, [accountId]);
+  return (
+    <CreatePlaylistForm
+      key={JSON.stringify([sessionKey, accountId, subject])}
+      sessionKey={sessionKey}
+      accountId={accountId}
+      subject={subject}
+      currentAccount={currentAccount}
+    />
+  );
+}
+
+function CreatePlaylistForm({
+  sessionKey,
+  accountId,
+  subject,
+  currentAccount,
+}: {
+  sessionKey: string;
+  accountId: string | null;
+  subject: string | null;
+  currentAccount: RefObject<string | null>;
+}) {
   const { t } = useTranslation();
   const theme = useTheme();
   const router = useRouter();
@@ -69,26 +108,35 @@ const CreatePlaylistScreen: React.FC = () => {
   const [coverArt, setCoverArt] = useState<string | null>(null);
   const [visibility, setVisibility] = useState<PlaylistVisibility>(PlaylistVisibility.PRIVATE);
   const [errors, setErrors] = useState<FormErrors>({});
+  const ownsAction = useCallback(
+    () => currentAccount.current === accountId && ownsPlaylistSession(sessionKey, accountId),
+    [accountId, currentAccount, sessionKey],
+  );
   const createPlaylistMutation = useMutation({
     // The server cannot deduplicate a create whose response was lost.
     retry: false,
-    mutationFn: (input: z.infer<typeof createPlaylistFormSchema>) =>
-      musicService.createPlaylist({
+    mutationFn: (input: z.infer<typeof createPlaylistFormSchema>) => {
+      if (!ownsAction()) throw new Error('Session changed');
+      return musicService.createPlaylist({
         name: input.name,
         description: input.description || undefined,
         coverArt: input.coverArt || undefined,
         visibility: input.visibility,
-      }),
+      });
+    },
     onSuccess: (playlist) => {
+      if (!ownsAction()) return;
       toast.success(`Playlist "${playlist.name}" created successfully`);
       router.replace({ pathname: '/playlist/[id]', params: { id: playlist.id } });
     },
     onError: (error: unknown) => {
+      if (!ownsAction()) return;
       console.error('Failed to create playlist:', error);
       toast.error(getErrorMessage(error) || 'Failed to create playlist. Please try again.');
     },
   });
   const isCreating = createPlaylistMutation.isPending;
+  const sessionUnverified = isAuthenticated && (!accountId || subject !== accountId);
 
   const validateForm = useCallback((): z.infer<typeof createPlaylistFormSchema> | null => {
     const newErrors: FormErrors = {};
@@ -113,18 +161,29 @@ const CreatePlaylistScreen: React.FC = () => {
   }, [coverArt, description, name, visibility]);
 
   const handleCreate = useCallback(async () => {
+    if (!isPlaylistSessionCurrent(sessionKey) || currentAccount.current !== accountId) return;
     if (!isAuthenticated) {
       toast.error(t('createPlaylist.signInRequired'));
       return;
     }
 
+    if (!ownsAction()) return;
     const formData = validateForm();
     if (!formData) {
       return;
     }
 
     createPlaylistMutation.mutate(formData);
-  }, [createPlaylistMutation, isAuthenticated, validateForm]);
+  }, [
+    accountId,
+    createPlaylistMutation,
+    currentAccount,
+    isAuthenticated,
+    ownsAction,
+    sessionKey,
+    t,
+    validateForm,
+  ]);
 
   const handleGoBack = useCallback(() => {
     if (!isCreating) {
@@ -180,14 +239,17 @@ const CreatePlaylistScreen: React.FC = () => {
             {t('library.createPlaylist')}
           </Text>
           <Pressable
+            testID="create-playlist-submit"
             onPress={handleCreate}
-            disabled={isCreating || !name.trim()}
+            disabled={isCreating || !name.trim() || sessionUnverified}
             style={[
               styles.createHeaderButton,
               {
                 backgroundColor:
-                  isCreating || !name.trim() ? theme.colors.textSecondary : theme.colors.primary,
-                opacity: isCreating || !name.trim() ? 0.6 : 1,
+                  isCreating || !name.trim() || sessionUnverified
+                    ? theme.colors.textSecondary
+                    : theme.colors.primary,
+                opacity: isCreating || !name.trim() || sessionUnverified ? 0.6 : 1,
               },
             ]}
           >
@@ -201,6 +263,11 @@ const CreatePlaylistScreen: React.FC = () => {
           </Pressable>
         </View>
 
+        {sessionUnverified ? (
+          <Text accessibilityRole="alert" className="text-error" style={styles.errorText}>
+            {t('createPlaylist.sessionUnverified')}
+          </Text>
+        ) : null}
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 16 }]}
@@ -332,7 +399,7 @@ const CreatePlaylistScreen: React.FC = () => {
       </KeyboardAvoidingView>
     </>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
