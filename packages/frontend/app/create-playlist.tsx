@@ -24,6 +24,7 @@ import {
   ownsPlaylistSession,
   usePlaylistSessionKey,
   usePlaylistSessionSubject,
+  usePlaylistOwnerRetry,
 } from '@/lib/playlistSession';
 import { toast } from '@oxy.so/bloom/toast';
 import SEO from '@/components/SEO';
@@ -113,10 +114,10 @@ function CreatePlaylistForm({
   const [coverArt, setCoverArt] = useState<string | null>(null);
   const [visibility, setVisibility] = useState<PlaylistVisibility>(PlaylistVisibility.PRIVATE);
   const [errors, setErrors] = useState<FormErrors>({});
-  const ownsAction = useCallback(
-    () => currentOwner.current === owner && ownsPlaylistSession(sessionKey, accountId),
-    [accountId, currentOwner, owner, sessionKey],
-  );
+  const { needsRetry, clearRetry } = usePlaylistOwnerRetry(owner);
+  function ownsAction() {
+    return currentOwner.current === owner && ownsPlaylistSession(sessionKey, accountId);
+  }
   const createPlaylistMutation = useMutation({
     // The server cannot deduplicate a create whose response was lost.
     retry: false,
@@ -165,7 +166,7 @@ function CreatePlaylistForm({
     return parsed.success ? parsed.data : null;
   }, [coverArt, description, name, visibility]);
 
-  const handleCreate = useCallback(async () => {
+  async function handleCreate() {
     if (!isPlaylistSessionCurrent(sessionKey) || currentOwner.current !== owner) return;
     if (!isAuthenticated) {
       toast.error(t('createPlaylist.signInRequired'));
@@ -178,17 +179,9 @@ function CreatePlaylistForm({
       return;
     }
 
+    clearRetry();
     createPlaylistMutation.mutate(formData);
-  }, [
-    createPlaylistMutation,
-    currentOwner,
-    isAuthenticated,
-    ownsAction,
-    owner,
-    sessionKey,
-    t,
-    validateForm,
-  ]);
+  }
 
   const handleGoBack = useCallback(() => {
     if (!isCreating) {
@@ -268,9 +261,13 @@ function CreatePlaylistForm({
           </Pressable>
         </View>
 
-        {sessionUnverified ? (
+        {sessionUnverified || needsRetry ? (
           <Text accessibilityRole="alert" className="text-error" style={styles.errorText}>
-            {t('createPlaylist.sessionUnverified')}
+            {t(
+              sessionUnverified
+                ? 'createPlaylist.sessionUnverified'
+                : 'createPlaylist.verifyBeforeRetry',
+            )}
           </Text>
         ) : null}
         <ScrollView

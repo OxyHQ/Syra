@@ -490,6 +490,7 @@
     "privacy": "Privacy",
     "signInRequired": "You must be logged in to create playlists",
     "sessionUnverified": "目前无法验证你的账号，请重试。",
+    "verifyBeforeRetry": "重试前，请检查播放列表是否已创建。",
     "publicHint": "Anyone can find and play",
     "privateHint": "Only you can access",
     "unlistedHint": "Only accessible via link"

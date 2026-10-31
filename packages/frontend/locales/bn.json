@@ -490,6 +490,7 @@
     "privacy": "Privacy",
     "signInRequired": "You must be logged in to create playlists",
     "sessionUnverified": "এই মুহূর্তে আপনার অ্যাকাউন্ট যাচাই করা যাচ্ছে না। আবার চেষ্টা করুন।",
+    "verifyBeforeRetry": "আবার চেষ্টা করার আগে প্লেলিস্টটি তৈরি হয়েছে কি না দেখুন।",
     "publicHint": "Anyone can find and play",
     "privateHint": "Only you can access",
     "unlistedHint": "Only accessible via link"

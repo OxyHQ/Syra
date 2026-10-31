@@ -490,6 +490,7 @@
     "privacy": "Privacy",
     "signInRequired": "You must be logged in to create playlists",
     "sessionUnverified": "Не удалось проверить ваш аккаунт. Попробуйте ещё раз.",
+    "verifyBeforeRetry": "Прежде чем повторить попытку, проверьте, создан ли плейлист.",
     "publicHint": "Anyone can find and play",
     "privateHint": "Only you can access",
     "unlistedHint": "Only accessible via link"

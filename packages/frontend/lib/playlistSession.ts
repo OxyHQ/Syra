@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { oxyServices } from '@/lib/oxyServices';
 
 const http = oxyServices.http;
@@ -38,4 +38,18 @@ export function ownsPlaylistSession(owner: string, accountId: string | null): bo
     !!http.getAccessToken() &&
     isPlaylistSessionCurrent(owner)
   );
+}
+
+/** Report when a still-mounted form gets a replacement owner and keeps its draft. */
+export function usePlaylistOwnerRetry(owner: object) {
+  const previousOwner = useRef(owner);
+  const [needsRetry, setNeedsRetry] = useState(false);
+  useLayoutEffect(() => {
+    if (previousOwner.current !== owner) {
+      previousOwner.current = owner;
+      setNeedsRetry(true);
+    }
+  }, [owner]);
+  const clearRetry = useCallback(() => setNeedsRetry(false), []);
+  return { needsRetry, clearRetry };
 }
