@@ -78,6 +78,11 @@ This package contains the complete React Native application that runs on Android
 └── ...
 ```
 
+Edit the source translation files in `locales/`, then run `bun run compact-i18n`
+from this directory and commit the generated files in `locales/compact/`.
+`bun run check-i18n` verifies that the compact files match the sources. The app
+rebuilds complete, independent catalogs synchronously before initializing i18n.
+
 ## Getting Started
 
 ### Prerequisites

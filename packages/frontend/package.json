@@ -17,7 +17,8 @@
     "build-web:prod": "expo export --platform web --source-maps --output-dir dist && bun ./scripts/remove-css-preloads.mjs && bun ../../scripts/write-web-bundle-inventory.mjs dist .expo/web-bundle-inventory.json",
     "test": "jest --watchAll=false",
     "typecheck": "tsc --noEmit",
-    "check-i18n": "bun ./scripts/check-i18n.mjs",
+    "compact-i18n": "bun ./scripts/generate-compact-locales.mjs",
+    "check-i18n": "bun ./scripts/check-i18n.mjs && bun ./scripts/generate-compact-locales.mjs --check",
     "lint": "expo lint",
     "clean": "rm -rf dist .expo",
     "analyze-bundle": "bun ./scripts/analyze-bundle.js"

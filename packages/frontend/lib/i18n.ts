@@ -7,24 +7,52 @@ import i18n, { init as i18nInit, use as i18nUse } from 'i18next';
 import { initReactI18next } from 'react-i18next';
 
 import enUS from '@/locales/en.json';
-import esES from '@/locales/es.json';
-import itIT from '@/locales/it.json';
-import ar from '@/locales/ar.json';
-import bn from '@/locales/bn.json';
-import ca from '@/locales/ca.json';
-import de from '@/locales/de.json';
-import fr from '@/locales/fr.json';
-import hi from '@/locales/hi.json';
-import id from '@/locales/id.json';
-import ja from '@/locales/ja.json';
-import ptBR from '@/locales/pt-BR.json';
-import ru from '@/locales/ru.json';
-import tr from '@/locales/tr.json';
-import ur from '@/locales/ur.json';
-import zhCN from '@/locales/zh-CN.json';
+import esES from '@/locales/compact/es.generated.json';
+import itIT from '@/locales/compact/it.generated.json';
+import ar from '@/locales/compact/ar.generated.json';
+import bn from '@/locales/compact/bn.generated.json';
+import ca from '@/locales/compact/ca.generated.json';
+import de from '@/locales/compact/de.generated.json';
+import fr from '@/locales/compact/fr.generated.json';
+import hi from '@/locales/compact/hi.generated.json';
+import id from '@/locales/compact/id.generated.json';
+import ja from '@/locales/compact/ja.generated.json';
+import ptBR from '@/locales/compact/pt-BR.generated.json';
+import ru from '@/locales/compact/ru.generated.json';
+import tr from '@/locales/compact/tr.generated.json';
+import ur from '@/locales/compact/ur.generated.json';
+import zhCN from '@/locales/compact/zh-CN.generated.json';
 
 import { DEFAULT_LANGUAGE, STORAGE_KEYS } from './constants';
 import { getData } from '@/utils/storage';
+
+/** A compact JSON tree: unchanged, replace, or recurse into an equal-key object. */
+export type LocalePatch = [0] | [1, unknown] | [2, Record<string, LocalePatch>];
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function clone(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(clone);
+  if (isRecord(value))
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, clone(v)]));
+  return value;
+}
+
+/** Rebuild a separate locale tree synchronously, retaining missing keys and value order. */
+export function restoreLocale(base: unknown, patch: LocalePatch): unknown {
+  if (patch[0] === 0) return clone(base);
+  if (patch[0] === 1) return clone(patch[1]);
+  if (!isRecord(base)) throw new Error('Invalid compact locale patch');
+  const changes = patch[1];
+  return Object.fromEntries(
+    Object.entries(base).map(([key, value]) => [
+      key,
+      Object.hasOwn(changes, key) ? restoreLocale(value, changes[key]) : clone(value),
+    ]),
+  );
+}
 
 /**
  * Registered SYNCHRONOUSLY, at module load, and deliberately not inside
@@ -41,23 +69,25 @@ import { getData } from '@/utils/storage';
  */
 i18nUse(initReactI18next);
 
+const restore = (patch: unknown) => restoreLocale(enUS, patch as LocalePatch) as typeof enUS;
+
 const i18nResources = {
   'en-US': { translation: enUS },
-  'es-ES': { translation: esES },
-  'it-IT': { translation: itIT },
-  'fr-FR': { translation: fr },
-  'de-DE': { translation: de },
-  'pt-BR': { translation: ptBR },
-  'zh-CN': { translation: zhCN },
-  'hi-IN': { translation: hi },
-  'ar-SA': { translation: ar },
-  'bn-BD': { translation: bn },
-  'ru-RU': { translation: ru },
-  'ja-JP': { translation: ja },
-  'ur-PK': { translation: ur },
-  'id-ID': { translation: id },
-  'tr-TR': { translation: tr },
-  'ca-ES': { translation: ca },
+  'es-ES': { translation: restore(esES) },
+  'it-IT': { translation: restore(itIT) },
+  'fr-FR': { translation: restore(fr) },
+  'de-DE': { translation: restore(de) },
+  'pt-BR': { translation: restore(ptBR) },
+  'zh-CN': { translation: restore(zhCN) },
+  'hi-IN': { translation: restore(hi) },
+  'ar-SA': { translation: restore(ar) },
+  'bn-BD': { translation: restore(bn) },
+  'ru-RU': { translation: restore(ru) },
+  'ja-JP': { translation: restore(ja) },
+  'ur-PK': { translation: restore(ur) },
+  'id-ID': { translation: restore(id) },
+  'tr-TR': { translation: restore(tr) },
+  'ca-ES': { translation: restore(ca) },
 } as const;
 
 /**
