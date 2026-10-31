@@ -489,6 +489,7 @@
     "descriptionPlaceholder": "Add a description (optional)",
     "privacy": "Privacy",
     "signInRequired": "You must be logged in to create playlists",
+    "sessionUnverified": "अभी आपका खाता सत्यापित नहीं हो सका। कृपया फिर से कोशिश करें।",
     "publicHint": "Anyone can find and play",
     "privateHint": "Only you can access",
     "unlistedHint": "Only accessible via link"
