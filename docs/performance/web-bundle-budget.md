@@ -67,3 +67,20 @@ CI measures initial JavaScript at 8,129,811 bytes / 2,049,151 gzip bytes, within
 the existing limits; local gzip differs by one byte. All six non-translation
 limits remain unchanged, and the source-map provenance and mutation gates still
 apply to every chunk.
+
+## BloomProvider adoption (2026-10-31)
+
+With the same published Bloom 15.10.1 and frozen dependencies, base `3d3385d`
+exports 1,263,220 translation bytes / 429,348 gzip bytes; provider migration
+`11e4a49` exports the same 1,263,220 bytes / 429,386 gzip bytes. Local exports
+and CI agree on both translation measurements.
+
+All fourteen complete translation chunks compare byte-for-byte after replacing
+only the numeric registration ID and eleven numeric dependency IDs in each
+Metro `__d(factory, moduleId, dependencyIds)` call. AST-selected replacements
+leave factory bodies, strings, punctuation and whitespace untouched. Their
+compression changes by 38 bytes without any translation payload changes. The
+existing 429,370-byte ceiling therefore rises by 16 to the exact measured
+429,386; the raw translation ceiling and all seven other ceilings stay fixed.
+The source-map inventory, content hashes and classification mutation tests
+remain enforced.
