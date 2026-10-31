@@ -107,14 +107,10 @@ function toHomeSection<TData>(
   };
 }
 
-export const HOME_QUERY_KEYS = {
+const HOME_QUERY_KEYS = {
   browse: ['home', 'browse'] as const,
   recentlyPlayed: ['home', 'recently-played'] as const,
-  madeForYou: ['home', 'made-for-you'] as const,
-  popularAlbums: ['home', 'popular-albums'] as const,
-  popularArtists: ['home', 'popular-artists'] as const,
   userPlaylists: ['home', 'user-playlists'] as const,
-  tracks: ['home', 'tracks'] as const,
 };
 
 const HOME_BROWSE_QUERY_OPTIONS = {

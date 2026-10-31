@@ -15,7 +15,6 @@ import { useAuthGate, type CatalogIdentity } from '@/hooks/useAuthGate';
  */
 
 export const RADIO_QUERY_KEYS = {
-  all: ['radio'] as const,
   station: (identity: CatalogIdentity, seedType: RadioSeedType, seedId: string) =>
     ['radio', 'station', identity, seedType, seedId] as const,
 };
@@ -44,7 +43,9 @@ export function useRadioStation(seed: RadioSeed | null) {
       });
     },
     initialPageParam: null as string | null,
-    getNextPageParam: (lastPage) => lastPage.cursor,
+    // Use the shared cursor helper once it has a lightweight entry point for Metro.
+    getNextPageParam: (lastPage, _pages, _lastPageParam, pageParams) =>
+      lastPage.cursor && !pageParams.includes(lastPage.cursor) ? lastPage.cursor : null,
     enabled: isResolved && seed !== null,
     staleTime: Infinity,
     refetchOnWindowFocus: false,
