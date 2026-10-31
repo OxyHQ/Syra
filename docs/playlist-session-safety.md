@@ -16,8 +16,11 @@ was created before retrying, since a request may already have reached the server
 
 The update to Core 7.9.1 is part of this protection: older Core could receive a
 late 401 from A, refresh using B, and retry A's request as B. This screen guard
-alone cannot fence that internal HTTP retry. A request already accepted by a
-server cannot be undone by changing sessions.
+alone cannot fence that internal HTTP retry. In an isolated Core 7.3 test,
+passing an AbortSignal did not provide equivalent protection: after A's 401
+entered a held refresh, switching to B and aborting rejected the caller, but
+the old refresh later cleared B's bearer from the linked client. A request
+already accepted by a server cannot be undone by changing sessions.
 
 This change does not clear unregistered mutations, migrate old persisted work,
 or protect other mutation screens. Syra supplies its own QueryClient; in both
