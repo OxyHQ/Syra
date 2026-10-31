@@ -3,7 +3,8 @@ import 'react-native-reanimated';
 
 import { Slot } from 'expo-router';
 import { Platform, View } from 'react-native';
-import { BloomThemeProvider } from '@oxy.so/bloom/theme';
+import { BloomProvider } from '@oxy.so/bloom/provider';
+import { expoRouterScrollAdapter } from '@oxy.so/bloom/scroll/expo-router';
 
 import { createScopedLogger } from '@/utils/logger';
 
@@ -31,7 +32,7 @@ import '../styles/global.css';
 /**
  * Root layout.
  *
- * `BloomThemeProvider` is hoisted to the very top so it wraps EVERY render
+ * `BloomProvider` is hoisted to the very top so it wraps EVERY render
  * branch — including the font-loading splash it renders via `onFontsLoading`
  * and the full provider/app tree below. Anything that calls `useTheme()` (the
  * splash, the shell, every screen) is therefore always inside the provider,
@@ -39,7 +40,8 @@ import '../styles/global.css';
  */
 export default function RootLayout() {
   return (
-    <BloomThemeProvider
+    <BloomProvider
+      scrollAdapter={expoRouterScrollAdapter}
       defaultMode="dark"
       defaultColorPreset="purple"
       onFontsLoading={<SplashScreen />}
@@ -51,6 +53,6 @@ export default function RootLayout() {
           </AppShell>
         </AppProviders>
       </View>
-    </BloomThemeProvider>
+    </BloomProvider>
   );
 }

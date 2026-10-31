@@ -25,7 +25,9 @@ import { PLAYER_BAR_HEIGHT } from '@/constants/layout';
 // Hooks
 import { useKeyboardVisibility } from '@/hooks/useKeyboardVisibility';
 import { useIsScreenNotMobile, useIsDesktop } from '@/hooks/useOptimizedMediaQuery';
-import { BloomThemeProvider, useTheme } from '@oxy.so/bloom/theme';
+import { useTheme } from '@oxy.so/bloom/theme';
+import { BloomProvider } from '@oxy.so/bloom/provider';
+import { expoRouterScrollAdapter } from '@oxy.so/bloom/scroll/expo-router';
 import { LayoutScrollProvider, useLayoutScroll } from '@/context/LayoutScrollContext';
 import { usePlayerStore } from '@/stores/playerStore';
 import { useUIStore } from '@/stores/uiStore';
@@ -301,7 +303,7 @@ export default function RootLayout() {
   const isScreenNotMobile = useIsScreenNotMobile();
   const keyboardVisible = useKeyboardVisibility();
 
-  // Font loading is owned entirely by Bloom's `BloomThemeProvider`/`FontLoader`:
+  // Font loading is owned entirely by Bloom's `BloomProvider`/`FontLoader`:
   // it loads the Bloom font families on native (and sets the default `Text`
   // family) and injects the `@font-face` rules + `--bloom-font-*` tokens on web.
   // The provider gates native rendering on fonts via its `onFontsLoading`
@@ -408,7 +410,8 @@ export default function RootLayout() {
   ]);
 
   return (
-    <BloomThemeProvider
+    <BloomProvider
+      scrollAdapter={expoRouterScrollAdapter}
       defaultMode="dark"
       defaultColorPreset="purple"
       // WEB shows the custom splash while fonts load; NATIVE shows nothing here
@@ -419,6 +422,6 @@ export default function RootLayout() {
       // provider consumes that store internally — no `seed` prop threading here.
     >
       <ThemedView style={{ flex: 1 }}>{appContent}</ThemedView>
-    </BloomThemeProvider>
+    </BloomProvider>
   );
 }
