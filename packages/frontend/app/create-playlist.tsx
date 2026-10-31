@@ -1,4 +1,4 @@
-import { useState, useCallback, useLayoutEffect, useRef, type RefObject } from 'react';
+import { useState, useCallback, useLayoutEffect, useMemo, useRef, type RefObject } from 'react';
 import {
   StyleSheet,
   View,
@@ -68,20 +68,23 @@ function CreatePlaylistScreen() {
   const subject = usePlaylistSessionSubject();
   const { user } = useOxy();
   const accountId = user?.id ?? null;
-  const currentAccount = useRef<string | null>(null);
+  // Preserve a distinct owner across A→B→A, even if the bearer did not change.
+  const owner = useMemo(() => ({ accountId }), [accountId]);
+  const currentOwner = useRef<typeof owner | null>(null);
   useLayoutEffect(() => {
-    currentAccount.current = accountId;
+    currentOwner.current = owner;
     return () => {
-      currentAccount.current = null;
+      if (currentOwner.current === owner) currentOwner.current = null;
     };
-  }, [accountId]);
+  }, [owner]);
   return (
     <CreatePlaylistForm
       key={JSON.stringify([sessionKey, accountId, subject])}
       sessionKey={sessionKey}
       accountId={accountId}
       subject={subject}
-      currentAccount={currentAccount}
+      owner={owner}
+      currentOwner={currentOwner}
     />
   );
 }
@@ -90,12 +93,14 @@ function CreatePlaylistForm({
   sessionKey,
   accountId,
   subject,
-  currentAccount,
+  owner,
+  currentOwner,
 }: {
   sessionKey: string;
   accountId: string | null;
   subject: string | null;
-  currentAccount: RefObject<string | null>;
+  owner: { accountId: string | null };
+  currentOwner: RefObject<{ accountId: string | null } | null>;
 }) {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -109,8 +114,8 @@ function CreatePlaylistForm({
   const [visibility, setVisibility] = useState<PlaylistVisibility>(PlaylistVisibility.PRIVATE);
   const [errors, setErrors] = useState<FormErrors>({});
   const ownsAction = useCallback(
-    () => currentAccount.current === accountId && ownsPlaylistSession(sessionKey, accountId),
-    [accountId, currentAccount, sessionKey],
+    () => currentOwner.current === owner && ownsPlaylistSession(sessionKey, accountId),
+    [accountId, currentOwner, owner, sessionKey],
   );
   const createPlaylistMutation = useMutation({
     // The server cannot deduplicate a create whose response was lost.
@@ -161,7 +166,7 @@ function CreatePlaylistForm({
   }, [coverArt, description, name, visibility]);
 
   const handleCreate = useCallback(async () => {
-    if (!isPlaylistSessionCurrent(sessionKey) || currentAccount.current !== accountId) return;
+    if (!isPlaylistSessionCurrent(sessionKey) || currentOwner.current !== owner) return;
     if (!isAuthenticated) {
       toast.error(t('createPlaylist.signInRequired'));
       return;
@@ -175,11 +180,11 @@ function CreatePlaylistForm({
 
     createPlaylistMutation.mutate(formData);
   }, [
-    accountId,
     createPlaylistMutation,
-    currentAccount,
+    currentOwner,
     isAuthenticated,
     ownsAction,
+    owner,
     sessionKey,
     t,
     validateForm,
