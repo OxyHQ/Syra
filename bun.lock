@@ -93,6 +93,7 @@
         "@oxy.so/core": "7.3.0",
         "@oxy.so/expo-splash": "^1.0.0",
         "@oxy.so/services": "13.0.0",
+        "@oxy.so/utils": "1.4.0",
         "@react-native-async-storage/async-storage": "2.2.0",
         "@react-native-community/netinfo": "12.0.1",
         "@react-native/js-polyfills": "^0.81.1",
@@ -3633,6 +3634,8 @@
     "@redis/client/cluster-key-slot": ["cluster-key-slot@1.1.2", "", {}, "sha512-RMr0FhtfXemyinomL4hrWcYJxmX6deFdCxpJzhDttxgO1+bcCnkk+9drydLVDmAMG7NE6aN/fl4F7ucU/90gAA=="],
 
     "@socket.io/redis-adapter/debug": ["debug@4.3.7", "", { "dependencies": { "ms": "^2.1.3" }, "peerDependencies": { "supports-color": "*" }, "optionalPeers": ["supports-color"] }, "sha512-Er2nc/H7RrMXZBFCEim6TCmMk02Z8vLC2Rbi1KEBggpo0fS6l0S1nnapwmIi3yW/+GOJap1Krg4w0Hg80oCqgQ=="],
+
+    "@syra/frontend/@oxy.so/utils": ["@oxy.so/utils@1.4.0", "", {}, "sha512-139h31p24tlAIFsdVNy5XWcmuE+GffJpZyNBmEUbgrF7CbmyEE14gxhK+zLLJGyrj/zNmVuV1x24hmbHdQ2lPA=="],
 
     "@syra/frontend/typescript": ["typescript@6.0.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw=="],
 

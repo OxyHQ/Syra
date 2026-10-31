@@ -1,5 +1,6 @@
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { RadioSeed, RadioSeedType } from '@syra/shared-types';
+import { nextUnvisitedCursor } from '@oxy.so/utils/paging';
 import { radioService } from '@/services/radioService';
 import { useAuthGate, type CatalogIdentity } from '@/hooks/useAuthGate';
 
@@ -44,7 +45,8 @@ export function useRadioStation(seed: RadioSeed | null) {
       });
     },
     initialPageParam: null as string | null,
-    getNextPageParam: (lastPage) => lastPage.cursor,
+    getNextPageParam: (lastPage, _pages, _lastPageParam, pageParams) =>
+      nextUnvisitedCursor(lastPage.cursor, pageParams) ?? null,
     enabled: isResolved && seed !== null,
     staleTime: Infinity,
     refetchOnWindowFocus: false,
