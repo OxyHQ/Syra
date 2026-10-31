@@ -114,6 +114,7 @@ function CreatePlaylistForm({
   const [coverArt, setCoverArt] = useState<string | null>(null);
   const [visibility, setVisibility] = useState<PlaylistVisibility>(PlaylistVisibility.PRIVATE);
   const [errors, setErrors] = useState<FormErrors>({});
+  const submitting = useRef(false);
   const { needsRetry, markRetry, clearRetry } = usePlaylistOwnerRetry(owner);
   function ownsAction() {
     return currentOwner.current === owner && ownsPlaylistSession(sessionKey, accountId);
@@ -140,6 +141,9 @@ function CreatePlaylistForm({
       markRetry();
       console.error('Failed to create playlist:', error);
       toast.error(getErrorMessage(error) || 'Failed to create playlist. Please try again.');
+    },
+    onSettled: () => {
+      submitting.current = false;
     },
   });
   const isCreating = createPlaylistMutation.isPending;
@@ -168,7 +172,12 @@ function CreatePlaylistForm({
   }, [coverArt, description, name, visibility]);
 
   async function handleCreate() {
-    if (!isPlaylistSessionCurrent(sessionKey) || currentOwner.current !== owner) return;
+    if (
+      submitting.current ||
+      !isPlaylistSessionCurrent(sessionKey) ||
+      currentOwner.current !== owner
+    )
+      return;
     if (!isAuthenticated) {
       toast.error(t('createPlaylist.signInRequired'));
       return;
@@ -181,7 +190,13 @@ function CreatePlaylistForm({
     }
 
     clearRetry();
-    createPlaylistMutation.mutate(formData);
+    submitting.current = true;
+    try {
+      createPlaylistMutation.mutate(formData);
+    } catch (error) {
+      submitting.current = false;
+      throw error;
+    }
   }
 
   const handleGoBack = useCallback(() => {

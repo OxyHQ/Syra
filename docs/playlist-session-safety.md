@@ -16,6 +16,10 @@ was created before retrying, since a request may already have reached the server
 The same notice appears when a create fails while its original session is still
 current. Automatic mutation retries are disabled: a lost response does not
 prove the server rejected the create, and manual retries are not idempotent.
+Each form also uses a synchronous in-flight guard, so two presses before React
+renders its disabled button cannot send two creates. The guard belongs to that
+form instance and is released on completion; a newly mounted account form has
+its own guard.
 
 The update to Core 7.9.1 is part of this protection: older Core could receive a
 late 401 from A, refresh using B, and retry A's request as B. This screen guard

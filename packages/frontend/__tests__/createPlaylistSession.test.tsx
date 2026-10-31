@@ -778,3 +778,120 @@ it.each([false, true])(
     expect(mockToast.error).not.toHaveBeenCalled();
   },
 );
+
+it('accepts only one synchronous submission and permits an explicit retry after failure', async () => {
+  let fail!: (error: Error) => void;
+  globalThis.fetch = jest
+    .fn()
+    .mockImplementationOnce(
+      () =>
+        new Promise<Response>((_resolve, reject) => {
+          fail = reject;
+        }),
+    )
+    .mockImplementationOnce(async () => response()) as typeof fetch;
+  await act(async () => {
+    renderer.root
+      .findByProps({ placeholder: 'createPlaylist.namePlaceholder' })
+      .props.onChangeText('Alice private playlist');
+  });
+  const press = renderer.root.findByProps({ testID: 'create-playlist-submit' }).props.onPress;
+  await act(async () => {
+    press();
+    press();
+    await tick();
+  });
+  expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  await act(async () => {
+    fail(new TypeError('Lost response'));
+    await tick();
+  });
+  expect(renderer.root.findByProps({ accessibilityRole: 'alert' }).props.children).toBe(
+    'createPlaylist.verifyBeforeRetry',
+  );
+  await act(async () => {
+    renderer.root.findByProps({ testID: 'create-playlist-submit' }).props.onPress();
+    await tick();
+  });
+  expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+  expect(mockRouter.replace).toHaveBeenCalledTimes(1);
+});
+
+it('gives B its own lock and an old A settlement cannot unlock B', async () => {
+  const requests: Array<{ resolve: (response: Response) => void; reject: (error: Error) => void }> =
+    [];
+  globalThis.fetch = jest.fn(
+    () =>
+      new Promise<Response>((resolve, reject) => {
+        requests.push({ resolve, reject });
+      }),
+  ) as typeof fetch;
+  await act(async () => {
+    renderer.root
+      .findByProps({ placeholder: 'createPlaylist.namePlaceholder' })
+      .props.onChangeText('Alice private playlist');
+  });
+  await act(async () => {
+    renderer.root.findByProps({ testID: 'create-playlist-submit' }).props.onPress();
+    await tick();
+  });
+  expect(requests).toHaveLength(1);
+  await act(async () => {
+    mockOxy.session.setAccessToken(token('bob'));
+    mockVisibleUser = 'bob';
+    persistence.activate('bob');
+    renderer.update(
+      <QueryClientProvider client={client}>
+        <CreatePlaylistScreen />
+      </QueryClientProvider>,
+    );
+  });
+  await act(async () => {
+    renderer.root
+      .findByProps({ placeholder: 'createPlaylist.namePlaceholder' })
+      .props.onChangeText('Bob playlist');
+  });
+  const bobPress = renderer.root.findByProps({ testID: 'create-playlist-submit' }).props.onPress;
+  await act(async () => {
+    bobPress();
+    await tick();
+  });
+  expect(requests).toHaveLength(2);
+  await act(async () => {
+    requests[0].reject(new TypeError('Old request failed'));
+    await tick();
+  });
+  await act(async () => {
+    bobPress();
+    await tick();
+  });
+  expect(requests).toHaveLength(2);
+  await act(async () => {
+    requests[1].resolve(response());
+    await tick();
+  });
+  expect(mockRouter.replace).toHaveBeenCalledTimes(1);
+});
+
+it('compiled screen also prevents two synchronous submissions', async () => {
+  globalThis.fetch = jest.fn(() => new Promise<Response>(() => {})) as typeof fetch;
+  await act(async () => {
+    renderer.update(
+      <QueryClientProvider client={client}>
+        <CompiledPlaylistScreen />
+      </QueryClientProvider>,
+    );
+  });
+  await act(async () => {
+    renderer.root
+      .findByProps({ placeholder: 'createPlaylist.namePlaceholder' })
+      .props.onChangeText('Alice private playlist');
+  });
+  const press = renderer.root.findByProps({ testID: 'create-playlist-submit' }).props.onPress;
+  await act(async () => {
+    press();
+    press();
+    await tick();
+  });
+  expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+});
