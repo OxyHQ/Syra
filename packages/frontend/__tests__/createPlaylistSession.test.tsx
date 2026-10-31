@@ -34,6 +34,24 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 
+let mockDiscardNextOwnerMemo = false;
+const reactModule = require('react') as typeof import('react');
+const realUseMemo = reactModule.useMemo;
+jest.spyOn(reactModule, 'useMemo').mockImplementation(((factory, deps) => {
+  const value = realUseMemo(factory, deps);
+  if (
+    mockDiscardNextOwnerMemo &&
+    value !== null &&
+    typeof value === 'object' &&
+    Object.keys(value).length === 1 &&
+    'accountId' in value
+  ) {
+    mockDiscardNextOwnerMemo = false;
+    return { ...value };
+  }
+  return value;
+}) as typeof reactModule.useMemo);
+
 const linkedClients: Array<{ dispose(): void }> = [];
 const createLinkedClient = mockOxy.createLinkedClient.bind(mockOxy);
 jest.spyOn(mockOxy, 'createLinkedClient').mockImplementation((options) => {
@@ -83,6 +101,7 @@ const oldFetch = globalThis.fetch;
 beforeEach(async () => {
   jest.clearAllMocks();
   mockIsAuthenticated = true;
+  mockDiscardNextOwnerMemo = false;
   mockVisibleUser = 'alice';
   onlineManager.setOnline(true);
   mockOxy.session.setAccessToken(token('alice'));
@@ -533,6 +552,37 @@ it('keeps queued work valid across a same-account rerender', async () => {
   await act(async () => {
     onlineManager.setOnline(true);
     await mutation.continue();
+    await tick();
+  });
+  expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  expect(mockToast.success).toHaveBeenCalledTimes(1);
+});
+
+it('preserves the form and warns before retry if React replaces the owner memo', async () => {
+  await act(async () => {
+    renderer.root
+      .findByProps({ placeholder: 'createPlaylist.namePlaceholder' })
+      .props.onChangeText('My unsent playlist');
+  });
+  mockDiscardNextOwnerMemo = true;
+  await act(async () => {
+    renderer.update(
+      <QueryClientProvider client={client}>
+        <CreatePlaylistScreen />
+      </QueryClientProvider>,
+    );
+    await tick();
+  });
+  expect(mockDiscardNextOwnerMemo).toBe(false);
+  expect(
+    renderer.root.findByProps({ placeholder: 'createPlaylist.namePlaceholder' }).props.value,
+  ).toBe('My unsent playlist');
+  expect(renderer.root.findByProps({ accessibilityRole: 'alert' }).props.children).toBe(
+    'createPlaylist.verifyBeforeRetry',
+  );
+  expect(globalThis.fetch).not.toHaveBeenCalled();
+  await act(async () => {
+    renderer.root.findByProps({ testID: 'create-playlist-submit' }).props.onPress();
     await tick();
   });
   expect(globalThis.fetch).toHaveBeenCalledTimes(1);

@@ -10,7 +10,9 @@ that case. Tokens without `userId` or `id`, including opaque and sub-only
 bearers, therefore cannot create a playlist through this screen. The render
 owner uses a memoized identity and is committed in a layout effect. If React
 discards that memo without an account change, an older action may be rejected
-conservatively; it must not be reassigned to another account.
+conservatively; it must not be reassigned to another account. The still-mounted
+form retains its input and shows a localized prompt to check whether the playlist
+was created before retrying, since a request may already have reached the server.
 
 The update to Core 7.9.1 is part of this protection: older Core could receive a
 late 401 from A, refresh using B, and retry A's request as B. This screen guard
