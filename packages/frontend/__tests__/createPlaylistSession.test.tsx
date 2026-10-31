@@ -60,6 +60,44 @@ jest.spyOn(mockOxy, 'createLinkedClient').mockImplementation((options) => {
   return linked;
 });
 const CreatePlaylistScreen = require('@/app/create-playlist').default;
+
+// Exercise the same React Compiler version used by Expo without creating a
+// shared temporary route or relying on an uncompiled Jest transform.
+function compiledScreen(): typeof CreatePlaylistScreen {
+  const { transformSync } = require('@babel/core') as typeof import('@babel/core');
+  const { readFileSync } = require('node:fs') as typeof import('node:fs');
+  const path = require('node:path') as typeof import('node:path');
+  const { Script } = require('node:vm') as typeof import('node:vm');
+  const filename = path.resolve(__dirname, '../app/create-playlist.tsx');
+  const preset = path.dirname(require.resolve('babel-preset-expo'));
+  const compiler = require(require.resolve('babel-plugin-react-compiler', { paths: [preset] }));
+  const code = transformSync(readFileSync(filename, 'utf8'), {
+    filename,
+    babelrc: false,
+    configFile: false,
+    plugins: [
+      [compiler, { target: '19' }],
+      [require('@babel/plugin-transform-typescript'), { isTSX: true, allExtensions: true }],
+      [require('@babel/plugin-transform-react-jsx'), { runtime: 'automatic' }],
+      require('@babel/plugin-transform-modules-commonjs'),
+    ],
+  })?.code;
+  if (
+    !code ||
+    !/function CreatePlaylistScreen\([^)]*\)\s*\{\s*const \$ =/.test(code) ||
+    !/function CreatePlaylistForm\([^)]*\)\s*\{\s*const \$ =/.test(code)
+  ) {
+    throw new Error('React Compiler did not compile both playlist components');
+  }
+  const output = { exports: {} as { default: typeof CreatePlaylistScreen } };
+  const run = new Script(`(function(require, module, exports) {${code}\n})`, {
+    filename,
+  }).runInThisContext();
+  run(require, output, output.exports);
+  return output.exports.default;
+}
+const CompiledPlaylistScreen = compiledScreen();
+
 const {
   createAccountQueryPersistence,
 } = require('../../../node_modules/@oxy.so/services/lib/commonjs/ui/hooks/accountQueryPersistence.js');
@@ -587,4 +625,72 @@ it('preserves the form and warns before retry if React replaces the owner memo',
   });
   expect(globalThis.fetch).toHaveBeenCalledTimes(1);
   expect(mockToast.success).toHaveBeenCalledTimes(1);
+});
+
+it('compiled screen rejects a retained handler after projected A→B→A without token change', async () => {
+  await act(async () => {
+    renderer.update(
+      <QueryClientProvider client={client}>
+        <CompiledPlaylistScreen />
+      </QueryClientProvider>,
+    );
+  });
+  await act(async () => {
+    renderer.root
+      .findByProps({ placeholder: 'createPlaylist.namePlaceholder' })
+      .props.onChangeText('Alice private playlist');
+  });
+  const oldPress = renderer.root.findByProps({ testID: 'create-playlist-submit' }).props.onPress;
+  mockVisibleUser = 'bob';
+  await act(async () => {
+    renderer.update(
+      <QueryClientProvider client={client}>
+        <CompiledPlaylistScreen />
+      </QueryClientProvider>,
+    );
+    await tick();
+  });
+  mockVisibleUser = 'alice';
+  await act(async () => {
+    renderer.update(
+      <QueryClientProvider client={client}>
+        <CompiledPlaylistScreen />
+      </QueryClientProvider>,
+    );
+    await tick();
+  });
+  await act(async () => {
+    oldPress();
+    await tick();
+  });
+  expect(globalThis.fetch).not.toHaveBeenCalled();
+  expect(mockToast.error).not.toHaveBeenCalled();
+});
+
+it('compiled screen rejects a write while token B and visible user A disagree', async () => {
+  await act(async () => {
+    renderer.update(
+      <QueryClientProvider client={client}>
+        <CompiledPlaylistScreen />
+      </QueryClientProvider>,
+    );
+  });
+  await act(async () => {
+    mockOxy.session.setAccessToken(token('bob'));
+    persistence.activate('bob');
+    await tick();
+  });
+  expect(renderer.root.findByProps({ accessibilityRole: 'alert' }).props.children).toBe(
+    'createPlaylist.sessionUnverified',
+  );
+  await act(async () => {
+    renderer.root
+      .findByProps({ placeholder: 'createPlaylist.namePlaceholder' })
+      .props.onChangeText('Visible as Alice');
+  });
+  await act(async () => {
+    renderer.root.findByProps({ testID: 'create-playlist-submit' }).props.onPress();
+    await tick();
+  });
+  expect(globalThis.fetch).not.toHaveBeenCalled();
 });
