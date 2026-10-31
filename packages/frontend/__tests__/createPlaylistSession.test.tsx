@@ -694,3 +694,87 @@ it('compiled screen rejects a write while token B and visible user A disagree', 
   });
   expect(globalThis.fetch).not.toHaveBeenCalled();
 });
+
+it('warns after a lost response, preserves the draft, and does not retry automatically', async () => {
+  let accepted = 0;
+  globalThis.fetch = jest.fn(async () => {
+    accepted += 1;
+    throw new TypeError('Connection lost after server accepted the POST');
+  }) as typeof fetch;
+  await act(async () => {
+    renderer.root
+      .findByProps({ placeholder: 'createPlaylist.namePlaceholder' })
+      .props.onChangeText('Alice private playlist');
+  });
+  await act(async () => {
+    renderer.root.findByProps({ testID: 'create-playlist-submit' }).props.onPress();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+  });
+  expect(accepted).toBe(1);
+  expect(
+    renderer.root.findByProps({ placeholder: 'createPlaylist.namePlaceholder' }).props.value,
+  ).toBe('Alice private playlist');
+  expect(renderer.root.findByProps({ accessibilityRole: 'alert' }).props.children).toBe(
+    'createPlaylist.verifyBeforeRetry',
+  );
+  await act(async () => {
+    mockOxy.session.setAccessToken(token('bob'));
+    mockVisibleUser = 'bob';
+    persistence.activate('bob');
+    renderer.update(
+      <QueryClientProvider client={client}>
+        <CreatePlaylistScreen />
+      </QueryClientProvider>,
+    );
+  });
+  expect(renderer.root.findAllByProps({ accessibilityRole: 'alert' })).toHaveLength(0);
+});
+
+it.each([false, true])(
+  'does not show an old error after a session change (return to A: %s)',
+  async (returnToAlice) => {
+    let fail!: (error: Error) => void;
+    globalThis.fetch = jest.fn(
+      () =>
+        new Promise((_resolve, reject) => {
+          fail = reject;
+        }),
+    ) as typeof fetch;
+    await act(async () => {
+      renderer.root
+        .findByProps({ placeholder: 'createPlaylist.namePlaceholder' })
+        .props.onChangeText('Alice private playlist');
+    });
+    await act(async () => {
+      renderer.root.findByProps({ testID: 'create-playlist-submit' }).props.onPress();
+      await tick();
+    });
+    await act(async () => {
+      mockOxy.session.setAccessToken(token('bob'));
+      mockVisibleUser = 'bob';
+      persistence.activate('bob');
+      renderer.update(
+        <QueryClientProvider client={client}>
+          <CreatePlaylistScreen />
+        </QueryClientProvider>,
+      );
+    });
+    if (returnToAlice)
+      await act(async () => {
+        mockOxy.session.setAccessToken(token('alice', 2));
+        mockVisibleUser = 'alice';
+        persistence.activate('alice');
+        renderer.update(
+          <QueryClientProvider client={client}>
+            <CreatePlaylistScreen />
+          </QueryClientProvider>,
+        );
+      });
+    await act(async () => {
+      fail(new TypeError('Lost response'));
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    });
+    expect(renderer.root.findAllByProps({ accessibilityRole: 'alert' })).toHaveLength(0);
+    expect(mockToast.error).not.toHaveBeenCalled();
+  },
+);

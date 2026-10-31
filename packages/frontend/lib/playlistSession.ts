@@ -50,6 +50,7 @@ export function usePlaylistOwnerRetry(owner: object) {
       setNeedsRetry(true);
     }
   }, [owner]);
+  const markRetry = useCallback(() => setNeedsRetry(true), []);
   const clearRetry = useCallback(() => setNeedsRetry(false), []);
-  return { needsRetry, clearRetry };
+  return { needsRetry, markRetry, clearRetry };
 }

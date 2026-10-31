@@ -13,6 +13,9 @@ discards that memo without an account change, an older action may be rejected
 conservatively; it must not be reassigned to another account. The still-mounted
 form retains its input and shows a localized prompt to check whether the playlist
 was created before retrying, since a request may already have reached the server.
+The same notice appears when a create fails while its original session is still
+current. Automatic mutation retries are disabled: a lost response does not
+prove the server rejected the create, and manual retries are not idempotent.
 
 The update to Core 7.9.1 is part of this protection: older Core could receive a
 late 401 from A, refresh using B, and retry A's request as B. This screen guard
