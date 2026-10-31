@@ -489,6 +489,8 @@
     "descriptionPlaceholder": "Add a description (optional)",
     "privacy": "Privacy",
     "signInRequired": "You must be logged in to create playlists",
+    "sessionUnverified": "لا يمكننا التحقق من حسابك الآن. يُرجى المحاولة مرة أخرى.",
+    "verifyBeforeRetry": "تحقق مما إذا تم إنشاء قائمة التشغيل قبل المحاولة مرة أخرى.",
     "publicHint": "Anyone can find and play",
     "privateHint": "Only you can access",
     "unlistedHint": "Only accessible via link"

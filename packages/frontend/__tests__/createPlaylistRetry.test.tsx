@@ -7,7 +7,9 @@ const mockToast = { error: jest.fn(), success: jest.fn() };
 const mockRouter = { replace: jest.fn(), back: jest.fn() };
 jest.mock('@/lib/oxyServices', () => ({ oxyServices: mockOxy }));
 jest.mock('@/config', () => ({ API_URL: 'https://syra.example' }));
-jest.mock('@oxy.so/services/ui/client', () => ({ useOxy: () => ({ isAuthenticated: true }) }));
+jest.mock('@oxy.so/services/ui/client', () => ({
+  useOxy: () => ({ isAuthenticated: true, user: { id: 'alice' } }),
+}));
 jest.mock('@oxy.so/bloom/toast', () => ({ toast: mockToast }));
 jest.mock('@oxy.so/bloom/theme', () => ({
   useTheme: () => ({

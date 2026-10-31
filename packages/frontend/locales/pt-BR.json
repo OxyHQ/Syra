@@ -489,6 +489,8 @@
     "descriptionPlaceholder": "Add a description (optional)",
     "privacy": "Privacy",
     "signInRequired": "You must be logged in to create playlists",
+    "sessionUnverified": "Não foi possível verificar sua conta agora. Tente novamente.",
+    "verifyBeforeRetry": "Verifique se a playlist foi criada antes de tentar novamente.",
     "publicHint": "Anyone can find and play",
     "privateHint": "Only you can access",
     "unlistedHint": "Only accessible via link"

@@ -489,6 +489,8 @@
     "descriptionPlaceholder": "Add a description (optional)",
     "privacy": "Privacy",
     "signInRequired": "You must be logged in to create playlists",
+    "sessionUnverified": "Kami tidak dapat memverifikasi akun Anda saat ini. Coba lagi.",
+    "verifyBeforeRetry": "Periksa apakah playlist sudah dibuat sebelum mencoba lagi.",
     "publicHint": "Anyone can find and play",
     "privateHint": "Only you can access",
     "unlistedHint": "Only accessible via link"

@@ -48,9 +48,9 @@
     "@livekit/react-native-webrtc": "144.2.0",
     "@oxy.so/app-preset": "^4.0.0",
     "@oxy.so/bloom": "15.10.1",
-    "@oxy.so/core": "7.3.0",
+    "@oxy.so/core": "7.9.2",
     "@oxy.so/expo-splash": "^1.0.0",
-    "@oxy.so/services": "13.0.0",
+    "@oxy.so/services": "13.13.0",
     "@oxy.so/utils": "1.5.0",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/netinfo": "12.0.1",
@@ -128,6 +128,10 @@
     "zustand": "^5.0.8"
   },
   "devDependencies": {
+    "@babel/core": "7.29.7",
+    "@babel/plugin-transform-react-jsx": "7.29.7",
+    "@babel/plugin-transform-typescript": "7.29.9",
+    "babel-preset-expo": "~58.0.20",
     "@babel/plugin-transform-modules-commonjs": "^7.27.1",
     "@react-native/jest-preset": "0.88.0",
     "@tailwindcss/postcss": "4.2.2",
