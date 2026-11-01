@@ -1,4 +1,26 @@
-import { ownedShowStateKey } from './podcastFormat';
+import { formatPubDate, ownedShowStateKey } from './podcastFormat';
+
+describe('formatPubDate', () => {
+  afterEach(() => jest.useRealTimers());
+
+  it('uses the local calendar day for relative labels', () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date(2026, 2, 9, 9));
+    expect(formatPubDate(new Date(2026, 2, 8, 23).toISOString())).toBe('Yesterday');
+    expect(formatPubDate(new Date(2026, 2, 7, 23).toISOString())).toBe('2 days ago');
+    expect(formatPubDate(new Date(2026, 2, 9, 1).toISOString())).toBe('Today');
+    expect(formatPubDate(new Date(2026, 2, 10, 1).toISOString())).toBe('Today');
+    const lastWeek = new Date(2026, 2, 2, 23);
+    expect(formatPubDate(lastWeek.toISOString())).toBe(
+      lastWeek.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }),
+    );
+  });
+
+  it('keeps invalid and absent dates empty', () => {
+    expect(formatPubDate(undefined)).toBe('');
+    expect(formatPubDate('invalid')).toBe('');
+  });
+});
 
 /**
  * The label an owned show carries in the library, and the ORDER it is decided

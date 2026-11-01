@@ -1,6 +1,7 @@
 /**
  * Formatting helpers for podcast episode metadata (duration + publish date).
  */
+import { calendarDaysBetween } from '@oxy.so/utils/date';
 
 /**
  * Format an episode duration (seconds) as a human label.
@@ -35,8 +36,7 @@ export function formatPubDate(pubDate: string | undefined): string {
     return '';
   }
 
-  const diffMs = Date.now() - parsed;
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  const diffDays = calendarDaysBetween(new Date(parsed), new Date());
 
   if (diffDays <= 0) {
     return 'Today';
