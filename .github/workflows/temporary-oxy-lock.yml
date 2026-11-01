@@ -1,0 +1,29 @@
+name: Resolve diagnostic Oxy lockfile
+
+on:
+  push:
+    branches:
+      - codex/syra-oxy-budget-diagnostic
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - name: Resolve without installing or running lifecycle scripts
+        run: bun install --lockfile-only --ignore-scripts --minimum-release-age=0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: candidate-lockfile
+          path: bun.lock
+          if-no-files-found: error
+          retention-days: 3
