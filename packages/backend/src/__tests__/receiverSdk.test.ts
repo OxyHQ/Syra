@@ -2,7 +2,7 @@ import { expect, it } from 'bun:test';
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
-it('validates receiver identity and revocation in an isolated loopback process', () => {
+it('validates receiver identity, revocation and outage recovery in an isolated loopback process', () => {
   const result = spawnSync(
     'bun',
     ['--no-env-file', resolve('src/__tests__/fixtures/receiver-sdk-probe.ts')],
@@ -16,7 +16,7 @@ it('validates receiver identity and revocation in an isolated loopback process',
         LOG_LEVEL: 'silent',
       },
       encoding: 'utf8',
-      timeout: 15000,
+      timeout: 30000,
     },
   );
   if (result.status !== 0)
@@ -29,14 +29,10 @@ it('validates receiver identity and revocation in an isolated loopback process',
     admitted: number;
     nonLoopbackRequests: number;
   } = JSON.parse(lines[lines.length - 1] ?? '{}');
-  expect(receipt.controls).toBe(3);
-  // Five round trips, because with no live revocation feed (no service token
-  // here) core >= 6.9 validates every request and caches nothing: the owner's
-  // bearer, the conflicting claim (refused), the owner twice more, and the
-  // revoked session — refused on the very next request.
-  expect(receipt.validations).toBe(5);
-  // Three admits: the owner's first call and the two calls before revocation;
-  // nothing is admitted after the session ends.
-  expect(receipt.admitted).toBe(3);
+  expect(receipt.controls).toBe(4);
+  // The outage can be retried by the SDK, so only the lower bound is fixed.
+  expect(receipt.validations).toBeGreaterThanOrEqual(7);
+  // The owner enters three times before revocation and once after recovery.
+  expect(receipt.admitted).toBe(4);
   expect(receipt.nonLoopbackRequests).toBe(0);
-});
+}, 30000);
