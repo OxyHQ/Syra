@@ -143,7 +143,10 @@ beforeEach(async () => {
   mockVisibleUser = 'alice';
   onlineManager.setOnline(true);
   mockOxy.session.setAccessToken(token('alice'));
-  client = new QueryClient({ defaultOptions: { mutations: { retry: 1, retryDelay: 1 } } });
+  client = new QueryClient({
+    // These tests exercise session ownership, not mutation garbage collection.
+    defaultOptions: { mutations: { retry: 1, retryDelay: 1, gcTime: Infinity } },
+  });
   persistence = createAccountQueryPersistence(client, {
     roots: 'all',
     memoryOnlyRoots: ['search'],

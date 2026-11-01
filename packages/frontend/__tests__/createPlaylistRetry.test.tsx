@@ -54,7 +54,12 @@ beforeEach(async () => {
     ...QUERY_CLIENT_CONFIG,
     defaultOptions: {
       ...QUERY_CLIENT_CONFIG.defaultOptions,
-      mutations: { ...QUERY_CLIENT_CONFIG.defaultOptions.mutations, retryDelay: 1 },
+      // These tests exercise retry and session behavior, not mutation garbage collection.
+      mutations: {
+        ...QUERY_CLIENT_CONFIG.defaultOptions.mutations,
+        retryDelay: 1,
+        gcTime: Infinity,
+      },
     },
   });
   await act(async () => {
