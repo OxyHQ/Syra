@@ -1,0 +1,80 @@
+name: Diagnose Oxy upgrade and budgets
+
+on:
+  push:
+    branches:
+      - codex/syra-oxy-budget-diagnostic
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Check out base
+        uses: actions/checkout@v7
+        with:
+          ref: 08a5348b8e014004001e8a5c8e2d1defec582b7a
+          path: baseline
+          persist-credentials: false
+      - name: Check out candidate
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          path: candidate
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: candidate/package.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Install and export exact frozen trees
+        run: |
+          for repo in baseline candidate; do
+            (cd "$repo" && bun install --frozen-lockfile && bun run build:shared-types && bun run build:contracts && bun run build:sdk && bun run build:frontend)
+          done
+      - name: Report unmodified budget results
+        run: |
+          set +e
+          for repo in baseline candidate; do
+            echo "--- $repo budget ---"
+            (cd "$repo" && bun run check:web-bundle-budget)
+            status=$?
+            echo "$repo budget exit: $status"
+          done
+          exit 0
+      - name: Check route files and session tests
+        run: |
+          diff -qr baseline/packages/frontend/app candidate/packages/frontend/app
+          diff -qr baseline/packages/studio/app candidate/packages/studio/app
+          cd candidate
+          bun run --filter @syra/frontend test
+          bun run --filter @syra/studio test
+      - name: Inspect Expo and React Native selections
+        run: |
+          node --input-type=module <<'NODE'
+          import { execFileSync } from 'node:child_process';
+          import { createRequire } from 'node:module';
+          import { dirname, join, resolve } from 'node:path';
+          function inspect(repository, app, platform) {
+            const repo = resolve(repository), root = join(repo, `packages/${app}`);
+            const require = createRequire(join(root, 'package.json'));
+            const cli = join(dirname(require.resolve('expo-modules-autolinking/package.json')), 'bin/expo-modules-autolinking.js');
+            const args = ['--platform', platform === 'apple' ? 'ios' : 'android', '--project-root', root, '--json'];
+            const expoArgs = ['--platform', platform, '--project-root', root, '--json'];
+            const expo = JSON.parse(execFileSync(process.execPath, [cli, 'resolve', ...expoArgs], { encoding: 'utf8' }));
+            const rn = JSON.parse(execFileSync(process.execPath, [cli, 'react-native-config', ...args], { encoding: 'utf8' }));
+            if (!Array.isArray(expo.modules) || typeof rn.dependencies !== 'object') throw new Error('Invalid resolver output');
+            const selected = expo.modules.filter(m => m.packageName === '@oxy.so/services').map(m => ({ version: m.packageVersion, projects: m.projects, pods: m.pods, modules: m.modules }));
+            if (selected.length !== 1) throw new Error(`Expected one Services module for ${app} ${platform}`);
+            const netinfo = rn.dependencies['@react-native-community/netinfo'];
+            const normalize = x => JSON.parse(JSON.stringify(x).replaceAll(repo, '<repo>'));
+            return { services: normalize(selected), netinfo: netinfo ? normalize(netinfo) : null };
+          }
+          for (const app of ['frontend', 'studio']) for (const platform of ['android', 'apple']) {
+            console.log(JSON.stringify({ app, platform, before: inspect('baseline', app, platform), after: inspect('candidate', app, platform) }));
+          }
+          NODE
