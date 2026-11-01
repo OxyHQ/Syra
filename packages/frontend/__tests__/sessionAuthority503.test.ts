@@ -29,7 +29,7 @@ it('keeps the session when Syra returns an authority outage and recovers on retr
       headers: { get: () => 'application/json' },
       json: async () => body,
       text: async () => JSON.stringify(body),
-    } as Response;
+    } as unknown as Response;
   }) as typeof fetch;
   try {
     mockOxy.session.setAccessToken(bearer);
