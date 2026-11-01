@@ -3,7 +3,7 @@ name: Diagnose Oxy upgrade and budgets
 on:
   push:
     branches:
-      - codex/syra-oxy-budget-diagnostic
+      - codex/syra-native-diagnostic
 
 permissions:
   contents: read
@@ -31,28 +31,10 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '22'
-      - name: Install and export exact frozen trees
+      - name: Install exact frozen trees
         run: |
-          for repo in baseline candidate; do
-            (cd "$repo" && bun install --frozen-lockfile && bun run build:shared-types && bun run build:contracts && bun run build:sdk && bun run build:frontend)
-          done
-      - name: Report unmodified budget results
-        run: |
-          set +e
-          for repo in baseline candidate; do
-            echo "--- $repo budget ---"
-            (cd "$repo" && bun run check:web-bundle-budget)
-            status=$?
-            echo "$repo budget exit: $status"
-          done
-          exit 0
-      - name: Check route files and session tests
-        run: |
-          diff -qr baseline/packages/frontend/app candidate/packages/frontend/app
-          diff -qr baseline/packages/studio/app candidate/packages/studio/app
-          cd candidate
-          bun run --filter @syra/frontend test
-          bun run --filter @syra/studio test
+          (cd baseline && bun install --frozen-lockfile)
+          (cd candidate && bun install --frozen-lockfile)
       - name: Inspect Expo and React Native selections
         run: |
           node --input-type=module <<'NODE'
@@ -65,12 +47,13 @@ jobs:
             const cli = join(dirname(require.resolve('expo-modules-autolinking/package.json')), 'bin/expo-modules-autolinking.js');
             const args = ['--platform', platform === 'apple' ? 'ios' : 'android', '--project-root', root, '--json'];
             const expoArgs = ['--platform', platform, '--project-root', root, '--json'];
-            const expo = JSON.parse(execFileSync(process.execPath, [cli, 'resolve', ...expoArgs], { encoding: 'utf8' }));
-            const rn = JSON.parse(execFileSync(process.execPath, [cli, 'react-native-config', ...args], { encoding: 'utf8' }));
+            const expo = JSON.parse(execFileSync(process.execPath, [cli, 'resolve', ...expoArgs], { encoding: 'utf8', cwd: root }));
+            const rn = JSON.parse(execFileSync(process.execPath, [cli, 'react-native-config', ...args], { encoding: 'utf8', cwd: root }));
             if (!Array.isArray(expo.modules) || typeof rn.dependencies !== 'object') throw new Error('Invalid resolver output');
             const selected = expo.modules.filter(m => m.packageName === '@oxy.so/services').map(m => ({ version: m.packageVersion, projects: m.projects, pods: m.pods, modules: m.modules }));
             if (selected.length !== 1) throw new Error(`Expected one Services module for ${app} ${platform}`);
             const netinfo = rn.dependencies['@react-native-community/netinfo'];
+            if (repository === 'candidate' && !netinfo) throw new Error(`NetInfo missing for ${app} ${platform}`);
             const normalize = x => JSON.parse(JSON.stringify(x).replaceAll(repo, '<repo>'));
             return { services: normalize(selected), netinfo: netinfo ? normalize(netinfo) : null };
           }
