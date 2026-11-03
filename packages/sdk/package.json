@@ -223,7 +223,7 @@
     "react-native": "0.88.0",
     "react-native-reanimated": "4.7.1",
     "react-native-safe-area-context": "~5.10.1",
-    "@oxy.so/services": "14.0.1",
+    "@oxy.so/services": "14.1.2",
     "@oxy.so/bloom": "16.5.0",
     "@expo/app-integrity": "~58.0.2",
     "@react-native-async-storage/async-storage": "2.2.0",
