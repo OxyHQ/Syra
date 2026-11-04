@@ -9,6 +9,7 @@ import { getDb } from '../db/postgres';
 import { catalogEntities } from '../db/schema/catalog';
 import { artistClaims } from '../db/schema/creators';
 import { createArtistClaim, resolveArtistClaim, listMyArtistClaims } from './artists.controller';
+import { asComplianceReviewer } from '../test/complianceReview';
 
 /**
  * ONE database: the artist profile a claim GRANTS and the claim itself
@@ -72,6 +73,11 @@ const failNext: NextFunction = (err) => {
 
 function makeReq(params: Record<string, string>, userId: string, body: unknown = {}): AuthRequest {
   return { params, query: {}, body, user: { id: userId } } as unknown as AuthRequest;
+}
+
+/** A request that passed `requireComplianceReviewer` as `operatorId`. */
+function reviewerReq(params: Record<string, string>, operatorId: string, body: unknown = {}) {
+  return asComplianceReviewer(makeReq(params, operatorId, body), operatorId);
 }
 
 async function makeClaimableArtist(
@@ -239,7 +245,7 @@ describe('POST /api/artist-claims/:id/resolve', () => {
 
     const res = makeRes();
     await resolveArtistClaim(
-      makeReq({ id: claimId }, 'reviewer-1', { status: 'approved' }),
+      reviewerReq({ id: claimId }, 'reviewer-1', { status: 'approved' }),
       res as unknown as Response,
       failNext,
     );
@@ -262,7 +268,10 @@ describe('POST /api/artist-claims/:id/resolve', () => {
 
     const res = makeRes();
     await resolveArtistClaim(
-      makeReq({ id: claimId }, 'reviewer-1', { status: 'rejected', resolutionNote: 'no evidence' }),
+      reviewerReq({ id: claimId }, 'reviewer-1', {
+        status: 'rejected',
+        resolutionNote: 'no evidence',
+      }),
       res as unknown as Response,
       failNext,
     );
@@ -283,7 +292,7 @@ describe('POST /api/artist-claims/:id/resolve', () => {
     const loser = await openClaim(artistId, 'claimant-2');
 
     await resolveArtistClaim(
-      makeReq({ id: winner }, 'reviewer-1', { status: 'approved' }),
+      reviewerReq({ id: winner }, 'reviewer-1', { status: 'approved' }),
       makeRes() as unknown as Response,
       failNext,
     );
@@ -298,14 +307,14 @@ describe('POST /api/artist-claims/:id/resolve', () => {
     const claimId = await openClaim(artistId, 'claimant-1');
 
     await resolveArtistClaim(
-      makeReq({ id: claimId }, 'reviewer-1', { status: 'rejected' }),
+      reviewerReq({ id: claimId }, 'reviewer-1', { status: 'rejected' }),
       makeRes() as unknown as Response,
       failNext,
     );
 
     const second = makeRes();
     await resolveArtistClaim(
-      makeReq({ id: claimId }, 'reviewer-1', { status: 'approved' }),
+      reviewerReq({ id: claimId }, 'reviewer-1', { status: 'approved' }),
       second as unknown as Response,
       failNext,
     );
@@ -335,7 +344,7 @@ describe('POST /api/artist-claims/:id/resolve', () => {
 
     const res = makeRes();
     await resolveArtistClaim(
-      makeReq({ id: claimId }, 'reviewer-1', { status: 'approved' }),
+      reviewerReq({ id: claimId }, 'reviewer-1', { status: 'approved' }),
       res as unknown as Response,
       failNext,
     );
@@ -354,7 +363,7 @@ describe('POST /api/artist-claims/:id/resolve', () => {
 
     const res = makeRes();
     await resolveArtistClaim(
-      makeReq({ id: claimId }, 'reviewer-1', { status: 'approved' }),
+      reviewerReq({ id: claimId }, 'reviewer-1', { status: 'approved' }),
       res as unknown as Response,
       failNext,
     );
@@ -367,7 +376,7 @@ describe('POST /api/artist-claims/:id/resolve', () => {
   it('404s an unknown claim', async () => {
     const res = makeRes();
     await resolveArtistClaim(
-      makeReq({ id: uuidv7() }, 'reviewer-1', { status: 'approved' }),
+      reviewerReq({ id: uuidv7() }, 'reviewer-1', { status: 'approved' }),
       res as unknown as Response,
       failNext,
     );
@@ -380,7 +389,7 @@ describe('POST /api/artist-claims/:id/resolve', () => {
 
     const res = makeRes();
     await resolveArtistClaim(
-      makeReq({ id: claimId }, 'reviewer-1', { status: 'pending' }),
+      reviewerReq({ id: claimId }, 'reviewer-1', { status: 'pending' }),
       res as unknown as Response,
       failNext,
     );

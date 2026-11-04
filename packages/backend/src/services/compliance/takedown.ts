@@ -170,7 +170,6 @@ async function announceRemoval(notice: LockerRemovalNotice, deps: LockerPurgeDep
     actorId: notice.ownerOxyUserId,
     event: 'upload.removed',
     entityId: `${notice.cause}:${notice.ownerOxyUserId}:${Date.now()}`,
-    entityType: 'upload',
     title: `${notice.fileCount} ${plural} removed from your library`,
     message:
       notice.cause === 'termination'
@@ -178,7 +177,6 @@ async function announceRemoval(notice: LockerRemovalNotice, deps: LockerPurgeDep
           'to the public catalogue, following repeated copyright complaints.'
         : `${notice.fileCount} ${plural} were removed from your library after a copyright ` +
           'complaint about that recording.',
-    data: { cause: notice.cause, fileCount: notice.fileCount },
     coalesceGroupId: `upload-removed:${notice.ownerOxyUserId}`,
   });
 }

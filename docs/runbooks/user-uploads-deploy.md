@@ -12,11 +12,18 @@ the code that reads it looks correct.
 
 ## 0. Before you start
 
-**Set `SYRA_COMPLIANCE_REVIEWERS` in SSM.**
+**Declare and grant Syra's `compliance.review` application permission in Oxy.**
 
-Both review queues are **fail-closed**: with the variable unset, every review
-endpoint answers `403` to everyone, so no copyright report and no artist claim
-can ever be resolved. Shipping the public contribution path with this unset is
+Reviewers are an Oxy application role (`~/Oxy/docs/application-roles.md`), read
+by `oxy.middleware.requireAppPermission('compliance.review', { fresh: true })`
+in `middleware/complianceReviewer.ts`. Declare the key on Syra's Oxy application
+(Console → application → Settings → Roles; the key list is
+`src/config/applicationPermissions.ts`), then have an owner or admin of the
+owning account grant it to each reviewer — a second admin, never yourself.
+
+Both review queues are **fail-closed**: until somebody holds the permission,
+every review endpoint answers `403` to everyone, so no copyright report and no
+artist claim can ever be resolved. Shipping the public contribution path with this unset is
 the worst available combination — the door open and the takedown mechanism off.
 
 Verify it before anything else, because it is the only step here whose absence
@@ -72,7 +79,7 @@ matter how correct their code is:
 
 ## Verifying the deploy
 
-- `SYRA_COMPLIANCE_REVIEWERS` is set, and a reviewer account can load the claim
-  queue rather than receiving `403`.
+- A reviewer holding `compliance.review` can load the claim queue rather than
+  receiving `403`.
 - `reseed:persons` exits 0.
 - `backfill:fingerprints` reports `failed: 0`, or the failures are understood.

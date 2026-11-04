@@ -15,7 +15,7 @@ import {
   resolveCopyrightReport,
 } from './copyright.controller';
 import { requireComplianceReviewer } from '../middleware/complianceReviewer';
-import { COMPLIANCE_REVIEWERS_ENV, isComplianceReviewer } from '../services/compliance/reviewers';
+import { asComplianceReviewer, stubComplianceReviewers } from '../test/complianceReview';
 
 /**
  * ONE database: the catalogue, the reports, the strike ledger and
@@ -107,6 +107,15 @@ function makeReq(
   } as unknown as AuthRequest;
 }
 
+/** A request that passed `requireComplianceReviewer` as `operatorId`. */
+function reviewerReq(
+  params: Record<string, string>,
+  operatorId: string,
+  body: unknown = {},
+): AuthRequest {
+  return asComplianceReviewer(makeReq(params, operatorId, body), operatorId);
+}
+
 async function makeArtist(owner = 'creator-1'): Promise<string> {
   const name = `Artist ${uuidv7()}`;
   const [artist] = await getDb()
@@ -152,54 +161,64 @@ async function fileReport(trackId: string, reason = 'This is my recording'): Pro
 
 // ── The reviewer gate ─────────────────────────────────────────────────────────
 
-describe('compliance reviewer allowlist', () => {
-  function withReviewers<T>(value: string | undefined, run: () => T): T {
-    const previous = process.env[COMPLIANCE_REVIEWERS_ENV];
-    if (value === undefined) delete process.env[COMPLIANCE_REVIEWERS_ENV];
-    else process.env[COMPLIANCE_REVIEWERS_ENV] = value;
-    try {
-      return run();
-    } finally {
-      if (previous === undefined) delete process.env[COMPLIANCE_REVIEWERS_ENV];
-      else process.env[COMPLIANCE_REVIEWERS_ENV] = previous;
-    }
+describe('compliance reviewer gate (Oxy application permission)', () => {
+  /** A signed-in request, as `middleware.auth()` leaves it. */
+  function signedIn(userId: string): AuthRequest {
+    return {
+      ...makeReq({}, userId),
+      userId,
+      sessionId: `session-${userId}`,
+      accessToken: `token-${userId}`,
+      path: '/reports',
+    } as unknown as AuthRequest;
   }
 
-  it('FAILS CLOSED when unconfigured — nobody is a reviewer', () => {
-    withReviewers(undefined, () => {
-      expect(isComplianceReviewer('anyone')).toBe(false);
+  async function gate(req: AuthRequest): Promise<{ status: number; body: unknown; next: boolean }> {
+    const res = makeRes();
+    let calledNext = false;
+    await requireComplianceReviewer(req, res as unknown as Response, () => {
+      calledNext = true;
     });
-    withReviewers('', () => {
-      expect(isComplianceReviewer('anyone')).toBe(false);
-    });
+    return { status: res._status, body: res._body, next: calledNext };
+  }
+
+  it('403s a signed-in non-holder and passes a holder through, asking Oxy fresh', async () => {
+    const roles = stubComplianceReviewers(['reviewer-1']);
+    try {
+      const denied = await gate(signedIn('ordinary-user'));
+      expect(denied).toMatchObject({ status: 403, next: false });
+      expect(denied.body).toMatchObject({ error: { code: expect.any(String) } });
+
+      const allowedReq = signedIn('reviewer-1');
+      const allowed = await gate(allowedReq);
+      expect(allowed).toMatchObject({ status: 200, next: true });
+      expect(allowedReq.oxyAppPermissions?.operatorId).toBe('reviewer-1');
+
+      // Every review request asks Oxy rather than reusing a cached answer, so a
+      // revoked grant stops working at once.
+      expect(roles.optionsSeen().length).toBeGreaterThan(0);
+      for (const options of roles.optionsSeen()) expect(options).toMatchObject({ fresh: true });
+    } finally {
+      roles.restore();
+    }
   });
 
-  it('admits exactly the configured ids, trimming whitespace', () => {
-    withReviewers(' reviewer-1 , reviewer-2 ', () => {
-      expect(isComplianceReviewer('reviewer-1')).toBe(true);
-      expect(isComplianceReviewer('reviewer-2')).toBe(true);
-      expect(isComplianceReviewer('reviewer-3')).toBe(false);
-    });
+  it('401s a request with no session', async () => {
+    const roles = stubComplianceReviewers(['reviewer-1']);
+    try {
+      expect(await gate(makeReq({}, undefined))).toMatchObject({ status: 401, next: false });
+    } finally {
+      roles.restore();
+    }
   });
 
-  it('the middleware 403s a signed-in non-reviewer and passes a reviewer through', () => {
-    withReviewers('reviewer-1', () => {
-      const denied = makeRes();
-      let deniedCalledNext = false;
-      requireComplianceReviewer(makeReq({}, 'ordinary-user'), denied as unknown as Response, () => {
-        deniedCalledNext = true;
-      });
-      expect(denied._status).toBe(403);
-      expect(deniedCalledNext).toBe(false);
-
-      const allowed = makeRes();
-      let allowedCalledNext = false;
-      requireComplianceReviewer(makeReq({}, 'reviewer-1'), allowed as unknown as Response, () => {
-        allowedCalledNext = true;
-      });
-      expect(allowedCalledNext).toBe(true);
-      expect(allowed._status).toBe(200);
-    });
+  it('FAILS CLOSED when nobody holds the permission', async () => {
+    const roles = stubComplianceReviewers([]);
+    try {
+      expect(await gate(signedIn('anyone'))).toMatchObject({ status: 403, next: false });
+    } finally {
+      roles.restore();
+    }
   });
 });
 
@@ -213,7 +232,7 @@ describe('POST /api/copyright/reports/:id/resolve', () => {
 
     const res = makeRes();
     await resolveCopyrightReport(
-      makeReq({ id: reportId }, 'reviewer-1', { status: 'approved' }),
+      reviewerReq({ id: reportId }, 'reviewer-1', { status: 'approved' }),
       res as unknown as Response,
       failNext,
     );
@@ -231,6 +250,24 @@ describe('POST /api/copyright/reports/:id/resolve', () => {
     expect(report?.resolvedBy).toBe('reviewer-1');
   });
 
+  it('records the PERSON who decided, even when their session acts as an organization', async () => {
+    const artistId = await makeArtist();
+    const trackId = await makeTrack(artistId);
+    const reportId = await fileReport(trackId);
+
+    // The session speaks as `org-1`; Oxy resolved the human operator behind it.
+    const req = asComplianceReviewer(
+      makeReq({ id: reportId }, 'org-1', { status: 'approved' }),
+      'person-1',
+    );
+    const res = makeRes();
+    await resolveCopyrightReport(req, res as unknown as Response, failNext);
+
+    expect(res._status).toBe(200);
+    expect((await readReport(reportId))?.resolvedBy).toBe('person-1');
+    expect((await readTrack(trackId))?.removedBy).toBe('person-1');
+  });
+
   it('REJECTING leaves the track exactly where it was', async () => {
     const artistId = await makeArtist();
     const trackId = await makeTrack(artistId);
@@ -238,7 +275,7 @@ describe('POST /api/copyright/reports/:id/resolve', () => {
 
     const res = makeRes();
     await resolveCopyrightReport(
-      makeReq({ id: reportId }, 'reviewer-1', {
+      reviewerReq({ id: reportId }, 'reviewer-1', {
         status: 'rejected',
         resolutionNote: 'not infringing',
       }),
@@ -271,7 +308,7 @@ describe('POST /api/copyright/reports/:id/resolve', () => {
       const reportId = await fileReport(trackId);
       const res = makeRes();
       await resolveCopyrightReport(
-        makeReq({ id: reportId }, 'reviewer-1', { status: 'approved' }),
+        reviewerReq({ id: reportId }, 'reviewer-1', { status: 'approved' }),
         res as unknown as Response,
         failNext,
       );
@@ -296,7 +333,7 @@ describe('POST /api/copyright/reports/:id/resolve', () => {
       const trackId = await makeTrack(artistId, title);
       const reportId = await fileReport(trackId);
       await resolveCopyrightReport(
-        makeReq({ id: reportId }, 'reviewer-1', { status: 'approved' }),
+        reviewerReq({ id: reportId }, 'reviewer-1', { status: 'approved' }),
         makeRes() as unknown as Response,
         failNext,
       );
@@ -314,14 +351,14 @@ describe('POST /api/copyright/reports/:id/resolve', () => {
     const reportId = await fileReport(trackId);
 
     await resolveCopyrightReport(
-      makeReq({ id: reportId }, 'reviewer-1', { status: 'rejected' }),
+      reviewerReq({ id: reportId }, 'reviewer-1', { status: 'rejected' }),
       makeRes() as unknown as Response,
       failNext,
     );
 
     const second = makeRes();
     await resolveCopyrightReport(
-      makeReq({ id: reportId }, 'reviewer-1', { status: 'approved' }),
+      reviewerReq({ id: reportId }, 'reviewer-1', { status: 'approved' }),
       second as unknown as Response,
       failNext,
     );
@@ -365,7 +402,7 @@ describe('POST /api/copyright/reports/:id/resolve', () => {
 
     const res = makeRes();
     await resolveCopyrightReport(
-      makeReq({ id: reportId }, 'reviewer-1', { status: 'approved' }),
+      reviewerReq({ id: reportId }, 'reviewer-1', { status: 'approved' }),
       res as unknown as Response,
       failNext,
     );
@@ -381,7 +418,7 @@ describe('POST /api/copyright/reports/:id/resolve', () => {
 
     const res = makeRes();
     await resolveCopyrightReport(
-      makeReq({ id: reportId }, 'reviewer-1', { status: 'pending' }),
+      reviewerReq({ id: reportId }, 'reviewer-1', { status: 'pending' }),
       res as unknown as Response,
       failNext,
     );
@@ -393,7 +430,7 @@ describe('POST /api/copyright/reports/:id/resolve', () => {
   it('404s an unknown report', async () => {
     const res = makeRes();
     await resolveCopyrightReport(
-      makeReq({ id: uuidv7() }, 'reviewer-1', { status: 'approved' }),
+      reviewerReq({ id: uuidv7() }, 'reviewer-1', { status: 'approved' }),
       res as unknown as Response,
       failNext,
     );

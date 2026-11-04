@@ -1,14 +1,14 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'bun:test';
 import { Readable } from 'node:stream';
 import type { IncomingMessage } from 'node:http';
-import { count, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import type { SafeFetchResult } from '@oxy.so/core/server';
 import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
 import { getDb } from '../../db/postgres';
 import { userPodcastSubscriptions } from '../../db/schema/library';
 import { episodes } from '../../db/schema/podcasts';
-import { notificationSuppressions } from '../../db/schema/user';
 import { setCatalogImageMirrorImplementationForTests } from '../catalog/catalogImageAssets';
+import type { PublishedEpisode } from '../notifications/triggers/episodePublished';
 import { importFeed } from './podcastImportService';
 
 /**
@@ -21,11 +21,10 @@ import { importFeed } from './podcastImportService';
  * (`db/podcasts/episodes.ts`), which is correct even under two concurrent crawls of
  * one feed.
  *
- * These tests assert on NotificationSuppression rows rather than on delivered pushes:
- * the notifier claims its suppression key BEFORE attempting delivery, so a claim proves
- * the trigger genuinely ran for that episode. Delivery itself cannot succeed here — no
- * Oxy service credentials are configured in tests — which is exactly what makes the
- * second test meaningful.
+ * These tests record which episodes the import hands to the new-episode fan-out
+ * (`announceEpisode`, injected) rather than asserting on delivered pushes: whether and
+ * how a push is delivered is the notifier's concern (`notifier.test.ts`); the decision
+ * under test here is the import's, to call the fan-out or not.
  *
  * The whole path — feed, episodes, subscriptions, notifier — is Postgres.
  */
@@ -65,13 +64,14 @@ afterEach(async () => {
 });
 afterAll(disconnectDb);
 
-/** How many suppression claims one subscriber holds — the "did the trigger run" read. */
-async function claimCount(oxyUserId: string): Promise<number> {
-  const [row] = await getDb()
-    .select({ value: count() })
-    .from(notificationSuppressions)
-    .where(eq(notificationSuppressions.oxyUserId, oxyUserId));
-  return row.value;
+/** Records every episode the import hands to the fan-out. */
+function recordingAnnouncer() {
+  const announced: PublishedEpisode[] = [];
+  const announceEpisode = async (episode: PublishedEpisode) => {
+    announced.push(episode);
+    return { notified: 1, skippedAsBackfill: false, skippedAsHidden: false };
+  };
+  return { announced, announceEpisode };
 }
 
 /** How many episode rows a show has — the "did the row really land" read. */
@@ -97,25 +97,29 @@ describe('episode notifications are driven by the INSERT signal', () => {
       .insert(userPodcastSubscriptions)
       .values({ oxyUserId: SUBSCRIBER, podcastId: first.podcast.id });
     await getDb().delete(episodes).where(eq(episodes.podcastId, first.podcast.id));
-    await getDb().delete(notificationSuppressions);
 
     // This run genuinely INSERTS the episode → the trigger must run.
-    const inserting = await importFeed(feedUrl, { fetch, force: true });
-    expect(inserting.importedEpisodes).toBe(1);
-    expect(await claimCount(SUBSCRIBER)).toBeGreaterThan(0);
+    const inserting = recordingAnnouncer();
+    const insertRun = await importFeed(feedUrl, {
+      fetch,
+      force: true,
+      announceEpisode: inserting.announceEpisode,
+    });
+    expect(insertRun.importedEpisodes).toBe(1);
+    expect(inserting.announced.map((episode) => episode.podcastId)).toEqual([first.podcast.id]);
 
-    // CRITICAL: wipe the suppression records before the re-import. Without this the test
-    // has no teeth — the notifier's own exact-entity dedupe would swallow a wrong signal
-    // and the counts would match either way. Clearing them means the ONLY thing that can
-    // keep the count at zero below is the import correctly deciding not to call the
-    // trigger at all. (Verified by mutation: notifying on every processed episode fails
-    // this assertion.)
-    await getDb().delete(notificationSuppressions);
-
-    // This run processes the SAME episode again — an update, not an insert.
-    const reimport = await importFeed(feedUrl, { fetch, force: true });
+    // This run processes the SAME episode again — an update, not an insert. The fan-out
+    // is a fresh recorder with nothing downstream to dedupe, so the ONLY thing that can
+    // keep it empty is the import deciding not to call it. (Verified by mutation:
+    // announcing every processed episode fails this assertion.)
+    const reimporting = recordingAnnouncer();
+    const reimport = await importFeed(feedUrl, {
+      fetch,
+      force: true,
+      announceEpisode: reimporting.announceEpisode,
+    });
     expect(reimport.importedEpisodes).toBe(1); // still PROCESSED one episode...
-    expect(await claimCount(SUBSCRIBER)).toBe(0); // ...but the trigger never ran.
+    expect(reimporting.announced).toEqual([]); // ...but the trigger never ran.
   });
 
   it('completes the import even though notification delivery fails', async () => {
@@ -128,9 +132,15 @@ describe('episode notifications are driven by the INSERT signal', () => {
       .values({ oxyUserId: SUBSCRIBER, podcastId: first.podcast.id });
     await getDb().delete(episodes).where(eq(episodes.podcastId, first.podcast.id));
 
-    // No Oxy service credentials exist in tests, so every delivery attempt fails. The
-    // import is the only external ingest Syra has — it must survive that completely.
-    const result = await importFeed(feedUrl, { fetch, force: true });
+    // The fan-out itself fails. The import is the only external ingest Syra has — it
+    // must survive that completely.
+    const result = await importFeed(feedUrl, {
+      fetch,
+      force: true,
+      announceEpisode: async () => {
+        throw new Error('fan-out down');
+      },
+    });
 
     expect(result.importedEpisodes).toBe(1);
     expect(result.failedEpisodes).toBe(0);

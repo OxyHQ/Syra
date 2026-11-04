@@ -19,6 +19,13 @@ export interface StreamTokenClaims {
   maxBitrateKbps: number;
 }
 
+/**
+ * The one algorithm a stream token is signed and verified with. Pinned on BOTH
+ * sides: a verifier that accepts whatever the header names lets the header pick
+ * how it is checked, and this secret must only ever be an HMAC key.
+ */
+const ALGORITHM = 'HS256';
+
 /** Default token lifetime: 5 minutes. */
 const DEFAULT_TTL_SEC = 300;
 
@@ -52,7 +59,7 @@ export function mintStreamToken(
       maxBitrateKbps: claims.maxBitrateKbps,
     },
     secret,
-    { expiresIn: ttlSec },
+    { algorithm: ALGORITHM, expiresIn: ttlSec },
   );
 }
 
@@ -66,7 +73,7 @@ export function verifyStreamToken(token: string): StreamTokenClaims | null {
   if (!secret) return null;
 
   try {
-    const decoded = jwt.verify(token, secret);
+    const decoded = jwt.verify(token, secret, { algorithms: [ALGORITHM] });
     if (typeof decoded !== 'object' || decoded === null) return null;
 
     const { trackId, userId, maxBitrateKbps } = decoded as Record<string, unknown>;

@@ -242,14 +242,12 @@ async function defaultNotify(input: ExpiryNoticeInput): Promise<void> {
     actorId: input.ownerOxyUserId,
     event: 'upload.expiring',
     entityId: input.uploadIds[0] ?? input.ownerOxyUserId,
-    entityType: 'upload',
     title: `${input.uploadCount} uploaded ${plural} expiring`,
     message:
       `${input.uploadCount} ${plural} in your library will be removed after ` +
       `${input.earliestExpiresAt.toISOString().slice(0, 10)} because ` +
       `${input.uploadCount === 1 ? 'it has' : 'they have'} not been played for a year. ` +
       `Play ${input.uploadCount === 1 ? 'it' : 'them'} to keep ${input.uploadCount === 1 ? 'it' : 'them'}.`,
-    data: { uploadIds: input.uploadIds },
     // One notice per owner per window, however many files are in it: a library
     // clear-out should not be N pushes.
     coalesceGroupId: `upload-expiry:${input.ownerOxyUserId}`,

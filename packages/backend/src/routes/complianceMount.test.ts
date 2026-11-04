@@ -9,7 +9,7 @@ import { clearDb, connectDb, disconnectDb } from '../test/postgres';
 import { getDb } from '../db/postgres';
 import { catalogEntities, tracks } from '../db/schema/catalog';
 import { artistClaims, copyrightReports } from '../db/schema/creators';
-import { COMPLIANCE_REVIEWERS_ENV } from '../services/compliance/reviewers';
+import { stubComplianceReviewers } from '../test/complianceReview';
 import artistsRoutes from './artists.routes';
 import artistsAuthRoutes from './artists.auth.routes';
 import artistClaimsRoutes from './artistClaims.routes';
@@ -49,31 +49,30 @@ async function withApi(
   const app = express();
   app.use(express.json());
 
+  // What `middleware.auth()` leaves on a signed-in request; nothing for a guest.
+  const signIn: express.RequestHandler = (req, _res, next) => {
+    if (userId) {
+      Object.assign(req as AuthRequest, {
+        user: { id: userId },
+        userId,
+        sessionId: `session-${userId}`,
+        accessToken: `token-${userId}`,
+      });
+    }
+    next();
+  };
+
   const publicApiRouter = express.Router();
   // Optional auth: resolves the caller when there is one, never rejects.
   publicApiRouter.use('/artists', artistsRoutes);
-  publicApiRouter.use(
-    '/copyright',
-    (req, _res, next) => {
-      if (userId) (req as AuthRequest).user = { id: userId };
-      next();
-    },
-    copyrightRoutes,
-  );
+  publicApiRouter.use('/copyright', signIn, copyrightRoutes);
 
   const authenticatedApiRouter = express.Router();
   authenticatedApiRouter.use('/artists', artistsAuthRoutes);
   authenticatedApiRouter.use('/artist-claims', artistClaimsRoutes);
 
   app.use('/api', publicApiRouter);
-  app.use(
-    '/api',
-    (req, _res, next) => {
-      if (userId) (req as AuthRequest).user = { id: userId };
-      next();
-    },
-    authenticatedApiRouter,
-  );
+  app.use('/api', signIn, authenticatedApiRouter);
 
   const server = await new Promise<Server>((resolve) => {
     const listening = app.listen(0, () => resolve(listening));
@@ -98,14 +97,14 @@ function post(url: string, body: Record<string, unknown> = {}): Promise<globalTh
   });
 }
 
-function withReviewers<T>(value: string | undefined, run: () => Promise<T>): Promise<T> {
-  const previous = process.env[COMPLIANCE_REVIEWERS_ENV];
-  if (value === undefined) delete process.env[COMPLIANCE_REVIEWERS_ENV];
-  else process.env[COMPLIANCE_REVIEWERS_ENV] = value;
-  return run().finally(() => {
-    if (previous === undefined) delete process.env[COMPLIANCE_REVIEWERS_ENV];
-    else process.env[COMPLIANCE_REVIEWERS_ENV] = previous;
-  });
+/** Run with exactly `holders` holding `compliance.review` in (stubbed) Oxy. */
+async function withReviewers<T>(holders: string[], run: () => Promise<T>): Promise<T> {
+  const roles = stubComplianceReviewers(holders);
+  try {
+    return await run();
+  } finally {
+    roles.restore();
+  }
 }
 
 async function makeClaimableArtist(): Promise<string> {
@@ -197,7 +196,7 @@ describe('claim submission routing', () => {
 
 describe('review routing and gating', () => {
   it('the claim queue is reviewer-gated, not merely authenticated', async () => {
-    await withReviewers('reviewer-1', async () => {
+    await withReviewers(['reviewer-1'], async () => {
       await withApi('ordinary-user', async (baseUrl) => {
         const response = await fetch(`${baseUrl}/api/artist-claims`);
         expect(response.status).toBe(403);
@@ -211,7 +210,7 @@ describe('review routing and gating', () => {
   });
 
   it('a claimant reads their own claims without being a reviewer', async () => {
-    await withReviewers('reviewer-1', async () => {
+    await withReviewers(['reviewer-1'], async () => {
       await withApi('claimant-1', async (baseUrl) => {
         const response = await fetch(`${baseUrl}/api/artist-claims/mine`);
         expect(response.status).toBe(200);
@@ -221,7 +220,7 @@ describe('review routing and gating', () => {
   });
 
   it('an unauthenticated caller gets 401 from the review routes, not 403', async () => {
-    await withReviewers('reviewer-1', async () => {
+    await withReviewers(['reviewer-1'], async () => {
       await withApi(undefined, async (baseUrl) => {
         const response = await fetch(`${baseUrl}/api/artist-claims`);
         expect(response.status).toBe(401);
@@ -272,7 +271,7 @@ describe('copyright routing', () => {
   });
 
   it('the report queue and resolution are reviewer-gated on the same mount', async () => {
-    await withReviewers('reviewer-1', async () => {
+    await withReviewers(['reviewer-1'], async () => {
       await withApi('ordinary-user', async (baseUrl) => {
         expect((await fetch(`${baseUrl}/api/copyright/reports`)).status).toBe(403);
         expect(
@@ -290,8 +289,8 @@ describe('copyright routing', () => {
     });
   });
 
-  it('FAILS CLOSED for everyone when no reviewers are configured', async () => {
-    await withReviewers(undefined, async () => {
+  it('FAILS CLOSED for everyone when nobody holds the permission', async () => {
+    await withReviewers([], async () => {
       await withApi('anyone-at-all', async (baseUrl) => {
         expect((await fetch(`${baseUrl}/api/copyright/reports`)).status).toBe(403);
         expect((await fetch(`${baseUrl}/api/artist-claims`)).status).toBe(403);
