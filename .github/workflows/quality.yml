@@ -212,6 +212,11 @@ jobs:
       - name: Check Oxy dependency health
         run: bun run doctor:oxy
 
+      # Translation keys follow ADR 0055: nested identifier segments under a
+      # namespace, every locale shaped like English. Missing translations warn.
+      - name: Translation keys (ADR 0055)
+        run: bun run i18n:check
+
       # Syra never owns inference-provider credentials or talks to a model
       # provider/Kaana directly. One-shot product AI belongs behind the Oxy
       # inference edge through @oxy.so/core; conversations and agents belong in
