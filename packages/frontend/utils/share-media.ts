@@ -1,4 +1,5 @@
 import { Share, Platform } from 'react-native';
+import { clipboardAvailable, writeClipboardText } from '@oxy.so/bloom/hooks';
 import { toast } from '@oxy.so/bloom/toast';
 import i18n from 'i18next';
 import { createScopedLogger } from '@/utils/logger';
@@ -31,8 +32,8 @@ export async function shareUrl(title: string, url: string): Promise<void> {
     if (Platform.OS === 'web' && typeof navigator !== 'undefined') {
       if (navigator.share) {
         await navigator.share({ title, url });
-      } else if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(url);
+      } else if (clipboardAvailable()) {
+        await writeClipboardText(url);
         toast.success(i18n.t('listener.linkCopied'));
       } else {
         throw new Error('Sharing is unavailable in this browser');

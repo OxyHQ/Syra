@@ -22,7 +22,7 @@ import { useMediaQuery } from 'react-responsive';
 
 import { useTheme } from '@oxy.so/bloom/theme';
 import { useIsScreenNotMobile } from '@/hooks/useOptimizedMediaQuery';
-import { useKeyboardVisibility } from '@/hooks/useKeyboardVisibility';
+import { useKeyboardVisible } from '@oxy.so/bloom/hooks';
 import { Z_INDEX } from '@/lib/constants';
 import { flattenStyleArray } from '@/styles/shared';
 
@@ -91,7 +91,7 @@ const ButtonComponent: React.FC<ButtonProps> = ({
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const isScreenNotMobile = useIsScreenNotMobile();
-  const keyboardVisible = useKeyboardVisibility();
+  const keyboardVisible = useKeyboardVisible();
   const isDesktop = useMediaQuery({ minWidth: 1266 });
 
   // Determine if this is a responsive button (SideBar pattern)
