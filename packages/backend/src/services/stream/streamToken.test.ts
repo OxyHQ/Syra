@@ -93,4 +93,18 @@ describe('streamToken', () => {
     );
     expect(verifyStreamToken(badMax)).toBeNull();
   });
+
+  it('a token whose header names another algorithm returns null, same secret and claims', () => {
+    // The verifier pins HS256: the token's own header never chooses how it is
+    // checked. HS512 with the right secret is the discriminating input — it
+    // verifies under an unpinned `jwt.verify` and must not here.
+    const secret = process.env.STREAM_TOKEN_SECRET as string;
+    const otherAlgorithm = jwt.sign(CLAIMS, secret, { algorithm: 'HS512', expiresIn: 300 });
+    expect(jwt.verify(otherAlgorithm, secret)).toMatchObject(CLAIMS);
+    expect(verifyStreamToken(otherAlgorithm)).toBeNull();
+  });
+
+  it('mints with the pinned algorithm', () => {
+    expect(jwt.decode(mintStreamToken(CLAIMS), { complete: true })?.header.alg).toBe('HS256');
+  });
 });

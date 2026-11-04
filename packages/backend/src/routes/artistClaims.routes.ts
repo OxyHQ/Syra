@@ -24,7 +24,7 @@ router.get('/mine', requireAuth, listMyArtistClaims);
 
 // The queue and the decision. Reviewer-gated: approval is what hands somebody an
 // artist page, and a contributed page carries other people's recordings.
-router.get('/', requireAuth, requireComplianceReviewer, listArtistClaims);
-router.post('/:id/resolve', requireAuth, requireComplianceReviewer, resolveArtistClaim);
+router.get('/', requireComplianceReviewer, listArtistClaims);
+router.post('/:id/resolve', requireComplianceReviewer, resolveArtistClaim);
 
 export default router;

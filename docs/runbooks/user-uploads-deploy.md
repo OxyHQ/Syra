@@ -12,11 +12,25 @@ the code that reads it looks correct.
 
 ## 0. Before you start
 
-**Set `SYRA_COMPLIANCE_REVIEWERS` in SSM.**
+**Seed Syra's `compliance.review` application permission in Oxy.**
 
-Both review queues are **fail-closed**: with the variable unset, every review
-endpoint answers `403` to everyone, so no copyright report and no artist claim
-can ever be resolved. Shipping the public contribution path with this unset is
+Reviewers are an Oxy application role (`~/Oxy/docs/application-roles.md`), read
+by `oxy.middleware.requireAppPermission('compliance.review', { fresh: true })`
+in `middleware/complianceReviewer.ts`. Syra is one of Oxy's own applications, so
+the key and the roles that hold it are declared in code in oxy's first-party
+registry (`operatorPermissions` on Syra's entry in
+`packages/api/src/scripts/seedOxyApplicationsSpecs.ts`; oxy ADR 0056), held
+today by the owners and admins of the organization that owns Syra. Run oxy's
+**Seed Oxy applications** workflow with `only_apps` = `Syra`, dry run first:
+it lists `compliance.review` as declared and who holds it through which role.
+Then apply it. Nothing is granted per person (the Console shows the key
+read-only and the API refuses a grant with `409 FIRST_PARTY_ROLES_IN_CODE`):
+to make someone a reviewer, give them that role in the organization. The key
+list in `src/config/applicationPermissions.ts` must match the registry.
+
+Both review queues are **fail-closed**: until somebody holds the permission,
+every review endpoint answers `403` to everyone, so no copyright report and no
+artist claim can ever be resolved. Shipping the public contribution path with this unset is
 the worst available combination — the door open and the takedown mechanism off.
 
 Verify it before anything else, because it is the only step here whose absence
@@ -72,7 +86,7 @@ matter how correct their code is:
 
 ## Verifying the deploy
 
-- `SYRA_COMPLIANCE_REVIEWERS` is set, and a reviewer account can load the claim
-  queue rather than receiving `403`.
+- A reviewer holding `compliance.review` can load the claim queue rather than
+  receiving `403`.
 - `reseed:persons` exits 0.
 - `backfill:fingerprints` reports `failed: 0`, or the failures are understood.

@@ -37,6 +37,7 @@ import { mirrorCatalogImage } from '../services/catalog/catalogImageAssets';
 import { logger } from '../utils/logger';
 import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
 import { getRequiredOxyUserId as getAuthenticatedUserId } from '@oxy.so/core/server';
+import { complianceReviewerId } from '../middleware/complianceReviewer';
 import { getParam, parseBoundedLimit, parseOffset } from '../utils/reqParams';
 import {
   CreateArtistRequest,
@@ -860,7 +861,7 @@ export const resolveArtistClaim = async (req: AuthRequest, res: Response, next: 
       return res.status(503).json({ error: 'Database not available' });
     }
 
-    const reviewerId = getAuthenticatedUserId(req);
+    const reviewerId = complianceReviewerId(req);
     const id = getParam(req, 'id');
 
     /**

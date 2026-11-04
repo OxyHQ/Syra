@@ -6,7 +6,7 @@ import { getDb, isPostgresConnected } from '../db/postgres';
 import { tracks } from '../db/schema/catalog';
 import { copyrightReports } from '../db/schema/creators';
 import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
-import { getRequiredOxyUserId } from '@oxy.so/core/server';
+import { complianceReviewerId } from '../middleware/complianceReviewer';
 import { getParam, parseBoundedLimit, parseOffset } from '../utils/reqParams';
 import { takeDownTrack, type TakeDownTrackResult } from '../services/compliance/takedown';
 import { logger } from '../utils/logger';
@@ -225,7 +225,7 @@ export const resolveCopyrightReport = async (
       return res.status(503).json({ error: 'Database not available' });
     }
 
-    const reviewerId = getRequiredOxyUserId(req);
+    const reviewerId = complianceReviewerId(req);
     const id = getParam(req, 'id');
 
     if (!isLiveEntityId(id)) {

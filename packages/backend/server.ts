@@ -7,7 +7,8 @@ import { startPlatformActivity } from './src/services/platformActivity';
 import express from 'express';
 import http from 'http';
 import compression from 'compression';
-import { apiCors, ALLOWED_ORIGINS, ALLOWED_HEADERS } from './src/middleware/apiCors';
+import { apiCors, socketCors } from './src/middleware/apiCors';
+import { securityHeaders } from './src/middleware/securityHeaders';
 import { Server as SocketIOServer, type Socket, type Namespace } from 'socket.io';
 import { createOptionalOxyAuth, createOxyRateLimit } from '@oxy.so/core/server';
 import { oxy } from './src/oxyClient';
@@ -17,9 +18,7 @@ import { createRedisPubSub, isRedisConnected, getRedisStats } from './src/utils/
 import { ensureRedisConnected, isRedisConnectionError } from './src/utils/redisHelpers';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { logger } from './src/utils/logger';
-import { bruteForceProtection } from './src/middleware/security';
 import { performanceMiddleware, getPerformanceStats } from './src/middleware/performance';
-import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
 import { RedisStore } from './src/middleware/rateLimitStore';
 
 import { setupPlayerSocket } from './src/sockets/playerSocket';
@@ -76,6 +75,7 @@ if (activity) app.use(activity.observeHttp);
 
 trustLoadBalancer(app);
 
+app.use(securityHeaders);
 app.use(apiCors);
 app.use(
   '/api/podcasts/public-cards',
@@ -194,12 +194,7 @@ const io = new SocketIOServer(server, {
   upgradeTimeout: SOCKET_CONFIG.UPGRADE_TIMEOUT,
   maxHttpBufferSize: SOCKET_CONFIG.MAX_BUFFER_SIZE,
   connectTimeout: SOCKET_CONFIG.CONNECT_TIMEOUT,
-  cors: {
-    origin: ALLOWED_ORIGINS,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    credentials: true,
-    allowedHeaders: ALLOWED_HEADERS,
-  },
+  ...socketCors,
   perMessageDeflate: {
     threshold: SOCKET_CONFIG.COMPRESSION_THRESHOLD,
     zlibInflateOptions: {
@@ -322,7 +317,7 @@ publicApiRouter.use('/search', searchRoutes);
 publicApiRouter.use('/browse', browseRoutes);
 // Copyright: public reporting (a rightsholder need not have a Syra account) plus
 // the reviewer-gated queue and resolution, which self-enforce with requireAuth +
-// the compliance reviewer allowlist. Mounted ONCE — a second mount on the
+// the `compliance.review` Oxy application permission. Mounted ONCE — a second mount on the
 // authenticated router below was unreachable, because this one matches first, and
 // its only effect was that every report recorded an undefined reporter.
 publicApiRouter.use('/copyright', createOptionalOxyAuth(oxy), copyrightRoutes);
