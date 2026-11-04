@@ -6,6 +6,7 @@ name: Quality
 # otherwise reach main with no type coverage at all. This job is deliberately
 # NOT path-filtered so that never happens.
 on:
+  workflow_dispatch:
   push:
     branches: [main]
   pull_request:
