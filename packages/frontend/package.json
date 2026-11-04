@@ -28,6 +28,11 @@
     "setupFilesAfterEnv": [
       "<rootDir>/jest.setup.ts"
     ],
+    "transformIgnorePatterns": [
+      "/node_modules/(?!(.pnpm|react-native|@react-native|@react-native-community|expo|@expo|@expo-google-fonts|react-navigation|@react-navigation|@sentry/react-native|native-base|standard-navigation|@noble|@scure))",
+      "/node_modules/react-native-reanimated/plugin/",
+      "/node_modules/@react-native/babel-preset/"
+    ],
     "moduleNameMapper": {
       "^@/(.*)$": "<rootDir>/$1",
       "^@oxy.so/core$": "<rootDir>/../../node_modules/@oxy.so/core/dist/cjs/index.js",
@@ -48,9 +53,9 @@
     "@livekit/react-native-webrtc": "144.2.0",
     "@oxy.so/app-preset": "^5.2.1",
     "@oxy.so/bloom": "16.5.0",
-    "@oxy.so/core": "7.13.0",
+    "@oxy.so/core": "7.17.0",
     "@oxy.so/expo-splash": "^1.0.0",
-    "@oxy.so/services": "14.1.2",
+    "@oxy.so/services": "14.3.4",
     "@oxy.so/utils": "1.5.2",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/netinfo": "12.0.1",

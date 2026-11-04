@@ -3,7 +3,8 @@
  * personal writes additionally require the original requester proof.
  */
 
-import type { RequesterProof, ServerAssetsApi } from '@oxy.so/core/server';
+import { Readable } from 'node:stream';
+import { readResponseBody, type ServerAssetsApi } from '@oxy.so/core/server';
 import { oxy } from '../../oxyClient';
 
 /** What Syra uses of `OxyServer.assets`. Narrow on purpose: a test double implements exactly this. */
@@ -53,22 +54,33 @@ const READ_BACK_MAX_BYTES = 40 * 1024 * 1024;
 /**
  * The bytes of a PUBLIC Oxy file, from its public URL — Oxy's CDN, the one
  * host this ever reads from, so it is not a second fetcher of untrusted URLs.
- * Bounded like Oxy's own uploads (40 MiB).
+ * Bounded like Oxy's own uploads (40 MiB): `readResponseBody` stops at the cap
+ * as the bytes arrive, so an oversized or undeclared body is never buffered
+ * whole, and one deadline covers the response and its body.
  */
 export async function readOxyFile(fileId: string): Promise<Buffer> {
   if (readerOverride) return readerOverride(fileId);
   const response = await fetch(oxyFileUrl(fileId), {
     signal: AbortSignal.timeout(READ_BACK_TIMEOUT_MS),
   });
-  if (!response.ok) {
+  if (!response.ok || !response.body) {
+    await response.body?.cancel();
     throw new Error(`Reading Oxy file ${fileId} failed with status ${response.status}`);
   }
-  const declared = Number(response.headers.get('content-length') ?? '0');
-  if (declared > READ_BACK_MAX_BYTES) throw new Error(`Oxy file ${fileId} is too large to read`);
-  const bytes = Buffer.from(await response.arrayBuffer());
-  if (bytes.length > READ_BACK_MAX_BYTES)
-    throw new Error(`Oxy file ${fileId} is too large to read`);
-  return bytes;
+  const read = await readResponseBody(Readable.from(response.body), {
+    maxBytes: READ_BACK_MAX_BYTES,
+    timeoutMs: READ_BACK_TIMEOUT_MS,
+  });
+  switch (read.kind) {
+    case 'ok':
+      return read.body;
+    case 'too_large':
+      throw new Error(`Oxy file ${fileId} is too large to read`);
+    case 'timeout':
+      throw new Error(`Reading Oxy file ${fileId} timed out`);
+    case 'error':
+      throw new Error(`Reading Oxy file ${fileId} failed: ${read.error.message}`);
+  }
 }
 
 /**

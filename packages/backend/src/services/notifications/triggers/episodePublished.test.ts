@@ -5,10 +5,19 @@ import { eq } from 'drizzle-orm';
 import { getDb } from '../../../db/postgres';
 import { userPodcastSubscriptions } from '../../../db/schema/library';
 import { podcasts } from '../../../db/schema/podcasts';
+import type { notifyUser } from '../notifier';
 import { EPISODE_NOTIFY_MAX_AGE_MS, notifySubscribersOfNewEpisode } from './episodePublished';
 
-/** Injected so the trigger tests exercise fan-out, not the credential-absent path. */
-const testDeps = { fetch: (input: string, init: RequestInit) => fetch(input, init) };
+/**
+ * Injected in place of `notifyUser`: these tests are about the trigger's gates and
+ * fan-out — who would be told — not about how (or whether) Oxy delivers it, which
+ * `notifier.test.ts` covers.
+ */
+const recipients: string[] = [];
+const testNotify: typeof notifyUser = async (input) => {
+  recipients.push(input.recipientId);
+  return { emitted: true };
+};
 
 /**
  * The age gate is the half of the anti-spam design that coalescing cannot provide:
@@ -23,14 +32,8 @@ const testDeps = { fetch: (input: string, init: RequestInit) => fetch(input, ini
  */
 const PODCAST_ID = uuidv7();
 const OTHER_PODCAST_ID = uuidv7();
-let posted: number;
-const realFetch = globalThis.fetch;
-
 beforeAll(connectDb);
-afterAll(async () => {
-  globalThis.fetch = realFetch;
-  await disconnectDb();
-});
+afterAll(disconnectDb);
 
 beforeEach(async () => {
   await getDb()
@@ -41,14 +44,7 @@ beforeEach(async () => {
     ])
     .onConflictDoNothing();
 
-  posted = 0;
-  globalThis.fetch = Object.assign(
-    async () => {
-      posted += 1;
-      return new Response(JSON.stringify({ ok: true }), { status: 201 });
-    },
-    { preconnect: realFetch.preconnect },
-  );
+  recipients.length = 0;
 });
 
 afterEach(clearDb);
@@ -72,19 +68,19 @@ describe('notifySubscribersOfNewEpisode', () => {
     await subscribe('u1', PODCAST_ID);
 
     const old = new Date(Date.now() - EPISODE_NOTIFY_MAX_AGE_MS - 1000);
-    const outcome = await notifySubscribersOfNewEpisode(episode(old), Date.now(), testDeps);
+    const outcome = await notifySubscribersOfNewEpisode(episode(old), Date.now(), testNotify);
 
     expect(outcome).toEqual({ notified: 0, skippedAsBackfill: true, skippedAsHidden: false });
-    expect(posted).toBe(0);
+    expect(recipients).toEqual([]);
   });
 
   it('treats an episode with no publish date as backfill', async () => {
     await subscribe('u1', PODCAST_ID);
 
-    const outcome = await notifySubscribersOfNewEpisode(episode(undefined), Date.now(), testDeps);
+    const outcome = await notifySubscribersOfNewEpisode(episode(undefined), Date.now(), testNotify);
 
     expect(outcome.skippedAsBackfill).toBe(true);
-    expect(posted).toBe(0);
+    expect(recipients).toEqual([]);
   });
 
   it('notifies every subscriber of a genuinely new episode, and nobody else', async () => {
@@ -92,10 +88,14 @@ describe('notifySubscribersOfNewEpisode', () => {
     await subscribe('u2', PODCAST_ID);
     await subscribe('u3', OTHER_PODCAST_ID);
 
-    const outcome = await notifySubscribersOfNewEpisode(episode(new Date()), Date.now(), testDeps);
+    const outcome = await notifySubscribersOfNewEpisode(
+      episode(new Date()),
+      Date.now(),
+      testNotify,
+    );
 
     expect(outcome).toEqual({ notified: 2, skippedAsBackfill: false, skippedAsHidden: false });
-    expect(posted).toBe(2);
+    expect(recipients.sort()).toEqual(['u1', 'u2']);
   });
 
   it('tells nobody about an episode of a PRIVATE or UNLISTED show', async () => {
@@ -119,13 +119,13 @@ describe('notifySubscribersOfNewEpisode', () => {
       const outcome = await notifySubscribersOfNewEpisode(
         episode(new Date()),
         Date.now(),
-        testDeps,
+        testNotify,
       );
 
       expect(`${visibility}: ${JSON.stringify(outcome)}`).toBe(
         `${visibility}: ${JSON.stringify({ notified: 0, skippedAsBackfill: false, skippedAsHidden: true })}`,
       );
-      expect(`${visibility} posted: ${posted}`).toBe(`${visibility} posted: 0`);
+      expect(`${visibility} told: ${recipients.length}`).toBe(`${visibility} told: 0`);
     }
   });
 
@@ -139,10 +139,14 @@ describe('notifySubscribersOfNewEpisode', () => {
       .set({ status: 'unavailable' })
       .where(eq(podcasts.id, PODCAST_ID));
 
-    const outcome = await notifySubscribersOfNewEpisode(episode(new Date()), Date.now(), testDeps);
+    const outcome = await notifySubscribersOfNewEpisode(
+      episode(new Date()),
+      Date.now(),
+      testNotify,
+    );
 
     expect(outcome.skippedAsHidden).toBe(true);
-    expect(posted).toBe(0);
+    expect(recipients).toEqual([]);
   });
 
   it('a whole archive import notifies nobody', async () => {
@@ -153,9 +157,9 @@ describe('notifySubscribersOfNewEpisode', () => {
     // fresh, since the gate is `>` not `>=`.
     for (let i = 1; i <= 40; i += 1) {
       const old = new Date(Date.now() - EPISODE_NOTIFY_MAX_AGE_MS - i * 1000);
-      await notifySubscribersOfNewEpisode(episode(old), Date.now(), testDeps);
+      await notifySubscribersOfNewEpisode(episode(old), Date.now(), testNotify);
     }
 
-    expect(posted).toBe(0);
+    expect(recipients).toEqual([]);
   });
 });

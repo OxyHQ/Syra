@@ -1,44 +1,42 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
+import { OxyApiError } from '@oxy.so/core';
 import { count } from 'drizzle-orm';
 import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
 import { getDb } from '../../db/postgres';
 import { notificationPreferences, notificationSuppressions } from '../../db/schema/user';
 
-import { notifyUser } from './notifier';
+import { notifyUser, type NotifierDeps, type OxyNotificationRequest } from './notifier';
 
-// The real transport is covered separately; suppression tests inject delivery only.
-const testDeps = { fetch: (input: string, init: RequestInit) => fetch(input, init) };
-
+// The real transport is covered by `notifier.http.test.ts`; suppression tests inject delivery only.
 const RECIPIENT = 'oxy-listener-1';
 
-/** Captured POSTs to Oxy's notification endpoint. */
-let posted: Array<Record<string, unknown>> = [];
-let failNextPost = false;
-const realFetch = globalThis.fetch;
+/** Requests handed to `oxy.notifications.create`. */
+let sent: OxyNotificationRequest[] = [];
+/** What the next `create` does instead of succeeding. */
+let nextFailure: Error | null = null;
+
+const deps: NotifierDeps = {
+  create: async (request) => {
+    if (nextFailure) {
+      const failure = nextFailure;
+      nextFailure = null;
+      throw failure;
+    }
+    sent.push(request);
+    return {} as Awaited<ReturnType<NotifierDeps['create']>>;
+  },
+};
 
 beforeAll(connectDb);
-afterAll(async () => {
-  globalThis.fetch = realFetch;
-  await disconnectDb();
-});
-
+afterAll(disconnectDb);
 beforeEach(() => {
-  posted = [];
-  failNextPost = false;
-  globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
-    if (failNextPost) {
-      throw new Error('network down');
-    }
-    posted.push(JSON.parse(String(init?.body ?? '{}')));
-    return new Response(JSON.stringify({ ok: true }), { status: 201 });
-  }) as typeof fetch;
+  sent = [];
+  nextFailure = null;
 });
-
 afterEach(clearDb);
 
-/** Inject delivery so suppression tests never mint credentials. */
-function notifyUserT(input: Parameters<typeof notifyUser>[0]) {
-  return notifyUser(input, testDeps);
+function notify(input: Parameters<typeof notifyUser>[0]) {
+  return notifyUser(input, deps);
 }
 
 /** How many suppression claims exist, of any age. */
@@ -47,71 +45,99 @@ async function suppressionCount(): Promise<number> {
   return row.value;
 }
 
-function episodeInput(episodeId: string, podcastId: string) {
+/** An expiry notice: the owner is told about their own files, coalesced per owner. */
+function expiryInput(uploadId: string, groupId = 'owner-group') {
   return {
     recipientId: RECIPIENT,
-    actorId: podcastId,
-    event: 'episode.published' as const,
-    entityId: episodeId,
-    entityType: 'episode',
-    title: 'New episode',
-    coalesceGroupId: podcastId,
+    actorId: RECIPIENT,
+    event: 'upload.expiring' as const,
+    entityId: uploadId,
+    title: '1 uploaded file expiring',
+    message: 'Play it to keep it.',
+    coalesceGroupId: groupId,
   };
 }
 
 describe('notifyUser', () => {
-  it('emits once for a new entity', async () => {
-    const result = await notifyUserT(episodeInput('ep-1', 'show-1'));
+  it('sends an upload notice to Oxy as a system notification about the owner', async () => {
+    const result = await notify(expiryInput('upload-1'));
 
     expect(result).toEqual({ emitted: true });
-    expect(posted).toHaveLength(1);
-    expect(posted[0]).toMatchObject({
+    expect(sent).toEqual([
+      {
+        recipientId: RECIPIENT,
+        actorId: RECIPIENT,
+        type: 'system',
+        entityId: 'upload-1',
+        entityType: 'app',
+        title: '1 uploaded file expiring',
+        message: 'Play it to keep it.',
+      },
+    ]);
+  });
+
+  /**
+   * Oxy's notification types are a closed set and none of them is "a show you
+   * follow published". Sending one anyway is refused by Oxy's request
+   * validation, so it is not sent — and, the point of this test, it claims
+   * nothing: a suppression for a notification nobody received would silence the
+   * event once Oxy can carry it.
+   */
+  it('sends nothing and claims nothing for an event Oxy has no type for', async () => {
+    const result = await notify({
       recipientId: RECIPIENT,
-      type: 'episode.published',
+      actorId: 'show-1',
+      event: 'episode.published',
       entityId: 'ep-1',
-      entityType: 'episode',
+      title: 'A Show',
+      message: 'An Episode',
+      coalesceGroupId: 'show-1',
     });
+
+    expect(result).toEqual({ emitted: false, reason: 'undeliverable' });
+    expect(sent).toHaveLength(0);
+    expect(await suppressionCount()).toBe(0);
   });
 
   it('never notifies twice about the same entity', async () => {
-    await notifyUserT(episodeInput('ep-1', 'show-1'));
-    const second = await notifyUserT(episodeInput('ep-1', 'show-1'));
+    await notify(expiryInput('upload-1', 'group-a'));
+    const second = await notify(expiryInput('upload-1', 'group-b'));
 
     expect(second).toEqual({ emitted: false, reason: 'duplicate' });
-    expect(posted).toHaveLength(1);
+    expect(sent).toHaveLength(1);
   });
 
-  // THE case this system exists to prevent: a feed refresh that imports a show's whole
-  // back catalogue must produce ONE notification, not one per episode. Getting this wrong
-  // costs the push permission permanently — users do not grant it a second time.
-  it('coalesces a 40-episode backfill into a single notification', async () => {
+  // THE case this system exists to prevent: a clear-out that touches a whole library must
+  // produce ONE notification, not one per file. Getting this wrong costs the push permission
+  // permanently — users do not grant it a second time.
+  it('coalesces 40 notices in one group into a single notification', async () => {
     const results = [];
     for (let i = 0; i < 40; i += 1) {
-      results.push(await notifyUserT(episodeInput(`ep-${i}`, 'show-1')));
+      results.push(await notify(expiryInput(`upload-${i}`)));
     }
 
-    expect(posted).toHaveLength(1);
+    expect(sent).toHaveLength(1);
     expect(results.filter((r) => r.emitted)).toHaveLength(1);
     expect(results.filter((r) => !r.emitted && r.reason === 'coalesced')).toHaveLength(39);
   });
 
-  it('still notifies about a different show during the coalescing window', async () => {
-    await notifyUserT(episodeInput('ep-1', 'show-1'));
-    const other = await notifyUserT(episodeInput('ep-2', 'show-2'));
+  it('still notifies about a different group during the coalescing window', async () => {
+    await notify(expiryInput('upload-1', 'group-a'));
+    const other = await notify(expiryInput('upload-2', 'group-b'));
 
     expect(other).toEqual({ emitted: true });
-    expect(posted).toHaveLength(2);
+    expect(sent).toHaveLength(2);
   });
 
   it('does not emit an event the user turned off, and makes no network call', async () => {
     await getDb()
       .insert(notificationPreferences)
-      .values({ oxyUserId: RECIPIENT, disabledEvents: ['episode.published'] });
+      .values({ oxyUserId: RECIPIENT, disabledEvents: ['upload.expiring'] });
 
-    const result = await notifyUserT(episodeInput('ep-1', 'show-1'));
+    const result = await notify(expiryInput('upload-1'));
 
     expect(result).toEqual({ emitted: false, reason: 'event-disabled' });
-    expect(posted).toHaveLength(0);
+    expect(sent).toHaveLength(0);
     // A disabled event must not even claim a suppression key — re-enabling should not
     // leave the user silently suppressed for everything that happened while it was off.
     expect(await suppressionCount()).toBe(0);
@@ -120,9 +146,9 @@ describe('notifyUser', () => {
   it('emits for an event the user has NOT disabled', async () => {
     await getDb()
       .insert(notificationPreferences)
-      .values({ oxyUserId: RECIPIENT, disabledEvents: ['artist.release'] });
+      .values({ oxyUserId: RECIPIENT, disabledEvents: ['upload.removed'] });
 
-    expect(await notifyUserT(episodeInput('ep-1', 'show-1'))).toEqual({ emitted: true });
+    expect(await notify(expiryInput('upload-1'))).toEqual({ emitted: true });
   });
 
   /**
@@ -137,13 +163,9 @@ describe('notifyUser', () => {
    * first would win that claim and then collide on the group key, and the test
    * would report `coalesced` for a reason that has nothing to do with what it is
    * asserting.
-   *
-   * The live-claim half of the distinction is the `duplicate` and `coalesced`
-   * cases above, which is what makes this the discriminating input rather than
-   * one more emission: a claim that never expires would pass those and fail this.
    */
   it('re-arms once a claim has expired, rather than waiting for the sweep', async () => {
-    expect(await notifyUserT(episodeInput('ep-1', 'show-1'))).toEqual({ emitted: true });
+    expect(await notify(expiryInput('upload-1'))).toEqual({ emitted: true });
     expect(await suppressionCount()).toBe(2);
 
     await getDb()
@@ -152,38 +174,61 @@ describe('notifyUser', () => {
 
     // Same user, same entity, same group — and it emits, because every claim
     // standing in the way is past its own deadline.
-    expect(await notifyUserT(episodeInput('ep-1', 'show-1'))).toEqual({ emitted: true });
-    expect(posted).toHaveLength(2);
+    expect(await notify(expiryInput('upload-1'))).toEqual({ emitted: true });
+    expect(sent).toHaveLength(2);
 
     // Claimed, not duplicated: the rows were taken over in place.
     expect(await suppressionCount()).toBe(2);
 
     // And the fresh claims suppress again, so re-arming did not disable the rule.
-    expect(await notifyUserT(episodeInput('ep-1', 'show-1'))).toEqual({
+    expect(await notify(expiryInput('upload-1'))).toEqual({
       emitted: false,
       reason: 'duplicate',
     });
   });
 
-  it('reports failure without throwing when delivery fails', async () => {
-    failNextPost = true;
+  /**
+   * A claim stands only for a notification Oxy accepted. Before, the claims were
+   * taken and KEPT when the send failed, so one Oxy outage silenced that entity
+   * for 30 days and its group for the whole window — nobody was told, and every
+   * retry answered `duplicate`.
+   */
+  it('reports a failed send without throwing, and releases what it claimed', async () => {
+    nextFailure = new OxyApiError('unavailable', { status: 503, code: 'UNAVAILABLE' });
 
-    // The caller must survive: an import or a room start cannot fail because a
+    // The caller must survive: a sweep or a takedown cannot fail because a
     // notification could not be delivered.
-    const result = await notifyUserT(episodeInput('ep-1', 'show-1'));
+    expect(await notify(expiryInput('upload-1'))).toEqual({ emitted: false, reason: 'failed' });
+    expect(await suppressionCount()).toBe(0);
 
-    expect(result).toEqual({ emitted: false, reason: 'failed' });
+    // So the next trigger for the same entity and group is delivered.
+    expect(await notify(expiryInput('upload-1'))).toEqual({ emitted: true });
+    expect(sent).toHaveLength(1);
   });
 
-  it('treats Oxy 409 duplicate as delivered, not as an error', async () => {
-    globalThis.fetch = Object.assign(
-      async () =>
-        new Response(JSON.stringify({ error: 'Duplicate notification' }), { status: 409 }),
-      { preconnect: globalThis.fetch.preconnect },
-    );
+  it('releasing a failed claim leaves a live claim on another key alone', async () => {
+    expect(await notify(expiryInput('upload-1', 'group-a'))).toEqual({ emitted: true });
+
+    nextFailure = new Error('network down');
+    expect(await notify(expiryInput('upload-2', 'group-b'))).toEqual({
+      emitted: false,
+      reason: 'failed',
+    });
+
+    // upload-1's two claims stand; upload-2's were given back.
+    expect(await suppressionCount()).toBe(2);
+    expect(await notify(expiryInput('upload-1', 'group-c'))).toEqual({
+      emitted: false,
+      reason: 'duplicate',
+    });
+  });
+
+  it('treats Oxy 409 duplicate as delivered, and keeps the claim', async () => {
+    nextFailure = new OxyApiError('Duplicate notification', { status: 409, code: 'CONFLICT' });
 
     // Oxy dedupes on recipient+actor+type+entity itself. Its 409 means the notification
     // already exists, which is the outcome we wanted.
-    expect(await notifyUserT(episodeInput('ep-1', 'show-1'))).toEqual({ emitted: true });
+    expect(await notify(expiryInput('upload-1'))).toEqual({ emitted: true });
+    expect(await suppressionCount()).toBe(2);
   });
 });

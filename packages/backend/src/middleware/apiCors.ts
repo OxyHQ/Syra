@@ -1,7 +1,12 @@
-import cors from 'cors';
+import { createOxyCors, createOxySocketCors } from '@oxy.so/core/server';
 import { env } from '../config/env';
 
-export const ALLOWED_ORIGINS: string[] = [
+/**
+ * The browser origins Syra's API admits, besides the HTTPS Oxy apex family
+ * (`https://oxy.so`, `https://<one-label>.oxy.so`) that `@oxy.so/core` admits
+ * on its own. ONE list for HTTP and Socket.IO, so the two can never drift.
+ */
+export const APP_ORIGINS: string[] = [
   env.FRONTEND_URL,
   'https://syra.fm',
   'https://mention.earth',
@@ -9,9 +14,9 @@ export const ALLOWED_ORIGINS: string[] = [
   // Alia (alia.onl) generates podcast episodes into Syra-hosted shows and plays
   // them back from `/api/podcasts/episodes/:id/audio` with the listener's own
   // bearer token. That is a browser fetch carrying `Authorization`, so it is
-  // preflighted and needs an exact origin entry here — `Authorization` is
-  // already in ALLOWED_HEADERS. Native Alia is unaffected either way: React
-  // Native sends no `Origin` header and is not subject to CORS at all.
+  // preflighted and needs an exact origin entry here. Native Alia is unaffected
+  // either way: React Native sends no `Origin` header and is not subject to CORS
+  // at all.
   //
   // Only the app origin. `console.alia.onl` and the canvas do not play audio,
   // and a first-party app is listed here rather than pushed through
@@ -24,34 +29,12 @@ export const ALLOWED_ORIGINS: string[] = [
   ...env.ALLOWED_ORIGINS,
 ];
 
-// One source of truth for the CORS allow-list so the HTTP and Socket.IO
-// configs can never drift apart. `X-Syra-Device-Id` lets a guest identify its
-// device for radio/session reads (not a security boundary — see radio.controller).
-export const ALLOWED_HEADERS = [
-  'Content-Type',
-  'Authorization',
-  'X-CSRF-Token',
-  'X-Requested-With',
-  'Accept',
-  'Accept-Version',
-  'Content-Length',
-  'Content-MD5',
-  'Date',
-  'X-Api-Version',
-  'X-Syra-Device-Id',
-  'X-Oxy-Edge-Region',
-  'X-Oxy-Activity-Id',
-];
+/** HTTP CORS: echoes an admitted origin exactly, never a wildcard, never reflection. */
+export const apiCors = createOxyCors({ appOrigins: APP_ORIGINS });
 
-export const apiCors = cors({
-  origin: (origin, callback) => {
-    if (!origin || ALLOWED_ORIGINS.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(null, false);
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ALLOWED_HEADERS,
-});
+/**
+ * Socket.IO's `{ cors, allowRequest }` for the same origins: `cors` answers the
+ * polling transport, `allowRequest` refuses a WebSocket handshake from any other
+ * browser origin (browsers apply no CORS to an upgrade).
+ */
+export const socketCors = createOxySocketCors({ appOrigins: APP_ORIGINS });

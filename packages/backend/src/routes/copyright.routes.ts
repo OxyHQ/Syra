@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import { requireOxyAuth as requireAuth } from '@oxy.so/core/server';
 import {
   reportCopyrightViolation,
   listCopyrightReports,
@@ -27,9 +26,10 @@ router.post('/report', reportCopyrightViolation);
  *
  * Reviewer-gated rather than open, because approving a report is a takedown:
  * irreversible removal, a purge of every private locker holding the same
- * recording, and a strike that terminates the account at three.
+ * recording, and a strike that terminates the account at three. The gate answers
+ * 401 itself when there is no session.
  */
-router.get('/reports', requireAuth, requireComplianceReviewer, listCopyrightReports);
-router.post('/reports/:id/resolve', requireAuth, requireComplianceReviewer, resolveCopyrightReport);
+router.get('/reports', requireComplianceReviewer, listCopyrightReports);
+router.post('/reports/:id/resolve', requireComplianceReviewer, resolveCopyrightReport);
 
 export default router;

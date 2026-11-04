@@ -127,6 +127,8 @@ export interface ImportFeedOptions {
   directory?: PodcastDirectoryCandidate;
   /** Injectable SSRF-safe fetch (defaults to the real `safeFetch`). For tests. */
   fetch?: SafeFetchFn;
+  /** Injectable new-episode fan-out (defaults to `notifySubscribersOfNewEpisode`). For tests. */
+  announceEpisode?: typeof notifySubscribersOfNewEpisode;
 }
 
 export interface ImportFeedResult {
@@ -429,9 +431,10 @@ export async function importFeed(
   // `notifySubscribersOfNewEpisode` already swallows delivery failures; this
   // catch covers the fan-out itself (the subscriber query) so nothing can escape
   // into the import at all.
+  const announceEpisode = options.announceEpisode ?? notifySubscribersOfNewEpisode;
   for (const published of newlyPublished) {
     try {
-      await notifySubscribersOfNewEpisode(published);
+      await announceEpisode(published);
     } catch (err) {
       logger.error('[podcasts] episode notification fan-out failed', {
         feedUrl,

@@ -1,6 +1,6 @@
 import { showIsAnnounceable } from '../../../db/podcasts/podcasts';
 import { listSubscriberIds } from '../../../db/podcasts/subscriptions';
-import { notifyUser, type NotifierDeps } from '../notifier';
+import { notifyUser } from '../notifier';
 
 /**
  * Trigger: a subscribed show published a new episode.
@@ -48,11 +48,15 @@ export interface EpisodeNotifyOutcome {
 /**
  * Notify every subscriber of the show. Never throws — the notifier swallows delivery
  * failures, and a refresh must not fail because notifications did.
+ *
+ * Until Oxy's notification contract has a type for "a show you follow published",
+ * the notifier answers `undeliverable` for this event and nothing reaches Oxy
+ * (`toOxyNotification` in `../notifier.ts`); the gates here still decide who WOULD be told.
  */
 export async function notifySubscribersOfNewEpisode(
   episode: PublishedEpisode,
   now: number = Date.now(),
-  deps?: NotifierDeps,
+  notify: typeof notifyUser = notifyUser,
 ): Promise<EpisodeNotifyOutcome> {
   if (isBackfill(episode.pubDate, now)) {
     return { notified: 0, skippedAsBackfill: true, skippedAsHidden: false };
@@ -66,21 +70,16 @@ export async function notifySubscribersOfNewEpisode(
 
   let notified = 0;
   for (const recipientId of subscriberIds) {
-    const result = await notifyUser(
-      {
-        recipientId,
-        actorId: episode.podcastId,
-        event: 'episode.published',
-        entityId: episode.episodeId,
-        entityType: 'episode',
-        title: episode.podcastTitle,
-        message: episode.episodeTitle,
-        data: { podcastId: episode.podcastId, episodeId: episode.episodeId },
-        // One notification per show per subscriber per window, however many episodes land.
-        coalesceGroupId: episode.podcastId,
-      },
-      deps,
-    );
+    const result = await notify({
+      recipientId,
+      actorId: episode.podcastId,
+      event: 'episode.published',
+      entityId: episode.episodeId,
+      title: episode.podcastTitle,
+      message: episode.episodeTitle,
+      // One notification per show per subscriber per window, however many episodes land.
+      coalesceGroupId: episode.podcastId,
+    });
     if (result.emitted) {
       notified += 1;
     }

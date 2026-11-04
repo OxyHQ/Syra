@@ -5,17 +5,18 @@ import { notifyUser } from './notifier';
 
 let api: ReturnType<typeof Bun.serve>;
 let oxy: OxyServer;
-let transport: ReturnType<OxyServer['createServiceClient']>;
 let denied = false;
 let redirected = false;
+let duplicate = false;
 let minted = 0;
 const received: Record<string, unknown>[] = [];
 const input = {
   recipientId: 'listener-a',
-  actorId: 'show-1',
-  event: 'episode.published' as const,
-  entityId: 'episode-1',
-  entityType: 'episode',
+  actorId: 'listener-a',
+  event: 'upload.expiring' as const,
+  entityId: 'upload-1',
+  title: '1 uploaded file expiring',
+  message: 'Play it to keep it.',
 };
 
 beforeAll(async () => {
@@ -44,12 +45,14 @@ beforeAll(async () => {
       expect(request.headers.get('x-oxy-user-id')).toBeNull();
       received.push((await request.json()) as Record<string, unknown>);
       if (denied) return Response.json({ error: 'workload_revoked' }, { status: 403 });
+      if (duplicate)
+        return Response.json({ error: { code: 'conflict', message: 'dup' } }, { status: 409 });
       if (redirected)
         return new Response(null, {
           status: 307,
           headers: { location: 'https://other.invalid/leak' },
         });
-      return Response.json({ ok: true }, { status: 201 });
+      return Response.json({ notification: { id: 'n-1' } }, { status: 201 });
     },
   });
   oxy = new OxyServer({
@@ -60,42 +63,51 @@ beforeAll(async () => {
       Token: 'temporary',
     }),
   });
-  transport = oxy.createServiceClient({ baseURL: api.url.origin, audience: 'oxy-api' });
 });
 beforeEach(() => {
   denied = false;
   redirected = false;
+  duplicate = false;
   received.length = 0;
 });
 afterEach(clearDb);
 afterAll(async () => {
-  transport.dispose();
   oxy.dispose();
   api.stop(true);
   await disconnectDb();
 });
 
-test('shared workload transport delivers once and preserves exact notification identity', async () => {
-  expect(await notifyUser(input, transport)).toEqual({ emitted: true });
-  expect(await notifyUser(input, transport)).toEqual({ emitted: false, reason: 'duplicate' });
+test('oxy.notifications.create delivers once, as the workload, with the exact system request', async () => {
+  expect(await notifyUser(input, oxy.notifications)).toEqual({ emitted: true });
+  expect(await notifyUser(input, oxy.notifications)).toEqual({
+    emitted: false,
+    reason: 'duplicate',
+  });
   expect(received).toEqual([
     {
       recipientId: 'listener-a',
-      actorId: 'show-1',
-      type: 'episode.published',
-      entityId: 'episode-1',
-      entityType: 'episode',
+      actorId: 'listener-a',
+      type: 'system',
+      entityId: 'upload-1',
+      entityType: 'app',
+      title: '1 uploaded file expiring',
+      message: 'Play it to keep it.',
     },
   ]);
   expect(minted).toBe(1);
 });
+test('a 409 from Oxy is its own duplicate guard answering, so it counts as delivered', async () => {
+  duplicate = true;
+  expect(await notifyUser(input, oxy.notifications)).toEqual({ emitted: true });
+  expect(received).toHaveLength(1);
+});
 test('revoked workload is a delivery failure, never a key or user fallback', async () => {
   denied = true;
-  expect(await notifyUser(input, transport)).toEqual({ emitted: false, reason: 'failed' });
+  expect(await notifyUser(input, oxy.notifications)).toEqual({ emitted: false, reason: 'failed' });
   expect(received).toHaveLength(1);
 });
 test('redirect cannot forward service authority to another endpoint', async () => {
   redirected = true;
-  expect(await notifyUser(input, transport)).toEqual({ emitted: false, reason: 'failed' });
+  expect(await notifyUser(input, oxy.notifications)).toEqual({ emitted: false, reason: 'failed' });
   expect(received).toHaveLength(1);
 });

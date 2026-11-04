@@ -30,7 +30,7 @@
  * one statement and therefore still atomic.
  */
 
-import { eq, lte, sql } from 'drizzle-orm';
+import { and, eq, lte, sql } from 'drizzle-orm';
 import { getDb, type DbOrTransaction } from '../postgres';
 import {
   notificationPreferences,
@@ -60,10 +60,16 @@ export async function isEventDisabled(
   return row?.disabledEvents.includes(event) === true;
 }
 
+/** A claim this call won: enough to give back exactly that claim and no other. */
+export interface SuppressionClaim {
+  id: string;
+  expiresAt: Date;
+}
+
 /**
  * Try to claim a suppression key for `ttlMs`.
  *
- * Returns true when THIS call won the claim (so the caller may emit) and false
+ * Returns the claim when THIS call won it (so the caller may emit) and `null`
  * when a live claim was already held. See this file's doc comment for why an
  * expired claim is won rather than collided with.
  */
@@ -72,10 +78,10 @@ export async function claimSuppression(
   key: string,
   ttlMs: number,
   db: DbOrTransaction = getDb(),
-): Promise<boolean> {
+): Promise<SuppressionClaim | null> {
   const expiresAt = new Date(Date.now() + ttlMs);
 
-  const claimed = await db
+  const [claimed] = await db
     .insert(notificationSuppressions)
     .values({ oxyUserId, key, expiresAt })
     .onConflictDoUpdate({
@@ -88,7 +94,29 @@ export async function claimSuppression(
     })
     .returning({ id: notificationSuppressions.id });
 
-  return claimed.length > 0;
+  return claimed ? { id: claimed.id, expiresAt } : null;
+}
+
+/**
+ * Give back a claim whose notification was never delivered, so the next
+ * trigger for the same entity or group may try again instead of being
+ * suppressed by a notification nobody received.
+ *
+ * Matched on the row AND its deadline: a claim that has since expired and been
+ * taken over by another caller carries a different deadline and is left alone.
+ */
+export async function releaseSuppression(
+  claim: SuppressionClaim,
+  db: DbOrTransaction = getDb(),
+): Promise<void> {
+  await db
+    .delete(notificationSuppressions)
+    .where(
+      and(
+        eq(notificationSuppressions.id, claim.id),
+        eq(notificationSuppressions.expiresAt, claim.expiresAt),
+      ),
+    );
 }
 
 /**

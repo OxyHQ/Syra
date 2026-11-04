@@ -334,11 +334,8 @@ jobs:
           # revision until a deploy is told to take it out. This list is that
           # instruction, and it is the only thing that retires
           # OXY_SERVICE_API_KEY and OXY_SERVICE_API_SECRET from the container —
-          # Syra attests its ECS task role for an Oxy service token now (oxy ADR
-          # 0026), and @oxy.so/core >= 1.6.1 takes that path whenever no pair is
-          # present. `src/oxyClient.ts` asks whether this process can
-          # authenticate rather than whether the two variables are set, so the
-          # notifier keeps minting across the change.
+          # Syra authenticates to Oxy only as its workload (the ECS task role,
+          # oxy ADR 0026; `src/oxyClient.ts`), and no code reads either name.
           #
           # The SSM parameters are untouched and still exist. This removes the
           # task definition's REFERENCE to them, which is the half a deploy owns;

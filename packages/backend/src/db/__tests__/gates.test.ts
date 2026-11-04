@@ -3729,7 +3729,7 @@ describe('user, taste and listening schema (Task 7)', () => {
     const expiresAt = new Date(Date.now() + 60_000);
 
     try {
-      // `claimSuppression` (`services/notifications/notifier.ts:133`) INSERTS
+      // `claimSuppression` (`db/user/notifications.ts`) INSERTS
       // and reads the duplicate-key error as "already notified" — the unique
       // index IS the decision, so this constraint is load-bearing logic rather
       // than hygiene.
