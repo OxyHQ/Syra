@@ -23,7 +23,7 @@ import { Provider as PortalProvider, Outlet as PortalOutlet } from '@/components
 import { PLAYER_BAR_HEIGHT } from '@/constants/layout';
 
 // Hooks
-import { useKeyboardVisibility } from '@/hooks/useKeyboardVisibility';
+import { useKeyboardVisible } from '@oxy.so/bloom/hooks';
 import { useIsScreenNotMobile, useIsDesktop } from '@/hooks/useOptimizedMediaQuery';
 import { BloomThemeProvider, useTheme } from '@oxy.so/bloom/theme';
 import { LayoutScrollProvider, useLayoutScroll } from '@/context/LayoutScrollContext';
@@ -89,7 +89,7 @@ const MainLayout: React.FC<MainLayoutProps> = memo(({ isScreenNotMobile }) => {
   const theme = useTheme();
   const { forwardWheelEvent } = useLayoutScroll();
   const isDesktop = useIsDesktop();
-  const keyboardVisible = useKeyboardVisibility();
+  const keyboardVisible = useKeyboardVisible();
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const currentEpisode = usePlayerStore((s) => s.currentEpisode);
   const hasNowPlaying = !!currentTrack || !!currentEpisode;
@@ -299,7 +299,7 @@ export default function RootLayout() {
 
   // Hooks
   const isScreenNotMobile = useIsScreenNotMobile();
-  const keyboardVisible = useKeyboardVisibility();
+  const keyboardVisible = useKeyboardVisible();
 
   // Font loading is owned entirely by Bloom's `BloomThemeProvider`/`FontLoader`:
   // it loads the Bloom font families on native (and sets the default `Text`
