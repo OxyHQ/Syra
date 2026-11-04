@@ -317,7 +317,7 @@ publicApiRouter.use('/search', searchRoutes);
 publicApiRouter.use('/browse', browseRoutes);
 // Copyright: public reporting (a rightsholder need not have a Syra account) plus
 // the reviewer-gated queue and resolution, which self-enforce with requireAuth +
-// the compliance reviewer allowlist. Mounted ONCE — a second mount on the
+// the `compliance.review` Oxy application permission. Mounted ONCE — a second mount on the
 // authenticated router below was unreachable, because this one matches first, and
 // its only effect was that every report recorded an undefined reporter.
 publicApiRouter.use('/copyright', createOptionalOxyAuth(oxy), copyrightRoutes);

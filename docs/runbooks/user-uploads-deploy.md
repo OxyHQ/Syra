@@ -12,14 +12,21 @@ the code that reads it looks correct.
 
 ## 0. Before you start
 
-**Declare and grant Syra's `compliance.review` application permission in Oxy.**
+**Seed Syra's `compliance.review` application permission in Oxy.**
 
 Reviewers are an Oxy application role (`~/Oxy/docs/application-roles.md`), read
 by `oxy.middleware.requireAppPermission('compliance.review', { fresh: true })`
-in `middleware/complianceReviewer.ts`. Declare the key on Syra's Oxy application
-(Console → application → Settings → Roles; the key list is
-`src/config/applicationPermissions.ts`), then have an owner or admin of the
-owning account grant it to each reviewer — a second admin, never yourself.
+in `middleware/complianceReviewer.ts`. Syra is one of Oxy's own applications, so
+the key and the roles that hold it are declared in code in oxy's first-party
+registry (`operatorPermissions` on Syra's entry in
+`packages/api/src/scripts/seedOxyApplicationsSpecs.ts`; oxy ADR 0056), held
+today by the owners and admins of the organization that owns Syra. Run oxy's
+**Seed Oxy applications** workflow with `only_apps` = `Syra`, dry run first:
+it lists `compliance.review` as declared and who holds it through which role.
+Then apply it. Nothing is granted per person (the Console shows the key
+read-only and the API refuses a grant with `409 FIRST_PARTY_ROLES_IN_CODE`):
+to make someone a reviewer, give them that role in the organization. The key
+list in `src/config/applicationPermissions.ts` must match the registry.
 
 Both review queues are **fail-closed**: until somebody holds the permission,
 every review endpoint answers `403` to everyone, so no copyright report and no
