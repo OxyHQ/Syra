@@ -12,14 +12,7 @@ import {
   SegmentedControlItem,
   SegmentedControlItemText,
 } from '@oxy.so/bloom/segmented-control';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectItemText,
-  SelectTrigger,
-  SelectValue,
-} from '@oxy.so/bloom/select';
+import { SettingsSelect } from '@oxy.so/bloom/settings-modal/rows';
 import { COLOR_PRESET_REGISTRY, useBloomTheme } from '@oxy.so/bloom/theme';
 import { toast } from '@oxy.so/bloom/toast';
 import Constants from 'expo-constants';
@@ -411,19 +404,13 @@ const SettingsScreen: React.FC = () => {
                 title={t('settings.preferences.accentColor')}
                 description={t('settings.preferences.accentColorHint')}
               >
-                <Select value={colorValue} onValueChange={handleColorChange}>
-                  <SelectTrigger label={t('settings.preferences.accentColor')}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent
-                    items={colorOptions}
-                    renderItem={(item) => (
-                      <SelectItem value={item.value} label={item.label}>
-                        <SelectItemText>{item.label}</SelectItemText>
-                      </SelectItem>
-                    )}
-                  />
-                </Select>
+                <SettingsSelect
+                  label={t('settings.preferences.accentColor')}
+                  value={colorValue}
+                  onChange={handleColorChange}
+                  items={colorOptions}
+                  compact={false}
+                />
               </SettingsControlBlock>
 
               <SettingsControlBlock
