@@ -195,7 +195,7 @@ describe('compliance reviewer gate (Oxy application permission)', () => {
       expect(allowedReq.oxyAppPermissions?.operatorId).toBe('reviewer-1');
 
       // Every review request asks Oxy rather than reusing a cached answer, so a
-      // revoked grant stops working at once.
+      // removed role in the owning organization stops working at once.
       expect(roles.optionsSeen().length).toBeGreaterThan(0);
       for (const options of roles.optionsSeen()) expect(options).toMatchObject({ fresh: true });
     } finally {
