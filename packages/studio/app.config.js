@@ -9,6 +9,14 @@ const OXY_CLIENT_ID =
   'oxy_dk_3b5d68c224b7eaf690b2f682fb60399b31e5c7ab87c66181';
 const OXY_UPDATES_CHANNEL = 'studio-production';
 
+// App variant: a development build sits next to the production app on the same
+// device with its own applicationId/bundleId and name. Build it with
+// `APP_VARIANT=development`; production is the default. Commons' and
+// @oxy.so/services' caller allow-lists hold both ids.
+const IS_DEV_VARIANT = process.env.APP_VARIANT === 'development';
+const APP_ID = IS_DEV_VARIANT ? 'fm.syra.studio.dev' : 'fm.syra.studio';
+const APP_NAME = IS_DEV_VARIANT ? 'Syra Studio (Dev)' : 'Syra Studio';
+
 module.exports = function (_config) {
   /**
    * App version number. Should be incremented as part of a release cycle.
@@ -17,7 +25,7 @@ module.exports = function (_config) {
 
   return {
     expo: {
-      name: 'Syra Studio',
+      name: APP_NAME,
       slug: 'syra-studio',
       version: VERSION,
       orientation: 'portrait',
@@ -35,14 +43,16 @@ module.exports = function (_config) {
       },
       ios: {
         supportsTablet: true,
-        bundleIdentifier: 'com.syra.studio',
+        bundleIdentifier: APP_ID,
       },
       android: {
         adaptiveIcon: {
           foregroundImage: './assets/images/app-icon_foreground.png',
           backgroundImage: './assets/images/app-icon_background.png',
         },
-        package: 'com.syra.studio',
+        package: APP_ID,
+        // App Links: studio.syra.fm serves /.well-known/assetlinks.json for
+        // fm.syra.studio (public/.well-known/assetlinks.json, deployed with the web app).
         intentFilters: [
           {
             action: 'VIEW',
@@ -51,10 +61,6 @@ module.exports = function (_config) {
               {
                 scheme: 'https',
                 host: 'studio.syra.fm',
-              },
-              {
-                scheme: 'https',
-                host: 'oxy.so',
               },
             ],
             category: ['BROWSABLE', 'DEFAULT'],
