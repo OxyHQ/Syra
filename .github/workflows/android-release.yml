@@ -1,0 +1,32 @@
+name: Android release
+
+# Signed Android releases of Syra and Syra Studio, built on Oxy's build machine
+# by OxyHQ/oxy's reusable workflow (docs/engineering/build-and-deploy.md,
+# "Native Android releases"). A run builds only when the app's `version` has no
+# GitHub release yet (`android-v<version>`, `studio-android-v<version>`); a
+# JS-only change ships as an OTA update (publish-update.yml). The build env is
+# each app's eas.json `production` profile.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  syra:
+    permissions:
+      contents: write
+    uses: OxyHQ/oxy/.github/workflows/android-release.yml@main
+    with:
+      app-dir: packages/frontend
+
+  studio:
+    permissions:
+      contents: write
+    uses: OxyHQ/oxy/.github/workflows/android-release.yml@main
+    with:
+      app-dir: packages/studio
+      tag-prefix: studio-android

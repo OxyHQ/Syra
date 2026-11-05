@@ -1,5 +1,14 @@
 const pkg = require('./package.json');
 
+// Syra's registered Oxy client id (public), resolved exactly as `config.ts` resolves
+// the one OxyProvider uses. Release builds and OTA exports take it from eas.json's
+// production env. Studio is a surface of the Syra application, like the listener
+// app, so its OTA updates use their own channel.
+const OXY_CLIENT_ID =
+  process.env.EXPO_PUBLIC_OXY_CLIENT_ID ??
+  'oxy_dk_3b5d68c224b7eaf690b2f682fb60399b31e5c7ab87c66181';
+const OXY_UPDATES_CHANNEL = 'studio-production';
+
 module.exports = function (_config) {
   /**
    * App version number. Should be incremented as part of a release cycle.
@@ -126,6 +135,14 @@ module.exports = function (_config) {
         // so.oxy.permission.IDENTITY and DEVICE_SESSION and adds the <queries>
         // for their providers.
         '@oxy.so/services/plugins/withOxySharedPermissions',
+        // OTA updates from Oxy Updates (`.github/workflows/publish-update.yml`
+        // publishes every push to main). It also derives android.versionCode and
+        // ios.buildNumber from `version`, which is the OTA boundary: bump it for a
+        // native change and the next push to main releases a new binary.
+        [
+          '@oxy.so/app-preset/plugin/withOxyUpdates',
+          { clientId: OXY_CLIENT_ID, channel: OXY_UPDATES_CHANNEL },
+        ],
       ],
       extra: {
         router: {

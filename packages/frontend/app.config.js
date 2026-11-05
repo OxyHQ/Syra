@@ -11,6 +11,13 @@ const googleServicesJson =
   process.env.GOOGLE_SERVICES_JSON || path.resolve(__dirname, '../../google-services.json');
 const hasGoogleServices = fs.existsSync(googleServicesJson);
 
+// Syra's registered Oxy client id (public), resolved exactly as `config.ts` resolves
+// the one OxyProvider uses. Release builds and OTA exports take it from eas.json's
+// production env. Oxy Updates serves this app's OTA updates under it.
+const OXY_CLIENT_ID =
+  process.env.EXPO_PUBLIC_OXY_CLIENT_ID ??
+  'oxy_dk_3b5d68c224b7eaf690b2f682fb60399b31e5c7ab87c66181';
+
 module.exports = function (_config) {
   /**
    * App version number. Should be incremented as part of a release cycle.
@@ -23,10 +30,6 @@ module.exports = function (_config) {
    * @see https://docs.expo.dev/build-reference/variables/#built-in-environment-variables
    */
   const PLATFORM = process.env.EAS_BUILD_PLATFORM;
-
-  const IS_TESTFLIGHT = process.env.EXPO_PUBLIC_ENV === 'testflight';
-  const IS_PRODUCTION = process.env.EXPO_PUBLIC_ENV === 'production';
-  const IS_DEV = !IS_TESTFLIGHT && !IS_PRODUCTION;
 
   return {
     expo: {
@@ -74,10 +77,6 @@ module.exports = function (_config) {
               {
                 scheme: 'https',
                 host: 'oxy.so',
-              },
-              IS_DEV && {
-                scheme: 'http',
-                host: 'localhost:4120',
               },
             ],
             category: ['BROWSABLE', 'DEFAULT'],
@@ -208,6 +207,11 @@ module.exports = function (_config) {
           // so.oxy.permission.IDENTITY and DEVICE_SESSION and adds the <queries>
           // for their providers.
           '@oxy.so/services/plugins/withOxySharedPermissions',
+          // OTA updates from Oxy Updates (`.github/workflows/publish-update.yml`
+          // publishes every push to main). It also derives android.versionCode and
+          // ios.buildNumber from `version`, which is the OTA boundary: bump it for a
+          // native change and the next push to main releases a new binary.
+          ['@oxy.so/app-preset/plugin/withOxyUpdates', { clientId: OXY_CLIENT_ID }],
         ];
 
         // Only include expo-notifications for native builds (android/ios).
