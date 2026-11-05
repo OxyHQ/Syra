@@ -7,7 +7,7 @@ const logger = createScopedLogger('ShareMedia');
 const PUBLIC_APP_URL = process.env.EXPO_PUBLIC_APP_URL ?? 'https://syra.fm';
 export type ShareKind = 'track' | 'album' | 'p' | 'playlist';
 
-export function mediaShareUrl(kind: ShareKind, id: string, seconds?: number): string {
+function mediaShareUrl(kind: ShareKind, id: string, seconds?: number): string {
   const url = new URL(`/${kind}/${encodeURIComponent(id)}`, PUBLIC_APP_URL);
   if (seconds !== undefined && Number.isFinite(seconds) && seconds > 0) {
     url.searchParams.set('t', String(Math.floor(seconds)));

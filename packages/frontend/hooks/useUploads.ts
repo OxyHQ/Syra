@@ -24,11 +24,11 @@ const UPLOADS_QUERY_ROOT = 'uploads';
 /** While ingest is transcoding, ask again this often. */
 const PROCESSING_POLL_INTERVAL_MS = 3000;
 
-export function uploadsListQueryKey(identity: CatalogIdentity) {
+function uploadsListQueryKey(identity: CatalogIdentity) {
   return [UPLOADS_QUERY_ROOT, 'list', identity] as const;
 }
 
-export function uploadAlbumsQueryKey(identity: CatalogIdentity) {
+function uploadAlbumsQueryKey(identity: CatalogIdentity) {
   return [UPLOADS_QUERY_ROOT, 'albums', identity] as const;
 }
 

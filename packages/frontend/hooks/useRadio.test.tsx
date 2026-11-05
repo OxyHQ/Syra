@@ -143,6 +143,7 @@ describe('useRadioStation', () => {
 
     expect(getNextPageParam(page('cursor-2'), [], null, [])).toBe('cursor-2');
     expect(getNextPageParam(page(null), [], null, [])).toBeNull();
+    expect(getNextPageParam(page(''), [], null, [])).toBeNull();
     expect(getNextPageParam(page('cursor-2'), [], 'cursor-2', [null, 'cursor-2'])).toBeNull();
     expect(
       getNextPageParam(page('cursor-1'), [], 'cursor-2', [null, 'cursor-1', 'cursor-2']),
