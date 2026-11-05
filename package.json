@@ -42,7 +42,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",
-    "@oxy.so/doctor": "1.6.0",
+    "@oxy.so/doctor": "1.7.0",
     "@types/node": "^20.0.0",
     "typescript": "~5.9.2"
   },
