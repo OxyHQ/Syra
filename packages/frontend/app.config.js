@@ -18,6 +18,14 @@ const OXY_CLIENT_ID =
   process.env.EXPO_PUBLIC_OXY_CLIENT_ID ??
   'oxy_dk_3b5d68c224b7eaf690b2f682fb60399b31e5c7ab87c66181';
 
+// App variant: a development build sits next to the production app on the same
+// device with its own applicationId/bundleId and name. Build it with
+// `APP_VARIANT=development`; production is the default. The id is syra.fm
+// reversed; Commons' and @oxy.so/services' caller allow-lists hold both.
+const IS_DEV_VARIANT = process.env.APP_VARIANT === 'development';
+const APP_ID = IS_DEV_VARIANT ? 'fm.syra.app.dev' : 'fm.syra.app';
+const APP_NAME = IS_DEV_VARIANT ? 'Syra (Dev)' : 'Syra';
+
 module.exports = function (_config) {
   /**
    * App version number. Should be incremented as part of a release cycle.
@@ -33,7 +41,7 @@ module.exports = function (_config) {
 
   return {
     expo: {
-      name: 'Syra',
+      name: APP_NAME,
       slug: 'syra',
       version: VERSION,
       orientation: 'portrait',
@@ -51,7 +59,7 @@ module.exports = function (_config) {
       },
       ios: {
         supportsTablet: true,
-        bundleIdentifier: 'com.syra.ios',
+        bundleIdentifier: APP_ID,
       },
       android: {
         adaptiveIcon: {
@@ -60,11 +68,13 @@ module.exports = function (_config) {
           monochromeImage: './assets/images/app-icon_monochrome.png',
         },
         permissions: ['android.permission.CAMERA', 'android.permission.RECORD_AUDIO'],
-        // Must match google-services.json package_name
-        package: 'com.syra.app',
+        // A google-services.json must be registered in Firebase for this package.
+        package: APP_ID,
         // Point to your google-services.json for FCM (only when present —
         // absent in local dev-client builds).
         ...(hasGoogleServices ? { googleServicesFile: googleServicesJson } : {}),
+        // App Links: syra.fm serves /.well-known/assetlinks.json for fm.syra.app
+        // (public/.well-known/assetlinks.json, deployed with the web app).
         intentFilters: [
           {
             action: 'VIEW',
@@ -73,10 +83,6 @@ module.exports = function (_config) {
               {
                 scheme: 'https',
                 host: 'syra.fm',
-              },
-              {
-                scheme: 'https',
-                host: 'oxy.so',
               },
             ],
             category: ['BROWSABLE', 'DEFAULT'],

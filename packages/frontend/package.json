@@ -1,7 +1,7 @@
 {
   "name": "@syra/frontend",
   "main": "expo-router/entry",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "scripts": {
     "start": "RCT_METRO_PORT=8120 expo start --reset-cache --tunnel --clear",
     "start:local": "RCT_METRO_PORT=8120 expo start --reset-cache --clear",
@@ -55,7 +55,7 @@
     "@oxy.so/bloom": "17.9.0",
     "@oxy.so/core": "7.23.0",
     "@oxy.so/expo-splash": "^1.0.0",
-    "@oxy.so/services": "14.3.8",
+    "@oxy.so/services": "14.4.0",
     "@oxy.so/utils": "1.5.2",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/netinfo": "12.0.1",
