@@ -1,6 +1,6 @@
 {
   "cli": {
-    "appVersionSource": "remote"
+    "appVersionSource": "local"
   },
   "build": {
     "development": {
@@ -20,12 +20,12 @@
     "production": {
       "node": "24.20.0",
       "env": {
-        "API_URL": "https://api.syra.fm"
+        "API_URL": "https://api.syra.fm",
+        "EXPO_PUBLIC_OXY_CLIENT_ID": "oxy_dk_f80a32569e750851299568718ce518cb0d9a05a962285f3e"
       },
       "android": {
-        "buildType": "apk" //apk or app-bundle
-      },
-      "autoIncrement": true
+        "buildType": "apk"
+      }
     },
     "staging": {
       "extends": "production",

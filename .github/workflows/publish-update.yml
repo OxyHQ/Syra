@@ -1,0 +1,94 @@
+name: Publish OTA update
+
+# Publishes the JS bundle + assets of Syra (channel `production`) and Syra
+# Studio (channel `studio-production`) to Oxy Updates on every push to main
+# that changes them. Both apps are surfaces of the one Syra application (one
+# client id), so each binary polls its own channel.
+#
+# No secret: GitHub trusted publishing (oxy ADR 0057). The job's OIDC token is
+# exchanged for a five-minute `updates:publish` token of the Syra application,
+# which registered this repository, `refs/heads/main` and THIS file path
+# (`.github/workflows/publish-update.yml`) as its trusted publisher in oxy's
+# `seedOxyApplicationsSpecs.ts`. Renaming the file breaks publishing.
+#
+# OTA only. A native change bumps the app's `version` (the runtime version,
+# `appVersion` policy), and android-release.yml builds that binary.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-update.yml'
+      - '.github/scripts/with-eas-env.mjs'
+      - 'packages/frontend/**'
+      - 'packages/studio/**'
+      # Bundled `workspace:*` dependencies of both apps.
+      - 'packages/shared-types/**'
+      - 'packages/sdk/**'
+      - 'package.json'
+      - 'bun.lock'
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: oxy-updates-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      # Syra's public client id (`oxy_dk_…`, not a secret): the one eas.json's
+      # production env gives both apps, and so the one in their manifest URL.
+      OXY_SHIP_CLIENT_ID: oxy_dk_f80a32569e750851299568718ce518cb0d9a05a962285f3e
+      OXY_API_URL: https://api.oxy.so
+      SHIP_MESSAGE: ${{ github.event.head_commit.message }}
+      NODE_OPTIONS: '--max-old-space-size=4096'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: dorny/paths-filter@v4
+        id: changed
+        with:
+          filters: |
+            shared: &shared
+              - '.github/workflows/publish-update.yml'
+              - '.github/scripts/with-eas-env.mjs'
+              - 'packages/shared-types/**'
+              - 'packages/sdk/**'
+              - 'package.json'
+              - 'bun.lock'
+            frontend:
+              - *shared
+              - 'packages/frontend/**'
+            studio:
+              - *shared
+              - 'packages/studio/**'
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - run: bun install --frozen-lockfile --minimum-release-age=0
+
+      - name: Publish Syra (channel production)
+        if: steps.changed.outputs.frontend == 'true'
+        run: >-
+          bun .github/scripts/with-eas-env.mjs packages/frontend production --
+          bunx --no-install oxy-ship publish
+          --channel production
+          --platform all
+          --git-commit "$GITHUB_SHA"
+          --message "$SHIP_MESSAGE"
+
+      - name: Publish Syra Studio (channel studio-production)
+        if: steps.changed.outputs.studio == 'true'
+        run: >-
+          bun .github/scripts/with-eas-env.mjs packages/studio production --
+          bunx --no-install oxy-ship publish
+          --channel studio-production
+          --platform all
+          --git-commit "$GITHUB_SHA"
+          --message "$SHIP_MESSAGE"
