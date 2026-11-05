@@ -72,23 +72,30 @@ jobs:
         with:
           bun-version-file: package.json
       - run: bun install --frozen-lockfile --minimum-release-age=0
+      # Oxy Updates takes a message of at most 500 characters; a squash merge's
+      # full message (subject plus every commit body) is longer. The subject names
+      # the change, and --git-commit links the rest.
+      - name: Update message
+        run: |
+          subject="${SHIP_MESSAGE%%$'\n'*}"
+          echo "SHIP_SUBJECT=${subject:0:500}" >> "$GITHUB_ENV"
 
       - name: Publish Syra (channel production)
         if: steps.changed.outputs.frontend == 'true'
-        run: >-
-          bun .github/scripts/with-eas-env.mjs packages/frontend production --
-          bunx --no-install oxy-ship publish
-          --channel production
-          --platform all
-          --git-commit "$GITHUB_SHA"
-          --message "$SHIP_MESSAGE"
+        run: |
+          bun .github/scripts/with-eas-env.mjs packages/frontend production -- \
+            bunx --no-install oxy-ship publish \
+              --channel production \
+              --platform all \
+              --git-commit "$GITHUB_SHA" \
+              --message "$SHIP_SUBJECT"
 
       - name: Publish Syra Studio (channel studio-production)
         if: steps.changed.outputs.studio == 'true'
-        run: >-
-          bun .github/scripts/with-eas-env.mjs packages/studio production --
-          bunx --no-install oxy-ship publish
-          --channel studio-production
-          --platform all
-          --git-commit "$GITHUB_SHA"
-          --message "$SHIP_MESSAGE"
+        run: |
+          bun .github/scripts/with-eas-env.mjs packages/studio production -- \
+            bunx --no-install oxy-ship publish \
+              --channel studio-production \
+              --platform all \
+              --git-commit "$GITHUB_SHA" \
+              --message "$SHIP_SUBJECT"
