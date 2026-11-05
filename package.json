@@ -50,7 +50,7 @@
     "node": ">=18.0.0"
   },
   "overrides": {
-    "@oxy.so/bloom": "17.5.0",
+    "@oxy.so/bloom": "17.9.0",
     "@oxy.so/core": "7.23.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
