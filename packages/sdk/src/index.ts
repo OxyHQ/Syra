@@ -27,6 +27,7 @@ export type {
   UploadPayload,
 } from './client';
 export type {
+  ApplePodcastLink,
   TrackSummary,
   PodcastSummary,
   PodcastSubscription,

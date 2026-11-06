@@ -8,6 +8,7 @@ import {
   episodeSummary,
   podcastDeleted,
   podcastSubscription,
+  applePodcastLink,
   podcastSummary,
   publicApiError,
   publicPodcastCardsResponse,
@@ -17,6 +18,7 @@ import {
 } from './responses';
 import type {
   TrackSummary,
+  ApplePodcastLink,
   PodcastSummary,
   PodcastSubscription,
   EpisodeSummary,
@@ -268,6 +270,11 @@ export interface SyraClient {
    * returns just the show summary needed to render a card.
    */
   getPodcast(id: string): Promise<PodcastSummary>;
+  /**
+   * The Syra show for an Apple Podcasts collection id: Syra imports the show's
+   * feed if it does not have it yet. Rejects a non-numeric id before any request.
+   */
+  resolveApplePodcast(collectionId: string): Promise<ApplePodcastLink>;
   /**
    * Current public show cards for up to 100 ids, in one request.
    *
@@ -826,6 +833,18 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
         `/api/podcasts/${encodeURIComponent(id)}`,
       )) as PodcastDetailResponseShape;
       return checkResponse(podcastSummary, json?.data?.podcast, 'getPodcast');
+    },
+
+    async resolveApplePodcast(collectionId) {
+      if (!/^\d{1,15}$/.test(collectionId)) {
+        throw new TypeError(
+          `@syra.fm/sdk: resolveApplePodcast() takes a numeric Apple collection id, got "${collectionId}"`,
+        );
+      }
+      const json = (await getJson(`/api/podcasts/apple/${encodeURIComponent(collectionId)}`)) as {
+        data?: unknown;
+      };
+      return checkResponse(applePodcastLink, json?.data, 'resolveApplePodcast');
     },
 
     async getPublicPodcastCards(ids, cardOptions = {}) {

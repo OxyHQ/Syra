@@ -69,6 +69,14 @@ export type PodcastVisibility = (typeof PODCAST_VISIBILITIES)[number];
  * variant `url` is `/api/images/:id`); `imageSourceUrl` keeps the original
  * external artwork URL as an absolute fallback when re-hosting has not run yet.
  */
+/** A show as Syra knows it for an Apple Podcasts collection id. */
+export interface ApplePodcastLink {
+  /** Syra's id for the show. */
+  podcastId: string;
+  /** The show's page on Syra. */
+  url: string;
+}
+
 export interface PodcastSummary {
   id: string;
   title: string;
