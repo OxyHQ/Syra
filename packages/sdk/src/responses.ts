@@ -3,6 +3,7 @@ import {
   EPISODE_STATUSES,
   PODCAST_VISIBILITIES,
   PUBLIC_API_ERROR_CODES,
+  type ApplePodcastLink,
   type AudioUploadTarget,
   type CoverArtSizes,
   type CoverArtVariant,
@@ -69,6 +70,11 @@ export const trackSummary = object<TrackSummary>({
   coverArt: optional(string),
   coverArtSizes: optional(coverArtSizes),
   previewAvailable: optional(boolean),
+});
+
+export const applePodcastLink = object<ApplePodcastLink>({
+  podcastId: string,
+  url: string,
 });
 
 export const podcastSummary = object<PodcastSummary>({

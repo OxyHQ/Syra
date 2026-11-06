@@ -1457,3 +1457,35 @@ describe('createSyraClient deletes', () => {
     expect((await okClient.deletePodcast('p1')).objectsDeleted).toBe(2);
   });
 });
+
+describe('createSyraClient.resolveApplePodcast', () => {
+  it('fetches /api/podcasts/apple/:collectionId and validates data', async () => {
+    const { fetch, calls } = fakeFetch(() => ({
+      body: {
+        data: {
+          podcastId: '507f1f77bcf86cd799439021',
+          url: 'https://syra.fm/podcasts/507f1f77bcf86cd799439021',
+        },
+      },
+    }));
+    const client = createSyraClient({ baseURL: 'https://api.example.test', fetch });
+
+    const link = await client.resolveApplePodcast('1234567890');
+    expect(link.podcastId).toBe('507f1f77bcf86cd799439021');
+    expect(link.url).toBe('https://syra.fm/podcasts/507f1f77bcf86cd799439021');
+    expect(calls[0].url).toBe('https://api.example.test/api/podcasts/apple/1234567890');
+  });
+
+  it('refuses a collection id that is not numeric, before any request', async () => {
+    const { fetch, calls } = fakeFetch(() => ({ body: {} }));
+    const client = createSyraClient({ fetch });
+    await expect(client.resolveApplePodcast('../etc')).rejects.toThrow(TypeError);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('throws SyraApiError on a non-2xx response', async () => {
+    const { fetch } = fakeFetch(() => ({ status: 404, body: { error: 'not found' } }));
+    const client = createSyraClient({ fetch });
+    await expect(client.resolveApplePodcast('1234567890')).rejects.toBeInstanceOf(SyraApiError);
+  });
+});

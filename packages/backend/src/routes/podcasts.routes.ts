@@ -34,6 +34,7 @@ import {
   ingestEpisodeAudio,
 } from '../controllers/podcastIngest.controller';
 import { streamMediaCors } from '../middleware/streamMediaCors';
+import { openApplePodcast } from '../controllers/applePodcast.controller';
 
 /**
  * Mounted on the PUBLIC router with optional Oxy auth (server.ts). Reads are
@@ -112,6 +113,7 @@ router.post('/:id/unpublish', requireAuth, unpublishPodcast);
 router.delete('/:id', requireAuth, deletePodcast);
 
 // Show resolver (catch-last)
+router.get('/apple/:collectionId', openApplePodcast);
 router.get('/:id', getPodcast);
 
 export default router;
