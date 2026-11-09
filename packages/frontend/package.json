@@ -43,7 +43,7 @@
     }
   },
   "dependencies": {
-    "@alia.onl/sdk": "22.1.1",
+    "@alia.onl/sdk": "22.10.1",
     "@bitdrift/react-native": "^0.8.0",
     "@expo/app-integrity": "~58.0.2",
     "@expo/vector-icons": "^15.0.2",
@@ -51,11 +51,11 @@
     "@legendapp/list": "^2.0.14",
     "@livekit/react-native": "3.0.0",
     "@livekit/react-native-webrtc": "144.2.0",
-    "@oxy.so/app-preset": "^6.1.1",
-    "@oxy.so/bloom": "17.9.0",
-    "@oxy.so/core": "7.23.0",
-    "@oxy.so/expo-splash": "^1.0.0",
-    "@oxy.so/services": "14.4.0",
+    "@oxy.so/app-preset": "^6.2.0",
+    "@oxy.so/bloom": "17.14.1",
+    "@oxy.so/core": "7.30.0",
+    "@oxy.so/expo-splash": "^1.1.0",
+    "@oxy.so/services": "14.9.0",
     "@oxy.so/utils": "1.5.2",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/netinfo": "12.0.1",
@@ -134,7 +134,7 @@
     "zustand": "^5.0.8"
   },
   "devDependencies": {
-    "@oxy.so/ship": "2.0.0",
+    "@oxy.so/ship": "2.0.1",
     "@babel/core": "7.29.7",
     "@babel/plugin-transform-react-jsx": "7.29.7",
     "@babel/plugin-transform-typescript": "7.29.9",
