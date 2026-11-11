@@ -1,12 +1,12 @@
 {
   "frontendWeb": {
-    "initialJavaScriptBytes": 7937147,
-    "initialJavaScriptGzipBytes": 2100996,
-    "translationBytes": 1292326,
-    "translationGzipBytes": 439084,
-    "otherJavaScriptBytes": 2876015,
-    "otherJavaScriptGzipBytes": 836645,
-    "nonJavaScriptBytes": 2586654,
+    "initialJavaScriptBytes": 8380427,
+    "initialJavaScriptGzipBytes": 2220821,
+    "translationBytes": 1298352,
+    "translationGzipBytes": 440718,
+    "otherJavaScriptBytes": 61581936,
+    "otherJavaScriptGzipBytes": 13249247,
+    "nonJavaScriptBytes": 2586772,
     "fontBytes": 2105000
   },
   "notes": {
@@ -30,6 +30,7 @@
     "2026-11-04 Bloom 17.5.0": "Measured (bun run build:frontend, then bun ./scripts/check-web-export-budget.mjs) against main at services 14.3.4 / core 7.17.0, which measured 7,833,713 raw / 2,085,689 gzip initial locally (its budget, 2,085,690). Bloom 17.4.0 -> 17.5.0 alone (main's sources) grows the entry +4,841 raw / +2,276 gzip to 7,838,554 / 2,087,965: the shared hooks made public, haptics on Switch/Slider/SegmentedControl/Stepper and the other controls, the one live reduced-motion store and useNetworkStatus, which Metro keeps whether the app calls them or not. Adopting Bloom's useKeyboardVisible and writeClipboardText in place of the app's own copies takes back -555 raw / -427 gzip, to 7,837,999 / 2,087,538. Only the initial gzip ceiling changes (measured plus the 3-byte jitter); every other category is inside its ceiling.",
     "2026-11-05 services 14.3.8 / core 7.23.0 / contracts 6.9.0": "Measured (bun run build:frontend, then bun ./scripts/check-web-export-budget.mjs) against main at Bloom 17.5.0 / services 14.3.4 / core 7.17.0 (7,837,999 raw / 2,087,538 gzip initial locally): the SDK bump that the first signed Android release and Oxy Updates ship with grows the entry +2,015 raw / +867 gzip to 7,840,014 / 2,088,405, the services 14.3.5-14.3.8 and core 7.18-7.23 client changes Metro keeps whether the app calls them or not. expo-updates adds nothing to web (no app import). Only the initial gzip ceiling changes (measured plus the 3-byte jitter); every other category is inside its ceiling.",
     "2026-11-05 Bloom 17.9.0": "Measured as CI runs it (bun run build:frontend, then bun ./scripts/check-web-export-budget.mjs; local build reproduced CI: initial gzip 2,100,986 vs CI 2,100,989) against main's Bloom 17.5.0 built the same way (initial 7,840,014 raw / 2,088,397 gzip; translations 1,277,866 / 434,463; other deferred 2,871,355 / 835,276). The bump touches only @oxy.so/bloom 17.5.0 -> 17.9.0 (services and core unchanged). Initial +46,041 raw / +12,589 gzip (raw stays inside its ceiling); translations +14,460 raw / +4,618 gzip: Bloom's tarball changes the translation table of every language (diffed 17.5.0 vs 17.9.0 lib/module/locale/translations/*) and adds locale/formatter-cache plus the 17.6-17.9 work that Metro keeps whether the app renders it or not (LinkPreviewCard byline, avatar retry with backoff, the canonical-primitive consolidation of 17.7/17.8, openExternal, preference setting rows, RowActions). Other deferred JavaScript falls -16,160 raw / -3,048 gzip and assets -673, inside their ceilings. Only the three exceeded ceilings change (gzip keeps the 3-byte jitter). Tighten when Bloom offers narrower public entries and per-screen translations.",
-    "2026-11-05 services 14.4.0 / app-preset 6.1.1": "Measured as CI runs it (bun run build:frontend, then bun ./scripts/check-web-export-budget.mjs; local and CI both 2,100,993 initial gzip, every other metric identical). services 14.4.0 (#291, the native caller allow-list) took the initial gzip from CI's 2,100,989 to 2,100,992, the whole 3-byte jitter; app-preset 6.1.0 -> 6.1.1 (a build-time config plugin; nothing of it is in the bundle) moves it 1 byte to 2,100,993. Only the initial gzip ceiling changes (measured plus the 3-byte jitter); every other category is inside its ceiling."
+    "2026-11-05 services 14.4.0 / app-preset 6.1.1": "Measured as CI runs it (bun run build:frontend, then bun ./scripts/check-web-export-budget.mjs; local and CI both 2,100,993 initial gzip, every other metric identical). services 14.4.0 (#291, the native caller allow-list) took the initial gzip from CI's 2,100,989 to 2,100,992, the whole 3-byte jitter; app-preset 6.1.0 -> 6.1.1 (a build-time config plugin; nothing of it is in the bundle) moves it 1 byte to 2,100,993. Only the initial gzip ceiling changes (measured plus the 3-byte jitter); every other category is inside its ceiling.",
+    "2026-11-11 Bloom 17.50.0 / services 14.19.0 / core 7.48.0": "Measured locally as CI runs it (bun run build:frontend, then bun ./scripts/check-web-export-budget.mjs) against main's Bloom 17.9.0 / services 14.4.0 / core 7.23.0 budget: initial 8,380,427 raw / 2,220,818 gzip (+443,280 / +119,822 over the previous ceilings), translations 1,298,352 / 440,715, other deferred JavaScript 61,581,936 / 13,249,244 and non-JavaScript assets 2,586,772. The deferred jump is Bloom 17.22.0's SVG agent avatars (shape-*, eyes-*, template-* vector chunks, about 58 MB raw): Metro emits them as lazy chunks that load only when an avatar is rendered, so first paint does not pay for them. The remaining growth is Bloom 17.10-17.50 components and strings, services 14.5-14.19 and core 7.24-7.48 client code and locale tables, which Metro keeps whether the app calls them or not. Gzip ceilings keep the 3-byte jitter. Tighten when Bloom serves the avatar vectors from narrower entries."
   }
 }
