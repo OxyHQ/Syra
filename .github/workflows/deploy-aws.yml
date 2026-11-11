@@ -189,8 +189,10 @@ jobs:
       # so a change that would stop here fails before it can merge.
       - name: Refuse unreviewed image build inputs
         id: reviewed
-        run: python3 -B .github/scripts/reviewed-image.py guard --recipe syra
-
+        uses: OxyHQ/oxy/.github/actions/reviewed-image@main
+        with:
+          phase: guard
+          recipe: syra
       - name: Build and push (linux/arm64)
         id: build
         env:
