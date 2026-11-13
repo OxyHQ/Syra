@@ -174,12 +174,11 @@ background connections do not outlive the test; its timeout was not increased.
 
 ## Alia client transport
 
-The frontend source uses the published `@alia.onl/sdk` 22.0.0 with the existing
-Core 7.3 / services 13 stack. Alia owns conversation, history, streaming and audio
+The frontend uses the published `@gemies/sdk` (formerly `@alia.onl/sdk`), which talks to
+`https://api.gemies.ai`. Alia owns conversation, history, streaming and audio
 transport through the shared Oxy session; the app keeps its existing provider,
 agent selection and UI. No app-local bearer refresh or internal permission prompt
-is introduced. Package installation was checked against the published artifact;
-source adoption and deployment are separate rollout steps.
+is introduced.
 
 ### Realtime session follow-up
 
