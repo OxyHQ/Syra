@@ -2,8 +2,8 @@ import type React from 'react';
 import { useCallback, useMemo } from 'react';
 import { Pressable } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { AliaAskProvider, useAskAgent } from '@alia.onl/sdk/ask';
-import { AliaAvatarIcon } from '@alia.onl/sdk/avatar';
+import { GemieAskProvider, useAskGemie } from '@gemies/sdk/ask';
+import { GemieAvatarIcon } from '@gemies/sdk/avatar';
 import { useTheme } from '@oxy.so/bloom/theme';
 import { useOxy } from '@oxy.so/services/ui/client';
 import { useAuthGate } from '@/hooks/useAuthGate';
@@ -20,7 +20,7 @@ import { usePlayerStore } from '@/stores/playerStore';
  *
  * The sheet (and the Alia chat behind it) loads on the first press, not with
  * the entry bundle: everything here comes from the SDK's `ask` and `avatar`
- * leaf entries. Importing the root `@alia.onl/sdk` entry anywhere — even behind
+ * leaf entries. Importing the root `@gemies/sdk` entry anywhere — even behind
  * a lazy import — puts a second lazy chunk around the same chat, and Metro then
  * hoists the chat into the initial `__common` script.
  */
@@ -47,9 +47,9 @@ export const AskAlia: React.FC = () => {
   );
 
   return (
-    <AliaAskProvider clientContext={clientContext} welcomeSuggestions={welcomeSuggestions}>
+    <GemieAskProvider clientContext={clientContext} welcomeSuggestions={welcomeSuggestions}>
       <AskAliaButton />
-    </AliaAskProvider>
+    </GemieAskProvider>
   );
 };
 
@@ -58,7 +58,7 @@ const AskAliaButton: React.FC = () => {
   const theme = useTheme();
   const { openAccountDialog } = useOxy();
   const { canUsePrivateApi } = useAuthGate();
-  const { ask } = useAskAgent();
+  const { ask } = useAskGemie();
 
   const handlePress = useCallback(() => {
     if (!canUsePrivateApi) {
@@ -75,7 +75,7 @@ const AskAliaButton: React.FC = () => {
       accessibilityLabel={t('topbar.askAlia')}
       className="h-10 w-10 items-center justify-center rounded-full"
     >
-      <AliaAvatarIcon width={24} height={24} fill={theme.colors.text} />
+      <GemieAvatarIcon width={24} height={24} fill={theme.colors.text} />
     </Pressable>
   );
 };
