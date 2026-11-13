@@ -44,7 +44,8 @@ export function useRadioStation(seed: RadioSeed | null) {
       });
     },
     initialPageParam: null as string | null,
-    getNextPageParam: (lastPage) => lastPage.cursor,
+    getNextPageParam: (lastPage, _pages, _lastPageParam, pageParams) =>
+      lastPage.cursor && !pageParams.includes(lastPage.cursor) ? lastPage.cursor : null,
     enabled: isResolved && seed !== null,
     staleTime: Infinity,
     refetchOnWindowFocus: false,

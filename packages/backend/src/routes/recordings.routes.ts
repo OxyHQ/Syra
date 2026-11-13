@@ -1,17 +1,13 @@
 import { Router, type Response } from 'express';
 import { isLiveEntityId } from '@oxy.so/db';
 import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
-import {
-  findRecordingById,
-  listPublicRecordings,
-  updateRecording,
-  type PublicRecordingSort,
-} from '../db/rooms/recordings';
+import { findRecordingById, listPublicRecordings, updateRecording } from '../db/rooms/recordings';
 import { RecordingAccess, RecordingStatus } from '../db/rooms/types';
 import { describeErrorSafely } from '../utils/error';
 import { getParam } from '../utils/reqParams';
 import { logger } from '../utils/logger';
 import { deleteRecordingAudio, recordingPlaybackUrl } from '../services/oxyFiles/audioStorage';
+import { parseRecordingListQuery } from './recordingsQuery';
 
 const router = Router();
 
@@ -22,10 +18,7 @@ const router = Router();
  */
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
-    const { sortBy = 'recent', limit = '10' } = req.query;
-    const limitNum = Math.min(Math.max(parseInt(limit as string, 10) || 10, 1), 50);
-
-    const sort: PublicRecordingSort = sortBy === 'popular' ? 'popular' : 'recent';
+    const { sort, limit: limitNum } = parseRecordingListQuery(req.query);
 
     const recordings = await listPublicRecordings(sort, limitNum);
 
