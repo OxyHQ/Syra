@@ -694,3 +694,66 @@ it('compiled screen rejects a write while token B and visible user A disagree', 
   });
   expect(globalThis.fetch).not.toHaveBeenCalled();
 });
+
+it('AUDIT retries a POST that the server accepted when its response is lost', async () => {
+  let accepted = 0;
+  globalThis.fetch = jest.fn(async () => {
+    accepted += 1;
+    if (accepted === 1) throw new TypeError('Connection lost after server accepted the POST');
+    return response();
+  }) as typeof fetch;
+  await act(async () => {
+    renderer.root.findByProps({ placeholder: 'createPlaylist.namePlaceholder' }).props.onChangeText('Alice private playlist');
+  });
+  await act(async () => {
+    renderer.root.findByProps({ testID: 'create-playlist-submit' }).props.onPress();
+    await new Promise(resolve => setTimeout(resolve, 30));
+  });
+  expect(accepted).toBe(2);
+});
+
+it('AUDIT rejects a retry after A was accepted and the account changes before retry', async () => {
+  let fail!: (error: Error) => void;
+  let accepted = 0;
+  globalThis.fetch = jest.fn(() => {
+    accepted += 1;
+    return new Promise<Response>((_resolve, reject) => { fail = reject; });
+  }) as typeof fetch;
+  await act(async () => {
+    renderer.root.findByProps({ placeholder: 'createPlaylist.namePlaceholder' }).props.onChangeText('Alice private playlist');
+  });
+  await act(async () => {
+    renderer.root.findByProps({ testID: 'create-playlist-submit' }).props.onPress();
+    await tick();
+  });
+  expect(accepted).toBe(1);
+  await act(async () => {
+    mockOxy.session.setAccessToken(token('bob'));
+    mockVisibleUser = 'bob';
+    persistence.activate('bob');
+    renderer.update(<QueryClientProvider client={client}><CreatePlaylistScreen /></QueryClientProvider>);
+    fail(new TypeError('Connection lost after server accepted the POST'));
+    await new Promise(resolve => setTimeout(resolve, 30));
+  });
+  expect(accepted).toBe(1);
+  expect(renderer.root.findByProps({ placeholder: 'createPlaylist.namePlaceholder' }).props.value).toBe('');
+  expect(mockToast.success).not.toHaveBeenCalled();
+});
+
+it('AUDIT preserves the draft and warns after an ambiguous response without retrying', async () => {
+  let accepted = 0;
+  globalThis.fetch = jest.fn(async () => {
+    accepted += 1;
+    throw new TypeError('Connection lost after server accepted the POST');
+  }) as typeof fetch;
+  await act(async () => {
+    renderer.root.findByProps({ placeholder: 'createPlaylist.namePlaceholder' }).props.onChangeText('Alice private playlist');
+  });
+  await act(async () => {
+    renderer.root.findByProps({ testID: 'create-playlist-submit' }).props.onPress();
+    await new Promise(resolve => setTimeout(resolve, 30));
+  });
+  expect(accepted).toBe(1);
+  expect(renderer.root.findByProps({ placeholder: 'createPlaylist.namePlaceholder' }).props.value).toBe('Alice private playlist');
+  expect(renderer.root.findByProps({ accessibilityRole: 'alert' }).props.children).toBe('createPlaylist.verifyBeforeRetry');
+});

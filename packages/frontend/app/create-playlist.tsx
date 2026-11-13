@@ -114,11 +114,13 @@ function CreatePlaylistForm({
   const [coverArt, setCoverArt] = useState<string | null>(null);
   const [visibility, setVisibility] = useState<PlaylistVisibility>(PlaylistVisibility.PRIVATE);
   const [errors, setErrors] = useState<FormErrors>({});
-  const { needsRetry, clearRetry } = usePlaylistOwnerRetry(owner);
+  const { needsRetry, markRetry, clearRetry } = usePlaylistOwnerRetry(owner);
   function ownsAction() {
     return currentOwner.current === owner && ownsPlaylistSession(sessionKey, accountId);
   }
   const createPlaylistMutation = useMutation({
+    // The server does not deduplicate creates when the response is lost.
+    retry: false,
     mutationFn: (input: z.infer<typeof createPlaylistFormSchema>) => {
       if (!ownsAction()) throw new Error('Session changed');
       return musicService.createPlaylist({
@@ -135,6 +137,7 @@ function CreatePlaylistForm({
     },
     onError: (error: unknown) => {
       if (!ownsAction()) return;
+      markRetry();
       console.error('Failed to create playlist:', error);
       toast.error(getErrorMessage(error) || 'Failed to create playlist. Please try again.');
     },
