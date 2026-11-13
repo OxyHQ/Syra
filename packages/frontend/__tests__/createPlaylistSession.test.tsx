@@ -778,3 +778,13 @@ it.each([false, true])(
     expect(mockToast.error).not.toHaveBeenCalled();
   },
 );
+
+it('AUDIT double invocation before rerender submits two independent POSTs', async () => {
+  globalThis.fetch = jest.fn(() => new Promise<Response>(() => {})) as typeof fetch;
+  await act(async () => {
+    renderer.root.findByProps({ placeholder: 'createPlaylist.namePlaceholder' }).props.onChangeText('Alice playlist');
+  });
+  const press = renderer.root.findByProps({ testID: 'create-playlist-submit' }).props.onPress;
+  await act(async () => { press(); press(); await tick(); });
+  expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+});
