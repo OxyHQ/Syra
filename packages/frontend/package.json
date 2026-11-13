@@ -52,9 +52,9 @@
     "@livekit/react-native": "3.0.0",
     "@livekit/react-native-webrtc": "144.2.0",
     "@oxy.so/app-preset": "^6.6.0",
-    "@oxy.so/bloom": "17.50.0",
+    "@oxy.so/bloom": "18.1.1",
     "@oxy.so/core": "7.48.0",
-    "@oxy.so/expo-splash": "^1.0.0",
+    "@oxy.so/expo-splash": "^1.1.0",
     "@oxy.so/services": "14.19.1",
     "@oxy.so/utils": "1.5.2",
     "@react-native-async-storage/async-storage": "2.2.0",
@@ -134,7 +134,7 @@
     "zustand": "^5.0.8"
   },
   "devDependencies": {
-    "@oxy.so/ship": "2.0.0",
+    "@oxy.so/ship": "2.0.1",
     "@babel/core": "7.29.7",
     "@babel/plugin-transform-react-jsx": "7.29.7",
     "@babel/plugin-transform-typescript": "7.29.9",
