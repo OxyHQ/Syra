@@ -2,7 +2,7 @@ import { createPublicPodcastCardsRouter } from './src/routes/publicPodcastCards.
 import { publicOpenApi } from '@syra.fm/contracts';
 import { env } from './src/config/env';
 import { trustLoadBalancer } from './src/config/trustProxy';
-import { startPlatformActivity } from './src/services/platformActivity';
+import { createAwsWorkloadCredentialProvider } from '@oxy.so/core/server/aws';
 
 import express from 'express';
 import http from 'http';
@@ -10,7 +10,11 @@ import compression from 'compression';
 import { apiCors, socketCors } from './src/middleware/apiCors';
 import { securityHeaders } from './src/middleware/securityHeaders';
 import { Server as SocketIOServer, type Socket, type Namespace } from 'socket.io';
-import { createOptionalOxyAuth, createOxyRateLimit } from '@oxy.so/core/server';
+import {
+  createOptionalOxyAuth,
+  createOxyRateLimit,
+  startEcosystemTraffic,
+} from '@oxy.so/core/server';
 import { oxy } from './src/oxyClient';
 
 import { connectPostgres, isPostgresConnected } from './src/db/postgres';
@@ -69,9 +73,14 @@ import { startExpirySweeper } from './src/services/uploads/expirySweeper';
 import { startAbandonedAudioUploadSweeper } from './src/services/uploads/directAudioUpload';
 
 let activityReady = false;
-const activity = startPlatformActivity(() => activityReady && isPostgresConnected());
+const activity = startEcosystemTraffic({
+  service: 'syra',
+  ready: () => activityReady && isPostgresConnected(),
+  workloadCredentials: createAwsWorkloadCredentialProvider(),
+  deployedOnly: true,
+});
 const app = express();
-if (activity) app.use(activity.observeHttp);
+app.use(activity.observeHttp);
 
 trustLoadBalancer(app);
 
@@ -213,7 +222,7 @@ const io = new SocketIOServer(server, {
 // (e.g. `emitLiveRoomsUpdated`) can reach connected clients.
 initializeIO(io);
 const observeNamespace = (namespace: Namespace) => {
-  namespace.on('connection', (socket) => activity?.observeSocket(socket));
+  namespace.on('connection', (socket) => activity.observeSocket(socket));
 };
 observeNamespace(io.of('/'));
 io.on('new_namespace', observeNamespace);
@@ -536,7 +545,7 @@ async function shutdown() {
   timeout.unref();
   const httpClosed = new Promise<void>((resolve) => server.close(() => resolve()));
   await Promise.all([httpClosed, new Promise<void>((resolve) => io.close(() => resolve()))]);
-  await activity?.stop();
+  await activity.stop();
   stopOxyFilesWorkers();
   clearTimeout(timeout);
   process.exit(0);
