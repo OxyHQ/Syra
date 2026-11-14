@@ -1,0 +1,9 @@
+# The service worker files must revalidate on every load: the syra.fm zone
+# otherwise gives .js responses a 4-hour browser TTL, which would hold a new
+# deploy's worker back. oxy-web-pwa (@oxy.so/app-preset) writes these files.
+/sw.js
+  Cache-Control: no-cache
+/oxy-sw-base.js
+  Cache-Control: no-cache
+/oxy-sw-register.js
+  Cache-Control: no-cache
