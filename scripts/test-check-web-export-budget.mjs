@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -31,8 +31,11 @@ function fixture({
   entry = 'globalThis.value = 1;',
   entrySource = '/app/index.ts',
   languageSource = locale,
+  extra = {},
+  inventoryFails = false,
 } = {}) {
   writeFileSync(join(dist, 'index.html'), '<script src="/entry.js" defer></script>');
+  for (const [name, code] of Object.entries(extra)) writeFileSync(join(dist, name), code);
   writeFileSync(join(dist, 'icons.ttf'), Buffer.alloc(16));
   for (const [name, code, source] of [
     ['entry.js', entry, entrySource],
@@ -47,6 +50,10 @@ function fixture({
   const result = spawnSync(process.execPath, [INVENTORY, dist, inventoryFile], {
     encoding: 'utf8',
   });
+  if (inventoryFails) {
+    assert.notEqual(result.status, 0, 'a script without a source map must fail the inventory');
+    return;
+  }
   assert.equal(result.status, 0, result.stderr);
   assert.equal(existsSync(join(dist, 'entry.js.map')), false, 'maps must not ship');
 }
@@ -82,6 +89,17 @@ assert.match(run().stderr, /stale source-map inventory/, 'stale provenance fails
 fixture();
 writeFileSync(join(dist, 'index.html'), '<div>No scripts</div>');
 assert.match(run().stderr, /No initial script/, 'missing entry cannot report zero initial bytes');
+fixture({ extra: { 'oxy-sw-register.js': 'navigator.serviceWorker.register("/sw.js");' } });
+setBudget();
+assert.equal(run().status, 0, 'the oxy-web-pwa worker files are inventoried without a map');
+assert.equal(
+  JSON.parse(readFileSync(inventoryFile, 'utf8'))['oxy-sw-register.js'].translation,
+  false,
+  'a worker file is never a translation',
+);
+rmSync(join(dist, 'oxy-sw-register.js'));
+fixture({ extra: { 'unmapped.js': 'globalThis.hidden = 1;' }, inventoryFails: true });
+rmSync(join(dist, 'unmapped.js'));
 console.log(
   'Web-export budget mutations detected: initial, locale provenance, stale inventory and assets.',
 );
