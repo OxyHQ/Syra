@@ -20,6 +20,7 @@ bun run validate:agents-md       # AGENTS.md size budget (CI: Quality)
 
 - `packages/`: `frontend` (Expo, syra.fm), `backend` (Express API, api.syra.fm), `studio` (creator portal), `sdk` (`@syra.fm/sdk`), `shared-types`, `contracts`.
 - Docs index: [docs/README.md](docs/README.md). Rules that used to live here: [docs/agent-rules/](docs/agent-rules/).
+- Generated episodes and the public MCP server (`api.syra.fm/mcp`): [podcast-generation](docs/podcast-generation.md), [mcp](docs/mcp.md); inference only through `@kaana.ai/sdk` ([ai-routing](docs/ai-routing.md)).
 - Inter-product calls and cutover status: [docs/architecture/first-party-platform.md](docs/architecture/first-party-platform.md), [docs/first-party-sdk.md](docs/first-party-sdk.md).
 - Runbooks: [docs/runbooks/](docs/runbooks/).
 

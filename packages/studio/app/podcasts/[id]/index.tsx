@@ -29,6 +29,10 @@ function ShowDetail({ id }: { id: string }) {
     () => router.push({ pathname: '/podcasts/[id]/upload', params: { id } }),
     [router, id],
   );
+  const goToGenerate = useCallback(
+    () => router.push({ pathname: '/podcasts/[id]/generate', params: { id } }),
+    [router, id],
+  );
 
   const title = data?.podcast.title ?? '';
 
@@ -113,15 +117,29 @@ function ShowDetail({ id }: { id: string }) {
       subtitle={podcast.author ?? undefined}
       onBack={() => router.back()}
       actions={
-        <Button
-          size="sm"
-          onPress={goToUpload}
-          icon={<MaterialCommunityIcons name="upload" size={18} color="#fff" />}
-          tone="accent"
-          appearance="solid"
-        >
-          Upload
-        </Button>
+        <View className="flex-row gap-2">
+          {owned ? (
+            <Button
+              size="sm"
+              onPress={goToGenerate}
+              icon={<MaterialCommunityIcons name="creation" size={18} />}
+              tone="neutral"
+              appearance="outline"
+              testID="generate-episode-link"
+            >
+              Generate
+            </Button>
+          ) : null}
+          <Button
+            size="sm"
+            onPress={goToUpload}
+            icon={<MaterialCommunityIcons name="upload" size={18} color="#fff" />}
+            tone="accent"
+            appearance="solid"
+          >
+            Upload
+          </Button>
+        </View>
       }
     >
       <View className="flex-row gap-4 mb-6">

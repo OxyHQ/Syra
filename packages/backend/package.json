@@ -30,11 +30,15 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1087.0",
+    "@aws-sdk/credential-provider-node": "3.972.84",
     "@aws-sdk/s3-request-presigner": "^3.1087.0",
     "@crowdsource.you/contracts": "1.1.1",
     "@crowdsource.you/core": "3.1.0",
+    "@kaana.ai/sdk": "3.16.0",
+    "@oxy.so/contracts": "7.1.0",
     "@oxy.so/core": "7.51.0",
     "@oxy.so/db": "^1.5.0",
+    "@oxy.so/mcp": "1.4.3",
     "@oxy.so/utils": "1.5.2",
     "@socket.io/redis-adapter": "^8.2.0",
     "@syra.fm/contracts": "workspace:*",
@@ -69,8 +73,7 @@
     "socket.io": "^4.8.1",
     "url-metadata": "^5.7.4",
     "validator": "^13.15.22",
-    "zod": "^4.6.7",
-    "@aws-sdk/credential-provider-node": "3.972.84"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/bun": "^1.4.2",

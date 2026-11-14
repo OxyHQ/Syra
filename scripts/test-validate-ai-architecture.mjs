@@ -141,6 +141,14 @@ const cases = [
     output: 'names direct inference data-plane endpoint kaana.ai',
   },
   {
+    name: 'the canonical Kaana SDK is accepted',
+    files: cleanTree({
+      'packages/backend/src/inference.ts':
+        "const { kaanaForOxyService } = await import('@kaana.ai/sdk/server');\n",
+    }),
+    fails: false,
+  },
+  {
     name: 'a retired Relay endpoint in documentation is rejected',
     files: cleanTree({
       'README.md': 'Send inference requests to https://relay.oxy.so/v1/responses.\n',

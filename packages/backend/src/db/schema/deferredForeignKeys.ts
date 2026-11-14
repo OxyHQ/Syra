@@ -61,6 +61,10 @@ export const DEFERRED_FOREIGN_KEYS: readonly DeferredForeignKey[] = [];
 export const ID_COLUMNS_WITHOUT_FOREIGN_KEY: readonly { column: string; reason: string }[] = [
   // ── CROSS-SERVICE: Oxy account ids, owned by oxy-api, never a Syra row ────
   {
+    column: 'episode_generations.requested_by_oxy_user_id',
+    reason: 'The Oxy account that asked for a generated episode; its caps count by it.',
+  },
+  {
     column: 'playlist_activity.actor_oxy_user_id',
     reason: 'Authenticated Oxy account that performed the playlist action.',
   },

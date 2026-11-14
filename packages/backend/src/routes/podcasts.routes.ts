@@ -33,6 +33,11 @@ import {
   createEpisodeIngestUpload,
   ingestEpisodeAudio,
 } from '../controllers/podcastIngest.controller';
+import {
+  generateEpisode,
+  getEpisodeGeneration,
+  listPodcastGenerations,
+} from '../controllers/episodeGeneration.controller';
 import { streamMediaCors } from '../middleware/streamMediaCors';
 import { openApplePodcast } from '../controllers/applePodcast.controller';
 
@@ -56,6 +61,8 @@ router.get('/mine', requireAuth, getMyPodcasts);
 // Origin) can fetch the manifest, variant playlists, and key cross-origin. The
 // `/stream` resolver stays bearer-authed with the global credentialed CORS.
 router.get('/episodes/:id/audio', getEpisodeAudio);
+// A generated episode's job (docs/podcast-generation.md). Owner only.
+router.get('/episodes/:id/generation', requireAuth, getEpisodeGeneration);
 router.get('/episodes/:id/stream', getEpisodeStream);
 router.options('/episodes/:id/master.m3u8', streamMediaCors);
 router.get('/episodes/:id/master.m3u8', streamMediaCors, getEpisodeMasterPlaylist);
@@ -99,6 +106,9 @@ router.post('/:id/episodes', requireAuth, uploadEpisode);
 // the same reason every other subresource is, though it cannot collide with
 // `/episodes/:id/ingest` — the literal segments sit in different positions.
 router.post('/:id/episodes/draft', requireAuth, createEpisodeDraft);
+// Write and voice an episode of the caller's own show; 202 while it is made.
+router.post('/:id/episodes/generate', requireAuth, generateEpisode);
+router.get('/:id/generations', requireAuth, listPodcastGenerations);
 router.post('/:id/claim', requireAuth, claimPodcast);
 router.patch('/:id', requireAuth, updatePodcast);
 router.post('/:id/publish', requireAuth, publishPodcast);

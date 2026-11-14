@@ -39,7 +39,12 @@ import { descNullsLast } from '../catalog/containers';
 import { textSearch } from '../catalog/search';
 import { setEpisodeHlsRenditions, setEpisodePersons, setEpisodeTranscripts } from './children';
 import { episodeCreditsPerson, type CreditIdentity } from './persons';
-import { publiclyPlayableEpisodeFilter, showIsReadableByViewer } from './visibility';
+import {
+  publiclyPlayableEpisodeFilter,
+  showIsReadableByViewer,
+  viewerCanReadShow,
+  viewerOwnsShow,
+} from './visibility';
 import type { EpisodeRow, PodcastRow } from './serialize';
 
 /**
@@ -122,6 +127,22 @@ export async function findEpisodeById(id: string): Promise<EpisodeWithShow | und
     .where(eq(episodes.id, id))
     .limit(1);
   return row;
+}
+
+/**
+ * One episode as `viewerId` may see it, or `undefined`: its show must be
+ * readable by them, and only the owner sees an episode that is not `ready`
+ * (the single-episode reading of `episodeVisibilityFilter`). "Not yours" and
+ * "no such episode" are the same answer.
+ */
+export async function findEpisodeForViewer(
+  id: string,
+  viewerId: string | null | undefined,
+): Promise<EpisodeWithShow | undefined> {
+  const found = await findEpisodeById(id);
+  if (!found || !viewerCanReadShow(found.show, viewerId)) return undefined;
+  if (!viewerOwnsShow(found.show, viewerId) && found.episode.status !== 'ready') return undefined;
+  return found;
 }
 
 /**

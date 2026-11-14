@@ -100,6 +100,7 @@ const DTO_FOR_TABLE: Record<string, keyof typeof dtos> = {
   contributionAttestations: 'contributionAttestationSchema',
   devices: 'deviceSchema',
   lyrics: 'lyricsSchema',
+  episodeGenerations: 'episodeGenerationSchema',
 };
 
 /**
@@ -113,6 +114,8 @@ const DTO_FOR_TABLE: Record<string, keyof typeof dtos> = {
  */
 const TABLES_WITHOUT_DTO: Record<string, string> = {
   oxyFileTaskRevocations: 'internal durable authority-revocation outbox; never a user DTO',
+  podcastGenerationProfiles:
+    'server-internal — what a show is about and who speaks in it, read only by the generation pipeline',
   // Child tables — the parent DTO nests these as arrays; see CHILD_TABLE below.
   albumGenres: 'child of albums — albumSchema.genre',
   albumSources: 'child of albums — albumSchema.sources',

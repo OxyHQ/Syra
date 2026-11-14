@@ -71,6 +71,7 @@ import { startPodcastRefreshScheduler } from './src/services/podcasts/podcastRef
 import { startIngestWorker } from './src/services/ingest/ingestQueue';
 import { startExpirySweeper } from './src/services/uploads/expirySweeper';
 import { startAbandonedAudioUploadSweeper } from './src/services/uploads/directAudioUpload';
+import { mountMcp, registerMcpCatalog } from './src/mcp';
 
 let activityReady = false;
 const activity = startEcosystemTraffic({
@@ -85,6 +86,10 @@ app.use(activity.observeHttp);
 trustLoadBalancer(app);
 
 app.use(securityHeaders);
+// The public MCP endpoint (docs/mcp.md), ahead of the API's CORS, rate limit and
+// JSON parser: it reads its own body, answers its own CORS and authenticates
+// every request with an Oxy-issued token.
+mountMcp(app);
 app.use(apiCors);
 app.use(
   '/api/podcasts/public-cards',
@@ -512,6 +517,10 @@ const bootServer = async () => {
   // nightly, and flush the legacy-image-read counts the bucket retirement waits
   // on. See services/oxyFiles/workers.ts.
   startOxyFilesWorkers();
+
+  // Oxy issues MCP tokens only for a resource a registered catalogue declares.
+  // Retries until Oxy accepts it; never blocks the boot.
+  if (env.NODE_ENV === 'production') void registerMcpCatalog();
 
   // Drain the moderation outbox. Deliberately NOT lock-guarded like the two
   // schedulers above: every event is claimed under a Postgres lease with an owner
