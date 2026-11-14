@@ -13,11 +13,11 @@ PoPs, direction, scope, category and aggregate counts. It never sends payloads,
 paths, query strings, IPs, user IDs, credentials or socket IDs. A Cloudflare PoP
 is a network ingress location, not a visitor's physical location.
 
-`OXY_ECOSYSTEM_ACTIVITY_ENABLED=true` explicitly enables the deployed producer; it is disabled by default. Keep it false in local environments, even when using AWS storage.
+`packages/backend/server.ts` starts the producer with one `startEcosystemTraffic` call from `@oxy.so/core/server` (`deployedOnly: true`). `OXY_ECOSYSTEM_ACTIVITY_ENABLED` is `true` or `false` when set (anything else stops the process at startup) and wins; unset, it publishes only where the process can attest its ECS workload identity, so a local environment with AWS storage publishes nothing. The production task sets `true`.
 
 `AWS_REGION` supplies the process location. Publication uses temporary workload
 identity through the shared Oxy producer and its AWS credential provider
-(`packages/backend/src/services/platformActivity.ts`). ECS task roles and other
+(`createAwsWorkloadCredentialProvider()`). ECS task roles and other
 registered temporary assumed-role credentials are authenticated by Oxy's live
 workload binding; customer API keys are not an alternative for this own producer.
 Do not provision `OXY_ACTIVITY_API_KEY`/`OXY_ACTIVITY_API_SECRET` or
