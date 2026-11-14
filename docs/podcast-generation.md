@@ -65,11 +65,13 @@ that person and admitted by Oxy under Syra's terms; Syra keeps no ledger of its 
 
 ## Audio ownership
 
-From Studio, the owner's session is on the request, so the episode gets an Oxy file task like
-an upload and the finished audio becomes the owner's own Oxy file. An MCP connection carries
-no session, so its episodes keep Syra's copy of the audio (the progressive `/audio` path for a
-private show, the HLS ladder for a public one) until Oxy offers MCP callers a way to admit a
-personal file.
+The finished audio becomes the show owner's own Oxy file, from Studio and from MCP alike.
+Syra's entry in oxy's first-party registry declares `oxy:files` write, so Syra names the
+account (`oxy.assets.actingFor`, oxy ADR 0066) and Oxy checks it live; no session or task is
+kept, so the copy made later by the ingest works the same. When a person operates the show's
+account (an organization), `episodes.operator_oxy_user_id` records them and Syra names them
+beside it. If Oxy refuses, the episode keeps Syra's copy of the audio (the progressive
+`/audio` path for a private show, the HLS ladder for a public one).
 
 ## Routes
 

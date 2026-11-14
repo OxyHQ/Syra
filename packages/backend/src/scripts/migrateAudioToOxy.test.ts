@@ -1,10 +1,3 @@
-import type { OxyAuthRequest } from '@oxy.so/core/server';
-import {
-  verifiedAudioSession,
-  installFileTaskAuthorityFixture,
-  resetFileTaskAuthorityFixture,
-} from '../test/fileTaskAuthority';
-import { createFileTask } from '../services/oxyFiles/taskAuthority';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
 import { writeFileSync } from 'node:fs';
 import { sql } from 'drizzle-orm';
@@ -38,14 +31,12 @@ async function stage(key: string, localPath: string): Promise<boolean> {
 
 beforeAll(connectDb);
 beforeEach(() => {
-  installFileTaskAuthorityFixture();
   fake = installFakeOxyFiles();
   fake.localUsers.add('owner');
   fake.localUsers.add('host');
   bucket.clear();
 });
 afterEach(async () => {
-  resetFileTaskAuthorityFixture();
   delete process.env.OXY_AUDIO;
   resetOxyFiles();
   await clearDb();
@@ -112,28 +103,19 @@ describe('migrateAudioToOxy', () => {
     expect(fake.files.size).toBe(0);
   });
 
-  it('copies each kind with original personal admission proof, and a re-run finds nothing left', async () => {
+  it("copies each kind into its owner's account, and a re-run finds nothing left", async () => {
     await seed();
-    const requester = {} as OxyAuthRequest;
-    verifiedAudioSession(requester, 'owner');
-    const uploadTask = await createFileTask(requester, 'upload-1');
-    verifiedAudioSession(requester, 'host');
-    const episodeTask = await createFileTask(requester, 'ep-hosted');
+    // The show's account is operated by a person, who is named beside it.
     await getDb().execute(
-      sql`update user_uploads set oxy_task_id = ${uploadTask} where id = 'upload-1'`,
-    );
-    await getDb().execute(
-      sql`update episodes set oxy_task_id = ${episodeTask} where id = 'ep-hosted'`,
+      sql`update episodes set operator_oxy_user_id = 'person' where id = 'ep-hosted'`,
     );
     const outcomes = Object.fromEntries((await run(true)).map((line) => [line.id, line]));
 
     expect(outcomes['track-1']).toMatchObject({ outcome: 'copied', owner: 'application' });
     expect(outcomes['track-gone']).toMatchObject({ outcome: 'missing_object' });
     expect(outcomes['upload-1']).toMatchObject({ outcome: 'copied', owner: 'account' });
-    expect(outcomes['upload-stranger']).toMatchObject({
-      outcome: 'failed',
-      error: 'Personal audio copy awaits original requester authority',
-    });
+    // A person Oxy does not know cannot own the file, and it is not Syra's.
+    expect(outcomes['upload-stranger']).toMatchObject({ outcome: 'owner_unknown', status: 403 });
     expect(outcomes['ep-hosted']).toMatchObject({ outcome: 'copied', owner: 'account' });
     expect(outcomes['ep-rss']).toMatchObject({ outcome: 'copied', owner: 'application' });
     expect(outcomes['ep-rss-dead']).toMatchObject({ outcome: 'copied', owner: 'application' });
@@ -142,6 +124,12 @@ describe('migrateAudioToOxy', () => {
     const upload = fake.files.get(outcomes['upload-1'].fileId!)!;
     expect(upload).toMatchObject({ ownerUserId: 'owner', visibility: 'private' });
     expect(fake.files.get(outcomes['ep-hosted'].fileId!)!.ownerUserId).toBe('host');
+    expect(fake.calls.filter((call) => call.method === 'actingFor').map((c) => c.args)).toEqual(
+      expect.arrayContaining([
+        [{ accountId: 'owner' }],
+        [{ accountId: 'host', requesterAccountId: 'person' }],
+      ]),
+    );
     // The live enclosure was imported by URL; the dead one uploaded from the cache.
     expect(fake.calls.filter((call) => call.method === 'importAppFile')).toHaveLength(2);
 
@@ -160,37 +148,8 @@ describe('migrateAudioToOxy', () => {
     const again = await run(true);
     expect(again.map((line) => `${line.id}:${line.outcome}`)).toEqual([
       'track-gone:missing_object',
-      'upload-stranger:failed',
+      'upload-stranger:owner_unknown',
     ]);
-  });
-
-  it('retains historical personal audio without inventing authority from its owner', async () => {
-    await seed();
-    const outcomes = Object.fromEntries((await run(true)).map((line) => [line.id, line]));
-    for (const id of ['upload-1', 'ep-hosted']) {
-      expect(outcomes[id]).toMatchObject({
-        outcome: 'failed',
-        error: 'Personal audio copy awaits original requester authority',
-      });
-    }
-    const [upload] = await getDb().execute(
-      sql`select audio_file_id, oxy_task_id, audio_source_key from user_uploads where id = 'upload-1'`,
-    );
-    const [episode] = await getDb().execute(
-      sql`select audio_file_id, oxy_task_id, audio_source_url from episodes where id = 'ep-hosted'`,
-    );
-    expect(upload).toMatchObject({
-      audio_file_id: null,
-      oxy_task_id: null,
-      audio_source_key: 'uploads/owner/upload-1.flac',
-    });
-    expect(episode).toMatchObject({
-      audio_file_id: null,
-      oxy_task_id: null,
-      audio_source_url: '/x',
-    });
-    expect(outcomes['track-1']).toMatchObject({ outcome: 'copied', owner: 'application' });
-    expect(fake.calls.some((call) => call.method === 'uploadUserMedia')).toBe(false);
   });
 
   it('changes nothing when Oxy has no stage 4c: every unit fails, every row keeps its legacy path', async () => {

@@ -1,4 +1,3 @@
-import type { RequesterProof } from '@oxy.so/core/server';
 /**
  * Syra's audio in Oxy Files (OxyHQ/oxy ADR 0043, stage 4c) — the Oxy half of
  * the audio seam. Imported by `audioStorage.ts` ONLY
@@ -50,6 +49,7 @@ import {
 import { logger } from '../../utils/logger';
 import { describeErrorSafely } from '../../utils/error';
 import { oxyFiles } from './client';
+import { ownerActingFor } from './actingFor';
 
 // ── Mode ──────────────────────────────────────────────────────────────────────
 
@@ -254,12 +254,16 @@ async function markLadderReady(fileId: string): Promise<void> {
 // ── Storing ──────────────────────────────────────────────────────────────────
 
 export interface StoreAudioInput {
-  requester?: RequesterProof;
   entity: AudioEntity;
   /** The original, on local disk. */
   localPath: string;
   mime: string;
   owner: AudioOwner;
+  /**
+   * The person who operated a personal owner's account (an organization) when
+   * the row was made; Syra names them to Oxy beside the owner (oxy ADR 0066).
+   */
+  operatorOxyUserId?: string | null;
   /** The original's name, for the person's file manager. */
   filename?: string;
   /** Where Oxy's 30-second preview starts (Syra's default clip starts at 0). */
@@ -274,17 +278,16 @@ export interface StoreAudioInput {
  * {@link mirrorAudioToOxy}.
  */
 export async function storeAudioInOxy(input: StoreAudioInput): Promise<StoredOxyAudio> {
-  if (
-    input.owner.kind === 'account' &&
-    (!input.requester || input.requester.accountId !== input.owner.oxyUserId)
-  ) {
-    throw new Error('Personal audio copy awaits original requester authority');
-  }
   const size = statSync(input.localPath).size;
   const sha256 = input.sha256 ?? (await sha256OfFile(input.localPath));
   const entityType = AUDIO_REFERENCE_ENTITY_TYPES[input.entity.kind];
   const audio = { previewStartSeconds: input.previewStartSeconds ?? 0 };
-  const api = input.requester ? oxyFiles().withRequester(input.requester) : oxyFiles();
+  // A person's file is written on Syra's declared `oxy:files` authority for
+  // that account (oxy ADR 0066); Syra's own files need no account named.
+  const api =
+    input.owner.kind === 'account'
+      ? oxyFiles().actingFor(ownerActingFor(input.owner.oxyUserId, input.operatorOxyUserId ?? null))
+      : oxyFiles();
 
   let stored: StoredOxyAudio;
   if (size <= SINGLE_REQUEST_MAX_BYTES) {

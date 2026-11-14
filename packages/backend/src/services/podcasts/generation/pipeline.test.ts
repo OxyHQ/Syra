@@ -141,9 +141,6 @@ async function ownedShow(id: string) {
   return show;
 }
 
-const noTask = <T>(_episodeId: string, write: (oxyTaskId: string | null) => Promise<T>) =>
-  write(null);
-
 beforeAll(async () => {
   await connectDb();
 });
@@ -167,7 +164,7 @@ describe('requestEpisodeGeneration', () => {
       show,
       requesterId: OWNER,
       request: {},
-      fileTask: noTask,
+      operatorOxyUserId: null,
       deps: requestDeps(kaana),
     });
     expect(result.ok).toBe(true);
@@ -186,7 +183,7 @@ describe('requestEpisodeGeneration', () => {
   it("numbers episodes after the show's highest", async () => {
     const kaana = fakeKaana();
     const show = await ownedShow(await insertShow());
-    const args = { show, requesterId: OWNER, fileTask: noTask, deps: requestDeps(kaana) };
+    const args = { show, requesterId: OWNER, operatorOxyUserId: null, deps: requestDeps(kaana) };
     await requestEpisodeGeneration({ ...args, request: {} });
     const second = await requestEpisodeGeneration({ ...args, request: { topic: 'Queens' } });
     expect(second.ok && second.episode.episodeNumber).toBe(2);
@@ -199,7 +196,7 @@ describe('requestEpisodeGeneration', () => {
       show,
       requesterId: OWNER,
       request: {},
-      fileTask: noTask,
+      operatorOxyUserId: null,
       deps: requestDeps(fakeKaana()),
     });
     expect(result).toMatchObject({ ok: false, code: 'brief_required' });
@@ -212,7 +209,7 @@ describe('requestEpisodeGeneration', () => {
     const args = {
       show,
       requesterId: OWNER,
-      fileTask: noTask,
+      operatorOxyUserId: null,
       deps: requestDeps(kaana),
       request: {},
     };
@@ -231,7 +228,7 @@ describe('requestEpisodeGeneration', () => {
     const args = {
       show,
       requesterId: OWNER,
-      fileTask: noTask,
+      operatorOxyUserId: null,
       deps: requestDeps(kaana),
       request: { idempotencyKey: 'agent-request-1' },
     };
@@ -249,7 +246,7 @@ describe('requestEpisodeGeneration', () => {
       show: await ownedShow(id),
       requesterId: OWNER,
       request: {},
-      fileTask: noTask,
+      operatorOxyUserId: null,
       deps: requestDeps(fakeKaana()),
     });
     expect(result).toMatchObject({ ok: false, code: 'not_generatable' });
@@ -263,7 +260,7 @@ describe('runEpisodeGeneration', () => {
       show,
       requesterId: OWNER,
       request: {},
-      fileTask: noTask,
+      operatorOxyUserId: null,
       deps: requestDeps(kaana),
     });
     if (!result.ok) throw new Error('request refused');

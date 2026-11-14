@@ -130,6 +130,20 @@ export async function findEpisodeById(id: string): Promise<EpisodeWithShow | und
 }
 
 /**
+ * The person who operated the show's account (an organization) when the episode
+ * was made, or `null` when its owner did. Server-only (`operatorOxyUserId` is a
+ * protected column): what the ingest names to Oxy beside the owner.
+ */
+export async function findEpisodeOperator(id: string): Promise<string | null> {
+  const [row] = await getDb()
+    .select({ operator: episodes.operatorOxyUserId })
+    .from(episodes)
+    .where(eq(episodes.id, id))
+    .limit(1);
+  return row?.operator ?? null;
+}
+
+/**
  * One episode as `viewerId` may see it, or `undefined`: its show must be
  * readable by them, and only the owner sees an episode that is not `ready`
  * (the single-episode reading of `episodeVisibilityFilter`). "Not yours" and

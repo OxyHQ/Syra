@@ -1,8 +1,4 @@
-import {
-  verifiedAudioSession,
-  installFileTaskAuthorityFixture,
-  resetFileTaskAuthorityFixture,
-} from '../test/fileTaskAuthority';
+import { signedIn } from '../test/signedInRequest';
 /**
  * Three things that were invisible below the routers: the metadata
  * `uploadEpisode` was DROPPING, the order a numbered series comes back in, and
@@ -90,7 +86,6 @@ let server: Server;
 let baseUrl: string;
 
 beforeAll(async () => {
-  installFileTaskAuthorityFixture();
   armed = true;
   await connectDb();
 
@@ -99,7 +94,7 @@ beforeAll(async () => {
   app.use((req, _res, next) => {
     const viewer = req.headers[VIEWER_HEADER];
     if (typeof viewer === 'string' && viewer.length > 0) {
-      verifiedAudioSession(req, viewer);
+      signedIn(req, viewer);
     }
     next();
   });
@@ -119,7 +114,6 @@ afterEach(async () => {
 });
 
 afterAll(async () => {
-  resetFileTaskAuthorityFixture();
   armed = false;
   await new Promise<void>((resolve) => server.close(() => resolve()));
   await disconnectDb();

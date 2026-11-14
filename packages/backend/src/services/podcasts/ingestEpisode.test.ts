@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
 import { uuidv7 } from '@oxy.so/db';
 import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
 import { getDb } from '../../db/postgres';
-import { podcasts } from '../../db/schema/podcasts';
+import { episodes, podcasts } from '../../db/schema/podcasts';
 import { eq } from 'drizzle-orm';
 import {
   findEpisodeById,
@@ -344,25 +344,33 @@ describe('ingestEpisode — a private show gets no HLS ladder', () => {
   });
 });
 
-describe('legacy personal audio provenance', () => {
-  it('keeps existing playback/legacy ingest without guessing authority for a new personal copy', async () => {
+describe("a hosted show's audio (oxy ADR 0066)", () => {
+  it("becomes the owner's file, naming the person who operated the show's account", async () => {
     const previous = process.env.OXY_AUDIO;
     process.env.OXY_AUDIO = 'oxy';
     try {
       const episode = await createEpisode();
       await getDb()
         .update(podcasts)
-        .set({ ownerOxyUserId: 'original-owner', visibility: 'private' })
+        .set({ ownerOxyUserId: 'organization', visibility: 'private' })
         .where(eq(podcasts.id, PODCAST_ID));
-      let copied = false;
+      await getDb()
+        .update(episodes)
+        .set({ operatorOxyUserId: 'person' })
+        .where(eq(episodes.id, episode.id));
+      let copy: unknown;
       await ingestEpisode(episode.id, {
         ...happyDeps,
-        mirrorToOxy: async () => {
-          copied = true;
-          throw new Error('must not copy without proof');
+        mirrorToOxy: async (input) => {
+          copy = { owner: input.owner, operator: input.operatorOxyUserId };
+          return null;
         },
       });
-      expect(copied).toBe(false);
+      expect(copy).toEqual({
+        owner: { kind: 'account', oxyUserId: 'organization' },
+        operator: 'person',
+      });
+      // A refused copy keeps the existing playback path.
       expect((await findEpisodeById(episode.id))?.episode.status).toBe('ready');
       expect((await findEpisodeById(episode.id))?.episode.audioSourceUrl).toBe(
         episode.audioSourceUrl,

@@ -70,13 +70,14 @@ import type { episodes, podcasts } from '../schema/podcasts';
 
 // ── Row shapes ────────────────────────────────────────────────────────────
 //
-// Neither table protects a column (`schema/protectedColumns.ts`), so the whole
-// row is public and these are the plain inferred types. They are still written
-// out rather than used inline, so a column added tomorrow shows up as a type a
-// serializer does not name rather than as a field that silently ships.
+// `podcasts` protects no column and `episodes` only `operatorOxyUserId`
+// (`schema/protectedColumns.ts`), so these are the inferred types less that one.
+// They are still written out rather than used inline, so a column added tomorrow
+// shows up as a type a serializer does not name rather than as a field that
+// silently ships.
 
 export type PodcastRow = typeof podcasts.$inferSelect;
-export type EpisodeRow = Omit<typeof episodes.$inferSelect, 'oxyTaskId'>;
+export type EpisodeRow = Omit<typeof episodes.$inferSelect, 'operatorOxyUserId'>;
 
 /** Resolves an `image_assets` id to its rendered variant — `db/catalog/serialize.ts`'s. */
 export type ImageVariantLookup = (id: string | null) => CatalogImageVariant | undefined;

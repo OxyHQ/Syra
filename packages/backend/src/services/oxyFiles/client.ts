@@ -1,6 +1,7 @@
 /** Oxy Files uses the same workload identity as the rest of Syra.
  * App-owned media and live application references use domain authority;
- * personal writes additionally require the original requester proof.
+ * a person's file is written with `actingFor` that account, on what Syra's
+ * entry in oxy's first-party registry declares (`oxy:files`, oxy ADR 0066).
  */
 
 import { Readable } from 'node:stream';
@@ -10,7 +11,7 @@ import { oxy } from '../../oxyClient';
 /** What Syra uses of `OxyServer.assets`. Narrow on purpose: a test double implements exactly this. */
 export type OxyFilesApi = Pick<
   ServerAssetsApi,
-  | 'withRequester'
+  | 'actingFor'
   | 'uploadAppFile'
   | 'importAppFile'
   // Batch import (50 URLs a call): what the image migration copies sets with.

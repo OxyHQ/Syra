@@ -30,9 +30,11 @@ introspection, and reads through the same viewer rules as the app (`findPodcastF
 `idempotencyKey`: asking again with it answers the first request instead of starting, and
 paying for, another (`episode_generations.idempotency_key`).
 
-An MCP connection holds no Oxy session, so an episode it generates keeps Syra's copy of the
-audio rather than becoming the person's own Oxy file (see
-[audio ownership](./podcast-generation.md#audio-ownership)).
+An episode it generates becomes the active account's own Oxy file, exactly as one made in
+Studio: the connection verified that account, and Syra stores the audio on its own declared
+authority, naming only the account (oxy ADR 0066; see
+[audio ownership](./podcast-generation.md#audio-ownership)). The connection's OAuth scopes
+decide what the MCP client may ask Syra; they are not what lets Syra write the file.
 
 ## How it is wired
 

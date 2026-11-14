@@ -22,7 +22,7 @@ import {
   toEpisodeGenerationDto,
 } from '../db/podcasts/generations';
 import { loadShowContext, toEpisodeDtos } from '../db/podcasts/hydrate';
-import { withFileTask } from '../services/oxyFiles/taskAuthority';
+import { operatorOf } from '../services/oxyFiles/actingFor';
 import { requestEpisodeGeneration } from '../services/podcasts/generation/request';
 import { getParam } from '../utils/reqParams';
 import { logger } from '../utils/logger';
@@ -53,9 +53,8 @@ export async function generateEpisode(req: AuthRequest, res: Response): Promise<
       show,
       requesterId: userId,
       request: parsed.data,
-      // The owner's session is on this request, so the finished audio becomes
-      // their own Oxy file, exactly as an upload does.
-      fileTask: (episodeId, write) => withFileTask(req, episodeId, write),
+      // The finished audio becomes the owner's own Oxy file, as an upload does.
+      operatorOxyUserId: operatorOf(req),
     });
     if (!result.ok) {
       res.status(result.status).json({ error: result.code, message: result.message });

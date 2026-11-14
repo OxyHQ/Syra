@@ -111,10 +111,12 @@ describe('storing audio', () => {
       localPath: original('u.flac'),
       mime: 'audio/flac',
       owner: { kind: 'account', oxyUserId: 'owner' },
-      requester: { taskId: 'original-task', accountId: 'owner' },
     });
     const file = fake.files.get(stored.fileId)!;
     expect(file.ownerUserId).toBe('owner');
+    expect(fake.calls.find((call) => call.method === 'actingFor')?.args).toEqual([
+      { accountId: 'owner' },
+    ]);
     expect(file.visibility).toBe('private');
   });
 

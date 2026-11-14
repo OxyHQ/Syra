@@ -1,4 +1,4 @@
-import type { RequesterProof, ServerAssetsApi } from '@oxy.so/core/server';
+import type { ActingFor, ServerAssetsApi } from '@oxy.so/core/server';
 /**
  * An in-memory Oxy Files, installed with {@link installFakeOxyFiles}.
  *
@@ -87,8 +87,8 @@ function toBuffer(bytes: Uint8Array | ArrayBuffer | Blob): Buffer {
 }
 
 export class FakeOxyFiles implements OxyFilesApi {
-  withRequester(proof: RequesterProof): ServerAssetsApi {
-    this.record('withRequester', [proof]);
+  actingFor(actingFor: ActingFor): ServerAssetsApi {
+    this.record('actingFor', [actingFor]);
     // Tests exercise this narrow facade through its actual Files methods.
     return this as unknown as ServerAssetsApi;
   }

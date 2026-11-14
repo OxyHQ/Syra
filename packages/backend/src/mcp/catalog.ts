@@ -279,9 +279,9 @@ async function generateEpisodeTool(
     show,
     requesterId: actorId,
     request: { ...request.data, ...(idempotencyKey ? { idempotencyKey } : {}) },
-    // An MCP connection carries no Oxy session to admit the audio as the
-    // person's own Oxy file, so the episode keeps Syra's copy (docs/mcp.md).
-    fileTask: (_episodeId, write) => write(null),
+    // The connection verified this account; the audio becomes its own Oxy file
+    // on Syra's declared `oxy:files` authority, as in Studio (docs/mcp.md).
+    operatorOxyUserId: null,
   });
   if (!result.ok) return refused(result.code, result.message);
   return ok({

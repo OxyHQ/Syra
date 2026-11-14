@@ -1,4 +1,3 @@
-import { personalAudioRequester } from '../services/oxyFiles/taskAuthority';
 /**
  * One-shot: store the audio Syra already holds in Oxy Files (OxyHQ/oxy ADR 0043
  * stage 4c), and point each row at its file.
@@ -120,6 +119,8 @@ interface AudioUnit {
   kind: AudioMigrationKind;
   entity: AudioEntity;
   owner: AudioOwner;
+  /** The person who operated a personal owner's account when the row was made. */
+  operatorOxyUserId?: string | null;
   /** The bucket object holding the original (`null` for a target to collect). */
   objectKey: string | null;
   format: string;
@@ -194,6 +195,7 @@ async function uploadUnits(after: string | null): Promise<AudioUnit[]> {
     .select({
       id: userUploads.id,
       owner: userUploads.ownerOxyUserId,
+      operator: userUploads.operatorOxyUserId,
       key: userUploads.audioSourceKey,
       format: userUploads.audioSourceFormat,
     })
@@ -213,6 +215,7 @@ async function uploadUnits(after: string | null): Promise<AudioUnit[]> {
     kind: 'uploads',
     entity: { kind: 'user_upload', id: row.id },
     owner: { kind: 'account', oxyUserId: row.owner },
+    operatorOxyUserId: row.operator,
     objectKey: row.key,
     format: row.format ?? 'mp3',
   }));
@@ -225,6 +228,7 @@ async function episodeUnits(after: string | null): Promise<AudioUnit[]> {
       podcastId: episodes.podcastId,
       format: episodes.audioSourceFormat,
       owner: podcasts.ownerOxyUserId,
+      operator: episodes.operatorOxyUserId,
     })
     .from(episodes)
     .innerJoin(podcasts, eq(podcasts.id, episodes.podcastId))
@@ -243,6 +247,7 @@ async function episodeUnits(after: string | null): Promise<AudioUnit[]> {
     kind: 'episodes',
     entity: { kind: 'episode', id: row.id },
     owner: row.owner ? { kind: 'account', oxyUserId: row.owner } : { kind: 'application' },
+    operatorOxyUserId: row.operator,
     objectKey: getS3PodcastEpisodeAudioKey(row.id, row.podcastId, row.format ?? 'mp3'),
     format: row.format ?? 'mp3',
   }));
@@ -366,14 +371,9 @@ async function migrateUnit(
     if (!(await (deps.stage ?? stageAudioObject)(unit.objectKey, localPath))) {
       return { ...base, outcome: 'missing_object' };
     }
-    const requester =
-      unit.owner.kind === 'account' &&
-      (unit.entity.kind === 'episode' || unit.entity.kind === 'user_upload')
-        ? await personalAudioRequester(unit.entity.kind, unit.entity.id, unit.owner.oxyUserId)
-        : null;
     const stored = await (deps.store ?? storeAudioInOxy)({
-      ...(requester ? { requester } : {}),
       entity: unit.entity,
+      operatorOxyUserId: unit.operatorOxyUserId ?? null,
       localPath,
       mime: audioMimeFor(unit.format),
       owner: unit.owner,
