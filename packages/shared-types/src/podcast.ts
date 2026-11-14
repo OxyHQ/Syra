@@ -7,7 +7,17 @@ export const podcastSourceSchema = z.enum(['rss', 'syra']);
 export type PodcastSource = z.infer<typeof podcastSourceSchema>;
 
 /** Provider that contributed data to a show (the feed itself or a discovery directory). */
-export const podcastProvenanceProviderSchema = z.enum(['rss', 'syra', 'podcastindex', 'apple']);
+export const podcastProvenanceProviderSchema = z.enum([
+  'rss',
+  'syra',
+  'podcastindex',
+  'apple',
+  /**
+   * History: the shows Alia published into Syra until 2026-11-14. Nothing
+   * writes it any more; existing rows keep it.
+   */
+  'alia',
+]);
 export type PodcastProvenanceProvider = z.infer<typeof podcastProvenanceProviderSchema>;
 
 export const podcastSourceProvenanceSchema = z.object({

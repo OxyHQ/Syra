@@ -242,11 +242,19 @@ export const PODCAST_SOURCES = ['rss', 'syra'] as const;
  * two: a podcast's provenance provider is the feed/directory it came from,
  * not a music-metadata enrichment source.
  *
- * `'alia'` was here from 0028, for shows Alia generated into Syra; Syra
- * generates its own episodes now (docs/podcast-generation.md), 0041 deleted the
- * two rows and 0042 narrowed the CHECK.
+ * `'alia'` is history: the shows Alia published into Syra until 2026-11-14,
+ * when Syra began generating its own episodes (docs/podcast-generation.md).
+ * Nothing writes it any more; the rows that carry it are the record of where
+ * those shows came from, and the value stays so they remain valid (and
+ * readable by every client that parses a show's `sources`).
  */
-export const PODCAST_PROVENANCE_PROVIDERS = ['rss', 'syra', 'podcastindex', 'apple'] as const;
+export const PODCAST_PROVENANCE_PROVIDERS = [
+  'rss',
+  'syra',
+  'podcastindex',
+  'apple',
+  'alia',
+] as const;
 
 /** `@syra/shared-types` `podcastTypeSchema`. */
 export const PODCAST_TYPES = ['episodic', 'serial'] as const;

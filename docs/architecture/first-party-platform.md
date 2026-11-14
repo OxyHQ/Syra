@@ -62,7 +62,7 @@ Personal audio task checkpoint (source only): locker and podcast admissions crea
 an Oxy goal with the original requester and effective account, expiring after 24
 hours. Background ingest passes that exact task to Files; it never stores a user
 bearer. (The single-use podcast ingest ticket that also admitted episodes here
-was retired on 2026-11-14 with migrations 0041/0042: Syra generates episodes
+was retired on 2026-11-14 with migration 0041: Syra generates episodes
 itself, see [generated episodes](../podcast-generation.md).) A managed account keeps its human requester separate from the account
 whose audio is stored. Missing or revoked proof cannot authorize a personal copy;
 existing legacy audio playback remains available under the existing entitlement.

@@ -1,5 +1,5 @@
 {
-  "id": "0da891d1-cd00-453c-8a5f-f2f1cefd1772",
+  "id": "3ab27b44-04db-4d32-85a0-328e3f539586",
   "prevId": "c11956ce-4e8b-4b22-a003-d96b308ce46b",
   "version": "7",
   "dialect": "postgresql",
@@ -46,50 +46,50 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "album_genres_album_id_albums_id_fk": {
           "name": "album_genres_album_id_albums_id_fk",
           "tableFrom": "album_genres",
+          "tableTo": "albums",
           "columnsFrom": [
             "album_id"
           ],
-          "tableTo": "albums",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "album_genres_genre_id_kind_genres_id_kind_fk": {
           "name": "album_genres_genre_id_kind_genres_id_kind_fk",
           "tableFrom": "album_genres",
+          "tableTo": "genres",
           "columnsFrom": [
             "genre_id",
             "kind"
           ],
-          "tableTo": "genres",
           "columnsTo": [
             "id",
             "kind"
           ],
-          "onUpdate": "no action",
-          "onDelete": "restrict"
+          "onDelete": "restrict",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "album_genres_album_id_genre_id_key": {
           "name": "album_genres_album_id_genre_id_key",
+          "nullsNotDistinct": false,
           "columns": [
             "album_id",
             "genre_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -154,26 +154,26 @@
         "album_sources_album_id_albums_id_fk": {
           "name": "album_sources_album_id_albums_id_fk",
           "tableFrom": "album_sources",
+          "tableTo": "albums",
           "columnsFrom": [
             "album_id"
           ],
-          "tableTo": "albums",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "album_sources_album_id_position_key": {
           "name": "album_sources_album_id_position_key",
+          "nullsNotDistinct": false,
           "columns": [
             "album_id",
             "position"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -436,8 +436,8 @@
           "primaryKey": false,
           "notNull": false,
           "generated": {
-            "type": "stored",
-            "as": "to_tsvector('english', title || ' ' || artist_name)"
+            "as": "to_tsvector('english', title || ' ' || artist_name)",
+            "type": "stored"
           }
         },
         "created_at": {
@@ -473,9 +473,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "albums_popularity_idx": {
           "name": "albums_popularity_idx",
@@ -488,9 +488,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "albums_release_date_idx": {
           "name": "albums_release_date_idx",
@@ -503,9 +503,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "albums_external_isrc_idx": {
           "name": "albums_external_isrc_idx",
@@ -518,9 +518,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "albums_search_gin": {
           "name": "albums_search_gin",
@@ -533,9 +533,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "gin",
-          "concurrently": false
+          "with": {}
         },
         "albums_cover_art_id_idx": {
           "name": "albums_cover_art_id_idx",
@@ -548,9 +548,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "albums_cover_art_sizes_small_id_idx": {
           "name": "albums_cover_art_sizes_small_id_idx",
@@ -563,9 +563,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "albums_cover_art_sizes_medium_id_idx": {
           "name": "albums_cover_art_sizes_medium_id_idx",
@@ -578,9 +578,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "albums_cover_art_sizes_large_id_idx": {
           "name": "albums_cover_art_sizes_large_id_idx",
@@ -593,9 +593,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "albums_cover_art_sizes_xlarge_id_idx": {
           "name": "albums_cover_art_sizes_xlarge_id_idx",
@@ -608,9 +608,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "albums_cover_art_sizes_xxlarge_id_idx": {
           "name": "albums_cover_art_sizes_xxlarge_id_idx",
@@ -623,9 +623,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "albums_cover_art_sizes_original_id_idx": {
           "name": "albums_cover_art_sizes_original_id_idx",
@@ -638,132 +638,132 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "albums_artist_id_catalog_entities_id_fk": {
           "name": "albums_artist_id_catalog_entities_id_fk",
           "tableFrom": "albums",
+          "tableTo": "catalog_entities",
           "columnsFrom": [
             "artist_id"
           ],
-          "tableTo": "catalog_entities",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "restrict"
+          "onDelete": "restrict",
+          "onUpdate": "no action"
         },
         "albums_cover_art_id_image_assets_id_fk": {
           "name": "albums_cover_art_id_image_assets_id_fk",
           "tableFrom": "albums",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "cover_art_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "restrict"
+          "onDelete": "restrict",
+          "onUpdate": "no action"
         },
         "albums_cover_art_sizes_small_id_image_assets_id_fk": {
           "name": "albums_cover_art_sizes_small_id_image_assets_id_fk",
           "tableFrom": "albums",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "cover_art_sizes_small_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "restrict"
+          "onDelete": "restrict",
+          "onUpdate": "no action"
         },
         "albums_cover_art_sizes_medium_id_image_assets_id_fk": {
           "name": "albums_cover_art_sizes_medium_id_image_assets_id_fk",
           "tableFrom": "albums",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "cover_art_sizes_medium_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "restrict"
+          "onDelete": "restrict",
+          "onUpdate": "no action"
         },
         "albums_cover_art_sizes_large_id_image_assets_id_fk": {
           "name": "albums_cover_art_sizes_large_id_image_assets_id_fk",
           "tableFrom": "albums",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "cover_art_sizes_large_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "restrict"
+          "onDelete": "restrict",
+          "onUpdate": "no action"
         },
         "albums_cover_art_sizes_xlarge_id_image_assets_id_fk": {
           "name": "albums_cover_art_sizes_xlarge_id_image_assets_id_fk",
           "tableFrom": "albums",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "cover_art_sizes_xlarge_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "restrict"
+          "onDelete": "restrict",
+          "onUpdate": "no action"
         },
         "albums_cover_art_sizes_xxlarge_id_image_assets_id_fk": {
           "name": "albums_cover_art_sizes_xxlarge_id_image_assets_id_fk",
           "tableFrom": "albums",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "cover_art_sizes_xxlarge_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "restrict"
+          "onDelete": "restrict",
+          "onUpdate": "no action"
         },
         "albums_cover_art_sizes_original_id_image_assets_id_fk": {
           "name": "albums_cover_art_sizes_original_id_image_assets_id_fk",
           "tableFrom": "albums",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "cover_art_sizes_original_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "restrict"
+          "onDelete": "restrict",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "albums_upc_key": {
           "name": "albums_upc_key",
+          "nullsNotDistinct": false,
           "columns": [
             "upc"
-          ],
-          "nullsNotDistinct": false
+          ]
         },
         "albums_external_musicbrainz_release_id_key": {
           "name": "albums_external_musicbrainz_release_id_key",
+          "nullsNotDistinct": false,
           "columns": [
             "external_musicbrainz_release_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -1222,8 +1222,8 @@
           "primaryKey": false,
           "notNull": false,
           "generated": {
-            "type": "stored",
-            "as": "to_tsvector('english', name)"
+            "as": "to_tsvector('english', name)",
+            "type": "stored"
           }
         },
         "created_at": {
@@ -1253,10 +1253,10 @@
             }
           ],
           "isUnique": true,
-          "with": {},
-          "method": "btree",
           "where": "\"catalog_entities\".\"type\" = 'artist'",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "catalog_entities_type_name_key_idx": {
           "name": "catalog_entities_type_name_key_idx",
@@ -1275,9 +1275,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "catalog_entities_popularity_idx": {
           "name": "catalog_entities_popularity_idx",
@@ -1290,9 +1290,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "catalog_entities_owner_oxy_user_id_idx": {
           "name": "catalog_entities_owner_oxy_user_id_idx",
@@ -1305,9 +1305,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "catalog_entities_stats_followers_idx": {
           "name": "catalog_entities_stats_followers_idx",
@@ -1320,9 +1320,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "catalog_entities_verified_popularity_idx": {
           "name": "catalog_entities_verified_popularity_idx",
@@ -1341,9 +1341,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "catalog_entities_linked_artist_id_idx": {
           "name": "catalog_entities_linked_artist_id_idx",
@@ -1356,9 +1356,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "catalog_entities_search_gin": {
           "name": "catalog_entities_search_gin",
@@ -1371,24 +1371,24 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "gin",
-          "concurrently": false
+          "with": {}
         },
         "catalog_entities_image_suggestions_gin": {
           "name": "catalog_entities_image_suggestions_gin",
           "columns": [
             {
               "expression": "\"image_suggestions\" jsonb_path_ops",
-              "isExpression": true,
               "asc": true,
+              "isExpression": true,
               "nulls": "last"
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "gin",
-          "concurrently": false
+          "with": {}
         },
         "catalog_entities_image_id_idx": {
           "name": "catalog_entities_image_id_idx",
@@ -1401,9 +1401,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "catalog_entities_image_sizes_small_id_idx": {
           "name": "catalog_entities_image_sizes_small_id_idx",
@@ -1416,9 +1416,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "catalog_entities_image_sizes_medium_id_idx": {
           "name": "catalog_entities_image_sizes_medium_id_idx",
@@ -1431,9 +1431,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "catalog_entities_image_sizes_large_id_idx": {
           "name": "catalog_entities_image_sizes_large_id_idx",
@@ -1446,9 +1446,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "catalog_entities_image_sizes_xlarge_id_idx": {
           "name": "catalog_entities_image_sizes_xlarge_id_idx",
@@ -1461,9 +1461,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "catalog_entities_image_sizes_xxlarge_id_idx": {
           "name": "catalog_entities_image_sizes_xxlarge_id_idx",
@@ -1476,9 +1476,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "catalog_entities_image_sizes_original_id_idx": {
           "name": "catalog_entities_image_sizes_original_id_idx",
@@ -1491,139 +1491,139 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "catalog_entities_image_id_image_assets_id_fk": {
           "name": "catalog_entities_image_id_image_assets_id_fk",
           "tableFrom": "catalog_entities",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "image_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "catalog_entities_image_sizes_small_id_image_assets_id_fk": {
           "name": "catalog_entities_image_sizes_small_id_image_assets_id_fk",
           "tableFrom": "catalog_entities",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "image_sizes_small_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "catalog_entities_image_sizes_medium_id_image_assets_id_fk": {
           "name": "catalog_entities_image_sizes_medium_id_image_assets_id_fk",
           "tableFrom": "catalog_entities",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "image_sizes_medium_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "catalog_entities_image_sizes_large_id_image_assets_id_fk": {
           "name": "catalog_entities_image_sizes_large_id_image_assets_id_fk",
           "tableFrom": "catalog_entities",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "image_sizes_large_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "catalog_entities_image_sizes_xlarge_id_image_assets_id_fk": {
           "name": "catalog_entities_image_sizes_xlarge_id_image_assets_id_fk",
           "tableFrom": "catalog_entities",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "image_sizes_xlarge_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "catalog_entities_image_sizes_xxlarge_id_image_assets_id_fk": {
           "name": "catalog_entities_image_sizes_xxlarge_id_image_assets_id_fk",
           "tableFrom": "catalog_entities",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "image_sizes_xxlarge_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "catalog_entities_image_sizes_original_id_image_assets_id_fk": {
           "name": "catalog_entities_image_sizes_original_id_image_assets_id_fk",
           "tableFrom": "catalog_entities",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "image_sizes_original_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "catalog_entities_linked_artist_id_catalog_entities_id_fk": {
           "name": "catalog_entities_linked_artist_id_catalog_entities_id_fk",
           "tableFrom": "catalog_entities",
+          "tableTo": "catalog_entities",
           "columnsFrom": [
             "linked_artist_id"
           ],
-          "tableTo": "catalog_entities",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "catalog_entities_linked_oxy_user_id_key": {
           "name": "catalog_entities_linked_oxy_user_id_key",
+          "nullsNotDistinct": false,
           "columns": [
             "linked_oxy_user_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         },
         "catalog_entities_href_key": {
           "name": "catalog_entities_href_key",
+          "nullsNotDistinct": false,
           "columns": [
             "href"
-          ],
-          "nullsNotDistinct": false
+          ]
         },
         "catalog_entities_external_musicbrainz_artist_id_key": {
           "name": "catalog_entities_external_musicbrainz_artist_id_key",
+          "nullsNotDistinct": false,
           "columns": [
             "external_musicbrainz_artist_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -1712,26 +1712,26 @@
         "catalog_entity_sources_catalog_entity_id_catalog_entities_id_fk": {
           "name": "catalog_entity_sources_catalog_entity_id_catalog_entities_id_fk",
           "tableFrom": "catalog_entity_sources",
+          "tableTo": "catalog_entities",
           "columnsFrom": [
             "catalog_entity_id"
           ],
-          "tableTo": "catalog_entities",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "catalog_entity_sources_catalog_entity_id_position_key": {
           "name": "catalog_entity_sources_catalog_entity_id_position_key",
+          "nullsNotDistinct": false,
           "columns": [
             "catalog_entity_id",
             "position"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -1801,37 +1801,37 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "catalog_entity_strikes_catalog_entity_id_catalog_entities_id_fk": {
           "name": "catalog_entity_strikes_catalog_entity_id_catalog_entities_id_fk",
           "tableFrom": "catalog_entity_strikes",
+          "tableTo": "catalog_entities",
           "columnsFrom": [
             "catalog_entity_id"
           ],
-          "tableTo": "catalog_entities",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "catalog_entity_strikes_track_id_tracks_id_fk": {
           "name": "catalog_entity_strikes_track_id_tracks_id_fk",
           "tableFrom": "catalog_entity_strikes",
+          "tableTo": "tracks",
           "columnsFrom": [
             "track_id"
           ],
-          "tableTo": "tracks",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1943,9 +1943,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "gin",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {},
@@ -1953,10 +1953,10 @@
       "uniqueConstraints": {
         "discogs_releases_discogs_release_id_key": {
           "name": "discogs_releases_discogs_release_id_key",
+          "nullsNotDistinct": false,
           "columns": [
             "discogs_release_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -2109,9 +2109,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "image_assets_uploaded_by_idx": {
           "name": "image_assets_uploaded_by_idx",
@@ -2124,9 +2124,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "image_assets_catalog_lookup_idx": {
           "name": "image_assets_catalog_lookup_idx",
@@ -2157,9 +2157,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "image_assets_catalog_source_content_hash_idx": {
           "name": "image_assets_catalog_source_content_hash_idx",
@@ -2172,9 +2172,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "image_assets_catalog_source_url_hash_idx": {
           "name": "image_assets_catalog_source_url_hash_idx",
@@ -2187,9 +2187,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {},
@@ -2300,9 +2300,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "isrc_registry_artist_credit_name_key_idx": {
           "name": "isrc_registry_artist_credit_name_key_idx",
@@ -2315,9 +2315,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {},
@@ -2325,10 +2325,10 @@
       "uniqueConstraints": {
         "isrc_registry_isrc_key": {
           "name": "isrc_registry_isrc_key",
+          "nullsNotDistinct": false,
           "columns": [
             "isrc"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -2390,25 +2390,25 @@
         "lyrics_track_id_tracks_id_fk": {
           "name": "lyrics_track_id_tracks_id_fk",
           "tableFrom": "lyrics",
+          "tableTo": "tracks",
           "columnsFrom": [
             "track_id"
           ],
-          "tableTo": "tracks",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "lyrics_track_id_key": {
           "name": "lyrics_track_id_key",
+          "nullsNotDistinct": false,
           "columns": [
             "track_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -2455,26 +2455,26 @@
         "lyrics_lines_lyrics_id_lyrics_id_fk": {
           "name": "lyrics_lines_lyrics_id_lyrics_id_fk",
           "tableFrom": "lyrics_lines",
+          "tableTo": "lyrics",
           "columnsFrom": [
             "lyrics_id"
           ],
-          "tableTo": "lyrics",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "lyrics_lines_lyrics_id_position_key": {
           "name": "lyrics_lines_lyrics_id_position_key",
+          "nullsNotDistinct": false,
           "columns": [
             "lyrics_id",
             "position"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -2526,26 +2526,26 @@
         "musicbrainz_artist_urls_musicbrainz_artist_id_musicbrainz_artists_id_fk": {
           "name": "musicbrainz_artist_urls_musicbrainz_artist_id_musicbrainz_artists_id_fk",
           "tableFrom": "musicbrainz_artist_urls",
+          "tableTo": "musicbrainz_artists",
           "columnsFrom": [
             "musicbrainz_artist_id"
           ],
-          "tableTo": "musicbrainz_artists",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "musicbrainz_artist_urls_musicbrainz_artist_id_position_key": {
           "name": "musicbrainz_artist_urls_musicbrainz_artist_id_position_key",
+          "nullsNotDistinct": false,
           "columns": [
             "musicbrainz_artist_id",
             "position"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -2680,9 +2680,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {},
@@ -2690,10 +2690,10 @@
       "uniqueConstraints": {
         "musicbrainz_artists_mbid_key": {
           "name": "musicbrainz_artists_mbid_key",
+          "nullsNotDistinct": false,
           "columns": [
             "mbid"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -2764,9 +2764,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "track_credits_catalog_entity_id_idx": {
           "name": "track_credits_catalog_entity_id_idx",
@@ -2779,49 +2779,49 @@
             }
           ],
           "isUnique": false,
-          "with": {},
-          "method": "btree",
           "where": "\"track_credits\".\"catalog_entity_id\" is not null",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
         "track_credits_track_id_tracks_id_fk": {
           "name": "track_credits_track_id_tracks_id_fk",
           "tableFrom": "track_credits",
+          "tableTo": "tracks",
           "columnsFrom": [
             "track_id"
           ],
-          "tableTo": "tracks",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "track_credits_catalog_entity_id_catalog_entities_id_fk": {
           "name": "track_credits_catalog_entity_id_catalog_entities_id_fk",
           "tableFrom": "track_credits",
+          "tableTo": "catalog_entities",
           "columnsFrom": [
             "catalog_entity_id"
           ],
-          "tableTo": "catalog_entities",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "track_credits_track_id_position_key": {
           "name": "track_credits_track_id_position_key",
+          "nullsNotDistinct": false,
           "columns": [
             "track_id",
             "position"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -2888,34 +2888,34 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "track_fingerprints_track_id_tracks_id_fk": {
           "name": "track_fingerprints_track_id_tracks_id_fk",
           "tableFrom": "track_fingerprints",
+          "tableTo": "tracks",
           "columnsFrom": [
             "track_id"
           ],
-          "tableTo": "tracks",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "track_fingerprints_track_id_key": {
           "name": "track_fingerprints_track_id_key",
+          "nullsNotDistinct": false,
           "columns": [
             "track_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -2968,26 +2968,26 @@
         "track_hls_renditions_track_id_tracks_id_fk": {
           "name": "track_hls_renditions_track_id_tracks_id_fk",
           "tableFrom": "track_hls_renditions",
+          "tableTo": "tracks",
           "columnsFrom": [
             "track_id"
           ],
-          "tableTo": "tracks",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "track_hls_renditions_track_id_position_key": {
           "name": "track_hls_renditions_track_id_position_key",
+          "nullsNotDistinct": false,
           "columns": [
             "track_id",
             "position"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -3052,26 +3052,26 @@
         "track_sources_track_id_tracks_id_fk": {
           "name": "track_sources_track_id_tracks_id_fk",
           "tableFrom": "track_sources",
+          "tableTo": "tracks",
           "columnsFrom": [
             "track_id"
           ],
-          "tableTo": "tracks",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "track_sources_track_id_position_key": {
           "name": "track_sources_track_id_position_key",
+          "nullsNotDistinct": false,
           "columns": [
             "track_id",
             "position"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -3491,8 +3491,8 @@
           "primaryKey": false,
           "notNull": false,
           "generated": {
-            "type": "stored",
-            "as": "to_tsvector('english', title || ' ' || artist_name)"
+            "as": "to_tsvector('english', title || ' ' || artist_name)",
+            "type": "stored"
           }
         },
         "created_at": {
@@ -3522,10 +3522,10 @@
             }
           ],
           "isUnique": false,
-          "with": {},
-          "method": "btree",
           "where": "\"tracks\".\"audio_file_id\" is not null",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "tracks_artist_id_album_id_idx": {
           "name": "tracks_artist_id_album_id_idx",
@@ -3544,10 +3544,10 @@
             }
           ],
           "isUnique": false,
-          "with": {},
-          "method": "btree",
           "where": "\"tracks\".\"is_available\" = true and \"tracks\".\"copyright_removed\" = false",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "tracks_artist_id_idx": {
           "name": "tracks_artist_id_idx",
@@ -3560,9 +3560,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "tracks_album_id_idx": {
           "name": "tracks_album_id_idx",
@@ -3575,10 +3575,10 @@
             }
           ],
           "isUnique": false,
-          "with": {},
-          "method": "btree",
           "where": "\"tracks\".\"is_available\" = true and \"tracks\".\"copyright_removed\" = false",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "tracks_popularity_idx": {
           "name": "tracks_popularity_idx",
@@ -3591,10 +3591,10 @@
             }
           ],
           "isUnique": false,
-          "with": {},
-          "method": "btree",
           "where": "\"tracks\".\"is_available\" = true and \"tracks\".\"copyright_removed\" = false",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "tracks_play_count_idx": {
           "name": "tracks_play_count_idx",
@@ -3607,10 +3607,10 @@
             }
           ],
           "isUnique": false,
-          "with": {},
-          "method": "btree",
           "where": "\"tracks\".\"is_available\" = true and \"tracks\".\"copyright_removed\" = false",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "tracks_created_at_idx": {
           "name": "tracks_created_at_idx",
@@ -3623,10 +3623,10 @@
             }
           ],
           "isUnique": false,
-          "with": {},
-          "method": "btree",
           "where": "\"tracks\".\"is_available\" = true and \"tracks\".\"copyright_removed\" = false",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "tracks_genre_idx": {
           "name": "tracks_genre_idx",
@@ -3639,10 +3639,10 @@
             }
           ],
           "isUnique": false,
-          "with": {},
-          "method": "btree",
           "where": "\"tracks\".\"is_available\" = true and \"tracks\".\"copyright_removed\" = false",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "tracks_mood_idx": {
           "name": "tracks_mood_idx",
@@ -3655,10 +3655,10 @@
             }
           ],
           "isUnique": false,
-          "with": {},
-          "method": "btree",
           "where": "\"tracks\".\"is_available\" = true and \"tracks\".\"copyright_removed\" = false",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "tracks_sha256_idx": {
           "name": "tracks_sha256_idx",
@@ -3671,9 +3671,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "tracks_tags_gin": {
           "name": "tracks_tags_gin",
@@ -3686,9 +3686,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "gin",
-          "concurrently": false
+          "with": {}
         },
         "tracks_search_gin": {
           "name": "tracks_search_gin",
@@ -3701,9 +3701,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "gin",
-          "concurrently": false
+          "with": {}
         },
         "tracks_cover_art_id_idx": {
           "name": "tracks_cover_art_id_idx",
@@ -3716,9 +3716,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "tracks_cover_art_sizes_small_id_idx": {
           "name": "tracks_cover_art_sizes_small_id_idx",
@@ -3731,9 +3731,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "tracks_cover_art_sizes_medium_id_idx": {
           "name": "tracks_cover_art_sizes_medium_id_idx",
@@ -3746,9 +3746,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "tracks_cover_art_sizes_large_id_idx": {
           "name": "tracks_cover_art_sizes_large_id_idx",
@@ -3761,9 +3761,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "tracks_cover_art_sizes_xlarge_id_idx": {
           "name": "tracks_cover_art_sizes_xlarge_id_idx",
@@ -3776,9 +3776,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "tracks_cover_art_sizes_xxlarge_id_idx": {
           "name": "tracks_cover_art_sizes_xxlarge_id_idx",
@@ -3791,9 +3791,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "tracks_cover_art_sizes_original_id_idx": {
           "name": "tracks_cover_art_sizes_original_id_idx",
@@ -3806,151 +3806,151 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "tracks_artist_id_catalog_entities_id_fk": {
           "name": "tracks_artist_id_catalog_entities_id_fk",
           "tableFrom": "tracks",
+          "tableTo": "catalog_entities",
           "columnsFrom": [
             "artist_id"
           ],
-          "tableTo": "catalog_entities",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "restrict"
+          "onDelete": "restrict",
+          "onUpdate": "no action"
         },
         "tracks_album_id_albums_id_fk": {
           "name": "tracks_album_id_albums_id_fk",
           "tableFrom": "tracks",
+          "tableTo": "albums",
           "columnsFrom": [
             "album_id"
           ],
-          "tableTo": "albums",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "tracks_cover_art_id_image_assets_id_fk": {
           "name": "tracks_cover_art_id_image_assets_id_fk",
           "tableFrom": "tracks",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "cover_art_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "tracks_cover_art_sizes_small_id_image_assets_id_fk": {
           "name": "tracks_cover_art_sizes_small_id_image_assets_id_fk",
           "tableFrom": "tracks",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "cover_art_sizes_small_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "tracks_cover_art_sizes_medium_id_image_assets_id_fk": {
           "name": "tracks_cover_art_sizes_medium_id_image_assets_id_fk",
           "tableFrom": "tracks",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "cover_art_sizes_medium_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "tracks_cover_art_sizes_large_id_image_assets_id_fk": {
           "name": "tracks_cover_art_sizes_large_id_image_assets_id_fk",
           "tableFrom": "tracks",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "cover_art_sizes_large_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "tracks_cover_art_sizes_xlarge_id_image_assets_id_fk": {
           "name": "tracks_cover_art_sizes_xlarge_id_image_assets_id_fk",
           "tableFrom": "tracks",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "cover_art_sizes_xlarge_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "tracks_cover_art_sizes_xxlarge_id_image_assets_id_fk": {
           "name": "tracks_cover_art_sizes_xxlarge_id_image_assets_id_fk",
           "tableFrom": "tracks",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "cover_art_sizes_xxlarge_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "tracks_cover_art_sizes_original_id_image_assets_id_fk": {
           "name": "tracks_cover_art_sizes_original_id_image_assets_id_fk",
           "tableFrom": "tracks",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "cover_art_sizes_original_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "tracks_copyright_report_id_copyright_reports_id_fk": {
           "name": "tracks_copyright_report_id_copyright_reports_id_fk",
           "tableFrom": "tracks",
+          "tableTo": "copyright_reports",
           "columnsFrom": [
             "copyright_report_id"
           ],
-          "tableTo": "copyright_reports",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "tracks_external_isrc_key": {
           "name": "tracks_external_isrc_key",
+          "nullsNotDistinct": false,
           "columns": [
             "external_isrc"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -4060,10 +4060,10 @@
             }
           ],
           "isUnique": true,
-          "with": {},
-          "method": "btree",
           "where": "\"artist_claims\".\"status\" = 'pending'",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "artist_claims_oxy_user_id_created_at_idx": {
           "name": "artist_claims_oxy_user_id_created_at_idx",
@@ -4082,9 +4082,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "artist_claims_status_created_at_idx": {
           "name": "artist_claims_status_created_at_idx",
@@ -4103,24 +4103,24 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "artist_claims_artist_id_catalog_entities_id_fk": {
           "name": "artist_claims_artist_id_catalog_entities_id_fk",
           "tableFrom": "artist_claims",
+          "tableTo": "catalog_entities",
           "columnsFrom": [
             "artist_id"
           ],
-          "tableTo": "catalog_entities",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -4188,26 +4188,26 @@
         "contribution_attestation_provenance_markers_attestation_id_fk": {
           "name": "contribution_attestation_provenance_markers_attestation_id_fk",
           "tableFrom": "contribution_attestation_provenance_markers",
+          "tableTo": "contribution_attestations",
           "columnsFrom": [
             "contribution_attestation_id"
           ],
-          "tableTo": "contribution_attestations",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "contribution_attestation_provenance_markers_position_key": {
           "name": "contribution_attestation_provenance_markers_position_key",
+          "nullsNotDistinct": false,
           "columns": [
             "contribution_attestation_id",
             "position"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -4332,34 +4332,34 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "contribution_attestations_track_id_tracks_id_fk": {
           "name": "contribution_attestations_track_id_tracks_id_fk",
           "tableFrom": "contribution_attestations",
+          "tableTo": "tracks",
           "columnsFrom": [
             "track_id"
           ],
-          "tableTo": "tracks",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "restrict"
+          "onDelete": "restrict",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "contribution_attestations_track_id_key": {
           "name": "contribution_attestations_track_id_key",
+          "nullsNotDistinct": false,
           "columns": [
             "track_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -4447,10 +4447,10 @@
       "uniqueConstraints": {
         "contributor_standings_oxy_user_id_key": {
           "name": "contributor_standings_oxy_user_id_key",
+          "nullsNotDistinct": false,
           "columns": [
             "oxy_user_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -4516,37 +4516,37 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "contributor_strikes_track_id_tracks_id_fk": {
           "name": "contributor_strikes_track_id_tracks_id_fk",
           "tableFrom": "contributor_strikes",
+          "tableTo": "tracks",
           "columnsFrom": [
             "track_id"
           ],
-          "tableTo": "tracks",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "contributor_strikes_contributor_standing_id_fk": {
           "name": "contributor_strikes_contributor_standing_id_fk",
           "tableFrom": "contributor_strikes",
+          "tableTo": "contributor_standings",
           "columnsFrom": [
             "contributor_standing_id"
           ],
-          "tableTo": "contributor_standings",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -4641,9 +4641,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "copyright_reports_status_created_at_idx": {
           "name": "copyright_reports_status_created_at_idx",
@@ -4662,37 +4662,37 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "copyright_reports_track_id_tracks_id_fk": {
           "name": "copyright_reports_track_id_tracks_id_fk",
           "tableFrom": "copyright_reports",
+          "tableTo": "tracks",
           "columnsFrom": [
             "track_id"
           ],
-          "tableTo": "tracks",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "restrict"
+          "onDelete": "restrict",
+          "onUpdate": "no action"
         },
         "copyright_reports_artist_id_catalog_entities_id_fk": {
           "name": "copyright_reports_artist_id_catalog_entities_id_fk",
           "tableFrom": "copyright_reports",
+          "tableTo": "catalog_entities",
           "columnsFrom": [
             "artist_id"
           ],
-          "tableTo": "catalog_entities",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "restrict"
+          "onDelete": "restrict",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -4752,26 +4752,26 @@
         "user_upload_hls_renditions_user_upload_id_user_uploads_id_fk": {
           "name": "user_upload_hls_renditions_user_upload_id_user_uploads_id_fk",
           "tableFrom": "user_upload_hls_renditions",
+          "tableTo": "user_uploads",
           "columnsFrom": [
             "user_upload_id"
           ],
-          "tableTo": "user_uploads",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "user_upload_hls_renditions_user_upload_id_position_key": {
           "name": "user_upload_hls_renditions_user_upload_id_position_key",
+          "nullsNotDistinct": false,
           "columns": [
             "user_upload_id",
             "position"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -4829,26 +4829,26 @@
         "user_upload_provenance_markers_user_upload_id_fk": {
           "name": "user_upload_provenance_markers_user_upload_id_fk",
           "tableFrom": "user_upload_provenance_markers",
+          "tableTo": "user_uploads",
           "columnsFrom": [
             "user_upload_id"
           ],
-          "tableTo": "user_uploads",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "user_upload_provenance_markers_user_upload_id_position_key": {
           "name": "user_upload_provenance_markers_user_upload_id_position_key",
+          "nullsNotDistinct": false,
           "columns": [
             "user_upload_id",
             "position"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -5265,9 +5265,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "user_uploads_owner_oxy_user_id_status_idx": {
           "name": "user_uploads_owner_oxy_user_id_status_idx",
@@ -5286,9 +5286,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "user_uploads_owner_oxy_user_id_album_key_idx": {
           "name": "user_uploads_owner_oxy_user_id_album_key_idx",
@@ -5319,9 +5319,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "user_uploads_sha256_idx": {
           "name": "user_uploads_sha256_idx",
@@ -5334,9 +5334,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "user_uploads_audio_file_id_idx": {
           "name": "user_uploads_audio_file_id_idx",
@@ -5349,10 +5349,10 @@
             }
           ],
           "isUnique": false,
-          "with": {},
-          "method": "btree",
           "where": "\"user_uploads\".\"audio_file_id\" is not null",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "user_uploads_fingerprint_duration_sec_idx": {
           "name": "user_uploads_fingerprint_duration_sec_idx",
@@ -5365,9 +5365,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "user_uploads_expires_at_idx": {
           "name": "user_uploads_expires_at_idx",
@@ -5380,10 +5380,10 @@
             }
           ],
           "isUnique": false,
-          "with": {},
-          "method": "btree",
           "where": "\"user_uploads\".\"deleted_at\" is null",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "user_uploads_deleted_at_idx": {
           "name": "user_uploads_deleted_at_idx",
@@ -5396,9 +5396,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "user_uploads_matched_track_id_idx": {
           "name": "user_uploads_matched_track_id_idx",
@@ -5411,9 +5411,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "user_uploads_cover_art_id_idx": {
           "name": "user_uploads_cover_art_id_idx",
@@ -5426,9 +5426,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "user_uploads_cover_art_sizes_small_id_idx": {
           "name": "user_uploads_cover_art_sizes_small_id_idx",
@@ -5441,9 +5441,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "user_uploads_cover_art_sizes_medium_id_idx": {
           "name": "user_uploads_cover_art_sizes_medium_id_idx",
@@ -5456,9 +5456,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "user_uploads_cover_art_sizes_large_id_idx": {
           "name": "user_uploads_cover_art_sizes_large_id_idx",
@@ -5471,9 +5471,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "user_uploads_cover_art_sizes_xlarge_id_idx": {
           "name": "user_uploads_cover_art_sizes_xlarge_id_idx",
@@ -5486,9 +5486,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "user_uploads_cover_art_sizes_xxlarge_id_idx": {
           "name": "user_uploads_cover_art_sizes_xxlarge_id_idx",
@@ -5501,9 +5501,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "user_uploads_cover_art_sizes_original_id_idx": {
           "name": "user_uploads_cover_art_sizes_original_id_idx",
@@ -5516,139 +5516,139 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "user_uploads_cover_art_id_image_assets_id_fk": {
           "name": "user_uploads_cover_art_id_image_assets_id_fk",
           "tableFrom": "user_uploads",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "cover_art_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "user_uploads_cover_art_sizes_small_id_image_assets_id_fk": {
           "name": "user_uploads_cover_art_sizes_small_id_image_assets_id_fk",
           "tableFrom": "user_uploads",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "cover_art_sizes_small_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "user_uploads_cover_art_sizes_medium_id_image_assets_id_fk": {
           "name": "user_uploads_cover_art_sizes_medium_id_image_assets_id_fk",
           "tableFrom": "user_uploads",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "cover_art_sizes_medium_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "user_uploads_cover_art_sizes_large_id_image_assets_id_fk": {
           "name": "user_uploads_cover_art_sizes_large_id_image_assets_id_fk",
           "tableFrom": "user_uploads",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "cover_art_sizes_large_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "user_uploads_cover_art_sizes_xlarge_id_image_assets_id_fk": {
           "name": "user_uploads_cover_art_sizes_xlarge_id_image_assets_id_fk",
           "tableFrom": "user_uploads",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "cover_art_sizes_xlarge_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "user_uploads_cover_art_sizes_xxlarge_id_image_assets_id_fk": {
           "name": "user_uploads_cover_art_sizes_xxlarge_id_image_assets_id_fk",
           "tableFrom": "user_uploads",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "cover_art_sizes_xxlarge_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "user_uploads_cover_art_sizes_original_id_image_assets_id_fk": {
           "name": "user_uploads_cover_art_sizes_original_id_image_assets_id_fk",
           "tableFrom": "user_uploads",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "cover_art_sizes_original_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "user_uploads_matched_track_id_tracks_id_fk": {
           "name": "user_uploads_matched_track_id_tracks_id_fk",
           "tableFrom": "user_uploads",
+          "tableTo": "tracks",
           "columnsFrom": [
             "matched_track_id"
           ],
-          "tableTo": "tracks",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "user_uploads_resolved_artist_id_catalog_entities_id_fk": {
           "name": "user_uploads_resolved_artist_id_catalog_entities_id_fk",
           "tableFrom": "user_uploads",
+          "tableTo": "catalog_entities",
           "columnsFrom": [
             "resolved_artist_id"
           ],
-          "tableTo": "catalog_entities",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "user_uploads_owner_oxy_user_id_sha256_key": {
           "name": "user_uploads_owner_oxy_user_id_sha256_key",
+          "nullsNotDistinct": false,
           "columns": [
             "owner_oxy_user_id",
             "sha256"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -5720,8 +5720,8 @@
           "columns": [
             {
               "expression": "lower(\"name\")",
-              "isExpression": true,
               "asc": true,
+              "isExpression": true,
               "nulls": "last"
             },
             {
@@ -5732,9 +5732,9 @@
             }
           ],
           "isUnique": true,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {},
@@ -5742,11 +5742,11 @@
       "uniqueConstraints": {
         "genres_id_kind_key": {
           "name": "genres_id_kind_key",
+          "nullsNotDistinct": false,
           "columns": [
             "id",
             "kind"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -5834,11 +5834,11 @@
       "uniqueConstraints": {
         "devices_oxy_user_id_device_id_key": {
           "name": "devices_oxy_user_id_device_id_key",
+          "nullsNotDistinct": false,
           "columns": [
             "oxy_user_id",
             "device_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -5958,25 +5958,25 @@
         "playback_states_track_id_tracks_id_fk": {
           "name": "playback_states_track_id_tracks_id_fk",
           "tableFrom": "playback_states",
+          "tableTo": "tracks",
           "columnsFrom": [
             "track_id"
           ],
-          "tableTo": "tracks",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "playback_states_oxy_user_id_key": {
           "name": "playback_states_oxy_user_id_key",
+          "nullsNotDistinct": false,
           "columns": [
             "oxy_user_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -6054,35 +6054,35 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "playlist_collaborators_playlist_id_playlists_id_fk": {
           "name": "playlist_collaborators_playlist_id_playlists_id_fk",
           "tableFrom": "playlist_collaborators",
+          "tableTo": "playlists",
           "columnsFrom": [
             "playlist_id"
           ],
-          "tableTo": "playlists",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "playlist_collaborators_playlist_id_oxy_user_id_key": {
           "name": "playlist_collaborators_playlist_id_oxy_user_id_key",
+          "nullsNotDistinct": false,
           "columns": [
             "playlist_id",
             "oxy_user_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -6147,26 +6147,26 @@
         "playlist_sources_playlist_id_playlists_id_fk": {
           "name": "playlist_sources_playlist_id_playlists_id_fk",
           "tableFrom": "playlist_sources",
+          "tableTo": "playlists",
           "columnsFrom": [
             "playlist_id"
           ],
-          "tableTo": "playlists",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "playlist_sources_playlist_id_position_key": {
           "name": "playlist_sources_playlist_id_position_key",
+          "nullsNotDistinct": false,
           "columns": [
             "playlist_id",
             "position"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -6241,48 +6241,48 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "playlist_tracks_playlist_id_playlists_id_fk": {
           "name": "playlist_tracks_playlist_id_playlists_id_fk",
           "tableFrom": "playlist_tracks",
+          "tableTo": "playlists",
           "columnsFrom": [
             "playlist_id"
           ],
-          "tableTo": "playlists",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "playlist_tracks_track_id_tracks_id_fk": {
           "name": "playlist_tracks_track_id_tracks_id_fk",
           "tableFrom": "playlist_tracks",
+          "tableTo": "tracks",
           "columnsFrom": [
             "track_id"
           ],
-          "tableTo": "tracks",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "playlist_tracks_playlist_id_position_key": {
           "name": "playlist_tracks_playlist_id_position_key",
+          "nullsNotDistinct": false,
           "columns": [
             "playlist_id",
             "position"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -6428,8 +6428,8 @@
           "primaryKey": false,
           "notNull": false,
           "generated": {
-            "type": "stored",
-            "as": "to_tsvector('english', name || ' ' || coalesce(description, ''))"
+            "as": "to_tsvector('english', name || ' ' || coalesce(description, ''))",
+            "type": "stored"
           }
         },
         "created_at": {
@@ -6465,9 +6465,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "playlists_public_followers_idx": {
           "name": "playlists_public_followers_idx",
@@ -6486,10 +6486,10 @@
             }
           ],
           "isUnique": false,
-          "with": {},
-          "method": "btree",
           "where": "\"playlists\".\"visibility\" = 'public'",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "playlists_search_gin": {
           "name": "playlists_search_gin",
@@ -6502,9 +6502,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "gin",
-          "concurrently": false
+          "with": {}
         },
         "playlists_cover_art_id_idx": {
           "name": "playlists_cover_art_id_idx",
@@ -6517,9 +6517,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "playlists_cover_art_sizes_small_id_idx": {
           "name": "playlists_cover_art_sizes_small_id_idx",
@@ -6532,9 +6532,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "playlists_cover_art_sizes_medium_id_idx": {
           "name": "playlists_cover_art_sizes_medium_id_idx",
@@ -6547,9 +6547,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "playlists_cover_art_sizes_large_id_idx": {
           "name": "playlists_cover_art_sizes_large_id_idx",
@@ -6562,9 +6562,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "playlists_cover_art_sizes_xlarge_id_idx": {
           "name": "playlists_cover_art_sizes_xlarge_id_idx",
@@ -6577,9 +6577,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "playlists_cover_art_sizes_xxlarge_id_idx": {
           "name": "playlists_cover_art_sizes_xxlarge_id_idx",
@@ -6592,9 +6592,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "playlists_cover_art_sizes_original_id_idx": {
           "name": "playlists_cover_art_sizes_original_id_idx",
@@ -6607,102 +6607,102 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "playlists_cover_art_id_image_assets_id_fk": {
           "name": "playlists_cover_art_id_image_assets_id_fk",
           "tableFrom": "playlists",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "cover_art_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "playlists_cover_art_sizes_small_id_image_assets_id_fk": {
           "name": "playlists_cover_art_sizes_small_id_image_assets_id_fk",
           "tableFrom": "playlists",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "cover_art_sizes_small_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "playlists_cover_art_sizes_medium_id_image_assets_id_fk": {
           "name": "playlists_cover_art_sizes_medium_id_image_assets_id_fk",
           "tableFrom": "playlists",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "cover_art_sizes_medium_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "playlists_cover_art_sizes_large_id_image_assets_id_fk": {
           "name": "playlists_cover_art_sizes_large_id_image_assets_id_fk",
           "tableFrom": "playlists",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "cover_art_sizes_large_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "playlists_cover_art_sizes_xlarge_id_image_assets_id_fk": {
           "name": "playlists_cover_art_sizes_xlarge_id_image_assets_id_fk",
           "tableFrom": "playlists",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "cover_art_sizes_xlarge_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "playlists_cover_art_sizes_xxlarge_id_image_assets_id_fk": {
           "name": "playlists_cover_art_sizes_xxlarge_id_image_assets_id_fk",
           "tableFrom": "playlists",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "cover_art_sizes_xxlarge_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "playlists_cover_art_sizes_original_id_image_assets_id_fk": {
           "name": "playlists_cover_art_sizes_original_id_image_assets_id_fk",
           "tableFrom": "playlists",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "cover_art_sizes_original_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -6782,24 +6782,24 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "recently_played_track_id_tracks_id_fk": {
           "name": "recently_played_track_id_tracks_id_fk",
           "tableFrom": "recently_played",
+          "tableTo": "tracks",
           "columnsFrom": [
             "track_id"
           ],
-          "tableTo": "tracks",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -6843,26 +6843,26 @@
         "user_followed_artists_artist_id_catalog_entities_id_fk": {
           "name": "user_followed_artists_artist_id_catalog_entities_id_fk",
           "tableFrom": "user_followed_artists",
+          "tableTo": "catalog_entities",
           "columnsFrom": [
             "artist_id"
           ],
-          "tableTo": "catalog_entities",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "user_followed_artists_oxy_user_id_artist_id_key": {
           "name": "user_followed_artists_oxy_user_id_artist_id_key",
+          "nullsNotDistinct": false,
           "columns": [
             "oxy_user_id",
             "artist_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -6904,26 +6904,26 @@
         "user_liked_tracks_track_id_tracks_id_fk": {
           "name": "user_liked_tracks_track_id_tracks_id_fk",
           "tableFrom": "user_liked_tracks",
+          "tableTo": "tracks",
           "columnsFrom": [
             "track_id"
           ],
-          "tableTo": "tracks",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "user_liked_tracks_oxy_user_id_track_id_key": {
           "name": "user_liked_tracks_oxy_user_id_track_id_key",
+          "nullsNotDistinct": false,
           "columns": [
             "oxy_user_id",
             "track_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -6972,35 +6972,35 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "user_podcast_subscriptions_podcast_id_podcasts_id_fk": {
           "name": "user_podcast_subscriptions_podcast_id_podcasts_id_fk",
           "tableFrom": "user_podcast_subscriptions",
+          "tableTo": "podcasts",
           "columnsFrom": [
             "podcast_id"
           ],
-          "tableTo": "podcasts",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "user_podcast_subscriptions_oxy_user_id_podcast_id_key": {
           "name": "user_podcast_subscriptions_oxy_user_id_podcast_id_key",
+          "nullsNotDistinct": false,
           "columns": [
             "oxy_user_id",
             "podcast_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -7042,26 +7042,26 @@
         "user_saved_albums_album_id_albums_id_fk": {
           "name": "user_saved_albums_album_id_albums_id_fk",
           "tableFrom": "user_saved_albums",
+          "tableTo": "albums",
           "columnsFrom": [
             "album_id"
           ],
-          "tableTo": "albums",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "user_saved_albums_oxy_user_id_album_id_key": {
           "name": "user_saved_albums_oxy_user_id_album_id_key",
+          "nullsNotDistinct": false,
           "columns": [
             "oxy_user_id",
             "album_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -7103,26 +7103,26 @@
         "user_saved_playlists_playlist_id_playlists_id_fk": {
           "name": "user_saved_playlists_playlist_id_playlists_id_fk",
           "tableFrom": "user_saved_playlists",
+          "tableTo": "playlists",
           "columnsFrom": [
             "playlist_id"
           ],
-          "tableTo": "playlists",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "user_saved_playlists_oxy_user_id_playlist_id_key": {
           "name": "user_saved_playlists_oxy_user_id_playlist_id_key",
+          "nullsNotDistinct": false,
           "columns": [
             "oxy_user_id",
             "playlist_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -7251,9 +7251,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "moderation_enforcements_subject_chrono_idx": {
           "name": "moderation_enforcements_subject_chrono_idx",
@@ -7278,9 +7278,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "moderation_enforcements_subject_action_applied_idx": {
           "name": "moderation_enforcements_subject_action_applied_idx",
@@ -7317,9 +7317,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {},
@@ -7435,9 +7435,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "moderation_events_state_received_at_idx": {
           "name": "moderation_events_state_received_at_idx",
@@ -7456,9 +7456,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "moderation_events_expires_at_idx": {
           "name": "moderation_events_expires_at_idx",
@@ -7471,9 +7471,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {},
@@ -7599,9 +7599,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "moderation_outbox_lease_idx": {
           "name": "moderation_outbox_lease_idx",
@@ -7626,9 +7626,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "moderation_outbox_expires_at_idx": {
           "name": "moderation_outbox_expires_at_idx",
@@ -7641,9 +7641,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {},
@@ -7833,9 +7833,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "reports_crowdsource_case_id_idx": {
           "name": "reports_crowdsource_case_id_idx",
@@ -7848,9 +7848,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "reports_reporter_object_idx": {
           "name": "reports_reporter_object_idx",
@@ -7875,9 +7875,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "reports_reporter_type_object_key": {
           "name": "reports_reporter_type_object_key",
@@ -7902,9 +7902,9 @@
             }
           ],
           "isUnique": true,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "reports_status_idx": {
           "name": "reports_status_idx",
@@ -7917,9 +7917,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "reports_reported_type_idx": {
           "name": "reports_reported_type_idx",
@@ -7932,9 +7932,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {},
@@ -8096,9 +8096,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {},
@@ -8281,10 +8281,10 @@
             }
           ],
           "isUnique": false,
-          "with": {},
-          "method": "btree",
           "where": "\"oxy_file_reference_ops\".\"dead_at\" is null",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "oxy_file_reference_ops_dead_at_idx": {
           "name": "oxy_file_reference_ops_dead_at_idx",
@@ -8297,9 +8297,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {},
@@ -8417,26 +8417,26 @@
         "episode_hls_renditions_episode_id_episodes_id_fk": {
           "name": "episode_hls_renditions_episode_id_episodes_id_fk",
           "tableFrom": "episode_hls_renditions",
+          "tableTo": "episodes",
           "columnsFrom": [
             "episode_id"
           ],
-          "tableTo": "episodes",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "episode_hls_renditions_episode_id_position_key": {
           "name": "episode_hls_renditions_episode_id_position_key",
+          "nullsNotDistinct": false,
           "columns": [
             "episode_id",
             "position"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -8446,109 +8446,6 @@
           "value": "\"episode_hls_renditions\".\"position\" >= 0"
         }
       },
-      "isRLSEnabled": false
-    },
-    "public.episode_ingest_tickets": {
-      "name": "episode_ingest_tickets",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "jti": {
-          "name": "jti",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "episode_id": {
-          "name": "episode_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "expires_at": {
-          "name": "expires_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "consumed_at": {
-          "name": "consumed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "date_trunc('milliseconds', now())"
-        }
-      },
-      "indexes": {
-        "episode_ingest_tickets_episode_id_idx": {
-          "name": "episode_ingest_tickets_episode_id_idx",
-          "columns": [
-            {
-              "expression": "episode_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "with": {},
-          "method": "btree",
-          "concurrently": false
-        },
-        "episode_ingest_tickets_expires_at_idx": {
-          "name": "episode_ingest_tickets_expires_at_idx",
-          "columns": [
-            {
-              "expression": "expires_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "with": {},
-          "method": "btree",
-          "concurrently": false
-        }
-      },
-      "foreignKeys": {
-        "episode_ingest_tickets_episode_id_episodes_id_fk": {
-          "name": "episode_ingest_tickets_episode_id_episodes_id_fk",
-          "tableFrom": "episode_ingest_tickets",
-          "columnsFrom": [
-            "episode_id"
-          ],
-          "tableTo": "episodes",
-          "columnsTo": [
-            "id"
-          ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "episode_ingest_tickets_jti_key": {
-          "name": "episode_ingest_tickets_jti_key",
-          "columns": [
-            "jti"
-          ],
-          "nullsNotDistinct": false
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.episode_persons": {
@@ -8622,9 +8519,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "episode_persons_href_idx": {
           "name": "episode_persons_href_idx",
@@ -8637,35 +8534,35 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "episode_persons_episode_id_episodes_id_fk": {
           "name": "episode_persons_episode_id_episodes_id_fk",
           "tableFrom": "episode_persons",
+          "tableTo": "episodes",
           "columnsFrom": [
             "episode_id"
           ],
-          "tableTo": "episodes",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "episode_persons_episode_id_position_key": {
           "name": "episode_persons_episode_id_position_key",
+          "nullsNotDistinct": false,
           "columns": [
             "episode_id",
             "position"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -8747,9 +8644,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "episode_progress_oxy_user_id_updated_at_idx": {
           "name": "episode_progress_oxy_user_id_updated_at_idx",
@@ -8768,36 +8665,36 @@
             }
           ],
           "isUnique": false,
-          "with": {},
-          "method": "btree",
           "where": "\"episode_progress\".\"completed\" = false",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
         "episode_progress_episode_id_episodes_id_fk": {
           "name": "episode_progress_episode_id_episodes_id_fk",
           "tableFrom": "episode_progress",
+          "tableTo": "episodes",
           "columnsFrom": [
             "episode_id"
           ],
-          "tableTo": "episodes",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "episode_progress_oxy_user_id_episode_id_key": {
           "name": "episode_progress_oxy_user_id_episode_id_key",
+          "nullsNotDistinct": false,
           "columns": [
             "oxy_user_id",
             "episode_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -8850,26 +8747,26 @@
         "episode_transcripts_episode_id_episodes_id_fk": {
           "name": "episode_transcripts_episode_id_episodes_id_fk",
           "tableFrom": "episode_transcripts",
+          "tableTo": "episodes",
           "columnsFrom": [
             "episode_id"
           ],
-          "tableTo": "episodes",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "episode_transcripts_episode_id_position_key": {
           "name": "episode_transcripts_episode_id_position_key",
+          "nullsNotDistinct": false,
           "columns": [
             "episode_id",
             "position"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -9162,8 +9059,8 @@
           "primaryKey": false,
           "notNull": false,
           "generated": {
-            "type": "stored",
-            "as": "to_tsvector('english', title)"
+            "as": "to_tsvector('english', title)",
+            "type": "stored"
           }
         },
         "created_at": {
@@ -9193,10 +9090,10 @@
             }
           ],
           "isUnique": false,
-          "with": {},
-          "method": "btree",
           "where": "\"episodes\".\"audio_file_id\" is not null",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "episodes_podcast_id_pub_date_idx": {
           "name": "episodes_podcast_id_pub_date_idx",
@@ -9215,9 +9112,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "episodes_podcast_id_episode_number_pub_date_idx": {
           "name": "episodes_podcast_id_episode_number_pub_date_idx",
@@ -9242,9 +9139,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "episodes_ready_popularity_idx": {
           "name": "episodes_ready_popularity_idx",
@@ -9263,10 +9160,10 @@
             }
           ],
           "isUnique": false,
-          "with": {},
-          "method": "btree",
           "where": "\"episodes\".\"status\" = 'ready'",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "episodes_search_gin": {
           "name": "episodes_search_gin",
@@ -9279,9 +9176,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "gin",
-          "concurrently": false
+          "with": {}
         },
         "episodes_image_id_idx": {
           "name": "episodes_image_id_idx",
@@ -9294,9 +9191,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "episodes_image_sizes_small_id_idx": {
           "name": "episodes_image_sizes_small_id_idx",
@@ -9309,9 +9206,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "episodes_image_sizes_medium_id_idx": {
           "name": "episodes_image_sizes_medium_id_idx",
@@ -9324,9 +9221,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "episodes_image_sizes_large_id_idx": {
           "name": "episodes_image_sizes_large_id_idx",
@@ -9339,9 +9236,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "episodes_image_sizes_xlarge_id_idx": {
           "name": "episodes_image_sizes_xlarge_id_idx",
@@ -9354,9 +9251,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "episodes_image_sizes_xxlarge_id_idx": {
           "name": "episodes_image_sizes_xxlarge_id_idx",
@@ -9369,9 +9266,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "episodes_image_sizes_original_id_idx": {
           "name": "episodes_image_sizes_original_id_idx",
@@ -9384,126 +9281,126 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "episodes_podcast_id_podcasts_id_fk": {
           "name": "episodes_podcast_id_podcasts_id_fk",
           "tableFrom": "episodes",
+          "tableTo": "podcasts",
           "columnsFrom": [
             "podcast_id"
           ],
-          "tableTo": "podcasts",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "episodes_image_id_image_assets_id_fk": {
           "name": "episodes_image_id_image_assets_id_fk",
           "tableFrom": "episodes",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "image_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "episodes_image_sizes_small_id_image_assets_id_fk": {
           "name": "episodes_image_sizes_small_id_image_assets_id_fk",
           "tableFrom": "episodes",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "image_sizes_small_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "episodes_image_sizes_medium_id_image_assets_id_fk": {
           "name": "episodes_image_sizes_medium_id_image_assets_id_fk",
           "tableFrom": "episodes",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "image_sizes_medium_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "episodes_image_sizes_large_id_image_assets_id_fk": {
           "name": "episodes_image_sizes_large_id_image_assets_id_fk",
           "tableFrom": "episodes",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "image_sizes_large_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "episodes_image_sizes_xlarge_id_image_assets_id_fk": {
           "name": "episodes_image_sizes_xlarge_id_image_assets_id_fk",
           "tableFrom": "episodes",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "image_sizes_xlarge_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "episodes_image_sizes_xxlarge_id_image_assets_id_fk": {
           "name": "episodes_image_sizes_xxlarge_id_image_assets_id_fk",
           "tableFrom": "episodes",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "image_sizes_xxlarge_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "episodes_image_sizes_original_id_image_assets_id_fk": {
           "name": "episodes_image_sizes_original_id_image_assets_id_fk",
           "tableFrom": "episodes",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "image_sizes_original_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "episodes_podcast_id_guid_key": {
           "name": "episodes_podcast_id_guid_key",
+          "nullsNotDistinct": false,
           "columns": [
             "podcast_id",
             "guid"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -9583,58 +9480,58 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "podcast_categories_podcast_id_podcasts_id_fk": {
           "name": "podcast_categories_podcast_id_podcasts_id_fk",
           "tableFrom": "podcast_categories",
+          "tableTo": "podcasts",
           "columnsFrom": [
             "podcast_id"
           ],
-          "tableTo": "podcasts",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "podcast_categories_genre_id_kind_genres_id_kind_fk": {
           "name": "podcast_categories_genre_id_kind_genres_id_kind_fk",
           "tableFrom": "podcast_categories",
+          "tableTo": "genres",
           "columnsFrom": [
             "genre_id",
             "kind"
           ],
-          "tableTo": "genres",
           "columnsTo": [
             "id",
             "kind"
           ],
-          "onUpdate": "no action",
-          "onDelete": "restrict"
+          "onDelete": "restrict",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "podcast_categories_podcast_id_genre_id_key": {
           "name": "podcast_categories_podcast_id_genre_id_key",
+          "nullsNotDistinct": false,
           "columns": [
             "podcast_id",
             "genre_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         },
         "podcast_categories_podcast_id_position_key": {
           "name": "podcast_categories_podcast_id_position_key",
+          "nullsNotDistinct": false,
           "columns": [
             "podcast_id",
             "position"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -9690,26 +9587,26 @@
         "podcast_funding_podcast_id_podcasts_id_fk": {
           "name": "podcast_funding_podcast_id_podcasts_id_fk",
           "tableFrom": "podcast_funding",
+          "tableTo": "podcasts",
           "columnsFrom": [
             "podcast_id"
           ],
-          "tableTo": "podcasts",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "podcast_funding_podcast_id_position_key": {
           "name": "podcast_funding_podcast_id_position_key",
+          "nullsNotDistinct": false,
           "columns": [
             "podcast_id",
             "position"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -9792,9 +9689,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "podcast_persons_href_idx": {
           "name": "podcast_persons_href_idx",
@@ -9807,35 +9704,35 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "podcast_persons_podcast_id_podcasts_id_fk": {
           "name": "podcast_persons_podcast_id_podcasts_id_fk",
           "tableFrom": "podcast_persons",
+          "tableTo": "podcasts",
           "columnsFrom": [
             "podcast_id"
           ],
-          "tableTo": "podcasts",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "podcast_persons_podcast_id_position_key": {
           "name": "podcast_persons_podcast_id_position_key",
+          "nullsNotDistinct": false,
           "columns": [
             "podcast_id",
             "position"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -9900,26 +9797,26 @@
         "podcast_sources_podcast_id_podcasts_id_fk": {
           "name": "podcast_sources_podcast_id_podcasts_id_fk",
           "tableFrom": "podcast_sources",
+          "tableTo": "podcasts",
           "columnsFrom": [
             "podcast_id"
           ],
-          "tableTo": "podcasts",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "podcast_sources_podcast_id_position_key": {
           "name": "podcast_sources_podcast_id_position_key",
+          "nullsNotDistinct": false,
           "columns": [
             "podcast_id",
             "position"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -10195,8 +10092,8 @@
           "primaryKey": false,
           "notNull": false,
           "generated": {
-            "type": "stored",
-            "as": "to_tsvector('english', title || ' ' || coalesce(author, ''))"
+            "as": "to_tsvector('english', title || ' ' || coalesce(author, ''))",
+            "type": "stored"
           }
         },
         "created_at": {
@@ -10226,9 +10123,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "podcasts_owner_oxy_user_id_created_at_idx": {
           "name": "podcasts_owner_oxy_user_id_created_at_idx",
@@ -10247,9 +10144,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "podcasts_active_popularity_idx": {
           "name": "podcasts_active_popularity_idx",
@@ -10274,10 +10171,10 @@
             }
           ],
           "isUnique": false,
-          "with": {},
-          "method": "btree",
           "where": "\"podcasts\".\"status\" = 'active'",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "podcasts_active_last_episode_at_idx": {
           "name": "podcasts_active_last_episode_at_idx",
@@ -10290,10 +10187,10 @@
             }
           ],
           "isUnique": false,
-          "with": {},
-          "method": "btree",
           "where": "\"podcasts\".\"status\" = 'active'",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "podcasts_rss_active_subscriber_count_idx": {
           "name": "podcasts_rss_active_subscriber_count_idx",
@@ -10312,10 +10209,10 @@
             }
           ],
           "isUnique": false,
-          "with": {},
-          "method": "btree",
           "where": "\"podcasts\".\"status\" = 'active' and \"podcasts\".\"source\" = 'rss'",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "podcasts_inactive_idx": {
           "name": "podcasts_inactive_idx",
@@ -10328,10 +10225,10 @@
             }
           ],
           "isUnique": false,
-          "with": {},
-          "method": "btree",
           "where": "\"podcasts\".\"status\" <> 'active'",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "podcasts_search_gin": {
           "name": "podcasts_search_gin",
@@ -10344,9 +10241,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "gin",
-          "concurrently": false
+          "with": {}
         },
         "podcasts_image_id_idx": {
           "name": "podcasts_image_id_idx",
@@ -10359,9 +10256,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "podcasts_image_sizes_small_id_idx": {
           "name": "podcasts_image_sizes_small_id_idx",
@@ -10374,9 +10271,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "podcasts_image_sizes_medium_id_idx": {
           "name": "podcasts_image_sizes_medium_id_idx",
@@ -10389,9 +10286,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "podcasts_image_sizes_large_id_idx": {
           "name": "podcasts_image_sizes_large_id_idx",
@@ -10404,9 +10301,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "podcasts_image_sizes_xlarge_id_idx": {
           "name": "podcasts_image_sizes_xlarge_id_idx",
@@ -10419,9 +10316,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "podcasts_image_sizes_xxlarge_id_idx": {
           "name": "podcasts_image_sizes_xxlarge_id_idx",
@@ -10434,9 +10331,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "podcasts_image_sizes_original_id_idx": {
           "name": "podcasts_image_sizes_original_id_idx",
@@ -10449,132 +10346,132 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "podcasts_image_id_image_assets_id_fk": {
           "name": "podcasts_image_id_image_assets_id_fk",
           "tableFrom": "podcasts",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "image_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "podcasts_image_sizes_small_id_image_assets_id_fk": {
           "name": "podcasts_image_sizes_small_id_image_assets_id_fk",
           "tableFrom": "podcasts",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "image_sizes_small_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "podcasts_image_sizes_medium_id_image_assets_id_fk": {
           "name": "podcasts_image_sizes_medium_id_image_assets_id_fk",
           "tableFrom": "podcasts",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "image_sizes_medium_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "podcasts_image_sizes_large_id_image_assets_id_fk": {
           "name": "podcasts_image_sizes_large_id_image_assets_id_fk",
           "tableFrom": "podcasts",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "image_sizes_large_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "podcasts_image_sizes_xlarge_id_image_assets_id_fk": {
           "name": "podcasts_image_sizes_xlarge_id_image_assets_id_fk",
           "tableFrom": "podcasts",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "image_sizes_xlarge_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "podcasts_image_sizes_xxlarge_id_image_assets_id_fk": {
           "name": "podcasts_image_sizes_xxlarge_id_image_assets_id_fk",
           "tableFrom": "podcasts",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "image_sizes_xxlarge_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "podcasts_image_sizes_original_id_image_assets_id_fk": {
           "name": "podcasts_image_sizes_original_id_image_assets_id_fk",
           "tableFrom": "podcasts",
+          "tableTo": "image_assets",
           "columnsFrom": [
             "image_sizes_original_id"
           ],
-          "tableTo": "image_assets",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "podcasts_linked_artist_id_catalog_entities_id_fk": {
           "name": "podcasts_linked_artist_id_catalog_entities_id_fk",
           "tableFrom": "podcasts",
+          "tableTo": "catalog_entities",
           "columnsFrom": [
             "linked_artist_id"
           ],
-          "tableTo": "catalog_entities",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "podcasts_feed_url_key": {
           "name": "podcasts_feed_url_key",
+          "nullsNotDistinct": false,
           "columns": [
             "feed_url"
-          ],
-          "nullsNotDistinct": false
+          ]
         },
         "podcasts_podcast_guid_key": {
           "name": "podcasts_podcast_guid_key",
+          "nullsNotDistinct": false,
           "columns": [
             "podcast_guid"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -10714,9 +10611,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "episode_generations_requester_idempotency_key": {
           "name": "episode_generations_requester_idempotency_key",
@@ -10735,10 +10632,10 @@
             }
           ],
           "isUnique": true,
-          "with": {},
-          "method": "btree",
           "where": "\"episode_generations\".\"idempotency_key\" is not null",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "episode_generations_requester_created_at_idx": {
           "name": "episode_generations_requester_created_at_idx",
@@ -10757,37 +10654,37 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "episode_generations_episode_id_episodes_id_fk": {
           "name": "episode_generations_episode_id_episodes_id_fk",
           "tableFrom": "episode_generations",
+          "tableTo": "episodes",
           "columnsFrom": [
             "episode_id"
           ],
-          "tableTo": "episodes",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "episode_generations_podcast_id_podcasts_id_fk": {
           "name": "episode_generations_podcast_id_podcasts_id_fk",
           "tableFrom": "episode_generations",
+          "tableTo": "podcasts",
           "columnsFrom": [
             "podcast_id"
           ],
-          "tableTo": "podcasts",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -10861,15 +10758,15 @@
         "podcast_generation_profiles_podcast_id_podcasts_id_fk": {
           "name": "podcast_generation_profiles_podcast_id_podcasts_id_fk",
           "tableFrom": "podcast_generation_profiles",
+          "tableTo": "podcasts",
           "columnsFrom": [
             "podcast_id"
           ],
-          "tableTo": "podcasts",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -10932,35 +10829,35 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "house_members_house_id_houses_id_fk": {
           "name": "house_members_house_id_houses_id_fk",
           "tableFrom": "house_members",
+          "tableTo": "houses",
           "columnsFrom": [
             "house_id"
           ],
-          "tableTo": "houses",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "house_members_house_id_oxy_user_id_key": {
           "name": "house_members_house_id_oxy_user_id_key",
+          "nullsNotDistinct": false,
           "columns": [
             "house_id",
             "oxy_user_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -11046,8 +10943,8 @@
           "primaryKey": false,
           "notNull": false,
           "generated": {
-            "type": "stored",
-            "as": "to_tsvector('english', name || ' ' || coalesce(description, ''))"
+            "as": "to_tsvector('english', name || ' ' || coalesce(description, ''))",
+            "type": "stored"
           }
         },
         "created_at": {
@@ -11083,9 +10980,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "houses_visibility_rooms_idx": {
           "name": "houses_visibility_rooms_idx",
@@ -11098,9 +10995,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "houses_search_gin": {
           "name": "houses_search_gin",
@@ -11113,9 +11010,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "gin",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {},
@@ -11276,10 +11173,10 @@
             }
           ],
           "isUnique": false,
-          "with": {},
-          "method": "btree",
           "where": "\"recordings\".\"oxy_file_id\" is not null",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "recordings_ready_public_created_at_idx": {
           "name": "recordings_ready_public_created_at_idx",
@@ -11292,10 +11189,10 @@
             }
           ],
           "isUnique": false,
-          "with": {},
-          "method": "btree",
           "where": "\"recordings\".\"status\" = 'ready' and \"recordings\".\"access\" = 'public'",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "recordings_ready_host_idx": {
           "name": "recordings_ready_host_idx",
@@ -11308,10 +11205,10 @@
             }
           ],
           "isUnique": false,
-          "with": {},
-          "method": "btree",
           "where": "\"recordings\".\"status\" = 'ready'",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "recordings_room_id_status_created_at_idx": {
           "name": "recordings_room_id_status_created_at_idx",
@@ -11336,9 +11233,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "recordings_participant_ids_gin": {
           "name": "recordings_participant_ids_gin",
@@ -11351,34 +11248,34 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "gin",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "recordings_room_id_rooms_id_fk": {
           "name": "recordings_room_id_rooms_id_fk",
           "tableFrom": "recordings",
+          "tableTo": "rooms",
           "columnsFrom": [
             "room_id"
           ],
-          "tableTo": "rooms",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "recordings_egress_id_key": {
           "name": "recordings_egress_id_key",
+          "nullsNotDistinct": false,
           "columns": [
             "egress_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -11454,26 +11351,26 @@
         "room_media_queue_items_room_id_rooms_id_fk": {
           "name": "room_media_queue_items_room_id_rooms_id_fk",
           "tableFrom": "room_media_queue_items",
+          "tableTo": "rooms",
           "columnsFrom": [
             "room_id"
           ],
-          "tableTo": "rooms",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "room_media_queue_items_room_id_position_key": {
           "name": "room_media_queue_items_room_id_position_key",
+          "nullsNotDistinct": false,
           "columns": [
             "room_id",
             "position"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -11537,10 +11434,10 @@
       "uniqueConstraints": {
         "room_user_preferences_oxy_user_id_key": {
           "name": "room_user_preferences_oxy_user_id_key",
+          "nullsNotDistinct": false,
           "columns": [
             "oxy_user_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -11811,10 +11708,10 @@
             }
           ],
           "isUnique": false,
-          "with": {},
-          "method": "btree",
           "where": "\"rooms\".\"archived\" = false",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "rooms_house_id_status_created_at_idx": {
           "name": "rooms_house_id_status_created_at_idx",
@@ -11839,10 +11736,10 @@
             }
           ],
           "isUnique": false,
-          "with": {},
-          "method": "btree",
           "where": "\"rooms\".\"archived\" = false",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "rooms_host_status_created_at_idx": {
           "name": "rooms_host_status_created_at_idx",
@@ -11867,10 +11764,10 @@
             }
           ],
           "isUnique": false,
-          "with": {},
-          "method": "btree",
           "where": "\"rooms\".\"archived\" = false",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "rooms_type_status_created_at_idx": {
           "name": "rooms_type_status_created_at_idx",
@@ -11895,10 +11792,10 @@
             }
           ],
           "isUnique": false,
-          "with": {},
-          "method": "btree",
           "where": "\"rooms\".\"archived\" = false",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "rooms_owner_type_type_status_created_at_idx": {
           "name": "rooms_owner_type_type_status_created_at_idx",
@@ -11929,10 +11826,10 @@
             }
           ],
           "isUnique": false,
-          "with": {},
-          "method": "btree",
           "where": "\"rooms\".\"archived\" = false",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "rooms_active_ingress_id_idx": {
           "name": "rooms_active_ingress_id_idx",
@@ -11945,10 +11842,10 @@
             }
           ],
           "isUnique": false,
-          "with": {},
-          "method": "btree",
           "where": "\"rooms\".\"active_ingress_id\" is not null",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "rooms_series_id_idx": {
           "name": "rooms_series_id_idx",
@@ -11961,9 +11858,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "rooms_house_id_idx": {
           "name": "rooms_house_id_idx",
@@ -11976,37 +11873,37 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "rooms_house_id_houses_id_fk": {
           "name": "rooms_house_id_houses_id_fk",
           "tableFrom": "rooms",
+          "tableTo": "houses",
           "columnsFrom": [
             "house_id"
           ],
-          "tableTo": "houses",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "rooms_series_id_series_id_fk": {
           "name": "rooms_series_id_series_id_fk",
           "tableFrom": "rooms",
+          "tableTo": "series",
           "columnsFrom": [
             "series_id"
           ],
-          "tableTo": "series",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -12238,10 +12135,10 @@
             }
           ],
           "isUnique": false,
-          "with": {},
-          "method": "btree",
           "where": "\"series\".\"is_active\" = true",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "series_house_id_idx": {
           "name": "series_house_id_idx",
@@ -12254,24 +12151,24 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "series_house_id_houses_id_fk": {
           "name": "series_house_id_houses_id_fk",
           "tableFrom": "series",
+          "tableTo": "houses",
           "columnsFrom": [
             "house_id"
           ],
-          "tableTo": "houses",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -12382,48 +12279,48 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "series_episodes_series_id_series_id_fk": {
           "name": "series_episodes_series_id_series_id_fk",
           "tableFrom": "series_episodes",
+          "tableTo": "series",
           "columnsFrom": [
             "series_id"
           ],
-          "tableTo": "series",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "series_episodes_room_id_rooms_id_fk": {
           "name": "series_episodes_room_id_rooms_id_fk",
           "tableFrom": "series_episodes",
+          "tableTo": "rooms",
           "columnsFrom": [
             "room_id"
           ],
-          "tableTo": "rooms",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "series_episodes_series_id_position_key": {
           "name": "series_episodes_series_id_position_key",
+          "nullsNotDistinct": false,
           "columns": [
             "series_id",
             "position"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -12499,65 +12396,65 @@
         "track_keys_track_id_tracks_id_fk": {
           "name": "track_keys_track_id_tracks_id_fk",
           "tableFrom": "track_keys",
+          "tableTo": "tracks",
           "columnsFrom": [
             "track_id"
           ],
-          "tableTo": "tracks",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "track_keys_user_upload_id_user_uploads_id_fk": {
           "name": "track_keys_user_upload_id_user_uploads_id_fk",
           "tableFrom": "track_keys",
+          "tableTo": "user_uploads",
           "columnsFrom": [
             "user_upload_id"
           ],
-          "tableTo": "user_uploads",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "track_keys_episode_id_episodes_id_fk": {
           "name": "track_keys_episode_id_episodes_id_fk",
           "tableFrom": "track_keys",
+          "tableTo": "episodes",
           "columnsFrom": [
             "episode_id"
           ],
-          "tableTo": "episodes",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "track_keys_track_id_key": {
           "name": "track_keys_track_id_key",
+          "nullsNotDistinct": false,
           "columns": [
             "track_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         },
         "track_keys_user_upload_id_key": {
           "name": "track_keys_user_upload_id_key",
+          "nullsNotDistinct": false,
           "columns": [
             "user_upload_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         },
         "track_keys_episode_id_key": {
           "name": "track_keys_episode_id_key",
+          "nullsNotDistinct": false,
           "columns": [
             "episode_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -12642,9 +12539,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {},
@@ -12652,12 +12549,12 @@
       "uniqueConstraints": {
         "catalog_relations_kind_source_id_target_id_key": {
           "name": "catalog_relations_kind_source_id_target_id_key",
+          "nullsNotDistinct": false,
           "columns": [
             "kind",
             "source_id",
             "target_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -12785,9 +12682,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "listening_events_played_at_idx": {
           "name": "listening_events_played_at_idx",
@@ -12800,9 +12697,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "listening_events_track_id_idx": {
           "name": "listening_events_track_id_idx",
@@ -12815,9 +12712,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "listening_events_artist_id_idx": {
           "name": "listening_events_artist_id_idx",
@@ -12830,37 +12727,37 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "listening_events_track_id_tracks_id_fk": {
           "name": "listening_events_track_id_tracks_id_fk",
           "tableFrom": "listening_events",
+          "tableTo": "tracks",
           "columnsFrom": [
             "track_id"
           ],
-          "tableTo": "tracks",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "listening_events_artist_id_catalog_entities_id_fk": {
           "name": "listening_events_artist_id_catalog_entities_id_fk",
           "tableFrom": "listening_events",
+          "tableTo": "catalog_entities",
           "columnsFrom": [
             "artist_id"
           ],
-          "tableTo": "catalog_entities",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -12926,10 +12823,10 @@
       "uniqueConstraints": {
         "notification_preferences_oxy_user_id_key": {
           "name": "notification_preferences_oxy_user_id_key",
+          "nullsNotDistinct": false,
           "columns": [
             "oxy_user_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -12989,9 +12886,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {},
@@ -12999,11 +12896,11 @@
       "uniqueConstraints": {
         "notification_suppressions_oxy_user_id_key_key": {
           "name": "notification_suppressions_oxy_user_id_key_key",
+          "nullsNotDistinct": false,
           "columns": [
             "oxy_user_id",
             "key"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -13103,10 +13000,10 @@
       "uniqueConstraints": {
         "user_behavior_oxy_user_id_key": {
           "name": "user_behavior_oxy_user_id_key",
+          "nullsNotDistinct": false,
           "columns": [
             "oxy_user_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -13225,10 +13122,10 @@
       "uniqueConstraints": {
         "user_music_preferences_oxy_user_id_key": {
           "name": "user_music_preferences_oxy_user_id_key",
+          "nullsNotDistinct": false,
           "columns": [
             "oxy_user_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -13472,10 +13369,10 @@
       "uniqueConstraints": {
         "user_settings_oxy_user_id_key": {
           "name": "user_settings_oxy_user_id_key",
+          "nullsNotDistinct": false,
           "columns": [
             "oxy_user_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -13557,48 +13454,48 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "user_taste_artists_taste_profile_id_user_taste_profiles_id_fk": {
           "name": "user_taste_artists_taste_profile_id_user_taste_profiles_id_fk",
           "tableFrom": "user_taste_artists",
+          "tableTo": "user_taste_profiles",
           "columnsFrom": [
             "taste_profile_id"
           ],
-          "tableTo": "user_taste_profiles",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "user_taste_artists_artist_id_catalog_entities_id_fk": {
           "name": "user_taste_artists_artist_id_catalog_entities_id_fk",
           "tableFrom": "user_taste_artists",
+          "tableTo": "catalog_entities",
           "columnsFrom": [
             "artist_id"
           ],
-          "tableTo": "catalog_entities",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "user_taste_artists_taste_profile_id_artist_id_key": {
           "name": "user_taste_artists_taste_profile_id_artist_id_key",
+          "nullsNotDistinct": false,
           "columns": [
             "taste_profile_id",
             "artist_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -13645,26 +13542,26 @@
         "user_taste_genres_taste_profile_id_user_taste_profiles_id_fk": {
           "name": "user_taste_genres_taste_profile_id_user_taste_profiles_id_fk",
           "tableFrom": "user_taste_genres",
+          "tableTo": "user_taste_profiles",
           "columnsFrom": [
             "taste_profile_id"
           ],
-          "tableTo": "user_taste_profiles",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "user_taste_genres_taste_profile_id_genre_key": {
           "name": "user_taste_genres_taste_profile_id_genre_key",
+          "nullsNotDistinct": false,
           "columns": [
             "taste_profile_id",
             "genre"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -13727,10 +13624,10 @@
       "uniqueConstraints": {
         "user_taste_profiles_oxy_user_id_key": {
           "name": "user_taste_profiles_oxy_user_id_key",
+          "nullsNotDistinct": false,
           "columns": [
             "oxy_user_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -13802,24 +13699,24 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "playlist_activity_playlist_id_playlists_id_fk": {
           "name": "playlist_activity_playlist_id_playlists_id_fk",
           "tableFrom": "playlist_activity",
+          "tableTo": "playlists",
           "columnsFrom": [
             "playlist_id"
           ],
-          "tableTo": "playlists",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -13893,34 +13790,34 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "playlist_invites_playlist_id_playlists_id_fk": {
           "name": "playlist_invites_playlist_id_playlists_id_fk",
           "tableFrom": "playlist_invites",
+          "tableTo": "playlists",
           "columnsFrom": [
             "playlist_id"
           ],
-          "tableTo": "playlists",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "playlist_invites_token_hash_key": {
           "name": "playlist_invites_token_hash_key",
+          "nullsNotDistinct": false,
           "columns": [
             "token_hash"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -13935,10 +13832,10 @@
   },
   "enums": {},
   "schemas": {},
-  "views": {},
   "sequences": {},
   "roles": {},
   "policies": {},
+  "views": {},
   "_meta": {
     "columns": {},
     "schemas": {},
