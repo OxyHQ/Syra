@@ -27,6 +27,7 @@ export * from './library';
 export * from './moderation';
 export * from './oxyFiles';
 export * from './podcasts';
+export * from './podcastGeneration';
 export * from './rooms';
 export * from './trackKeys';
 export * from './user';

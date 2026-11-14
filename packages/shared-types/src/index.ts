@@ -10,6 +10,7 @@ export * from './artist';
 export * from './playlist';
 export * from './podcast';
 export * from './episode';
+export * from './generation';
 export * from './episodeProgress';
 export * from './subscription';
 export * from './person';

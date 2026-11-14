@@ -11,6 +11,7 @@ import { getRequiredOxyUserId } from '@oxy.so/core/server';
 import { updateEpisodeProgressRequestSchema, updateEpisodeRequestSchema } from '@syra/shared-types';
 import {
   findEpisodeById,
+  findEpisodeForViewer,
   findEpisodeProgress,
   findEpisodesByIds,
   listContinueListening,
@@ -50,21 +51,12 @@ export async function getEpisode(req: AuthRequest, res: Response): Promise<void>
     return;
   }
 
-  const found = await findEpisodeById(id);
-  if (!found || !viewerCanReadShow(found.show, req.user?.id)) {
+  const found = await findEpisodeForViewer(id, req.user?.id);
+  if (!found) {
     res.status(404).json({ error: 'Episode not found' });
     return;
   }
-  const { episode, show } = found;
-
-  // The owner sees an episode in every state; everyone else sees only `ready`
-  // ones — the same rule `episodeVisibilityFilter` states for a show's list,
-  // applied to the single-episode read that never had it.
-  const isOwner = viewerOwnsShow(show, req.user?.id);
-  if (!isOwner && episode.status !== 'ready') {
-    res.status(404).json({ error: 'Episode not found' });
-    return;
-  }
+  const { episode } = found;
 
   // The inline credits are a child table now, so they are read here and handed
   // to the resolver. Resolved in parallel with the parent show's artwork: a

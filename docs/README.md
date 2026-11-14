@@ -15,6 +15,12 @@ Documentation for the Syra music streaming platform.
 
 - **[First-party SDK transport](./first-party-sdk.md)** — own session transport and pending release/adoption.
 
+### Podcasts and agents
+
+- **[Generated episodes](./podcast-generation.md)** — a creator or an agent asks Syra to write and voice an episode of their show.
+- **[MCP server](./mcp.md)** — `https://api.syra.fm/mcp`: Syra's tools for any MCP client, signed in with Oxy.
+- **[AI routing](./ai-routing.md)** — how Syra reaches inference: Kaana's SDK over its Oxy workload.
+
 ### Runbooks
 
 - **[User uploads deploy](./runbooks/user-uploads-deploy.md)** — ordered one-time production steps for the user-upload feature; the order is not interchangeable.

@@ -43,7 +43,6 @@ import {
   findPodcastForViewer,
   findPodcastsByIds,
   findPodcastsByOwner,
-  insertPodcast,
   searchPodcastRows,
   updatePodcast as updatePodcastRow,
 } from '../db/podcasts/podcasts';
@@ -74,6 +73,7 @@ import {
   type ArtworkColumns,
 } from '../services/podcasts/podcastImportService';
 import { adoptCoverFile } from '../services/oxyFiles/adoptedCovers';
+import { insertHostedPodcast } from '../services/podcasts/hostedPodcast';
 import { syncPodcastSearch } from '../services/podcasts/podcastBackgroundImport';
 import {
   resolvePersons,
@@ -617,46 +617,12 @@ export async function createPodcast(req: AuthRequest, res: Response): Promise<vo
     secondaryColor = adopted.secondaryColor;
   }
 
-  const row = await insertPodcast(
-    {
-      id,
-      title: input.title,
-      description: input.description,
-      author: input.author,
-      imageId: null,
-      ...artwork,
-      primaryColor,
-      secondaryColor,
-      language: input.language,
-      explicit: input.explicit ?? false,
-      link: input.link,
-      type: input.type ?? 'episodic',
-      source: 'syra',
-      ownerOxyUserId: userId,
-      claimable: false,
-      status: 'active',
-      /**
-       * The one place a show's audience is CHOSEN. Validated by
-       * `createPodcastRequestSchema` (the zod enum is the same tuple as the
-       * column's CHECK), and absent means `'public'` — the column default, and
-       * what every show created before this field existed already is.
-       *
-       * Only `source: 'syra'` reaches here. RSS-mirrored shows are created by
-       * the import path, which never names this column, so a feed mirrored from
-       * the public internet stays public.
-       */
-      visibility: input.visibility ?? 'public',
-      aiGenerated: input.aiGenerated ?? false,
-      feedUrl: `${env.STREAM_KEY_BASE_URL}/api/podcasts/${id}/rss`,
-    },
-    {
-      categories: input.categories ?? [],
+  const row = await insertHostedPodcast(userId, input, {
+    id,
+    values: { ...artwork, primaryColor, secondaryColor },
+    children: {
       persons,
       /**
-       * The FIRST writer `podcast_sources` has ever had — `schema/podcasts.ts`
-       * recorded that the table was built on the brief's instruction with no
-       * writer anywhere, and this closes that.
-       *
        * `fields: []` is a real answer rather than a placeholder: the array names
        * which of the SHOW's fields that provider maintains, and Alia maintains
        * none of them — the creator owns the title, the artwork and the
@@ -676,7 +642,7 @@ export async function createPodcast(req: AuthRequest, res: Response): Promise<vo
             ],
           }),
     },
-  );
+  });
 
   res.status(201).json({ data: await serializeOne(row, userId) });
 }
