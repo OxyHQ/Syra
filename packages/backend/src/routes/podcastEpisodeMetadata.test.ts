@@ -4,20 +4,20 @@ import {
   resetFileTaskAuthorityFixture,
 } from '../test/fileTaskAuthority';
 /**
- * Three things the ingest task fixed or added that are not the capability:
- * the metadata `uploadEpisode` was DROPPING, the order a numbered series comes
- * back in, and the provenance/disclosure pair.
+ * Three things that were invisible below the routers: the metadata
+ * `uploadEpisode` was DROPPING, the order a numbered series comes back in, and
+ * the AI disclosure.
  *
  * All three are driven over the real routers rather than against the DB helpers,
  * because all three were invisible precisely at that layer: the fields were
  * parsed out of a multipart body and thrown away, the ordering is decided by the
- * listing endpoint, and the provenance row is written by a create handler.
+ * listing endpoint, and the disclosure is written by a create handler.
  */
 
 import { afterAll, afterEach, beforeAll, describe, expect, it, mock } from 'bun:test';
 import express from 'express';
 import type { Server } from 'http';
-import { asc, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { uuidv7 } from '@oxy.so/db';
 import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
 import { clearDb, connectDb, disconnectDb } from '../test/postgres';
@@ -50,10 +50,8 @@ const realEnqueueEpisodeIngest = realIngest.enqueueEpisodeIngest;
  * `mock.module` is process-global, so a fake left live would hand every later
  * file in the run a working S3 and a no-op transcode queue — and
  * `services/podcasts/ingestEpisode.test.ts` tests the real
- * `enqueueEpisodeIngest`. The sibling ingest suite scopes its fakes by episode
- * id, which it can do because it learns every id from a draft RESPONSE; here the
- * id is minted inside the handler under test, so there is nothing to register in
- * advance. A flag set in `beforeAll` and cleared in `afterAll` is the honest
+ * `enqueueEpisodeIngest`. The id is minted inside the handler under test, so
+ * there is nothing to scope a fake by in advance. A flag set in `beforeAll` and cleared in `afterAll` is the honest
  * scope: while this suite runs, the fake answers; afterwards it delegates.
  */
 let armed = false;
@@ -343,9 +341,9 @@ describe('GET /api/podcasts/:id/episodes orders a numbered series by NUMBER', ()
   });
 });
 
-// ── Provenance and disclosure ─────────────────────────────────────────────────
+// ── Disclosure ─────────────────────────────────────────────────
 
-describe('POST /api/podcasts records Alia provenance and the AI flag', () => {
+describe('POST /api/podcasts records the AI flag', () => {
   async function createShow(
     body: Record<string, unknown>,
   ): Promise<{ status: number; id?: string }> {
@@ -359,66 +357,15 @@ describe('POST /api/podcasts records Alia provenance and the AI flag', () => {
     return { status: response.status, id: payload.data.id };
   }
 
-  it('writes a provider=alia source row, without touching podcasts.source', async () => {
-    /**
-     * `podcasts.source` stays `'syra'`, and that is the load-bearing assertion:
-     * `source === 'syra'` is the owner-write predicate in five handlers, so a
-     * third value there would remove write access from every Alia-authored show.
-     * Provenance answers "who made it" on its own table.
-     */
-    const created = await createShow({
-      title: 'Generated Show',
-      aliaSeriesId: 'alia-series-42',
-      aiGenerated: true,
-    });
-    expect(`create: ${created.status}`).toBe('create: 201');
+  it('records the flag without a provenance row, and the show stays Syra-hosted', async () => {
+    const created = await createShow({ title: 'Generated', aiGenerated: true });
     if (!created.id) throw new Error('no id');
 
     const [show] = await getDb().select().from(podcasts).where(eq(podcasts.id, created.id));
     expect(`source: ${show?.source}`).toBe('source: syra');
     expect(`aiGenerated: ${show?.aiGenerated}`).toBe('aiGenerated: true');
-
-    const sources = await getDb()
-      .select()
-      .from(podcastSources)
-      .where(eq(podcastSources.podcastId, created.id))
-      .orderBy(asc(podcastSources.position));
-    expect(`rows: ${sources.length}`).toBe('rows: 1');
-    expect(`provider: ${sources[0]?.provider}`).toBe('provider: alia');
-    expect(`externalId: ${sources[0]?.externalId}`).toBe('externalId: alia-series-42');
-
-    // And the show still edits, which is the thing a `source` change would have
-    // broken. PATCH is the cheapest proof that the owner-write predicate holds.
-    const patched = await fetch(`${baseUrl}/api/podcasts/${created.id}`, {
-      method: 'PATCH',
-      headers: { [VIEWER_HEADER]: OWNER, 'content-type': 'application/json' },
-      body: JSON.stringify({ title: 'Renamed' }),
-    });
-    expect(`still editable: ${patched.status}`).toBe('still editable: 200');
-  });
-
-  it('treats provenance and the AI flag as INDEPENDENT', async () => {
-    /**
-     * Neither implies the other, so neither is derived from the other: a person
-     * can host a show published through Alia, and a machine-generated show can
-     * arrive from somewhere else entirely. Both one-sided cases are asserted,
-     * because a handler that derived one from the other would satisfy the
-     * both-set case above perfectly.
-     */
-    const aliaOnly = await createShow({ title: 'Human Host', aliaSeriesId: 'alia-series-7' });
-    if (!aliaOnly.id) throw new Error('no id');
-    const [humanShow] = await getDb().select().from(podcasts).where(eq(podcasts.id, aliaOnly.id));
-    expect(`alia but not ai: ${humanShow?.aiGenerated}`).toBe('alia but not ai: false');
     expect(
-      `alia row present: ${(await getDb().select().from(podcastSources).where(eq(podcastSources.podcastId, aliaOnly.id))).length}`,
-    ).toBe('alia row present: 1');
-
-    const aiOnly = await createShow({ title: 'Generated Elsewhere', aiGenerated: true });
-    if (!aiOnly.id) throw new Error('no id');
-    const [aiShow] = await getDb().select().from(podcasts).where(eq(podcasts.id, aiOnly.id));
-    expect(`ai but no provenance: ${aiShow?.aiGenerated}`).toBe('ai but no provenance: true');
-    expect(
-      `no source row: ${(await getDb().select().from(podcastSources).where(eq(podcastSources.podcastId, aiOnly.id))).length}`,
+      `no source row: ${(await getDb().select().from(podcastSources).where(eq(podcastSources.podcastId, created.id))).length}`,
     ).toBe('no source row: 0');
   });
 

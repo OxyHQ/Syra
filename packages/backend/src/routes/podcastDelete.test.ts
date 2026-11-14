@@ -40,7 +40,6 @@ import { clearDb, connectDb, disconnectDb } from '../test/postgres';
 import { getDb } from '../db/postgres';
 import {
   episodeHlsRenditions,
-  episodeIngestTickets,
   episodeProgress,
   episodes as episodesTable,
   podcasts,
@@ -50,8 +49,6 @@ import { userPodcastSubscriptions } from '../db/schema/library';
 import * as realS3 from '../services/s3Service';
 import podcastsRoutes from './podcasts.routes';
 import episodesRoutes from './episodes.routes';
-
-process.env.INGEST_TOKEN_SECRET = 'test-secret-podcast-delete';
 
 // ── The S3 boundary ───────────────────────────────────────────────────────────
 
@@ -241,15 +238,10 @@ async function seedEpisode(
   return id;
 }
 
-function request(
-  path: string,
-  method: string,
-  viewer?: string,
-  headers: Record<string, string> = {},
-): Promise<Response> {
+function request(path: string, method: string, viewer?: string): Promise<Response> {
   return fetch(`${baseUrl}${path}`, {
     method,
-    headers: { ...(viewer ? { [VIEWER_HEADER]: viewer } : {}), ...headers },
+    headers: viewer ? { [VIEWER_HEADER]: viewer } : {},
   });
 }
 
@@ -285,14 +277,6 @@ describe('DELETE /api/podcasts/:id', () => {
       episodeId,
       positionSec: 42,
     });
-    await getDb()
-      .insert(episodeIngestTickets)
-      .values({
-        id: uuidv7(),
-        jti: uuidv7(),
-        episodeId,
-        expiresAt: new Date(Date.now() + 86_400_000),
-      });
 
     const response = await request(`/api/podcasts/${showId}`, 'DELETE', OWNER);
     expect(response.status).toBe(200);
@@ -311,10 +295,6 @@ describe('DELETE /api/podcasts/:id', () => {
       "every listener's saved position",
     ).toBe(0);
     expect((await getDb().select().from(trackKeys)).length, 'the AES keys').toBe(0);
-    expect(
-      (await getDb().select().from(episodeIngestTickets)).length,
-      'any outstanding ingest capability',
-    ).toBe(0);
     expect((await getDb().select().from(episodeHlsRenditions)).length, 'the HLS ladder').toBe(0);
   });
 
@@ -412,51 +392,6 @@ describe('DELETE /api/podcasts/:id', () => {
     expect(touchedStorage()).toBe(0);
 
     expect((await request(`/api/podcasts/${active}`, 'DELETE', OWNER)).status).toBe(200);
-  });
-});
-
-// ── The ingest capability ─────────────────────────────────────────────────────
-
-describe('the ingest ticket', () => {
-  it('cannot delete anything, while still being a live capability', async () => {
-    const showId = await seedShow();
-
-    const drafted = await fetch(`${baseUrl}/api/podcasts/${showId}/episodes/draft`, {
-      method: 'POST',
-      headers: { [VIEWER_HEADER]: OWNER, 'content-type': 'application/json' },
-      body: JSON.stringify({ title: 'Drafted' }),
-    });
-    expect(drafted.status).toBe(201);
-    const { data } = (await drafted.json()) as {
-      data: { episodeId: string; ingestTicket: string };
-    };
-
-    /**
-     * The positive control, and it is what makes the two refusals below mean
-     * something: this proves the ticket AUTHENTICATES. `400 Audio file is
-     * required` is reached only after `authorizeIngest` has verified the token,
-     * bound it to this episode, and matched the show's current owner — so the
-     * ticket is live at the moment the deletes are attempted.
-     */
-    const ingest = await fetch(`${baseUrl}/api/podcasts/episodes/${data.episodeId}/ingest`, {
-      method: 'POST',
-      headers: { 'x-ingest-ticket': data.ingestTicket },
-    });
-    expect(ingest.status, 'the ticket is authentic and unspent').toBe(400);
-
-    const episode = await request(`/api/episodes/${data.episodeId}`, 'DELETE', undefined, {
-      'x-ingest-ticket': data.ingestTicket,
-    });
-    expect(episode.status, 'a ticket is not a session').toBe(401);
-
-    const show = await request(`/api/podcasts/${showId}`, 'DELETE', undefined, {
-      'x-ingest-ticket': data.ingestTicket,
-    });
-    expect(show.status).toBe(401);
-
-    expect(await showExists(showId)).toBe(true);
-    expect(await episodeExists(data.episodeId)).toBe(true);
-    expect(touchedStorage()).toBe(0);
   });
 });
 

@@ -449,12 +449,12 @@ export async function insertEpisode(
   /**
    * Join the CALLER's transaction instead of opening one.
    *
-   * The draft endpoint writes an episode and its ingest ticket together: a
-   * ticket whose redemption row failed to land is a capability that can never be
-   * redeemed (the claim treats a missing row as refused), and an episode with no
-   * ticket is a row nobody can ever attach audio to. Neither half is useful
-   * alone, so neither may land alone — and that is not expressible while this
-   * function insists on being the outermost transaction.
+   * A generated episode is written with its `episode_generations` job and
+   * numbered under the show's advisory lock (`insertGeneratedEpisode`): an
+   * episode with no job would never be made, and a job with no episode has
+   * nothing to fill. Neither half is useful alone, so neither may land alone —
+   * and that is not expressible while this function insists on being the
+   * outermost transaction.
    */
   tx?: DbOrTransaction,
 ): Promise<EpisodeRow> {

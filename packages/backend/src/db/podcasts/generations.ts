@@ -108,8 +108,8 @@ export interface GeneratedEpisodeDraft {
  *
  * The episode number is the show's highest plus one, taken under a transaction
  * advisory lock on the show, so two requests a second apart cannot both be
- * episode 4. The row starts `processing` with no audio, exactly like a draft:
- * nobody but the owner sees it until ingest makes it `ready`.
+ * episode 4. The row starts `processing` with no audio: nobody but the owner
+ * sees it until ingest makes it `ready`.
  */
 export async function insertGeneratedEpisode(
   draft: GeneratedEpisodeDraft,

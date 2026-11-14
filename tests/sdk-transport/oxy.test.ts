@@ -12,7 +12,7 @@ let oxy: OxyServices;
 let client: ReturnType<typeof syraForOxySession>;
 let revoked = false;
 let redirect: string | undefined;
-const requests: Array<{ account: string | null; path: string; ticket: string | null }> = [];
+const requests: Array<{ account: string | null; path: string }> = [];
 beforeAll(() => {
   server = Bun.serve({
     port: 0,
@@ -21,21 +21,9 @@ beforeAll(() => {
       const path = new URL(request.url).pathname;
       const bearer = request.headers.get('authorization');
       const account = bearer === `Bearer ${a}` ? 'a' : bearer === `Bearer ${b}` ? 'b' : null;
-      requests.push({ account, path, ticket: request.headers.get('x-ingest-ticket') });
-      if (path === '/storage') return new Response(null, { status: 204 });
-      if (path.endsWith('/ingest/upload'))
-        return Response.json({
-          data: {
-            uploadId: 'upload-1',
-            url: `${server.url.origin}/storage`,
-            method: 'PUT',
-            headers: {},
-            maxBytes: 1024,
-            expiresAt: new Date(Date.now() + 60000).toISOString(),
-          },
-        });
-      if (path.endsWith('/ingest') || path.endsWith('/ingest/abandon'))
-        return Response.json({ data: { id: 'episode-1', podcastId: 'show-1', title: 'Episode' } });
+      requests.push({ account, path });
+      if (path === '/api/podcasts/public-cards')
+        return Response.json({ items: [], unavailableIds: ['show-1'] });
       if (redirect) return Response.redirect(redirect, 307);
       if (revoked || !account) return Response.json({ error: 'unauthorized' }, { status: 401 });
       return Response.json({ data: [{ id: `show-${account}`, title: `Private ${account}` }] });
@@ -90,19 +78,9 @@ describe('Syra shared linked session transport', () => {
     await expect(client.listMyPodcasts()).rejects.toThrow();
     expect(oxy.http.getAccessToken()).toBe(a);
   });
-  it('keeps ingest tickets and signed storage uploads separate from the linked account', async () => {
-    const draft = { episodeId: 'episode-1', ingestTicket: 'ticket-only' };
-    expect(
-      (await client.ingestEpisode(draft, new Blob(['audio'], { type: 'audio/mpeg' }))).id,
-    ).toBe('episode-1');
-    await client.abandonEpisodeIngest(draft);
-    expect(requests.map(({ account }) => account)).toEqual([null, null, null, null]);
-    expect(requests.map(({ ticket }) => ticket)).toEqual([
-      'ticket-only',
-      null,
-      'ticket-only',
-      'ticket-only',
-    ]);
+  it('keeps a public-only read off the linked account', async () => {
+    expect((await client.getPublicPodcastCards(['show-1'])).unavailableIds).toEqual(['show-1']);
+    expect(requests.map(({ account }) => account)).toEqual([null]);
     expect(oxy.http.getAccessToken()).toBe(a);
   });
   it('preserves the external token callback and rejects ambiguous mixed authority', async () => {

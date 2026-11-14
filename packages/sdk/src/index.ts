@@ -22,8 +22,6 @@ export type {
   EpisodeArtworkSource,
   CreatePodcastInput,
   UpdatePodcastInput,
-  CreateEpisodeDraftInput,
-  IngestEpisodeInput,
   UploadPayload,
 } from './client';
 export type {
@@ -35,7 +33,6 @@ export type {
   EpisodeSummary,
   EpisodeAudioSource,
   EpisodeStatus,
-  EpisodeDraft,
   AudioUploadTarget,
   EpisodeStream,
   PodcastDeleted,

@@ -72,7 +72,7 @@ function makeEpisode(overrides: Record<string, unknown> = {}): Record<string, un
  * A Syra-HOSTED episode: no enclosure at all, audio at a path on the API.
  *
  * This is what everything created through the Syra API looks like — the creator
- * upload path, and every episode Alia drafts and ingests. It is the shape the
+ * upload path, and every episode Syra generates. It is the shape the
  * SDK used to drop on the floor.
  */
 function makeSyraEpisode(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -612,10 +612,10 @@ describe('createSyraClient.getPodcastEpisodes', () => {
 
   it('keeps a DRAFTED episode that has no audio at all', async () => {
     /**
-     * The other end of the same rule. An episode drafted for asynchronous ingest
-     * exists, is listable by its owner, and has neither an enclosure nor an
-     * audioSource until the worker redeems its ticket. Dropping it would hide a
-     * creator's own in-progress episode from them.
+     * The other end of the same rule. An episode still being generated exists,
+     * is listable by its owner, and has neither an enclosure nor an audioSource
+     * until its audio is stored. Dropping it would hide a creator's own
+     * in-progress episode from them.
      */
     const drafted = makeSyraEpisode({ id: '507f1f77bcf86cd799439042', status: 'processing' });
     delete drafted.audioSource;
@@ -863,15 +863,11 @@ describe('the authenticated methods refuse without a session', () => {
     ['createPodcast', (client) => client.createPodcast({ title: 'X' })],
     ['updatePodcast', (client) => client.updatePodcast('p1', { title: 'X' })],
     ['setPodcastVisibility', (client) => client.setPodcastVisibility('p1', 'private')],
-    ['createEpisodeDraft', (client) => client.createEpisodeDraft('p1', { title: 'X' })],
     ['getEpisodeStream', (client) => client.getEpisodeStream('e1')],
     /**
-     * The two deletes belong in THIS list and nowhere near the ticket-authenticated
-     * pair. `ingestEpisode`/`abandonEpisodeIngest` are `anonymous: true` — they
-     * carry a capability instead of a session — and a capability must never be
-     * able to destroy anything. `requires` is what makes these refuse without a
-     * user's own bearer, and `calls.length: 0` is the load-bearing half: the
-     * refusal happens before any request is made.
+     * `requires` is what makes the two deletes refuse without a user's own
+     * bearer, and `calls.length: 0` is the load-bearing half: the refusal
+     * happens before any request is made.
      */
     ['deletePodcast', (client) => client.deletePodcast('p1')],
     ['deleteEpisode', (client) => client.deleteEpisode('e1')],
@@ -994,7 +990,6 @@ describe('createSyraClient write methods', () => {
     const show = await client.createPodcast({
       title: 'Generated Show',
       visibility: 'private',
-      aliaSeriesId: 'alia-42',
       aiGenerated: true,
     });
 
@@ -1004,7 +999,6 @@ describe('createSyraClient write methods', () => {
     expect(sentJson(calls[0])).toEqual({
       title: 'Generated Show',
       visibility: 'private',
-      aliaSeriesId: 'alia-42',
       aiGenerated: true,
     });
     expect(show.visibility).toBe('private');
@@ -1064,40 +1058,6 @@ describe('createSyraClient write methods', () => {
     expect(uploaded.id).toBe('img-1');
   });
 
-  it('createPodcast sends imageFileId as given', async () => {
-    const { client, calls } = authedClient(() => ({
-      body: { data: { id: 'p-2', title: 'Show' } },
-    }));
-
-    await client.createPodcast({ title: 'Show', imageFileId: 'file-2' });
-
-    expect(sentJson(calls[0])).toEqual({ title: 'Show', imageFileId: 'file-2' });
-  });
-
-  it('createEpisodeDraft returns the episode id and its ticket', async () => {
-    const { client, calls } = authedClient(() => ({
-      body: {
-        data: {
-          episodeId: 'ep-1',
-          ingestTicket: 'ticket-abc',
-          expiresAt: '2026-01-02T00:00:00.000Z',
-        },
-      },
-    }));
-
-    const draft = await client.createEpisodeDraft('507f1f77bcf86cd799439021', {
-      title: 'Drafted',
-      episodeNumber: 7,
-    });
-
-    expect(calls[0].url).toBe(
-      'https://api.example.test/api/podcasts/507f1f77bcf86cd799439021/episodes/draft',
-    );
-    expect(sentJson(calls[0])).toEqual({ title: 'Drafted', episodeNumber: 7 });
-    expect(draft.ingestTicket).toBe('ticket-abc');
-    expect(draft.episodeId).toBe('ep-1');
-  });
-
   it('getEpisodeStream returns the tokenized URL', async () => {
     const { client, calls } = authedClient(() => ({
       body: { url: 'https://api.example.test/x/master.m3u8?t=abc', type: 'hls', expiresAt: 'z' },
@@ -1106,237 +1066,6 @@ describe('createSyraClient write methods', () => {
     const stream = await client.getEpisodeStream('ep-1');
     expect(calls[0].url).toBe('https://api.example.test/api/podcasts/episodes/ep-1/stream');
     expect(stream.type).toBe('hls');
-  });
-});
-
-describe('createSyraClient.ingestEpisode', () => {
-  const STORAGE_URL =
-    'https://syra-media.acct.r2.cloudflarestorage.com/incoming/episode/ticket/ep-1/u?X-Amz-Signature=s';
-  const target = {
-    uploadId: '0190f8a0-0000-7000-8000-000000000001',
-    url: STORAGE_URL,
-    method: 'PUT',
-    headers: { 'Content-Type': 'audio/mpeg' },
-    maxBytes: 500 * 1024 * 1024,
-    expiresAt: '2026-10-21T12:00:00.000Z',
-  };
-
-  /** The API and storage, each answering its own requests. */
-  function ingestFetch(
-    overrides: { storageStatus?: number; ingest?: { status?: number; body: unknown } } = {},
-  ) {
-    return fakeFetch((url) => {
-      if (url.endsWith('/ingest/upload')) return { status: 201, body: { data: target } };
-      if (url === STORAGE_URL) return { status: overrides.storageStatus ?? 204, body: null };
-      return overrides.ingest ?? { status: 202, body: { data: makeSyraEpisode() } };
-    });
-  }
-
-  it('sends the audio STRAIGHT to storage, then redeems the ticket by naming the upload', async () => {
-    /**
-     * No request body to the API carries the file: the API refuses bodies over
-     * 100 MB and an episode may be 500 MB. Three requests, in this order, and
-     * only the middle one — to storage, not to the API — is large.
-     */
-    const { fetch, calls } = ingestFetch();
-    const client = createSyraClient({ baseURL: 'https://api.example.test', fetch });
-
-    const episode = await client.ingestEpisode(
-      { episodeId: 'ep-1', ingestTicket: 'ticket-abc' },
-      new Blob([new Uint8Array([1, 2, 3, 4])], { type: 'audio/mpeg' }),
-      { duration: 1800, episodeNumber: 3 },
-    );
-
-    expect(calls.map((call) => call.url)).toEqual([
-      'https://api.example.test/api/podcasts/episodes/ep-1/ingest/upload',
-      STORAGE_URL,
-      'https://api.example.test/api/podcasts/episodes/ep-1/ingest',
-    ]);
-    expect(sentJson(calls[0])).toEqual({ mimeType: 'audio/mpeg', sizeBytes: 4 });
-
-    // Storage gets the raw bytes, PUT with the signed type — the exact size
-    // that was signed is the body's own.
-    expect(calls[1].method).toBe('PUT');
-    expect(calls[1].headers['content-type']).toBe('audio/mpeg');
-    expect((calls[1].body as Blob).size).toBe(4);
-    expect(calls[1].headers['x-ingest-ticket']).toBeUndefined();
-
-    expect(sentJson(calls[2])).toEqual({
-      duration: 1800,
-      episodeNumber: 3,
-      uploadId: target.uploadId,
-      fileName: 'episode.mp3',
-    });
-    expect(episode.id).toBe('507f1f77bcf86cd799439041');
-  });
-
-  it('authenticates every API request with the TICKET and sends no session token', async () => {
-    /**
-     * The property the whole draft/ingest pair exists for: this call is made by a
-     * background worker that has no user session at all. A configured
-     * `getAccessToken` must not turn it into a session-authenticated request —
-     * and storage, which is not Syra, gets neither credential.
-     */
-    const { fetch, calls } = ingestFetch();
-    const client = createSyraClient({ fetch, getAccessToken: () => 'tok' });
-
-    await client.ingestEpisode(
-      { episodeId: 'ep-1', ingestTicket: 'ticket-abc' },
-      new Blob([new Uint8Array([1])], { type: 'audio/mpeg' }),
-    );
-
-    for (const index of [0, 2]) {
-      expect(calls[index].headers.authorization).toBeUndefined();
-      expect(calls[index].headers['x-ingest-ticket']).toBe('ticket-abc');
-    }
-    expect(calls[1].headers.authorization).toBeUndefined();
-    expect(calls[1].headers['x-ingest-ticket']).toBeUndefined();
-  });
-
-  it('carries the title the finished episode earned', async () => {
-    // The draft was named from the topic that was requested; only this call
-    // has read the script.
-    const { fetch, calls } = ingestFetch();
-    const client = createSyraClient({ fetch });
-
-    await client.ingestEpisode(
-      { episodeId: 'ep-1', ingestTicket: 'ticket-abc' },
-      new Blob([new Uint8Array([1])], { type: 'audio/mpeg' }),
-      { title: 'Why the Moon Pays the Electricity Bill', duration: 1800 },
-    );
-
-    expect(sentJson(calls[2]).title).toBe('Why the Moon Pays the Electricity Bill');
-    expect(sentJson(calls[2]).duration).toBe(1800);
-  });
-
-  it('sends NO title key when the caller has no title to send', async () => {
-    /**
-     * An omitted title must mean "keep what the draft said". `title: undefined`
-     * is written EXPLICITLY: a worker whose own title is optional passes the key
-     * holding `undefined`, and `defined()` must strip it before it can reach the
-     * server as a value.
-     */
-    const { fetch, calls } = ingestFetch();
-    const client = createSyraClient({ fetch });
-
-    await client.ingestEpisode(
-      { episodeId: 'ep-1', ingestTicket: 'ticket-abc' },
-      new Blob([new Uint8Array([1])], { type: 'audio/mpeg' }),
-      { title: undefined, duration: 1800 },
-    );
-
-    const sent = sentJson(calls[2]);
-    expect('title' in sent).toBe(false);
-    expect(sent.duration).toBe(1800);
-  });
-
-  it('declares a type for an untyped payload from its file name', async () => {
-    // The signed form admits exactly one type, so it must be known up front.
-    const { fetch, calls } = ingestFetch();
-    const client = createSyraClient({ fetch });
-
-    await client.ingestEpisode(
-      { episodeId: 'ep-1', ingestTicket: 'ticket-abc' },
-      new Blob([new Uint8Array([1, 2])]),
-      {},
-      'take-3.flac',
-    );
-
-    expect(sentJson(calls[0]).mimeType).toBe('audio/flac');
-    expect(sentJson(calls[2]).fileName).toBe('take-3.flac');
-  });
-
-  it('stops before redeeming when storage refuses the file, so the ticket is not spent', async () => {
-    const { fetch, calls } = ingestFetch({ storageStatus: 400 });
-    const client = createSyraClient({ fetch });
-
-    await expect(
-      client.ingestEpisode(
-        { episodeId: 'ep-1', ingestTicket: 'ticket-abc' },
-        new Blob([new Uint8Array([1])], { type: 'audio/mpeg' }),
-      ),
-    ).rejects.toBeInstanceOf(SyraApiError);
-    expect(calls).toHaveLength(2);
-  });
-
-  it('surfaces the API’s own message when a ticket is refused', async () => {
-    // A replayed or expired ticket answers 409 with a reason. The SDK must carry
-    // that reason through — "409" alone does not tell a worker whether to retry.
-    const { fetch } = fakeFetch(() => ({
-      status: 409,
-      body: { error: 'Ingest ticket already used or expired' },
-    }));
-    const client = createSyraClient({ fetch });
-
-    await expect(
-      client.ingestEpisode(
-        { episodeId: 'ep-1', ingestTicket: 'used' },
-        new Blob([new Uint8Array([1])], { type: 'audio/mpeg' }),
-      ),
-    ).rejects.toThrow(/already used or expired/);
-  });
-});
-
-describe('createSyraClient.abandonEpisodeIngest', () => {
-  it('posts to the abandon route with the TICKET and no session token', async () => {
-    /**
-     * The other ending of the same capability, and it has to make the same
-     * credential choice: a background worker that has no user session calls it,
-     * and a configured `getAccessToken` must not turn it into a
-     * session-authenticated request.
-     */
-    const { fetch, calls } = fakeFetch(() => ({ body: { data: makeSyraEpisode() } }));
-    const client = createSyraClient({
-      baseURL: 'https://api.example.test',
-      fetch,
-      getAccessToken: () => 'tok',
-    });
-
-    const episode = await client.abandonEpisodeIngest(
-      { episodeId: 'ep-1', ingestTicket: 'ticket-abc' },
-      'audio generation failed',
-    );
-
-    expect(calls[0].url).toBe('https://api.example.test/api/podcasts/episodes/ep-1/ingest/abandon');
-    expect(calls[0].method).toBe('POST');
-    expect(calls[0].headers['x-ingest-ticket']).toBe('ticket-abc');
-    expect(calls[0].headers.authorization).toBeUndefined();
-    expect(sentJson(calls[0])).toEqual({ reason: 'audio generation failed' });
-    expect(episode.id).toBe('507f1f77bcf86cd799439041');
-  });
-
-  it('omits the reason KEY entirely when none is given, rather than sending a blank one', async () => {
-    /**
-     * The server refuses a blank or `null` reason (400) and accepts an absent
-     * one, so "no reason" has to reach it as an absent KEY. That is a wire fact
-     * rather than a JavaScript one: `{ reason: undefined }` and `{}` stringify
-     * identically, so the mutation this catches is not a dropped filter but the
-     * plausible fix for a `reason` typed as `string` — `reason ?? ''`, which
-     * turns every reasonless abandon into a 400.
-     */
-    const { fetch, calls } = fakeFetch(() => ({ body: { data: makeSyraEpisode() } }));
-    const client = createSyraClient({ fetch });
-
-    await client.abandonEpisodeIngest({ episodeId: 'ep-1', ingestTicket: 'ticket-abc' }, undefined);
-
-    expect(sentJson(calls[0])).toEqual({});
-    // The control: the ticket still made the trip, so an empty body is not this
-    // call failing to be made at all.
-    expect(calls[0].headers['x-ingest-ticket']).toBe('ticket-abc');
-  });
-
-  it('surfaces the API’s own message when the ticket is already spent', async () => {
-    // A ticket buys one outcome. A worker that already ingested — or already
-    // abandoned — gets a 409, and "409" alone does not say which.
-    const { fetch } = fakeFetch(() => ({
-      status: 409,
-      body: { error: 'Ingest ticket already used or expired' },
-    }));
-    const client = createSyraClient({ fetch });
-
-    await expect(
-      client.abandonEpisodeIngest({ episodeId: 'ep-1', ingestTicket: 'used' }),
-    ).rejects.toThrow(/already used or expired/);
   });
 });
 
@@ -1362,13 +1091,8 @@ describe('createSyraClient deletes', () => {
 
     expect(calls[0].url).toBe('https://api.example.test/api/podcasts/p1');
     expect(calls[0].method).toBe('DELETE');
-    /**
-     * The USER's own bearer, and this is the assertion that separates a delete
-     * from the ticket-authenticated pair in this file. A capability may attach
-     * audio or give an episode up; it may never destroy a show.
-     */
+    // The USER's own bearer: only the owner's session may destroy a show.
     expect(calls[0].headers.authorization).toBe('Bearer tok');
-    expect(calls[0].headers['x-ingest-ticket']).toBeUndefined();
 
     /**
      * Both counts are carried through rather than discarded. They are how a
@@ -1383,7 +1107,7 @@ describe('createSyraClient deletes', () => {
      * The one thing about these two endpoints that is easy to get wrong and
      * silent when you do: the episode WRITE routes live on their own router at
      * `/api/episodes/:id`, while `/api/podcasts/episodes/:id/...` is the media
-     * and ingest namespace. A DELETE aimed at the second would fall through to a
+     * namespace. A DELETE aimed at the second would fall through to a
      * route that does not exist.
      */
     const { client, calls } = authedDelete(() => ({

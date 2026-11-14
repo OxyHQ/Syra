@@ -27,13 +27,13 @@
  * ## What one `DELETE FROM podcasts` takes with it
  *
  * Every one of these is a real `ON DELETE CASCADE` in the generated migration
- * (`drizzle/0004_workable_hellion.sql`, `0023`, `0028`), not merely a
+ * (`drizzle/0004_workable_hellion.sql`, `0023`), not merely a
  * `.references()` in the schema — verified against the migrated database rather
  * than read off the TypeScript:
  *
  *   podcasts -> episodes -> episode_hls_renditions, episode_persons,
  *                           episode_transcripts, episode_progress,
- *                           episode_ingest_tickets, track_keys
+ *                           track_keys
  *            -> podcast_categories, podcast_funding, podcast_persons,
  *               podcast_sources, user_podcast_subscriptions
  *
@@ -43,10 +43,6 @@
  * meaningless without the show, so the cascade is correct — but a creator
  * deleting a published show does destroy strangers' state, and that is a
  * property of the feature, not an accident of the schema.
- *
- * `episode_ingest_tickets` cascading is load-bearing in the other direction: an
- * Alia worker holding a live ticket for an episode of a deleted show finds the
- * capability gone rather than pointing at a row that no longer exists.
  *
  * ## What is NOT reached, deliberately
  *

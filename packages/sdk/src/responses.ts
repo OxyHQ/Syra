@@ -4,12 +4,10 @@ import {
   PODCAST_VISIBILITIES,
   PUBLIC_API_ERROR_CODES,
   type ApplePodcastLink,
-  type AudioUploadTarget,
   type CoverArtSizes,
   type CoverArtVariant,
   type EpisodeAudioSource,
   type EpisodeDeleted,
-  type EpisodeDraft,
   type EpisodeStream,
   type EpisodeSummary,
   type PodcastDeleted,
@@ -29,7 +27,6 @@ import {
   object,
   oneOf,
   optional,
-  record,
   refine,
   string,
   type Validator,
@@ -119,21 +116,6 @@ export const episodeSummary = object<EpisodeSummary>({
   image: optional(string),
   imageSizes: optional(coverArtSizes),
   imageSourceUrl: optional(string),
-});
-
-export const episodeDraft = object<EpisodeDraft>({
-  episodeId: string,
-  ingestTicket: string,
-  expiresAt: string,
-});
-
-export const audioUploadTarget = object<AudioUploadTarget>({
-  uploadId: string,
-  url: string,
-  method: oneOf(['PUT'] as const),
-  headers: record(string),
-  maxBytes: number,
-  expiresAt: string,
 });
 
 export const podcastDeleted = object<PodcastDeleted>({

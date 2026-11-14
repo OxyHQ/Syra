@@ -28,12 +28,6 @@ import {
   getEpisodeVariantPlaylist,
 } from '../controllers/podcastAudio.controller';
 import {
-  abandonEpisodeIngest,
-  createEpisodeDraft,
-  createEpisodeIngestUpload,
-  ingestEpisodeAudio,
-} from '../controllers/podcastIngest.controller';
-import {
   generateEpisode,
   getEpisodeGeneration,
   listPodcastGenerations,
@@ -71,27 +65,6 @@ router.get('/episodes/:id/v/:variant', streamMediaCors, getEpisodeVariantPlaylis
 router.options('/episodes/:id/key', streamMediaCors);
 router.get('/episodes/:id/key', streamMediaCors, getEpisodeStreamKey);
 
-/**
- * Asynchronous ingest — NO `requireAuth`, and that is the whole point: the
- * caller is a background worker with no user session, authenticated by the
- * single-use ticket in `X-Ingest-Ticket`. The handler is the authority; see
- * `controllers/podcastIngest.controller.ts`.
- */
-router.post('/episodes/:id/ingest', ingestEpisodeAudio);
-/**
- * The same capability's other ending, and registered BEFORE its sibling would
- * matter if the two could collide — they cannot: `/episodes/:id/ingest` is three
- * segments and this is four, so Express never confuses them and `abandon` is
- * never read as an `:id`.
- */
-router.post('/episodes/:id/ingest/abandon', abandonEpisodeIngest);
-/**
- * A presigned PUT to send the episode's audio to, straight to storage — the
- * ticket's checks without its claim; `ingest` stays the one redemption. Four
- * segments like `abandon`, so it cannot collide with `ingest`.
- */
-router.post('/episodes/:id/ingest/upload', createEpisodeIngestUpload);
-
 // Browse + create
 router.get('/', browsePodcasts);
 router.post('/', requireAuth, createPodcast);
@@ -102,10 +75,6 @@ router.get('/:id/rss', getPodcastRss);
 router.post('/:id/subscribe', requireAuth, subscribePodcast);
 router.post('/:id/unsubscribe', requireAuth, unsubscribePodcast);
 router.post('/:id/episodes', requireAuth, uploadEpisode);
-// Reserve an episode now, attach the audio later. Registered before `/:id` for
-// the same reason every other subresource is, though it cannot collide with
-// `/episodes/:id/ingest` — the literal segments sit in different positions.
-router.post('/:id/episodes/draft', requireAuth, createEpisodeDraft);
 // Write and voice an episode of the caller's own show; 202 while it is made.
 router.post('/:id/episodes/generate', requireAuth, generateEpisode);
 router.get('/:id/generations', requireAuth, listPodcastGenerations);

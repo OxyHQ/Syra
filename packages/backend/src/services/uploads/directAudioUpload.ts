@@ -1,14 +1,13 @@
 /**
- * How audio bytes reach the four routes that take them — directly from storage,
+ * How audio bytes reach the three routes that take them — directly from storage,
  * or (for clients that predate it) in the request body.
  *
  * `api.syra.fm` is behind a proxy that refuses any request body over 100 MB, and
  * these routes accept up to 200 MB (`POST /api/tracks/upload`, `POST
- * /api/uploads`) and 500 MB (`POST /api/podcasts/:id/episodes`, `POST
- * /api/podcasts/episodes/:id/ingest`). So a client asks for a presigned PUT
- * ({@link createAudioUploadTarget}), sends the file straight to storage under
- * `incoming/`, and then calls the route it always called with `{ uploadId }`
- * where the file used to be. The shared contract is
+ * /api/uploads`) and 500 MB (`POST /api/podcasts/:id/episodes`). So a client
+ * asks for a presigned PUT ({@link createAudioUploadTarget}), sends the file
+ * straight to storage under `incoming/`, and then calls the route it always
+ * called with `{ uploadId }` where the file used to be. The shared contract is
  * `@syra/shared-types`'s `audioUpload.ts`.
  *
  * ## One route body, two ways in
@@ -21,10 +20,10 @@
  * the response — is unchanged and shared, so an upload's outcome cannot depend
  * on how its bytes travelled.
  *
- * The multipart way in stays because a published contract still uses it:
- * `@syra.fm/sdk` ≤ 0.21 sends `ingestEpisode` as multipart, and an installed app
- * keeps sending what its bundle sends until it updates. Through the proxy it
- * works for files up to 100 MB, which is every file those callers sent before.
+ * The multipart way in stays because an installed app built before direct
+ * uploads keeps sending what its bundle sends until it updates. Through the
+ * proxy it works for files up to 100 MB, which is every file those callers sent
+ * before.
  *
  * ## What the direct way keeps enforced
  *
@@ -34,9 +33,9 @@
  * - Type: the Content-Type validated when the URL was signed is a signed header
  *   too, and the completing route re-reads the stored object's type and maps it
  *   through the same table multer's filter uses.
- * - Ownership: the incoming key embeds the caller (`account/{oxyUserId}` or
- *   `ticket/{episodeId}`), and the completing route derives it from ITS caller,
- *   so naming somebody else's `uploadId` finds nothing.
+ * - Ownership: the incoming key embeds the caller (`account/{oxyUserId}`), and
+ *   the completing route derives it from ITS caller, so naming somebody else's
+ *   `uploadId` finds nothing.
  * - "Dedup before a byte is stored": an incoming object is not stored audio. It
  *   is deleted on every exit of the completing route, and nothing reads it but
  *   that route.
@@ -111,26 +110,17 @@ const KEY_SEGMENT = /^[A-Za-z0-9_-]+$/;
 
 // ── Who is uploading ─────────────────────────────────────────────────────────
 
-/**
- * The caller an incoming object belongs to — a signed-in account, or the holder
- * of one episode's ingest ticket (who has no account on the call at all).
- */
-export type AudioUploadPrincipal =
-  | { kind: 'account'; oxyUserId: string }
-  | { kind: 'ingest-ticket'; episodeId: string };
+/** The caller an incoming object belongs to: the signed-in account. */
+export type AudioUploadPrincipal = { kind: 'account'; oxyUserId: string };
 
 function principalSegment(principal: AudioUploadPrincipal): string {
-  const [label, id] =
-    principal.kind === 'account'
-      ? ['account', principal.oxyUserId]
-      : ['ticket', principal.episodeId];
-  // Both ids come from a verified credential, never from the body — but the key
+  // The id comes from a verified credential, never from the body — but the key
   // is a path, and a value that could climb out of its segment would turn
   // "derive the key from the caller" into "the caller chooses the key".
-  if (!KEY_SEGMENT.test(id)) {
-    throw new Error(`directAudioUpload: ${label} id is not a safe key segment`);
+  if (!KEY_SEGMENT.test(principal.oxyUserId)) {
+    throw new Error('directAudioUpload: account id is not a safe key segment');
   }
-  return `${label}/${id}`;
+  return `account/${principal.oxyUserId}`;
 }
 
 function incomingKey(

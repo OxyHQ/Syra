@@ -3,7 +3,9 @@
 A creator, or an agent acting for them, asks Syra to write and voice an episode of a show
 they own. It becomes an ordinary hosted episode of that show: in its RSS feed, playable in the
 app and in Studio, deleted with the show. Syra owns the whole feature; Gemies and Alia have
-none of it (they reach it through [Syra's MCP server](./mcp.md)).
+none of it (they reach it through [Syra's MCP server](./mcp.md)). It replaced the lane through
+which Alia published its own generated shows into Syra (an episode draft plus a single-use
+ingest ticket, `aliaSeriesId` provenance and Alia-owned covers), removed on 2026-11-14.
 
 ## How one episode is made
 

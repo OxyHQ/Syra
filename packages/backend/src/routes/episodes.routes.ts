@@ -24,9 +24,7 @@ router.post('/:id/unpublish', requireAuth, unpublishEpisode);
 /**
  * Irreversible, and `requireAuth` is not decoration here: this router is mounted
  * under `createOptionalOxyAuth`, so a route WITHOUT it serves unauthenticated
- * callers with `req.user` undefined. The ingest ticket cannot reach this — it is
- * a different header on a different router, and the only handler that reads it
- * writes through an explicit field allowlist that contains no delete.
+ * callers with `req.user` undefined.
  */
 router.delete('/:id', requireAuth, deleteEpisode);
 router.get('/:id', getEpisode);

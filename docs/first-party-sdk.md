@@ -27,10 +27,12 @@ artifact correction below was verified on 2026-10-25.
 Own apps must use this shared lifecycle instead of a copied bearer callback.
 Account identity remains the verified Oxy session; there is no app scope or
 connection consent. Existing external `createSyraClient({ getAccessToken })`
-behavior and ticket-only episode ingest remain supported.
+behavior and ticket-only episode ingest remain supported. (Ticket ingest was
+removed in SDK 0.26.0, 2026-11-14.)
 
 HTTP composition tests cover account switch, revocation, redirects, disposal,
-external callbacks and ingest/storage credential separation. The independent
+external callbacks and ingest/storage credential separation (the public-cards
+read since 0.26.0). The independent
 `tests/sdk-transport` consumer harness imports the SDK package's built main/types
 entries and uses published core 7.0.0/contracts 6.0.0. Its package and frozen lock
 are separate from the runtime workspace; CI explicitly installs it, checks its

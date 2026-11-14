@@ -27,7 +27,6 @@ import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
 import { getRequiredOxyUserId } from '@oxy.so/core/server';
 import { z } from 'zod';
 import {
-  createEpisodeDraftRequestSchema,
   createPodcastRequestSchema,
   episodeTypeSchema,
   importFeedRequestSchema,
@@ -72,7 +71,6 @@ import {
   importFeed,
   type ArtworkColumns,
 } from '../services/podcasts/podcastImportService';
-import { adoptCoverFile } from '../services/oxyFiles/adoptedCovers';
 import { insertHostedPodcast } from '../services/podcasts/hostedPodcast';
 import { syncPodcastSearch } from '../services/podcasts/podcastBackgroundImport';
 import {
@@ -580,16 +578,6 @@ export async function createPodcast(req: AuthRequest, res: Response): Promise<vo
     persons = built.persons;
   }
 
-  if (input.image && input.imageFileId) {
-    res.status(400).json({ error: 'Send image or imageFileId, not both' });
-    return;
-  }
-
-  // The public RSS URL is derivable from the id, so the id is minted here rather
-  // than left to the column default — the same reason `uploadEpisode` mints one.
-  // Minted before the cover too: an adopted Oxy file is referenced BY this id.
-  const id = uuidv7();
-
   // Pull the gradient colors from the creator's uploaded cover (Syra image id),
   // matching how Album/Artist carry primaryColor.
   let artwork: Partial<ArtworkColumns> = {};
@@ -604,44 +592,11 @@ export async function createPodcast(req: AuthRequest, res: Response): Promise<vo
     artwork = artworkColumns(input.image, {});
     primaryColor = cover.primaryColor;
     secondaryColor = cover.secondaryColor;
-  } else if (input.imageFileId) {
-    const adopted = await adoptCoverFile(input.imageFileId, { oxyUserId: userId, podcastId: id });
-    if (!adopted.ok) {
-      res
-        .status(422)
-        .json({ error: 'That file cannot be this show’s cover', reason: adopted.reason });
-      return;
-    }
-    artwork = artworkColumns(adopted.imageId, adopted.imageSizes);
-    primaryColor = adopted.primaryColor;
-    secondaryColor = adopted.secondaryColor;
   }
 
   const row = await insertHostedPodcast(userId, input, {
-    id,
     values: { ...artwork, primaryColor, secondaryColor },
-    children: {
-      persons,
-      /**
-       * `fields: []` is a real answer rather than a placeholder: the array names
-       * which of the SHOW's fields that provider maintains, and Alia maintains
-       * none of them — the creator owns the title, the artwork and the
-       * description from the moment the show exists. What the row records is
-       * ORIGIN, which is `provider` and `externalId`.
-       */
-      ...(input.aliaSeriesId === undefined
-        ? {}
-        : {
-            sources: [
-              {
-                provider: 'alia' as const,
-                externalId: input.aliaSeriesId,
-                importedAt: new Date().toISOString(),
-                fields: [],
-              },
-            ],
-          }),
-    },
+    children: { persons },
   });
 
   res.status(201).json({ data: await serializeOne(row, userId) });
@@ -946,28 +901,6 @@ export async function updatePodcast(req: AuthRequest, res: Response): Promise<vo
   // party who knows, and a wrong one in either direction is a real harm.
   if (updates.aiGenerated !== undefined) values.aiGenerated = updates.aiGenerated;
 
-  if (updates.image !== undefined && updates.imageFileId !== undefined) {
-    res.status(400).json({ error: 'Send image or imageFileId, not both' });
-    return;
-  }
-
-  if (updates.imageFileId !== undefined) {
-    const adopted = await adoptCoverFile(updates.imageFileId, {
-      oxyUserId: userId,
-      podcastId: podcast.id,
-    });
-    if (!adopted.ok) {
-      res
-        .status(422)
-        .json({ error: 'That file cannot be this show’s cover', reason: adopted.reason });
-      return;
-    }
-    Object.assign(values, artworkColumns(adopted.imageId, adopted.imageSizes));
-    // The new cover decides both accents, including their absence — see below.
-    values.primaryColor = adopted.primaryColor ?? null;
-    values.secondaryColor = adopted.secondaryColor ?? null;
-  }
-
   if (updates.image !== undefined) {
     const cover = await resolveCover(updates.image);
     if (!cover.ok) {
@@ -1085,9 +1018,9 @@ async function loadOwnedShowOrRespond(
  *
  * Every episode, every listener's saved position, every subscriber's
  * subscription, the credits, the categories, the funding links, the provenance
- * log, the AES keys, any outstanding ingest ticket — and the audio in S3. The
- * cascade is enumerated in `db/podcasts/delete.ts`; the bytes and their ordering
- * are `services/podcasts/deletePodcast.ts`.
+ * log, the AES keys — and the audio in S3. The cascade is enumerated in
+ * `db/podcasts/delete.ts`; the bytes and their ordering are
+ * `services/podcasts/deletePodcast.ts`.
  *
  * ## What a subscriber sees afterwards
  *

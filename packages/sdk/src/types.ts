@@ -138,7 +138,7 @@ export type EpisodeStatus = (typeof EPISODE_STATUSES)[number];
  * It used to be required, on the reasoning that "an episode with no enclosure is
  * unplayable, so a row missing it is malformed". That reasoning holds only for
  * RSS-mirrored episodes. A SYRA-HOSTED episode — everything created through
- * `createPodcast`/`uploadEpisode`/the ingest ticket — has no enclosure at all:
+ * `createPodcast`/`uploadEpisode`/Syra's own generation — has no enclosure at all:
  * its audio lives at `audioSource.url`, a path on the Syra API. So the required
  * field made this SDK silently DROP every Syra-hosted episode from
  * `getPodcastEpisodes` and throw on one from `getEpisode` — the entire
@@ -198,13 +198,6 @@ export interface AudioUploadTarget {
   method: 'PUT';
   headers: Record<string, string>;
   maxBytes: number;
-  expiresAt: string;
-}
-
-/** What `createEpisodeDraft` hands back: the episode to fill, and the capability to fill it. */
-export interface EpisodeDraft {
-  episodeId: string;
-  ingestTicket: string;
   expiresAt: string;
 }
 

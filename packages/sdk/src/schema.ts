@@ -7,7 +7,6 @@ import {
   type CoverArtVariant,
   type EpisodeAudioSource,
   type EpisodeDeleted,
-  type EpisodeDraft,
   type EpisodeStatus,
   type EpisodeStream,
   type EpisodeSummary,
@@ -113,12 +112,6 @@ export const episodeSummarySchema = z.object({
   imageSourceUrl: z.string().optional(),
 });
 
-export const episodeDraftSchema = z.object({
-  episodeId: z.string(),
-  ingestTicket: z.string(),
-  expiresAt: z.string(),
-});
-
 export const audioUploadTargetSchema = z.object({
   uploadId: z.string(),
   url: z.string(),
@@ -169,7 +162,6 @@ export type SchemaMatchesType = [
   Assert<Same<z.output<typeof episodeAudioSourceSchema>, EpisodeAudioSource>>,
   Assert<Same<z.output<typeof episodeStatusSchema>, EpisodeStatus>>,
   Assert<Same<z.output<typeof episodeSummarySchema>, EpisodeSummary>>,
-  Assert<Same<z.output<typeof episodeDraftSchema>, EpisodeDraft>>,
   Assert<Same<z.output<typeof audioUploadTargetSchema>, AudioUploadTarget>>,
   Assert<Same<z.output<typeof podcastDeletedSchema>, PodcastDeleted>>,
   Assert<Same<z.output<typeof episodeDeletedSchema>, EpisodeDeleted>>,

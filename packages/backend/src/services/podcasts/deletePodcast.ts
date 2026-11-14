@@ -78,8 +78,8 @@ export interface PodcastDeleteResult {
  * The source audio is DERIVED rather than read, and that is forced: the column
  * `audioSourceUrl` holds an API path (`/api/podcasts/episodes/{id}/audio`), not
  * an S3 key, so the key exists nowhere in the row. It is derived through
- * `getS3PodcastEpisodeAudioKey` — the same function `uploadEpisode` and
- * `ingestEpisodeAudio` write with — so there is one spelling of that layout
+ * `getS3PodcastEpisodeAudioKey` — the same function `uploadEpisode` and the
+ * generation pipeline write with — so there is one spelling of that layout
  * rather than two that can drift. An episode with no `audioSourceFormat` was
  * never ingested and has no source object to name.
  *
