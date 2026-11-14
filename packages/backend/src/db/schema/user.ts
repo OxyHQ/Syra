@@ -20,7 +20,7 @@
  *  - `listening_events.played_at`, 90 days — a retention window measured from
  *    a birth column.
  *
- * (The others cover the moderation tables and `episode_ingest_tickets`.)
+ * (The others cover the moderation tables and the Oxy file records.)
  *
  * Each entry needs a supporting index or the sweep's `column <= now() - N`
  * predicate becomes a full table scan every time it runs. `listening_events_played_at_idx` and

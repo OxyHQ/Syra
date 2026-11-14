@@ -301,8 +301,8 @@ export async function publishEpisode(req: AuthRequest, res: Response): Promise<v
  * A hard delete, for the reason `deletePodcast` is one: `unpublish` already
  * occupies the reversible half of this space, and a second verb that also only
  * hides would leave a creator with no way to actually remove an episode. What
- * goes with the row is its HLS ladder, its transcript, its credits, its AES key,
- * any outstanding ingest ticket, and every listener's saved position in it — the
+ * goes with the row is its HLS ladder, its transcript, its credits, its AES key
+ * and every listener's saved position in it — the
  * cascade is enumerated in `db/podcasts/delete.ts`. The audio goes first; the
  * ordering and its consequences are `services/podcasts/deletePodcast.ts`.
  *

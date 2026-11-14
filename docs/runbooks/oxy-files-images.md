@@ -12,6 +12,12 @@ has its own procedure: `docs/runbooks/oxy-files-audio.md`.
 > one-time scripts of steps 2, 3 and 6 and the `s3_key` / house and series URL
 > columns are gone (step 7). Steps 0–6 are kept as the record of what ran; the
 > scripts they name no longer exist.
+>
+> **2026-11-14:** Alia no longer publishes shows into Syra (Syra generates its
+> own episodes, `docs/podcast-generation.md`), so a show cover can no longer be
+> another application's file: `imageFileId` on `POST`/`PATCH /api/podcasts` and
+> the `SYRA_COVER_APPLICATION_IDS` setting are gone. The covers Syra already
+> adopted stay Alia's files, still referenced by their show.
 
 The steps below were one-time and ordered. Nothing ran against production
 except through `.github/workflows/run-backend-script.yml`, and every script
@@ -26,7 +32,7 @@ previewed unless given `--apply`.
 | Catalogue artwork Syra mirrors (MusicBrainz/Commons, podcast RSS show and episode art) | ONE Oxy file per image; its six sizes are `image_assets` rows naming an Oxy rendition each | **Syra application** (unbilled, garbage-collected when unused) | `catalog_entity`, `album`, `track`, `podcast`, `episode` |
 | A person's upload (`POST /api/images/upload`: playlist/show/track covers; embedded cover art from a locker upload; an artist photo suggestion from their file) | one Oxy file | **the uploader's account** | `playlist`, `podcast`, `track`, `user_upload`, `catalog_entity` (suggestions) |
 | A house avatar/cover, a room's stream image, a series cover | one Oxy file | **the space's owner** (house creator, room host, series creator) | `house`, `room`, `series` |
-| An Alia-generated show's cover | Alia's Oxy file — Syra never copies it | **Alia application** | `podcast` |
+| An Alia-generated show's cover (adopted until 2026-11-14; no new ones) | Alia's Oxy file — Syra never copies it | **Alia application** | `podcast` |
 | An upload whose uploader no longer has an Oxy account (migration only) | one Oxy file | Syra application (reported `ownerFallback`) | as above |
 
 Every use is registered with Oxy: database triggers (migration `0034`) queue

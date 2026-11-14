@@ -81,9 +81,9 @@ The linked transport requires Oxy core 7 and follows account switches, renewal
 and revocation without copying a bearer into app state. It refuses redirects
 and cannot be mixed with `getAccessToken` or a raw `fetch` override. The helper
 is structural and adds no Oxy, React or native runtime dependency to the
-headless entry. Ticket-authorized episode ingest and signed storage uploads
-retain their own credential and never attach the person's session as a second
-credential. See [the rollout record](../../docs/first-party-sdk.md).
+headless entry. Public-only reads (`getPublicPodcastCards`) and signed storage
+uploads (`sendAudioUpload`) never attach the person's session. See [the rollout
+record](../../docs/first-party-sdk.md).
 
 ## API
 

@@ -394,12 +394,16 @@ describe('runtime secrets come from SSM, and no workflow writes one', () => {
     );
     expect(deployStep, 'the deploy step is gone').toBeDefined();
     const removals = (deployStep?.env?.TASK_SECRET_REMOVALS ?? '').split(/\s+/).filter(Boolean);
-    // The Oxy service credential, and OXY_FILES_RECONCILE — the nightly
-    // reference reconciliation always applies, with no mode to set.
+    // The Oxy service credential; OXY_FILES_RECONCILE — the nightly reference
+    // reconciliation always applies, with no mode to set; and the two settings
+    // of Alia's shows lane (the ingest-ticket key and the cover applications),
+    // which Syra's own generation replaced.
     expect(removals).toEqual([
       'OXY_SERVICE_API_KEY',
       'OXY_SERVICE_API_SECRET',
       'OXY_FILES_RECONCILE',
+      'INGEST_TOKEN_SECRET',
+      'SYRA_COVER_APPLICATION_IDS',
     ]);
 
     const overrides = JSON.parse(deployStep?.env?.TASK_SECRET_OVERRIDES_JSON ?? '{}') as Record<

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { SyraApiError } from './errors';
 import type { AudioUploadTarget } from './types';
-import { audioMimeType, sendAudioUpload } from './upload';
+import { sendAudioUpload } from './upload';
 
 const target: AudioUploadTarget = {
   uploadId: 'u',
@@ -92,14 +92,5 @@ describe('sendAudioUpload', () => {
     expect(failure).toBeInstanceOf(SyraApiError);
     expect((failure as SyraApiError).status).toBe(403);
     expect((failure as SyraApiError).message).toMatch(/size or type other than was signed/);
-  });
-});
-
-describe('audioMimeType', () => {
-  it('prefers the payload’s own type, then its name, then mp3', () => {
-    expect(audioMimeType(new Blob([], { type: 'audio/wav' }), 'x.flac')).toBe('audio/wav');
-    expect(audioMimeType({ uri: 'file:///a.m4a' }, 'a.m4a')).toBe('audio/mp4');
-    expect(audioMimeType({ uri: 'file:///a', name: 'A.FLAC' })).toBe('audio/flac');
-    expect(audioMimeType(new Blob([]))).toBe('audio/mpeg');
   });
 });

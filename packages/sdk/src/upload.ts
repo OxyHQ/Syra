@@ -35,33 +35,6 @@ export function appendUpload(
   form.append(field, descriptor as unknown as Blob, name);
 }
 
-const AUDIO_MIME_BY_EXTENSION: Readonly<Record<string, string>> = {
-  mp3: 'audio/mpeg',
-  m4a: 'audio/mp4',
-  mp4: 'audio/mp4',
-  aac: 'audio/mp4',
-  flac: 'audio/flac',
-  ogg: 'audio/ogg',
-  oga: 'audio/ogg',
-  wav: 'audio/wav',
-};
-
-/**
- * The type to declare for an audio payload: its own, else the one its file name
- * implies, else `audio/mpeg`. A signed upload form admits exactly the type it was
- * signed for, so the type has to be known BEFORE the file is sent.
- */
-export function audioMimeType(payload: UploadPayload, filename?: string): string {
-  const own =
-    typeof Blob !== 'undefined' && payload instanceof Blob
-      ? payload.type
-      : (payload as { type?: string }).type;
-  if (own) return own;
-  const name = filename ?? (payload as { name?: string }).name ?? '';
-  const extension = name.includes('.') ? name.slice(name.lastIndexOf('.') + 1).toLowerCase() : '';
-  return AUDIO_MIME_BY_EXTENSION[extension] ?? 'audio/mpeg';
-}
-
 export interface SendAudioUploadOptions {
   /**
    * Called as bytes leave the device, with the fraction sent (0–1). Reported
@@ -137,7 +110,7 @@ function sendWithXhr(
  * large file on a device streams it from disk instead (`expo-file-system`'s
  * `File.upload` with the same URL and headers) and calls this only on the web.
  */
-export async function payloadBlob(payload: UploadPayload, doFetch: typeof fetch): Promise<Blob> {
+async function payloadBlob(payload: UploadPayload, doFetch: typeof fetch): Promise<Blob> {
   if (typeof Blob !== 'undefined' && payload instanceof Blob) return payload;
   const response = await doFetch((payload as { uri: string }).uri);
   return response.blob();

@@ -13,10 +13,8 @@ export const podcastProvenanceProviderSchema = z.enum([
   'podcastindex',
   'apple',
   /**
-   * Where the show was AUTHORED. Deliberately NOT a `podcastSourceSchema` value:
-   * `source === 'syra'` is the server's owner-write predicate, so a third value
-   * there would remove write access from every show carrying it. An
-   * Alia-authored show is Syra-hosted and says so here instead.
+   * History: the shows Alia published into Syra until 2026-11-14. Nothing
+   * writes it any more; existing rows keep it.
    */
   'alia',
 ]);
@@ -162,13 +160,6 @@ export const createPodcastRequestSchema = z.object({
   description: z.string().optional(),
   author: z.string().optional(),
   image: z.string().optional(),
-  /**
-   * An Oxy file to use as the cover instead of `image` (never both): an active,
-   * public image owned by the caller's account or by an Oxy application Syra
-   * trusts to supply covers (Alia, for the shows it draws). Syra references the
-   * file; it stays its owner's (OxyHQ/oxy ADR 0043).
-   */
-  imageFileId: z.string().min(1).max(128).optional(),
   language: z.string().optional(),
   categories: z.array(z.string()).optional(),
   explicit: z.boolean().optional(),
@@ -179,24 +170,7 @@ export const createPodcastRequestSchema = z.object({
    * show created before this field existed already was.
    */
   visibility: podcastVisibilitySchema.optional(),
-  /**
-   * The Alia series this show was generated from. Present ⇒ a
-   * `{ provider: 'alia', externalId }` row is written to `podcast_sources`.
-   *
-   * A dedicated field rather than a general `sources` array on the request, and
-   * that is a trust boundary rather than a convenience: provenance is an
-   * attribution record, and a client that could post an arbitrary
-   * `{ provider, externalId }` pair could claim its show came from Apple or
-   * PodcastIndex under an id the import path dedupes on. This field can only
-   * ever assert the one provenance the caller is entitled to assert.
-   */
-  aliaSeriesId: z.string().optional(),
-  /**
-   * Disclosure, and INDEPENDENT of `aliaSeriesId`: a human can host a show
-   * published through Alia, and a machine-generated show can arrive from
-   * somewhere else entirely. Neither implies the other, so neither is derived
-   * from the other.
-   */
+  /** Disclosure: the show's content is machine-generated. */
   aiGenerated: z.boolean().optional(),
   /** Hosts & Guests as Oxy user ids (validated server-side; no free text). */
   hosts: z.array(z.string()).optional(),
@@ -209,8 +183,6 @@ export const updatePodcastRequestSchema = z.object({
   description: z.string().optional(),
   author: z.string().optional(),
   image: z.string().optional(),
-  /** As `createPodcastRequestSchema.imageFileId`; never together with `image`. */
-  imageFileId: z.string().min(1).max(128).optional(),
   language: z.string().optional(),
   categories: z.array(z.string()).optional(),
   explicit: z.boolean().optional(),

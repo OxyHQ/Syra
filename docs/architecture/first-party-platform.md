@@ -15,7 +15,7 @@ remain bounded; a Syra brand or local owner identifier never supplies user autho
 | Personal image uploads → Files | Foreground requester proof bound to verified effective account; never persisted | Registry core 7.3 pinned; managed-account and revocation canary pending |
 | Personal audio uploads → Files | Original task admitted with verified session; only its handle is stored | No owner-ID fallback; retain account isolation and revocation |
 | House/room/series images → Files | New assets application-owned; historical file IDs unchanged | Same local roles, reference replacement, no deletion of personal owner's file |
-| Asynchronous podcast/locker ingest → Files | Original task persisted at verified draft/upload admission | Ticket contract unchanged; old missing-proof rows cannot create new personal files |
+| Asynchronous podcast/locker ingest → Files | Original task persisted at verified upload or generation admission | Old missing-proof rows cannot create new personal files |
 | Syra moderation → CrowdSource | Own outbox uses injected shared OxyServer; delivery signature retained | Registry CrowdSource 3.1 pinned; receiver live; preserve durable outbox and verify canary |
 | Other apps → Syra SDK | Main `772869c` contains the linked factory and corrective SDK 0.23 release | Verify published 0.23 bytes before caller pins; 0.22 is the older artifact |
 | Syra frontend/studio → own API | Shared linked clients; privacy reads separated by verified viewer and session change; Studio uses provider account cache | Verify caches and receiver composition with core 7 |
@@ -61,8 +61,9 @@ stored rows. Embedded artwork uses the same original upload session.
 Personal audio task checkpoint (source only): locker and podcast admissions create
 an Oxy goal with the original requester and effective account, expiring after 24
 hours. Background ingest passes that exact task to Files; it never stores a user
-bearer. The existing single-use podcast ingest ticket retains its 24-hour domain
-contract. A managed account keeps its human requester separate from the account
+bearer. (The single-use podcast ingest ticket that also admitted episodes here
+was retired on 2026-11-14 with migration 0041: Syra generates episodes
+itself, see [generated episodes](../podcast-generation.md).) A managed account keeps its human requester separate from the account
 whose audio is stored. Missing or revoked proof cannot authorize a personal copy;
 existing legacy audio playback remains available under the existing entitlement.
 An ordinary owner re-upload can renew an uncopied locker item's task using a
@@ -167,8 +168,7 @@ replacement without personal-file deletion, moderation delivery and task revocat
 The operator audio migration uses the same stored original-task lookup as
 asynchronous ingest. A row readmitted through the ordinary verified owner flow
 can be copied with that task; a historical row without proof remains unchanged.
-CI regression coverage includes both cases and the live ingest ticket refusing
-deletes. The isolated receiver probe disposes its OxyServer before exit so its
+CI regression coverage includes both cases. The isolated receiver probe disposes its OxyServer before exit so its
 background connections do not outlive the test; its timeout was not increased.
 
 

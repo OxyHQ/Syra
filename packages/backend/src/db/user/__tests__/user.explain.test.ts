@@ -196,19 +196,6 @@ const PROBES: readonly { readonly name: string; readonly sql: string }[] = [
           where expires_at <= now() - make_interval(secs => 0) limit 1000`,
   },
   {
-    /**
-     * Task A2's, and a PODCAST table probed from the user vertical's suite for
-     * exactly the reason the two moderation tables above are: this file is where
-     * `EXPIRY_SWEEP_TARGETS` is walked, and a target whose supporting index
-     * disappeared would otherwise cost a full scan on every tick with nothing in
-     * the repo saying so. The registry is the thing being tested, not the
-     * vertical.
-     */
-    name: 'sweep_episode_ingest_tickets',
-    sql: `select ctid from episode_ingest_tickets
-          where expires_at <= now() - make_interval(secs => 0) limit 1000`,
-  },
-  {
     // ADR 0043's two: 30 days after a file event arrived, and 30 days after the
     // reference outbox gave up on a row (live rows have no dead_at).
     name: 'sweep_oxy_file_events',
@@ -519,9 +506,6 @@ describe('the expiry sweep is a range scan on every registered target', () => {
     // with nothing in this repo saying so.
     moderation_outbox: 'moderation_outbox_expires_at_idx',
     moderation_events: 'moderation_events_expires_at_idx',
-    // Task A2. Same reasoning as the two above: another vertical's table, swept
-    // from Syra's registry against Syra's index.
-    episode_ingest_tickets: 'episode_ingest_tickets_expires_at_idx',
     // ADR 0043: the file-event dedupe log and the reference outbox's dead letters.
     oxy_file_events: 'oxy_file_events_received_at_idx',
     oxy_file_reference_ops: 'oxy_file_reference_ops_dead_at_idx',

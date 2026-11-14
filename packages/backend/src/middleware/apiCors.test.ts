@@ -35,7 +35,7 @@ function socketAdmits(origin: string | undefined): Promise<boolean> {
   );
 }
 
-const ADMITTED = ['https://syra.fm', 'https://alia.onl', 'https://mention.earth', 'https://oxy.so'];
+const ADMITTED = ['https://syra.fm', 'https://mention.earth', 'https://oxy.so'];
 const REFUSED = ['https://evil.example', 'https://syra.fm.evil.example', 'http://syra.fm'];
 
 describe('API CORS', () => {

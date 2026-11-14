@@ -1,9 +1,7 @@
 import {
-  audioUploadTarget,
   checkResponse,
   checkRow,
   episodeDeleted,
-  episodeDraft,
   episodeStream,
   episodeSummary,
   podcastDeleted,
@@ -22,7 +20,6 @@ import type {
   PodcastSummary,
   PodcastSubscription,
   EpisodeSummary,
-  EpisodeDraft,
   EpisodeStream,
   UploadedImage,
   PodcastDeleted,
@@ -33,13 +30,7 @@ import type {
   PublicPodcastCardsResponse,
 } from './types';
 import { SyraApiError, SyraResponseError } from './errors';
-import {
-  appendUpload,
-  audioMimeType,
-  payloadBlob,
-  sendAudioUpload,
-  type UploadPayload,
-} from './upload';
+import { appendUpload, type UploadPayload } from './upload';
 
 export type { UploadPayload } from './upload';
 
@@ -151,23 +142,13 @@ export interface CreatePodcastInput {
   author?: string;
   /** An image id from {@link SyraClient.uploadPodcastImage}, not a URL. */
   image?: string;
-  /**
-   * An Oxy file to use as the cover instead of {@link CreatePodcastInput.image}
-   * (never both): a public, active image owned by the caller's account or by an
-   * Oxy application Syra trusts to supply covers (Alia, for the shows it
-   * generates). Syra registers its own use of the file; the file stays its
-   * owner's.
-   */
-  imageFileId?: string;
   language?: string;
   categories?: string[];
   explicit?: boolean;
   link?: string;
   type?: 'episodic' | 'serial';
   visibility?: PodcastVisibility;
-  /** The Alia series this show was generated from; records `provider: 'alia'` provenance. */
-  aliaSeriesId?: string;
-  /** Disclosure. Independent of {@link CreatePodcastInput.aliaSeriesId} — neither implies the other. */
+  /** Disclosure: the show's content is machine-generated. */
   aiGenerated?: boolean;
   /** Hosts & Guests as Oxy user ids. Validated server-side; free text is refused. */
   hosts?: string[];
@@ -180,8 +161,6 @@ export interface UpdatePodcastInput {
   description?: string;
   author?: string;
   image?: string;
-  /** As {@link CreatePodcastInput.imageFileId}; never together with `image`. */
-  imageFileId?: string;
   language?: string;
   categories?: string[];
   explicit?: boolean;
@@ -189,49 +168,6 @@ export interface UpdatePodcastInput {
   type?: 'episodic' | 'serial';
   visibility?: PodcastVisibility;
   aiGenerated?: boolean;
-}
-
-/** The metadata `createEpisodeDraft` accepts — everything except the audio. */
-export interface CreateEpisodeDraftInput {
-  title: string;
-  description?: string;
-  summary?: string;
-  season?: number;
-  episodeNumber?: number;
-  episodeType?: 'full' | 'trailer' | 'bonus';
-  explicit?: boolean;
-  aiGenerated?: boolean;
-  hosts?: string[];
-  guests?: string[];
-}
-
-/**
- * The metadata the ingest step may set.
- *
- * Deliberately SMALLER than {@link CreateEpisodeDraftInput}, and it is not an
- * oversight: the ticket is redeemed by a process with no user session, so the
- * server accepts only what such a process can know by having produced the
- * episode. Artwork, `explicit`, `episodeType`, credits and the AI disclosure
- * were fixed at draft time by the authenticated user and are refused here.
- *
- * `title` IS accepted, and it is the reason to reach for this at all: a draft is
- * created before the content exists, so its title can only name the topic that
- * was requested. Send the name the FINISHED episode earned and it replaces the
- * draft's.
- *
- * Omitting it keeps whatever the draft said — an absent title never clears one,
- * so a worker that has nothing better than the placeholder can still deliver
- * the audio. A title that is empty or only whitespace is REFUSED (400) rather
- * than stored, the same rule the authenticated endpoints apply; the ticket
- * survives that refusal and can be redeemed again.
- */
-export interface IngestEpisodeInput {
-  title?: string;
-  duration?: number;
-  season?: number;
-  episodeNumber?: number;
-  description?: string;
-  summary?: string;
 }
 
 export interface SyraClient {
@@ -330,8 +266,8 @@ export interface SyraClient {
    * carries `audioSource.url`, a path on the API. This is the one place that
    * knows the difference, so no consumer has to.
    *
-   * `undefined` when the episode has no audio yet — a drafted episode awaiting
-   * ingest is a real, listable episode with nothing to play, and answering with
+   * `undefined` when the episode has no audio yet — an episode still being
+   * generated is a real, listable episode with nothing to play, and answering with
    * a broken URL would be worse than answering with nothing.
    */
   episodeAudioUrl(episode: {
@@ -393,8 +329,8 @@ export interface SyraClient {
    * off a doc comment:
    *
    * - **Every episode row goes** (`episodes.podcast_id` is `ON DELETE CASCADE`),
-   *   and with each one its HLS renditions, transcripts, credits, AES stream
-   *   key and any outstanding ingest ticket.
+   *   and with each one its HLS renditions, transcripts, credits and AES stream
+   *   key.
    * - **The audio in S3 goes** — the server sweeps the show's three storage
    *   trees (`hls/{id}/`, `podcasts/audio/{id}/`, `podcasts/cache/{id}/`), so
    *   segments that no row names are removed too. {@link PodcastDeleted.objectsDeleted}
@@ -407,7 +343,7 @@ export interface SyraClient {
    * ADR 0043): deleting the show removes Syra's use of it. A cover Syra owns
    * (mirrored artwork) is then garbage-collected by Oxy once nothing else uses
    * it; a cover that is the creator's own upload stays in their Oxy files, marked
-   * not in use, for them to keep or delete; a cover Alia drew stays Alia's.
+   * not in use, for them to keep or delete.
    *
    * Two more consequences worth knowing before calling it for real:
    *
@@ -430,8 +366,7 @@ export interface SyraClient {
    * show you own.
    *
    * IRREVERSIBLE. Its row goes with its HLS ladder, transcript, credits, AES
-   * key, any outstanding ingest ticket and every listener's saved position in
-   * it; its audio is swept from the episode's own `hls/{showId}/{episodeId}/`
+   * key and every listener's saved position in it; its audio is swept from the episode's own `hls/{showId}/{episodeId}/`
    * directory plus the keys the row records. The parent show's `episodeCount`
    * and `lastEpisodeAt` are recomputed in the same transaction.
    *
@@ -444,60 +379,6 @@ export interface SyraClient {
    * under a platform takedown.
    */
   deleteEpisode(episodeId: string): Promise<EpisodeDeleted>;
-  /**
-   * `POST /api/podcasts/:id/episodes/draft` — reserve an episode now and get a
-   * single-use ticket to attach its audio later, from a process with no session.
-   *
-   * The returned ticket is a bearer capability with a deadline: it is good for
-   * ONE redemption against THIS episode, and it stops working if the show
-   * changes hands. Treat it as a secret.
-   */
-  createEpisodeDraft(podcastId: string, input: CreateEpisodeDraftInput): Promise<EpisodeDraft>;
-  /**
-   * `POST /api/podcasts/episodes/:id/ingest` — redeem a draft's ticket by
-   * attaching the audio.
-   *
-   * The audio is sent straight to storage on a PUT presigned for the ticket's
-   * episode (`POST …/ingest/upload`), then the ticket is redeemed by naming the
-   * upload — so an episode of any size Syra accepts (500 MB) works, where a
-   * request body to the API stops at 100 MB. Three requests, one redemption.
-   *
-   * Takes the whole {@link EpisodeDraft} rather than a loose id and token, so the
-   * two cannot be paired up wrongly by a caller holding several drafts.
-   *
-   * Authenticated by the TICKET, not by the session — this is the one method here
-   * that works with no `getAccessToken` at all, which is the entire point of it.
-   */
-  ingestEpisode(
-    draft: Pick<EpisodeDraft, 'episodeId' | 'ingestTicket'>,
-    audio: UploadPayload,
-    input?: IngestEpisodeInput,
-    filename?: string,
-  ): Promise<EpisodeSummary>;
-  /**
-   * `POST /api/podcasts/episodes/:id/ingest/abandon` — redeem a draft's ticket
-   * by giving the reservation up.
-   *
-   * The other ending of {@link SyraClient.ingestEpisode}, and the one a
-   * generation pipeline needs when it fails on its own side. Call it and the
-   * episode becomes `failed`; do not call it and the episode sits at
-   * `processing` with no audio forever, because Syra has no way to learn that
-   * the audio is never coming.
-   *
-   * It spends the SAME single use — a ticket buys one outcome, not two — so a
-   * worker that abandons an episode cannot afterwards ingest it, and vice versa.
-   *
-   * `reason` is for the Syra operator log and is capped at 200 characters. It is
-   * never stored on the episode and never returned, so do not pass an upstream
-   * provider's raw error: send a short description of what your pipeline did.
-   *
-   * Authenticated by the TICKET, not by the session, exactly as
-   * {@link SyraClient.ingestEpisode} is.
-   */
-  abandonEpisodeIngest(
-    draft: Pick<EpisodeDraft, 'episodeId' | 'ingestTicket'>,
-    reason?: string,
-  ): Promise<EpisodeSummary>;
   /**
    * `GET /api/podcasts/episodes/:id/stream` — a tokenized HLS URL for a
    * Syra-hosted episode. Requires a session: the URL it returns embeds a stream
@@ -654,13 +535,8 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
     /** Refuse before sending when there is no session. The value is the method name. */
     requires?: string;
     /**
-     * Never attach the session token, even when one is available.
-     *
-     * For a request that carries its OWN credential — the ingest ticket. Sending
-     * both would leave the server's answer ambiguous about which one authorized
-     * the write, and would mean a worker that happens to hold a user token
-     * behaves differently from one that does not. Exactly one credential per
-     * request.
+     * Never attach the session token, even when one is available: for a read
+     * that must answer the same for everyone (`getPublicPodcastCards`).
      */
     anonymous?: boolean;
   }
@@ -1079,7 +955,7 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
     async deleteEpisode(episodeId) {
       // `/api/episodes/:id`, NOT `/api/podcasts/episodes/:id` — the episode
       // write routes live on their own router, and the podcast router's
-      // `/episodes/:id/...` paths are the media and ingest ones.
+      // `/episodes/:id/...` paths are the media ones.
       const json = (await request(`/api/episodes/${encodeURIComponent(episodeId)}`, {
         method: 'DELETE',
         requires: 'deleteEpisode',
@@ -1101,85 +977,6 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
         body: form,
       })) as unknown;
       return checkResponse(uploadedImage, json, 'uploadPodcastImage');
-    },
-
-    async createEpisodeDraft(podcastId, input) {
-      const json = (await postJson(
-        `/api/podcasts/${encodeURIComponent(podcastId)}/episodes/draft`,
-        defined({ ...input }),
-        'createEpisodeDraft',
-      )) as { data?: unknown };
-      return checkResponse(episodeDraft, json?.data, 'createEpisodeDraft');
-    },
-
-    async ingestEpisode(draft, audio, input = {}, filename) {
-      const name = filename ?? 'episode.mp3';
-      const episodePath = `/api/podcasts/episodes/${encodeURIComponent(draft.episodeId)}`;
-      /**
-       * `anonymous` on all three requests, and it is load-bearing rather than
-       * tidy: they are authenticated by the TICKET alone, which is the whole
-       * reason the draft/ingest pair exists. Without it a worker that HAPPENS to
-       * hold a user token would send both credentials — behaving differently
-       * from one that does not, and leaving the server's answer ambiguous about
-       * which authorized the write. Caught by a test, not by review.
-       */
-      const ticketJson = {
-        'Content-Type': 'application/json',
-        'X-Ingest-Ticket': draft.ingestTicket,
-      };
-
-      /**
-       * The audio goes STRAIGHT to storage, never through the API: the API
-       * refuses request bodies over 100 MB and an episode may be 500 MB. The
-       * PUT is signed for the ticket's episode; asking for it spends nothing.
-       */
-      const doFetch = resolveFetch();
-      // The exact size is signed into the URL, so it is known before asking.
-      const body = await payloadBlob(audio, doFetch);
-      const signed = (await request(`${episodePath}/ingest/upload`, {
-        method: 'POST',
-        anonymous: true,
-        headers: ticketJson,
-        body: JSON.stringify({ mimeType: audioMimeType(audio, name), sizeBytes: body.size }),
-      })) as { data?: unknown };
-      const target = checkResponse(audioUploadTarget, signed?.data, 'ingestEpisode');
-
-      await sendAudioUpload(target, body, { fetch: doFetch });
-
-      // The redemption: the ticket's one use, naming the upload instead of
-      // carrying the file. `defined()` keeps an absent field an absent KEY — an
-      // omitted title means "keep the draft's", never the string `undefined`.
-      const json = (await request(`${episodePath}/ingest`, {
-        method: 'POST',
-        anonymous: true,
-        headers: ticketJson,
-        body: JSON.stringify(defined({ ...input, uploadId: target.uploadId, fileName: name })),
-      })) as { data?: unknown };
-      return checkResponse(episodeSummary, json?.data, 'ingestEpisode');
-    },
-
-    async abandonEpisodeIngest(draft, reason) {
-      // `anonymous` for the same load-bearing reason `ingestEpisode` sets it:
-      // this request carries its OWN credential, and sending a session token
-      // beside it would leave the server's answer ambiguous about which one
-      // authorized the write.
-      const json = (await request(
-        `/api/podcasts/episodes/${encodeURIComponent(draft.episodeId)}/ingest/abandon`,
-        {
-          method: 'POST',
-          anonymous: true,
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Ingest-Ticket': draft.ingestTicket,
-          },
-          // `defined`, the same filter every JSON body in this client goes
-          // through: `reason` is optional on the server, so an absent one has to
-          // reach it as an absent KEY. An empty string would be a 400 and a
-          // `null` would be one too.
-          body: JSON.stringify(defined({ reason })),
-        },
-      )) as { data?: unknown };
-      return checkResponse(episodeSummary, json?.data, 'abandonEpisodeIngest');
     },
 
     async getEpisodeStream(episodeId) {

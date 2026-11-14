@@ -1,0 +1,24 @@
+-- oxy:deploy-phase=post
+--
+-- The episode ingest-ticket lane goes: `POST /api/podcasts/:id/episodes/draft`
+-- and `POST /api/podcasts/episodes/:id/ingest` (with `/ingest/upload` and
+-- `/ingest/abandon`) existed only so Alia could publish the shows it generated
+-- into Syra. Syra generates episodes itself now and writes their audio
+-- directly (docs/podcast-generation.md), so nothing mints or redeems a ticket.
+--
+-- Production, counted read-only on 2026-11-14: `episode_ingest_tickets` 0 rows,
+-- and no episode left at `processing` with no audio.
+--
+-- `post`, because the image this rollout replaces still serves the draft
+-- route, which inserts a ticket row, until it drains.
+--
+-- There is no `pre` half: the new image never reads or writes the table, and
+-- its only tie to the rest of the schema is a cascade from `episodes` that
+-- keeps working until the drop.
+--
+-- `podcast_sources_provider_check` is NOT narrowed. Its `'alia'` value is
+-- history (2 rows in production, the shows Alia published), and every client
+-- that parses a show's `sources` must keep accepting it; see
+-- `PODCAST_PROVENANCE_PROVIDERS`.
+
+DROP TABLE "episode_ingest_tickets" CASCADE;

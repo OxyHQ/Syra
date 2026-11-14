@@ -35,7 +35,7 @@ function cleanTree(extra = {}) {
       '',
     ].join('\n'),
     'packages/backend/src/podcast.ts': [
-      "export const provenance = { provider: 'alia', aiGenerated: true };",
+      "export const disclosure = { source: 'syra', aiGenerated: true };",
       '',
     ].join('\n'),
     'packages/frontend/src/alia.ts':
@@ -77,7 +77,7 @@ async function runAgainst(files) {
 
 const cases = [
   {
-    name: 'legitimate metadata, Alia provenance and Oxy imports pass',
+    name: 'legitimate metadata, an AI disclosure and Oxy imports pass',
     files: cleanTree(),
     fails: false,
   },

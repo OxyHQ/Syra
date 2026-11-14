@@ -242,14 +242,11 @@ export const PODCAST_SOURCES = ['rss', 'syra'] as const;
  * two: a podcast's provenance provider is the feed/directory it came from,
  * not a music-metadata enrichment source.
  *
- * `'alia'` is where a show was AUTHORED, which is a different question from
- * `podcasts.source` (`'rss' | 'syra'`) and deliberately does not touch it:
- * `source === 'syra'` is the owner-write predicate in five places
- * (`uploadEpisode`, `updatePodcast`, `updateEpisode`, `loadOwnedShowOrRespond`,
- * `loadOwnedEpisodeOrRespond`), so a third value there would silently remove
- * write access from every show carrying it. An Alia-authored show IS
- * Syra-hosted; the provenance row records who made it, and
- * {@link podcasts.aiGenerated} records whether a machine did.
+ * `'alia'` is history: the shows Alia published into Syra until 2026-11-14,
+ * when Syra began generating its own episodes (docs/podcast-generation.md).
+ * Nothing writes it any more; the rows that carry it are the record of where
+ * those shows came from, and the value stays so they remain valid (and
+ * readable by every client that parses a show's `sources`).
  */
 export const PODCAST_PROVENANCE_PROVIDERS = [
   'rss',
@@ -373,11 +370,9 @@ export const podcasts = pgTable(
      * Whether this show's content was machine-generated — a DISCLOSURE, not a
      * provenance record and not an authorization input.
      *
-     * Separate from the `provider = 'alia'` row in `podcast_sources` because the
-     * two answer different questions and neither implies the other: a human
-     * hosts a show and publishes it through Alia (Alia provenance, not AI
-     * generated), or a creator generates a show elsewhere and uploads it here
-     * (AI generated, no Alia provenance). One column each.
+     * Set by the creator, and by Syra's own generation for a show it creates
+     * (docs/podcast-generation.md); `podcast_sources` records where a show came
+     * from, which is a different question.
      *
      * `DEFAULT false` for the same reason `visibility` defaults to `'public'`:
      * every row that exists when this lands was made by a person, and claiming
@@ -861,69 +856,5 @@ export const episodeProgress = pgTable(
     index('episode_progress_oxy_user_id_updated_at_idx')
       .on(t.oxyUserId, t.updatedAt.desc())
       .where(sql`${t.completed} = false`),
-  ],
-);
-
-// ── episode_ingest_tickets (single-use capability to attach audio) ─────────
-
-/**
- * The redemption record of an episode ingest ticket.
- *
- * ## Why a table and not a Redis nonce
- *
- * The ticket is a 24-hour capability minted while a user's Oxy JWT is live and
- * redeemed later by a background worker that has no user credential at all
- * (service-token delegation is dead platform-wide). Its single-use property is
- * therefore the ONLY thing standing between a leaked ticket and an overwrite of
- * somebody's episode audio, and a nonce in Redis does not survive a restart: an
- * eviction, a failover or a deploy would silently make every outstanding ticket
- * replayable, with nothing anywhere reporting that it had happened. This row is
- * the authority, and `consumed_at` is claimed with a conditional `UPDATE`, so
- * two concurrent redemptions of the same ticket are resolved by Postgres rather
- * than by a read-then-write.
- *
- * ## A MISSING row is a refusal, never a pass
- *
- * `redeemIngestTicket` claims `where jti = … and consumed_at is null and
- * expires_at > now()` and treats zero rows as refused. That single rule makes
- * three separate things safe at once: a replay, a forged `jti` that somehow
- * carried a valid signature, and the expiry sweep below deleting a row while its
- * JWT is technically still valid. Nothing about this table can fail OPEN.
- *
- * ## `jti` is UNIQUE, and `id` is still the primary key
- *
- * The brief called for `jti` as the primary key. It is a `unique()` column
- * instead, which is the same guarantee, because every other table in this schema
- * carries `generatedId()` as `id` and the schema-convention gate
- * (`findSchemaInvariantViolations`) is written against that shape. A unique
- * constraint is what the single-use claim actually needs — it is the thing the
- * conditional `UPDATE` keys on.
- */
-export const episodeIngestTickets = pgTable(
-  'episode_ingest_tickets',
-  {
-    id: generatedId(),
-    /** The JWT's `jti` claim — the capability's identity. */
-    jti: text().notNull(),
-    episodeId: text()
-      .notNull()
-      .references(() => episodes.id, { onDelete: 'cascade' }),
-    /**
-     * The deadline, stored beside the JWT's own `exp` rather than trusted from
-     * it. A token is a bearer artefact: whatever it says about its own lifetime
-     * is the holder's copy of a claim this row is the record of.
-     */
-    expiresAt: timestamptz().notNull(),
-    /** Null until redeemed. Set by the conditional claim, never by a read-then-write. */
-    consumedAt: timestamptz(),
-    createdAt: createdAt(),
-  },
-  (t) => [
-    unique('episode_ingest_tickets_jti_key').on(t.jti),
-    // FK support — the cascade-delete lookup when an episode is removed.
-    index('episode_ingest_tickets_episode_id_idx').on(t.episodeId),
-    // The expiry sweep's leading key (`db/expiry.ts`); `gates.test.ts` fails a
-    // registered target that has no index whose FIRST key is the swept column.
-    index('episode_ingest_tickets_expires_at_idx').on(t.expiresAt),
   ],
 );

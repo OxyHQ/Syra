@@ -78,7 +78,6 @@
 import type { ExpirySweepTarget } from '@oxy.so/db/expiry';
 import { moderationExpirySweepTargets } from '@crowdsource.you/core/outbox/postgres';
 import { moderationTableSet } from './schema/moderation';
-import { episodeIngestTickets } from './schema/podcasts';
 import { oxyFileEvents, oxyFileReferenceOps } from './schema/oxyFiles';
 
 /** How long an Oxy file event's dedupe claim and a dead-lettered reference are kept. */
@@ -148,17 +147,6 @@ export const EXPIRY_SWEEP_TARGETS: readonly ExpirySweepTarget[] = [
    * `expiresAt` the writer computes, so `retentionSeconds` is 0 on both: the
    * column already is the deadline.
    */
-  {
-    table: episodeIngestTickets,
-    column: episodeIngestTickets.expiresAt,
-    // The column IS the deadline, so nothing is retained past it.
-    retentionSeconds: 0,
-    reason:
-      'A redemption record past its own expiresAt. Pure housekeeping: the redemption claim treats a ' +
-      'MISSING row as REFUSED, so deleting one can only ever narrow access, never widen it — and the ' +
-      'JWT carrying the same deadline has expired by then anyway. Unswept, this table grows by one ' +
-      'row per episode draft forever.',
-  },
   ...moderationExpirySweepTargets(moderationTableSet),
   {
     table: oxyFileEvents,

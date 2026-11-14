@@ -18,13 +18,11 @@ export async function insertHostedPodcast(
   ownerOxyUserId: string,
   request: CreatePodcastRequest,
   options: {
-    /** Minted by the caller when something (an adopted cover) is referenced by it first. */
-    readonly id?: string;
     readonly values?: PodcastValues;
     readonly children?: PodcastChildValues;
   } = {},
 ): Promise<PodcastRow> {
-  const id = options.id ?? uuidv7();
+  const id = uuidv7();
   return insertPodcast(
     {
       id,

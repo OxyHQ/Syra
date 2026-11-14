@@ -143,10 +143,10 @@ import { genres } from '../schema/genres';
  * inconsistency with `episode_hls_renditions` — see catalog.ts's own
  * comment) + 9 (Task 5: creators.ts) + 8 (Task 6: rooms.ts) +
  * 10 (Task 7: user.ts) + 4 (Task 8: moderation.ts — `reports` plus the three
- * `@crowdsource.you/core/outbox` owns) + 1 (Task A2: podcasts.ts's
- * `episode_ingest_tickets`) = 74.
+ * `@crowdsource.you/core/outbox` owns) = 73. (Task A2's `episode_ingest_tickets`
+ * counted here until 0041 dropped it.)
  */
-const MINIMUM_TABLES = 74;
+const MINIMUM_TABLES = 73;
 
 /**
  * Every drizzle table the schema barrel exports, walked rather than listed by
@@ -1345,8 +1345,6 @@ describe('podcasts schema (Task 4)', () => {
     'episode_persons',
     'episode_hls_renditions',
     'episode_progress',
-    // Task A2: the redemption record of an episode ingest ticket.
-    'episode_ingest_tickets',
   ];
 
   it('lands exactly the tables this task promises', () => {
@@ -3234,21 +3232,6 @@ describe('user, taste and listening schema (Task 7)', () => {
       // `expireAfterSeconds: LISTENING_EVENT_TTL_SEC` — 90 days, measured from
       // a birth column.
       `listening_events.played_at:${90 * 24 * 60 * 60}`,
-      /**
-       * Task A2's, and the review this shape forces has been done.
-       *
-       * `0` because the column already IS the deadline: the ticket's JWT and its
-       * row are minted with the same 24-hour expiry, so a row past `expires_at`
-       * cannot be redeemed by anything.
-       *
-       * Sweeping it can only ever NARROW access, which is the property that
-       * makes a blind delete safe here where it was not safe for
-       * `user_uploads.expires_at` above: `claimIngestTicket` treats a MISSING
-       * row as REFUSED, so the worst a premature delete can do is refuse a
-       * ticket early. Unswept, the table grows by one row per episode draft
-       * forever and nothing ever reads the old ones.
-       */
-      'episode_ingest_tickets.expires_at:0',
       // Task 8's two, and the review this shape exists to force has been done:
       // both were `expireAfterSeconds: 0` on an `expiresAt` the WRITER computes
       // from `MODERATION_*_RETENTION_SECONDS`, so 0 here is correct — the column
