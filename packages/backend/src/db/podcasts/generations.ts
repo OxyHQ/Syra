@@ -96,8 +96,8 @@ export interface GeneratedEpisodeDraft {
   readonly topic: string | null;
   readonly requestedTitle: string | null;
   readonly notes: string | null;
-  /** The Oxy task that lets the finished audio become the owner's own file, when there is one. */
-  readonly oxyTaskId: string | null;
+  /** The person operating the requester's account (an organization), when it is not theirs. */
+  readonly operatorOxyUserId: string | null;
   /** The caller's key for this request, when it sent one. */
   readonly idempotencyKey: string | null;
   readonly persons: readonly EpisodePerson[];
@@ -127,7 +127,7 @@ export async function insertGeneratedEpisode(
     const episode = await insertEpisode(
       {
         id: draft.episodeId,
-        oxyTaskId: draft.oxyTaskId,
+        operatorOxyUserId: draft.operatorOxyUserId,
         podcastId: draft.show.id,
         podcastTitle: draft.show.title,
         // The owner's name for it, or a placeholder the script replaces.

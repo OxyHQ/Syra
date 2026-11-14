@@ -385,13 +385,16 @@ export const ID_COLUMNS_WITHOUT_FOREIGN_KEY: readonly { column: string; reason: 
       '`key` (RELATIONS.md: NotificationSuppression.oxyUserId).',
   },
   {
-    column: 'episodes.oxy_task_id',
+    column: 'episodes.operator_oxy_user_id',
     reason:
-      'Original task authority owned and revoked by Oxy; only an opaque handle is persisted locally.',
+      'The Oxy account of the person who operated the owning account when the episode was made ' +
+      '(oxy ADR 0066); Oxy checks it live when Syra stores the audio for them.',
   },
   {
-    column: 'user_uploads.oxy_task_id',
-    reason: 'Original task authority owned and revoked by Oxy; not a local row or a bearer.',
+    column: 'user_uploads.operator_oxy_user_id',
+    reason:
+      'The Oxy account of the person who operated the owning account when they uploaded it ' +
+      '(oxy ADR 0066); Oxy checks it live when Syra stores the audio for them.',
   },
   // ── CROSS-SERVICE: Oxy file ids, owned by oxy-api (ADR 0043), never a Syra row ──
   {

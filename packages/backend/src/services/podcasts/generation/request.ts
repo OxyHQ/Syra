@@ -48,16 +48,6 @@ export interface GenerateEpisodeInput {
   readonly idempotencyKey?: string;
 }
 
-/**
- * Runs `write` with the Oxy task that lets the finished audio become the
- * owner's own file, or with `null` where the caller has no session to create
- * one from (an MCP connection): the episode then keeps Syra's copy only.
- */
-export type FileTaskRunner = <T>(
-  episodeId: string,
-  write: (oxyTaskId: string | null) => Promise<T>,
-) => Promise<T>;
-
 export type GenerationRefusal = {
   readonly ok: false;
   readonly status: 400 | 409 | 429 | 503;
@@ -149,7 +139,12 @@ export async function requestEpisodeGeneration(input: {
   readonly show: PodcastRow;
   readonly requesterId: string;
   readonly request: GenerateEpisodeInput;
-  readonly fileTask: FileTaskRunner;
+  /**
+   * The person operating the requester's account (an organization), when it is
+   * not theirs. The finished audio becomes the owner's own Oxy file either way,
+   * on Syra's declared authority (oxy ADR 0066).
+   */
+  readonly operatorOxyUserId: string | null;
   readonly now?: Date;
   readonly deps?: GenerationRequestDeps;
 }): Promise<GenerationRequestResult> {
@@ -180,19 +175,17 @@ export async function requestEpisodeGeneration(input: {
   if ('ok' in profile) return profile;
 
   const episodeId = uuidv7();
-  const created = await input.fileTask(episodeId, (oxyTaskId) =>
-    insertGeneratedEpisode({
-      episodeId,
-      show,
-      requestedByOxyUserId: requesterId,
-      topic: request.topic?.trim() || null,
-      requestedTitle: request.title?.trim() || null,
-      notes: request.notes?.trim() || null,
-      oxyTaskId,
-      idempotencyKey: request.idempotencyKey ?? null,
-      persons: [],
-    }),
-  );
+  const created = await insertGeneratedEpisode({
+    episodeId,
+    show,
+    requestedByOxyUserId: requesterId,
+    operatorOxyUserId: input.operatorOxyUserId,
+    topic: request.topic?.trim() || null,
+    requestedTitle: request.title?.trim() || null,
+    notes: request.notes?.trim() || null,
+    idempotencyKey: request.idempotencyKey ?? null,
+    persons: [],
+  });
   await deps.enqueue(episodeId);
   return { ok: true, replayed: false, ...created };
 }

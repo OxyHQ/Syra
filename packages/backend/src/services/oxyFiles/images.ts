@@ -1,4 +1,4 @@
-import type { RequesterProof } from '@oxy.so/core/server';
+import type { ActingFor } from '@oxy.so/core/server';
 /**
  * Images stored in Oxy Files (OxyHQ/oxy ADR 0043), as `image_assets` rows.
  *
@@ -317,17 +317,14 @@ export async function uploadAppImage(
  * id, and shown on public surfaces once used.
  */
 export async function uploadUserImage(
-  ownerOxyUserId: string,
+  owner: ActingFor,
   bytes: Buffer,
   mime: string,
   originalName: string,
-  requester: RequesterProof,
 ): Promise<StoredOxyFile> {
-  if (!requester || requester.accountId !== ownerOxyUserId) {
-    throw new Error('Personal image requires its original requester account proof');
-  }
+  // Syra's declared `oxy:files` authority for this account (oxy ADR 0066).
   const file = await oxyFiles()
-    .withRequester(requester)
-    .uploadUserMedia(ownerOxyUserId, bytes, mime, { originalName });
+    .actingFor(owner)
+    .uploadUserMedia(owner.accountId, bytes, mime, { originalName });
   return { id: file.id, sha256: file.sha256, size: file.size, mime: file.mime };
 }

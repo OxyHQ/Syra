@@ -290,8 +290,13 @@ export const userUploads = pgTable(
     id: generatedId(),
     /** An Oxy account id — no foreign key. */
     ownerOxyUserId: text().notNull(),
-    /** Original Oxy task authority for background personal Files copies. Never a bearer. */
-    oxyTaskId: text(),
+    /**
+     * The person who operated the owning account (an organization) when they
+     * uploaded it, or null when its owner did: whom Syra names to Oxy, beside
+     * the owner, when it stores the audio in their Oxy Files later (oxy ADR
+     * 0066). An Oxy account id; never a bearer or a task.
+     */
+    operatorOxyUserId: text(),
 
     title: text().notNull(),
     /**

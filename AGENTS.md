@@ -33,6 +33,7 @@ bun run validate:agents-md       # AGENTS.md size budget (CI: Quality)
 - Every image is an Oxy file (`image_assets.oxy_file_id`); audio goes only through `services/oxyFiles/audioStorage.ts`; no audio body goes to `api.syra.fm` (100 MB proxy limit). [oxy-files](docs/agent-rules/oxy-files.md).
 - Server state is TanStack Query, API boundaries are Zod, Zustand holds local-only state; do not mirror remote data in Zustand. [frontend-state](docs/agent-rules/frontend-state.md).
 - Own service calls use the shared workload provider: no internal scopes or client keys. Gate private API calls with `useAuth().canUsePrivateApi`. [oxy-integration](docs/agent-rules/oxy-integration.md).
+- First-party never asks people for permissions: this service acts for a person with `actingFor` on what oxy's first-party registry declares (oxy ADR 0066); permissions, scopes and consent are only for third parties.
 - Reviewer access (`compliance.review`) comes from the owning Oxy org role; keep `packages/backend/src/config/applicationPermissions.ts` equal to the oxy registry ([application roles](https://github.com/OxyHQ/oxy/blob/main/docs/auth/application-roles.md)).
 - Biome formats and lints (`bunx biome ci .`); the sonner ban and `EXPO_PUBLIC_*` rules are lint gates ([local notes](docs/agent-rules/lint-and-format.md), [lint and format](https://github.com/OxyHQ/oxy/blob/main/docs/engineering/lint-and-format.md)).
 - Runtime is Bun, including one-shot commands (`deployWorkflow.test.ts`). Production hosts are `syra.fm` and `api.syra.fm`. [deploy](docs/agent-rules/deploy.md).

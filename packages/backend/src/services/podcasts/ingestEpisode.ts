@@ -1,4 +1,3 @@
-import { personalAudioRequester } from '../oxyFiles/taskAuthority';
 /**
  * Episode HLS ingest — the Syra-hosted (creator-uploaded) counterpart of
  * `services/ingest/ingestTrack`. It REUSES the shared encryption/packaging
@@ -56,6 +55,7 @@ import path from 'path';
 import type { Readable } from 'stream';
 import {
   findEpisodeById,
+  findEpisodeOperator,
   findEpisodeIdsAwaitingHls,
   setEpisodeHls,
   setEpisodeStatus,
@@ -131,17 +131,14 @@ async function mirrorEpisodeToOxy(
   ownerOxyUserId: string | null,
   deps: IngestEpisodeDeps | undefined,
 ): Promise<boolean> {
-  const requester = ownerOxyUserId
-    ? await personalAudioRequester('episode', episode.id, ownerOxyUserId)
-    : null;
-  // Existing playback stays available; missing provenance never creates a new personal file.
-  if (ownerOxyUserId && !requester) return false;
   let fetched: EpisodeFetchSourceResult | undefined;
   try {
+    // A hosted show's audio becomes its owner's own Oxy file (oxy ADR 0066).
+    const operatorOxyUserId = ownerOxyUserId ? await findEpisodeOperator(episode.id) : null;
     fetched = await (deps?.fetchSource ?? defaultFetchSource)(episode);
     const stored = await (deps?.mirrorToOxy ?? mirrorAudioToOxy)({
       entity: { kind: 'episode', id: episode.id },
-      ...(requester ? { requester } : {}),
+      operatorOxyUserId,
       localPath: fetched.localPath,
       mime: audioMimeFor(episode.audioSourceFormat ?? 'mp3'),
       owner: ownerOxyUserId

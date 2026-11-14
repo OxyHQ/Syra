@@ -1,8 +1,4 @@
-import {
-  verifiedAudioSession,
-  installFileTaskAuthorityFixture,
-  resetFileTaskAuthorityFixture,
-} from '../test/fileTaskAuthority';
+import { signedIn } from '../test/signedInRequest';
 /**
  * Deleting a show, and deleting one episode — what actually goes, and who is
  * refused.
@@ -122,7 +118,6 @@ let server: Server;
 let baseUrl: string;
 
 beforeAll(async () => {
-  installFileTaskAuthorityFixture();
   await connectDb();
 
   const app = express();
@@ -130,7 +125,7 @@ beforeAll(async () => {
   app.use((req, _res, next) => {
     const viewer = req.headers[VIEWER_HEADER];
     if (typeof viewer === 'string' && viewer.length > 0) {
-      verifiedAudioSession(req as AuthRequest, viewer);
+      signedIn(req as AuthRequest, viewer);
     }
     next();
   });
@@ -153,7 +148,6 @@ afterEach(async () => {
 });
 
 afterAll(async () => {
-  resetFileTaskAuthorityFixture();
   await new Promise<void>((resolve) => server.close(() => resolve()));
   await disconnectDb();
 });

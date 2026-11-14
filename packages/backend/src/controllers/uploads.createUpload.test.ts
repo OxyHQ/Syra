@@ -1,8 +1,4 @@
-import {
-  verifiedAudioSession,
-  installFileTaskAuthorityFixture,
-  resetFileTaskAuthorityFixture,
-} from '../test/fileTaskAuthority';
+import { signedIn } from '../test/signedInRequest';
 /**
  * `POST /api/uploads`, end to end over real HTTP.
  *
@@ -193,7 +189,6 @@ let bulkImportWas: string | undefined;
  * `recommendationService` and the listener's taste profile.
  */
 beforeAll(async () => {
-  installFileTaskAuthorityFixture();
   await connectDb();
   installDeezerStub();
   // Embedded cover art is stored in the uploader's Oxy account (ADR 0043).
@@ -216,7 +211,7 @@ beforeAll(async () => {
   // which reads the resolved session off the request.
   app.use((req, _res, next) => {
     if (currentUserId) {
-      verifiedAudioSession(req, currentUserId);
+      signedIn(req, currentUserId);
       (req as express.Request & { accessToken?: string }).accessToken =
         `verified-session:${currentUserId}`;
     }
@@ -245,7 +240,6 @@ afterEach(async () => {
 });
 
 afterAll(async () => {
-  resetFileTaskAuthorityFixture();
   resetOxyFiles();
   if (bulkImportWas === undefined) delete process.env.PODCAST_BULK_IMPORT_ENABLED;
   else process.env.PODCAST_BULK_IMPORT_ENABLED = bulkImportWas;

@@ -600,8 +600,13 @@ export const episodes = pgTable(
   'episodes',
   {
     id: generatedId(),
-    /** Original Oxy task authority admitted with the creator's verified session. */
-    oxyTaskId: text(),
+    /**
+     * The person who operated the show's owning account (an organization) when
+     * they created the episode, or null when its owner did: whom Syra names to
+     * Oxy, beside the owner, when it stores the audio in their Oxy Files (oxy
+     * ADR 0066). An Oxy account id; never a bearer or a task.
+     */
+    operatorOxyUserId: text(),
     podcastId: text()
       .notNull()
       .references(() => podcasts.id, { onDelete: 'cascade' }),

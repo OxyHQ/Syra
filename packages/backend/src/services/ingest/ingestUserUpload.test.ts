@@ -207,32 +207,25 @@ describe('ingestUserUpload', () => {
   });
 });
 
-describe('personal copy authority', () => {
-  it('does not promote an old locker owner identifier into a requester proof', async () => {
-    const id = await createUpload();
-    let copies = 0;
-    await ingestUserUpload(id, {
-      ...happyDeps,
-      mirrorToOxy: async () => {
-        copies++;
-        throw new Error('no original root');
-      },
-    });
-    expect(copies).toBe(0);
-    expect((await reload(id)).status).toBe('ready');
-    expect((await reload(id)).audioFileId).toBeNull();
-  });
-  it('uses the admitted original task and leaves a rejected copy on the existing legacy path', async () => {
-    const id = await createUpload({ oxyTaskId: 'original-task' });
-    let proof: unknown;
-    await ingestUserUpload(id, {
-      ...happyDeps,
-      mirrorToOxy: async (input) => {
-        proof = input.requester;
-        return null;
-      },
-    });
-    expect(proof).toEqual({ taskId: 'original-task', accountId: OWNER_ID });
-    expect((await reload(id)).status).toBe('ready');
+describe('personal copy (oxy ADR 0066)', () => {
+  it("copies into the owner's account, naming the person who operated it", async () => {
+    const own = await createUpload();
+    const operated = await createUpload({ sha256: 'b'.repeat(64), operatorOxyUserId: 'person' });
+    const copies: unknown[] = [];
+    for (const id of [own, operated]) {
+      await ingestUserUpload(id, {
+        ...happyDeps,
+        mirrorToOxy: async (input) => {
+          copies.push({ owner: input.owner, operator: input.operatorOxyUserId });
+          return null;
+        },
+      });
+    }
+    expect(copies).toEqual([
+      { owner: { kind: 'account', oxyUserId: OWNER_ID }, operator: null },
+      { owner: { kind: 'account', oxyUserId: OWNER_ID }, operator: 'person' },
+    ]);
+    // A refused copy leaves the file on the existing legacy path.
+    expect((await reload(operated)).status).toBe('ready');
   });
 });
