@@ -1,14 +1,16 @@
 #!/usr/bin/env bun
 
 /**
- * Enforce Syra's AI boundary.
+ * Enforce Syra's AI boundary (docs/ai-routing.md).
  *
- * Product-specific upstreams such as MusicBrainz, AcoustID, LRCLIB, Podcast
- * Index, LiveKit and CrowdSource are deliberately not inference providers.
- * Alia podcast provenance is also legitimate: Alia calls Syra, not the other
- * way around. This gate targets only model-provider custody/routing surfaces:
+ * Syra reaches inference only through Kaana's own SDK (`@kaana.ai/sdk`), over
+ * its Oxy workload: the SDK owns Kaana's one origin, and Oxy admits and meters
+ * every request. Product-specific upstreams such as MusicBrainz, AcoustID,
+ * LRCLIB, Podcast Index, LiveKit and CrowdSource are deliberately not inference
+ * providers. This gate targets only model-provider custody/routing surfaces:
  * provider SDK packages/imports, provider credentials, provider inference
- * endpoints and direct current/retired inference data-plane endpoints.
+ * endpoints, and an inference data-plane endpoint named anywhere but through
+ * the SDK's package name (retired hosts included).
  *
  * Override AI_ARCHITECTURE_VALIDATOR_ROOT only in the mutation harness, where
  * the real validator runs against a temporary git checkout.
@@ -64,7 +66,10 @@ const providerCredential =
 const providerEndpoint =
   /\b(?:api\.openai\.com|[a-z0-9.-]+\.openai\.azure\.com|api\.anthropic\.com|generativelanguage\.googleapis\.com|[a-z0-9.-]+\.aiplatform\.googleapis\.com|api\.groq\.com|api\.mistral\.ai|api\.cohere\.com|api\.together\.xyz|api\.fireworks\.ai|api\.replicate\.com|api\.perplexity\.ai|api\.deepseek\.com|openrouter\.ai\/api|api\.x\.ai|api\.cerebras\.ai|api\.sambanova\.ai|integrate\.api\.nvidia\.com|api-inference\.huggingface\.co|api\.fal\.ai|bedrock-runtime\.[a-z0-9-]+\.amazonaws\.com)\b/i;
 
-const directDataPlaneEndpoint = /\b(?:(?:api\.)?kaana\.ai|kaana\.oxy\.so|relay\.oxy\.so)\b/i;
+// `@kaana.ai/sdk` is the package, not an endpoint: the lookbehind lets the
+// scope through and nothing else that names the host.
+const directDataPlaneEndpoint =
+  /\b(?:kaana\.oxy\.so|relay\.oxy\.so)\b|(?<!@)\b(?:api\.)?kaana\.ai\b/i;
 
 const importSpecifier = /(?:\bfrom\s*|\bimport\s*(?:\(\s*)?|\brequire\s*\(\s*)["']([^"']+)["']/g;
 
@@ -207,7 +212,7 @@ for (const path of scanFiles) {
   const dataPlane = source.match(directDataPlaneEndpoint)?.[0];
   if (dataPlane)
     violations.push(
-      `${path}: names direct inference data-plane endpoint ${dataPlane}; Syra must use Oxy`,
+      `${path}: names direct inference data-plane endpoint ${dataPlane}; Syra reaches Kaana only through @kaana.ai/sdk`,
     );
 
   if (!isRuntimeOrConfig(path)) continue;

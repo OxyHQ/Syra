@@ -1,43 +1,40 @@
 # Syra AI routing
 
-Syra does not call an inference provider or Kaana directly and does not hold
-inference-provider credentials. The product boundary is:
+Syra calls inference for one product feature, [generated episodes](./podcast-generation.md),
+and it reaches it one way:
 
-- A future one-shot Syra AI operation runs on the Syra backend and calls the Oxy
-  inference edge through `@oxy.so/core`. It uses Syra's Oxy application/service
-  credential and supplies the delegated Oxy user only when the request is made
-  on that user's behalf. The application credential determines billing; the
-  delegated user is attribution, not a substitute credential.
-- A conversation or autonomous agent belongs to Alia. A Syra client integrates
-  the canonical Alia SDK only after its contract is published and the
-  corresponding Alia agent/bot identity is provisioned. Syra must not invent or
-  sort by an agent, routing-profile, deployment, provider, or model identifier.
-- Kaana is reached only behind Oxy. Provider-key custody and provider adapters
-  belong to Kaana's PostgreSQL/KMS boundary, never to Syra configuration.
+```text
+Syra API (its Oxy workload) -> @kaana.ai/sdk/server -> Kaana -> provider
+                                   Oxy admits, meters and bills every request
+```
 
-There is no active Syra inference operation or conversational assistant at this
-revision, so there is no honest model/profile/agent identifier to configure and
-no unused inference client is constructed. Adding a product flow requires its
-provisioned Oxy application capability and default routing policy (one-shot), or
-its provisioned Alia agent/bot contract (conversation), in the same change.
+- **Kaana's SDK, over Syra's own Oxy workload.** `services/podcasts/generation/kaana.ts`
+  builds the client with `kaanaForOxyService(oxy, { attribution: { accountId } })`: the
+  workload identity of `oxyClient.ts`, no API key, no scope list, no token plumbing. The SDK
+  owns Kaana's one canonical origin; Syra never names a host (the gate below refuses one).
+- **Attributed to the person.** Every client is attributed to the account the episode is
+  for, so their usage is recorded against them. Attribution is not a payer: Oxy admits the
+  request under Syra's application and its reviewed terms (oxy
+  `config/inferenceEconomicPolicy.ts`, relationship `syra-kaana-shows`).
+- **Power levels and the catalogue, never a configured model.** A script is written at the
+  `medium` power level and Kaana picks the model. Speech needs a concrete model, because a
+  voice belongs to one: a show is cast once from the first speech model Syra's Kaana
+  catalogue lists with enough voices, and that model is stored on the show's generation
+  profile, never in code or environment.
+- **No provider credential, adapter, retry loop or failover list in Syra.** Kaana retries and
+  fails over before the first byte. The pipeline asks again only when a reply is not a usable
+  script (once); a failure is recorded on the job for the owner and never retried by itself.
 
-## Existing integrations that remain
+Conversations and autonomous agents belong to Gemies. An agent that wants to make an
+episode does it through [Syra's MCP server](./mcp.md), as any other client does.
 
-Alia authors podcast material outside Syra and calls the authenticated Syra SDK
-to create shows, draft episodes, redeem ingest tickets, and delete them. Syra's
-`provider = 'alia'`, `aliaSeriesId`, and `aiGenerated` fields are provenance and
-disclosure; they are not an inference adapter. The direction is Alia to Syra,
-not Syra to Alia or Kaana.
+Recommendations and radio are deterministic PostgreSQL computations over listening activity
+and catalogue data. AcoustID, MusicBrainz, Cover Art Archive, Wikidata, Wikimedia Commons,
+Deezer, LRCLIB, Podcast Index, Jamendo, KLIPY, storage, LiveKit, Telegram and CrowdSource are
+music, media, communications, moderation or operational integrations, not inference
+providers.
 
-Recommendations/radio are deterministic PostgreSQL computations over listening
-activity and catalogue data. AcoustID, MusicBrainz, Cover Art Archive, Wikidata,
-Wikimedia Commons, Deezer, LRCLIB, Podcast Index, Jamendo, KLIPY, storage,
-LiveKit, Telegram, and CrowdSource are music, media, communications, moderation,
-or operational integrations. They are not inference providers and their
-product-specific credentials and adapters are deliberately unaffected.
-
-`bun run validate:ai-architecture` rejects direct inference SDK dependencies or
-imports, well-known model-provider endpoints, direct current or retired
-inference data-plane endpoints, and inference-provider credential variables.
-Its mutation harness proves each negative rule and the legitimate
-metadata/Alia/Oxy cases.
+`bun run validate:ai-architecture` rejects direct inference SDK dependencies or imports,
+well-known model-provider endpoints, an inference data-plane host named anywhere but through
+the `@kaana.ai/sdk` package (retired hosts included), and inference-provider credential
+variables. Its mutation harness proves each negative rule and the legitimate cases.

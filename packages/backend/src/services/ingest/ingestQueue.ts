@@ -32,6 +32,7 @@ import type { IngestOptions } from './ingestTrack';
 import { ingestUserUpload } from './ingestUserUpload';
 import { enrichArtistProfile } from '../uploads/enrichCatalogEntity';
 import { describeErrorSafely } from '../../utils/error';
+import { runEpisodeGeneration } from '../podcasts/generation/pipeline';
 
 /** BullMQ rejects `:` in queue names — it is its own key separator. */
 const INGEST_QUEUE_NAME = 'syra-ingest';
@@ -74,7 +75,7 @@ const ENQUEUE_TIMEOUT_MS = 5_000;
  * for another, which produces a job that runs, succeeds, and writes to the wrong
  * place.
  */
-type IngestJobKind = 'track' | 'upload' | 'artist-enrichment';
+type IngestJobKind = 'track' | 'upload' | 'artist-enrichment' | 'episode-generation';
 
 interface IngestJobData {
   /**
@@ -109,6 +110,23 @@ const JOB_HANDLERS: Record<IngestJobKind, (data: IngestJobData) => Promise<void>
   'artist-enrichment': async (data) => {
     await enrichArtistProfile(data.recordId);
   },
+  /**
+   * Writing and voicing a generated episode (`services/podcasts/generation`).
+   * Durable for the same reason as the rest: a deploy mid-run re-delivers it.
+   */
+  'episode-generation': (data) => runEpisodeGeneration(data.recordId),
+};
+
+/**
+ * Attempts per kind. A generation is NOT retried: every attempt spends
+ * inference, and the pipeline records its own failure on the job for the owner
+ * to see and ask again.
+ */
+const ATTEMPTS: Readonly<Record<IngestJobKind, number>> = {
+  track: INGEST_ATTEMPTS,
+  upload: INGEST_ATTEMPTS,
+  'artist-enrichment': INGEST_ATTEMPTS,
+  'episode-generation': 1,
 };
 
 let queue: Queue<IngestJobData> | null = null;
@@ -256,7 +274,7 @@ async function deliver(data: IngestJobData): Promise<void> {
       .add(INGEST_QUEUE_NAME, data, {
         // One ingest in flight per record is exactly the dedup we want.
         jobId,
-        attempts: INGEST_ATTEMPTS,
+        attempts: ATTEMPTS[kind],
         backoff: { type: 'exponential', delay: INGEST_BACKOFF_DELAY_MS },
         // The durable outcome record is the document's own `status`, not a
         // retained job. Removing both terminal states also keeps a re-ingest of
@@ -328,6 +346,11 @@ export function enqueueUploadIngest(uploadId: string): Promise<void> {
  */
 export function enqueueArtistEnrichment(artistId: string): Promise<void> {
   return deliver({ recordId: artistId, kind: 'artist-enrichment' });
+}
+
+/** Hand a generated episode to its pipeline. `episodeId` is an `episodes.id`. */
+export function enqueueEpisodeGeneration(episodeId: string): Promise<void> {
+  return deliver({ recordId: episodeId, kind: 'episode-generation' });
 }
 
 /** Release the queue and worker connections (tests, graceful shutdown). */
