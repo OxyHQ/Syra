@@ -143,8 +143,10 @@ import {
 ```
 
 These require the optional peer dependencies (`react-native`, `livekit-client`,
-`@livekit/react-native`, `expo-audio`, `react-native-svg`, …) — present in any
-Expo/React Native app, absent from headless Node consumers.
+`@livekit/react-native`, `expo-audio`, `react-native-svg`, `@oxy.so/bloom` 23 or
+newer, …) — present in any Expo/React Native app, absent from headless Node
+consumers. The components style with React Native styles over Bloom's colour
+tokens: they need no NativeWind, and take no `className`.
 
 ### The client alone in an app
 

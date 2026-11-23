@@ -40,25 +40,12 @@ const defaultUseIsDesktop = () => false;
 export function LiveRoomProvider({ children }: { children: React.ReactNode }) {
   const config = useLiveConfig();
   const theme = config.useTheme();
-  // NativeWind class the host supplies to pin the dock to the viewport on web
-  // (e.g. `"web:fixed"` for the document-scroll shell). Undefined on hosts with
-  // the default fixed-viewport model and on native (no-op there).
-  const dockClassName = config.dockClassName;
-  // Inline `position`, resolved per-platform/host so it never fights the
-  // className on web:
-  //   - NATIVE (always): `absolute` — pins against the screen-filling root
-  //     (`web:fixed` is a no-op on native).
-  //   - WEB + host className present (e.g. Mention's document-scroll shell):
-  //     OMIT the inline position so the supplied `web:fixed` class owns it
-  //     (NativeWind lets an inline `position` win over a className, which would
-  //     re-sink the dock to the document bottom).
-  //   - WEB + no host className (e.g. the live-rooms app, fixed-viewport model with
-  //     no NativeWind): `absolute` — pins to the viewport there, preserving the
-  //     prior behavior.
-  const dockPosition = useMemo<ViewStyle>(
-    () => (Platform.OS === 'web' && dockClassName ? {} : { position: 'absolute' }),
-    [dockClassName],
-  );
+  // The dock's `position`: `fixed` on a web host whose shell scrolls the
+  // document (`absolute` there would resolve against the tall document and sink
+  // the dock to the page bottom); `absolute` everywhere else, which pins it
+  // against the screen-filling root on native and the fixed viewport on web.
+  const pinToViewport = Platform.OS === 'web' && config.documentScroll === true;
+  const dockPosition = pinToViewport ? styles.dockViewport : styles.dockAbsolute;
   const insets = useSafeAreaInsets();
   const { height: screenHeight } = useWindowDimensions();
 
@@ -152,7 +139,6 @@ export function LiveRoomProvider({ children }: { children: React.ReactNode }) {
 
       {activeRoomId && (
         <Animated.View
-          className={dockClassName}
           style={[styles.backdrop, dockPosition, backdropAnimStyle]}
           pointerEvents={isExpanded ? 'auto' : 'none'}
         >
@@ -162,7 +148,6 @@ export function LiveRoomProvider({ children }: { children: React.ReactNode }) {
 
       {activeRoomId && (
         <Animated.View
-          className={dockClassName}
           style={[
             styles.sheet,
             dockPosition,
@@ -217,11 +202,14 @@ export function LiveRoomProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-// `position` is intentionally NOT set in these StyleSheet entries — it is
-// supplied at runtime via `dockPosition` (inline) and/or the host's
-// `dockClassName` (web), so an inline `position` here can never override the
-// `web:fixed` class on the document-scroll host.
+// `position: fixed` is web CSS that React Native's `ViewStyle` does not model
+// (Yoga has no viewport); react-native-web passes it through.
+const WEB_POSITION_FIXED = 'fixed' as ViewStyle['position'];
+
+// `position` is not set in `backdrop` and `sheet`: `dockPosition` supplies it.
 const styles = StyleSheet.create({
+  dockAbsolute: { position: 'absolute' },
+  dockViewport: { position: WEB_POSITION_FIXED },
   backdrop: {
     top: 0,
     left: 0,

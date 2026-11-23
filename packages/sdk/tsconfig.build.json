@@ -11,7 +11,7 @@
     "skipLibCheck": true,
     "strict": true,
     "target": "ESNext",
-    "types": ["react", "node", "nativewind/types"]
+    "types": ["react", "node"]
   },
   "include": ["src"],
   "exclude": ["**/*.test.ts", "**/*.test.tsx", "lib", "node_modules"]

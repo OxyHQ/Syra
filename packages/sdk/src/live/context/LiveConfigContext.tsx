@@ -63,16 +63,15 @@ export interface LiveConfig {
   useIsDesktop?: () => boolean;
   onRoomChanged?: (roomId: string) => void;
   /**
-   * Optional NativeWind className applied to the floating live-room dock and its
-   * backdrop. Hosts whose web shell uses a DOCUMENT-scroll model (html/body/#root
-   * = height:auto + overflow:visible, the window is the scroller) must pass
-   * `"web:fixed"` so the dock pins to the VIEWPORT bottom instead of resolving
-   * its `position: absolute` against the tall document and sinking to the page
-   * bottom. Omitted on hosts with the default fixed-viewport web model (and on
-   * native, where `web:fixed` is a no-op and the dock pins via `position:
-   * absolute` against the screen-filling root).
+   * Web: the host's shell uses a DOCUMENT-scroll model (html/body/#root =
+   * height:auto + overflow:visible, the window is the scroller). The floating
+   * live-room dock and its backdrop then pin to the VIEWPORT with `position:
+   * fixed` instead of resolving `position: absolute` against the tall document
+   * and sinking to the page bottom. Omit on hosts with the default
+   * fixed-viewport web model. No effect on native, where the dock pins with
+   * `position: absolute` against the screen-filling root.
    */
-  dockClassName?: string;
+  documentScroll?: boolean;
 }
 
 export interface LiveConfigInternal extends LiveConfig {
