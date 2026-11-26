@@ -37,12 +37,9 @@ const DeviceRow: React.FC<DeviceRowProps> = ({ device, isActive, onPress }) => {
   const { t } = useTranslation();
   const theme = useTheme();
 
-  const rowStyle = useMemo(() => [styles.deviceRow], []);
-
   return (
     <Pressable
-      className={isActive ? 'bg-surface' : undefined}
-      style={rowStyle}
+      style={[isActive && themed.surface2, styles.deviceRow]}
       onPress={onPress}
       accessibilityRole="button"
     >

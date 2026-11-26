@@ -306,8 +306,11 @@ function CreatePlaylistForm({
             {/* Name Input */}
             <View style={styles.inputGroup}>
               <TextInput
-                className={`bg-surface text-foreground ${errors.name ? 'border-error' : 'border-border'}`}
-                style={styles.input}
+                style={[
+                  themed.input,
+                  errors.name ? themed.inputError : themed.inputIdle,
+                  styles.input,
+                ]}
                 placeholder={t('createPlaylist.namePlaceholder')}
                 placeholderTextColor={theme.colors.textSecondary}
                 value={name}
@@ -330,8 +333,11 @@ function CreatePlaylistForm({
             {/* Description Input */}
             <View style={styles.inputGroup}>
               <TextInput
-                className={`bg-surface text-foreground ${errors.description ? 'border-error' : 'border-border'}`}
-                style={styles.textArea}
+                style={[
+                  themed.input,
+                  errors.description ? themed.inputError : themed.inputIdle,
+                  styles.textArea,
+                ]}
                 placeholder={t('createPlaylist.descriptionPlaceholder')}
                 placeholderTextColor={theme.colors.textSecondary}
                 value={description}
@@ -390,12 +396,10 @@ function CreatePlaylistForm({
                       {option.label}
                     </Text>
                     <Text
-                      className={
-                        visibility === option.value
-                          ? 'text-primary-foreground opacity-80'
-                          : 'text-muted-foreground'
-                      }
-                      style={styles.visibilityOptionDescription}
+                      style={[
+                        visibility === option.value ? themed.selectedDescription : themed.mutedText,
+                        styles.visibilityOptionDescription,
+                      ]}
                     >
                       {option.description}
                     </Text>
@@ -533,4 +537,8 @@ const useThemedStyles = createTokenStyles((t) => ({
   text2: { color: t.primaryForeground },
   text3: { color: t.error },
   mutedText: { color: t.mutedForeground },
+  input: { backgroundColor: t.surface, color: t.foreground },
+  inputError: { borderColor: t.error },
+  inputIdle: { borderColor: t.border },
+  selectedDescription: { color: t.primaryForeground, opacity: 0.8 },
 }));

@@ -116,7 +116,7 @@ const PodcastShowScreen: React.FC = () => {
             await showQuery.refetch();
           },
         }}
-        className="bg-surface"
+        tone="surface"
       />
     );
   }
@@ -133,7 +133,7 @@ const PodcastShowScreen: React.FC = () => {
           onPress: () => router.push('/podcasts'),
           icon: 'search-outline',
         }}
-        className="bg-surface"
+        tone="surface"
       />
     );
   }
@@ -259,8 +259,8 @@ const PodcastShowView: React.FC<PodcastShowViewProps> = ({
               ) : null}
               <Pressable
                 onPress={onToggleSubscription}
-                className={subscribed ? 'border-border' : undefined}
                 style={[
+                  subscribed && themed.subscribedBorder,
                   styles.subscribeButton,
                   subscribed ? { borderWidth: 1 } : { backgroundColor: subscribeButtonColor },
                 ]}
@@ -443,4 +443,5 @@ const useThemedStyles = createTokenStyles((t) => ({
   text: { color: t.foreground },
   mutedText: { color: t.mutedForeground },
   text2: { color: t.primary },
+  subscribedBorder: { borderColor: t.border },
 }));

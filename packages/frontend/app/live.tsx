@@ -181,8 +181,11 @@ export default function LiveScreen() {
             <Pressable
               onPress={() => createRef.current?.handleSchedule()}
               disabled={!formState.isValid || formState.loading}
-              className={`flex-row items-center justify-center gap-1.5 rounded-full py-3 bg-surface border-border ${formState.loading ? 'opacity-60' : 'opacity-100'}`}
-              style={{ borderWidth: 1 }}
+              style={[
+                styles.scheduleButton,
+                formState.loading ? styles.busy : styles.idle,
+                styles.scheduleButtonBorder,
+              ]}
             >
               <MaterialCommunityIcons name="calendar" size={20} color={theme.colors.text} />
               <Text style={styles.title5}>{t('live.scheduleRoom')}</Text>
@@ -197,6 +200,19 @@ export default function LiveScreen() {
 const useStyles = createTokenStyles((t) => ({
   surface: { flexGrow: 1, flexShrink: 1, flexBasis: '0%', backgroundColor: t.background },
   fill: { flexGrow: 1, flexShrink: 1, flexBasis: '0%' },
+  scheduleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderRadius: 9999,
+    borderColor: t.border,
+    backgroundColor: t.surface,
+    paddingVertical: 12,
+  },
+  scheduleButtonBorder: { borderWidth: 1 },
+  busy: { opacity: 0.6 },
+  idle: { opacity: 1 },
   section: { paddingHorizontal: 16, paddingBottom: 12 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   surface2: { height: 10, width: 10, borderRadius: 9999, backgroundColor: t.error },

@@ -105,7 +105,7 @@ export const TopBar: React.FC = () => {
   };
 
   // Subtle raised pill behind the active nav icon, derived from the theme.
-  // Layout only — the pill's colour comes from `className="bg-popover"` at the
+  // Layout only — the pill's colour comes from the `popover` token style at the
   // call sites, so it follows a preset change instead of freezing a read.
   const activeButtonStyle: ViewStyle = styles.activeButton;
   const navIconColor = theme.colors.text;
@@ -334,8 +334,11 @@ export const TopBar: React.FC = () => {
         key={item.key}
         onPress={() => navigateFromSearch(item.href)}
         onHoverIn={() => setActiveSearchIndex(index)}
-        className={isActive ? 'bg-popover' : undefined}
-        style={({ pressed }) => [styles.searchResultRow, pressed && { opacity: 0.9 }]}
+        style={({ pressed }) => [
+          isActive && themed.surface,
+          styles.searchResultRow,
+          pressed && { opacity: 0.9 },
+        ]}
       >
         {renderArtwork(item, isActive)}
         <View style={styles.searchResultText}>
@@ -399,8 +402,11 @@ export const TopBar: React.FC = () => {
             <Pressable
               onPress={handleSearchSubmit}
               onHoverIn={() => setActiveSearchIndex(viewAllIndex)}
-              className={isViewAllActive ? 'bg-popover' : undefined}
-              style={({ pressed }) => [styles.viewAllButton, pressed && { opacity: 0.9 }]}
+              style={({ pressed }) => [
+                isViewAllActive && themed.surface,
+                styles.viewAllButton,
+                pressed && { opacity: 0.9 },
+              ]}
             >
               <Text style={[themed.text2, styles.viewAllText]}>{t('topbar.viewAllResults')}</Text>
               <MaterialCommunityIcons name="arrow-right" size={18} color={theme.colors.primary} />
@@ -417,8 +423,11 @@ export const TopBar: React.FC = () => {
     return (
       <View style={styles.searchShell}>
         <View
-          className={`bg-surface ${isExpanded ? 'border-border' : 'border-transparent'}`}
-          style={[styles.searchSurface, isExpanded && styles.searchSurfaceExpanded]}
+          style={[
+            isExpanded ? themed.searchSurfaceExpanded : themed.searchSurface,
+            styles.searchSurface,
+            isExpanded && styles.searchSurfaceExpanded,
+          ]}
         >
           <View style={[styles.searchContainer, containerStyle]}>
             <MaterialCommunityIcons name="magnify" size={20} color={theme.colors.textSecondary} />
@@ -510,8 +519,11 @@ export const TopBar: React.FC = () => {
         <View style={styles.centerGroup}>
           <Pressable
             onPress={handleHome}
-            className={pathname === '/' ? 'bg-popover' : undefined}
-            style={[styles.iconButton, pathname === '/' && activeButtonStyle]}
+            style={[
+              pathname === '/' && themed.surface,
+              styles.iconButton,
+              pathname === '/' && activeButtonStyle,
+            ]}
           >
             <MaterialCommunityIcons
               name={pathname === '/' ? 'home' : 'home-outline'}
@@ -522,8 +534,11 @@ export const TopBar: React.FC = () => {
 
           <Pressable
             onPress={() => router.push('/live')}
-            className={pathname.startsWith('/live') ? 'bg-popover' : undefined}
-            style={[styles.iconButton, pathname.startsWith('/live') && activeButtonStyle]}
+            style={[
+              pathname.startsWith('/live') && themed.surface,
+              styles.iconButton,
+              pathname.startsWith('/live') && activeButtonStyle,
+            ]}
             accessibilityRole="button"
             accessibilityLabel={t('topbar.live')}
           >
@@ -536,8 +551,11 @@ export const TopBar: React.FC = () => {
 
           <Pressable
             onPress={() => router.push('/podcasts')}
-            className={pathname.startsWith('/podcasts') ? 'bg-popover' : undefined}
-            style={[styles.iconButton, pathname.startsWith('/podcasts') && activeButtonStyle]}
+            style={[
+              pathname.startsWith('/podcasts') && themed.surface,
+              styles.iconButton,
+              pathname.startsWith('/podcasts') && activeButtonStyle,
+            ]}
             accessibilityRole="button"
             accessibilityLabel={t('common.podcasts')}
           >
@@ -809,4 +827,6 @@ const useThemedStyles = createTokenStyles((t) => ({
   mutedText: { color: t.mutedForeground },
   text2: { color: t.primary },
   surface3: { backgroundColor: t.border },
+  searchSurface: { backgroundColor: t.surface, borderColor: 'transparent' },
+  searchSurfaceExpanded: { backgroundColor: t.surface, borderColor: t.border },
 }));

@@ -114,8 +114,12 @@ export const CoverArtPicker: React.FC<CoverArtPickerProps> = ({
       disabled={disabled}
       onPointerEnter={Platform.OS === 'web' ? () => setIsHovered(true) : undefined}
       onPointerLeave={Platform.OS === 'web' ? () => setIsHovered(false) : undefined}
-      className={`bg-surface border-border ${disabled || isUploading ? 'opacity-50' : 'opacity-100'}`}
-      style={[styles.container, { width: size, height: size }]}
+      style={[
+        themed.container,
+        disabled || isUploading ? styles.dimmed : styles.enabled,
+        styles.container,
+        { width: size, height: size },
+      ]}
     >
       {isUploading ? (
         <View style={styles.uploadingContainer}>
@@ -159,6 +163,8 @@ export const CoverArtPicker: React.FC<CoverArtPickerProps> = ({
 };
 
 const styles = StyleSheet.create({
+  enabled: { opacity: 1 },
+  dimmed: { opacity: 0.5 },
   container: {
     borderRadius: 20,
     borderWidth: 2,
@@ -219,4 +225,5 @@ const styles = StyleSheet.create({
 
 const useThemedStyles = createTokenStyles((t) => ({
   mutedText: { color: t.mutedForeground },
+  container: { borderColor: t.border, backgroundColor: t.surface },
 }));

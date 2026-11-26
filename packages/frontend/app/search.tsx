@@ -25,7 +25,7 @@ import { usePlayEntity } from '@/hooks/usePlayEntity';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { trackArtistsText } from '@/utils/trackArtists';
 import { useMediaQuery } from 'react-responsive';
-import { createTokenStyles } from '@oxy.so/bloom/theme';
+import { createTokenStyles, tokenAlpha } from '@oxy.so/bloom/theme';
 
 /**
  * Syra Search Screen
@@ -352,12 +352,10 @@ const SearchScreen: React.FC = () => {
               <Pressable
                 key={category.value}
                 onPress={() => handleCategoryChange(category.value)}
-                className={
-                  activeCategory === category.value
-                    ? 'bg-primary/10 border-primary'
-                    : 'border-transparent'
-                }
-                style={styles.categoryTab}
+                style={[
+                  activeCategory === category.value ? themed.activeCategoryTab : themed.categoryTab,
+                  styles.categoryTab,
+                ]}
               >
                 <Text
                   style={[
@@ -906,8 +904,11 @@ const SearchScreen: React.FC = () => {
                         <Pressable
                           key={person.personId}
                           onPress={onPress}
-                          className="bg-surface border-border active:bg-popover"
-                          style={styles.userRow}
+                          style={({ pressed }) => [
+                            themed.userRow,
+                            pressed && themed.surface3,
+                            styles.userRow,
+                          ]}
                         >
                           {person.oxyAvatar ? (
                             <Avatar
@@ -980,8 +981,11 @@ const SearchScreen: React.FC = () => {
                         <Pressable
                           key={user.id}
                           onPress={() => handleUserPress(user)}
-                          className="bg-surface border-border active:bg-popover"
-                          style={styles.userRow}
+                          style={({ pressed }) => [
+                            themed.userRow,
+                            pressed && themed.surface3,
+                            styles.userRow,
+                          ]}
                         >
                           <Avatar
                             source={user.avatar ?? undefined}
@@ -1176,4 +1180,7 @@ const useThemedStyles = createTokenStyles((t) => ({
   surface2: { backgroundColor: t.border },
   mutedText: { color: t.mutedForeground },
   surface3: { backgroundColor: t.popover },
+  activeCategoryTab: { borderColor: t.primary, backgroundColor: tokenAlpha(t.primary, 0.1) },
+  categoryTab: { borderColor: 'transparent' },
+  userRow: { borderColor: t.border, backgroundColor: t.surface },
 }));

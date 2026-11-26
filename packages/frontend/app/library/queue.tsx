@@ -68,11 +68,7 @@ export default function QueueScreen() {
             style={styles.fill}
             onPress={() => void playFromQueue(index)}
           >
-            <Text
-              className={
-                index === queue?.current ? 'text-primary font-semibold' : 'text-foreground'
-              }
-            >
+            <Text style={index === queue?.current ? styles.currentTitle : styles.queueTitle}>
               {index + 1}. {track.title}
             </Text>
             <Text style={styles.mutedText}>{track.artistName}</Text>
@@ -113,6 +109,8 @@ const useStyles = createTokenStyles((t) => ({
   content: { gap: 16, padding: 24, paddingBottom: 144 },
   title: { fontSize: 24, fontWeight: 700, color: t.foreground, lineHeight: 32 },
   mutedText: { color: t.mutedForeground },
+  currentTitle: { fontWeight: 600, color: t.primary },
+  queueTitle: { color: t.foreground },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 16 },
   text: { color: t.primary },
   text2: { color: t.destructive },

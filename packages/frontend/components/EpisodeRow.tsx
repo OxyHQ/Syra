@@ -9,7 +9,7 @@ import { formatEpisodeDuration, formatPubDate, formatRemaining } from '@/utils/p
 import type { EpisodeProgressSnapshot } from '@/hooks/usePodcasts';
 import { usePlayerStore } from '@/stores/playerStore';
 import { webViewStyle } from '@/utils/webStyles';
-import { createTokenStyles } from '@oxy.so/bloom/theme';
+import { createTokenStyles, tokenAlpha } from '@oxy.so/bloom/theme';
 
 interface EpisodeRowProps {
   episode: Episode;
@@ -94,11 +94,10 @@ const EpisodeRowComponent: React.FC<EpisodeRowProps> = ({
 
   return (
     <Pressable
-      className={isCurrent ? 'bg-surface/25' : undefined}
       onPress={onPress}
       style={[
         styles.row,
-        undefined,
+        isCurrent && themed.currentRow,
         ...Platform.select({ web: [webViewStyle({ cursor: 'pointer' as const })], default: [] }),
       ]}
     >
@@ -221,6 +220,7 @@ const styles = StyleSheet.create({
 });
 
 const useThemedStyles = createTokenStyles((t) => ({
+  currentRow: { backgroundColor: tokenAlpha(t.surface, 0.25) },
   surface: { backgroundColor: t.popover },
   surface2: { backgroundColor: t.primary },
   mutedText: { color: t.mutedForeground },

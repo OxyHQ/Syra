@@ -24,7 +24,7 @@ import { CATALOG_QUERY_KEYS } from '@/hooks/useLibraryCollections';
 import { AddToPlaylistSheet } from '@/components/playlist/AddToPlaylistSheet';
 import { TrackActionsSheet } from '@/components/playlist/TrackActionsSheet';
 import { TrackArtistLine } from '@/components/TrackArtistLine';
-import { createTokenStyles } from '@oxy.so/bloom/theme';
+import { createTokenStyles, tokenAlpha } from '@oxy.so/bloom/theme';
 
 /**
  * Album Screen
@@ -132,7 +132,7 @@ const AlbumScreen: React.FC = () => {
   if (gate.isTimedOut) {
     return (
       <EmptyState
-        className="bg-surface"
+        tone="surface"
         icon={{ name: 'cloud-offline-outline' }}
         error={{
           title: t('common.sessionUnavailable'),
@@ -162,7 +162,7 @@ const AlbumScreen: React.FC = () => {
   if ((albumQuery.isError || tracksQuery.isError) && !isNotFoundError(albumQuery.error)) {
     return (
       <EmptyState
-        className="bg-surface"
+        tone="surface"
         icon={{ name: 'cloud-offline-outline' }}
         error={{
           title: t('album.errors.load'),
@@ -178,7 +178,7 @@ const AlbumScreen: React.FC = () => {
   if (!album) {
     return (
       <EmptyState
-        className="bg-surface"
+        tone="surface"
         icon={{ name: 'disc-outline' }}
         title={t('album.notFound')}
         subtitle={t('album.notFoundMessage')}
@@ -426,9 +426,8 @@ const AlbumView: React.FC<AlbumViewProps> = ({
 
               return (
                 <Pressable
-                  className={isCurrentTrack ? 'bg-surface/25' : undefined}
                   key={track.id}
-                  style={[styles.trackRow, undefined]}
+                  style={[styles.trackRow, isCurrentTrack && themed.currentRow]}
                   onPress={() => onTrackPress(track)}
                 >
                   <View style={styles.trackRowLeft}>
@@ -468,8 +467,7 @@ const AlbumView: React.FC<AlbumViewProps> = ({
                         )}
                         <TrackArtistLine
                           track={track}
-                          className="text-muted-foreground"
-                          style={styles.trackArtist}
+                          style={[themed.mutedText, styles.trackArtist]}
                           numberOfLines={1}
                           fallback={track.artistName}
                         />
@@ -794,4 +792,5 @@ const useThemedStyles = createTokenStyles((t) => ({
   mutedText: { color: t.mutedForeground },
   surface2: { backgroundColor: t.primary },
   surface3: { backgroundColor: t.popover },
+  currentRow: { backgroundColor: tokenAlpha(t.surface, 0.25) },
 }));

@@ -211,8 +211,7 @@ export const MobilePlayerBar: React.FC = () => {
             </Pressable>
           ) : null}
           <Pressable
-            className={`bg-primary-foreground ${hasMedia ? 'opacity-100' : 'opacity-50'}`}
-            style={styles.playButton}
+            style={[themed.surface3, hasMedia ? styles.enabled : styles.dimmed, styles.playButton]}
             onPress={handlePlayPause}
             disabled={isLoading || !hasMedia}
           >
@@ -353,6 +352,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginHorizontal: 0,
   },
+  enabled: { opacity: 1 },
+  dimmed: { opacity: 0.5 },
 });
 
 const useThemedStyles = createTokenStyles((t) => ({

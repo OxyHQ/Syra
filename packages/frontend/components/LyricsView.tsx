@@ -93,11 +93,7 @@ export const LyricsView: React.FC<LyricsViewProps> = React.memo(({ trackId }) =>
           >
             <Text
               selectable={!isCurrent}
-              className={
-                index === activeIndex
-                  ? 'text-lg font-semibold text-primary leading-relaxed'
-                  : 'text-base text-muted-foreground leading-relaxed'
-              }
+              style={index === activeIndex ? styles.activeLine : styles.line}
             >
               {line.text}
             </Text>
@@ -137,6 +133,8 @@ const useStyles = createTokenStyles((t) => ({
   stack: { gap: 12, padding: 24 },
   mutedText: { color: t.mutedForeground },
   text: { color: t.primary },
+  activeLine: { fontSize: 18, lineHeight: 29.25, fontWeight: 600, color: t.primary },
+  line: { fontSize: 16, lineHeight: 26, color: t.mutedForeground },
   centered: {
     flexGrow: 1,
     flexShrink: 1,

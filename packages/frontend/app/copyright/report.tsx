@@ -166,8 +166,11 @@ const CopyrightReportScreen: React.FC = () => {
             <Text style={[themed.text, styles.label]}>{t('copyright.searchLabel')}</Text>
             <View style={styles.searchContainer}>
               <TextInput
-                className={`bg-surface text-foreground ${selectedTrack ? 'border-primary' : 'border-border'}`}
-                style={styles.searchInput}
+                style={[
+                  themed.input,
+                  selectedTrack ? themed.inputSelected : themed.inputIdle,
+                  styles.searchInput,
+                ]}
                 placeholder={t('copyright.searchPlaceholder')}
                 placeholderTextColor={theme.colors.textSecondary}
                 value={searchQuery}
@@ -200,8 +203,7 @@ const CopyrightReportScreen: React.FC = () => {
                       <Text style={[themed.text, styles.resultTitle]}>{track.title}</Text>
                       <TrackArtistLine
                         track={track}
-                        className="text-muted-foreground"
-                        style={styles.resultArtist}
+                        style={[themed.mutedText, styles.resultArtist]}
                         linked={false}
                         fallback={track.artistName}
                       />
@@ -462,4 +464,7 @@ const useThemedStyles = createTokenStyles((t) => ({
   surface3: { borderColor: t.primary, backgroundColor: tokenAlpha(t.primary, 0.1) },
   surface4: { borderColor: t.border, backgroundColor: t.surface, color: t.foreground },
   text3: { color: t.primaryForeground },
+  input: { backgroundColor: t.surface, color: t.foreground },
+  inputSelected: { borderColor: t.primary },
+  inputIdle: { borderColor: t.border },
 }));

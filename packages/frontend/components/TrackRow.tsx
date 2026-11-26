@@ -9,7 +9,7 @@ import { useLibrary, useToggleLikeTrack } from '@/hooks/useLibrary';
 import { usePlayerStore } from '@/stores/playerStore';
 import { webViewStyle } from '@/utils/webStyles';
 import { TrackArtistLine } from '@/components/TrackArtistLine';
-import { createTokenStyles } from '@oxy.so/bloom/theme';
+import { createTokenStyles, tokenAlpha } from '@oxy.so/bloom/theme';
 
 interface TrackRowProps {
   track: Track;
@@ -96,14 +96,13 @@ const TrackRowComponent: React.FC<TrackRowProps> = ({
   return (
     <>
       <Pressable
-        className={isCurrentTrack ? 'bg-surface/25' : undefined}
         style={[
           styles.trackRow,
-          // `bg-surface/25`, never `theme.colors.backgroundSecondary + '40'`: an accent
-          // role resolves to `rgb(...)`, so a hex-alpha suffix yields a malformed colour
-          // that react-native-web parses back as fully OPAQUE — the row would hide the
-          // art behind it instead of tinting.
-          undefined,
+          // `tokenAlpha(t.surface, 0.25)`, never `theme.colors.backgroundSecondary + '40'`:
+          // an accent role resolves to `rgb(...)`, so a hex-alpha suffix yields a malformed
+          // colour that react-native-web parses back as fully OPAQUE — the row would hide
+          // the art behind it instead of tinting.
+          isCurrentTrack && themed.currentRow,
           ...Platform.select({
             web: [webViewStyle({ cursor: 'pointer' as const })],
             default: [],
@@ -158,8 +157,7 @@ const TrackRowComponent: React.FC<TrackRowProps> = ({
               ) : null}
               <TrackArtistLine
                 track={track}
-                className="text-muted-foreground"
-                style={styles.trackArtist}
+                style={[themed.mutedText2, styles.trackArtist]}
                 numberOfLines={1}
                 fallback={track.artistName}
               />
@@ -346,4 +344,5 @@ const useThemedStyles = createTokenStyles((t) => ({
   mutedText: { fontSize: 14, color: t.mutedForeground, lineHeight: 20 },
   surface: { backgroundColor: t.popover },
   mutedText2: { color: t.mutedForeground },
+  currentRow: { backgroundColor: tokenAlpha(t.surface, 0.25) },
 }));
