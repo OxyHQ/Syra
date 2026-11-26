@@ -22,6 +22,7 @@ import { LiveConfigProvider, LiveRoomProvider } from '@syra.fm/sdk';
 import { OXY_CLIENT_ID } from '@/config';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { liveConfig, liveRoomsQueryKey } from '@/lib/liveConfig';
+import { AccountQueryScope } from './AccountQueryScope';
 
 interface AppProvidersProps {
   children: ReactNode;
@@ -70,17 +71,18 @@ export const AppProviders = memo(function AppProviders({
     <SafeAreaProvider initialMetrics={initialWindowMetrics}>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <ErrorBoundary>
+          {/* Studio's own client: Services 15 mounts no QueryClientProvider. */}
           <QueryClientProvider client={queryClient}>
             <OxyProvider
               oxyServices={oxyServices}
               clientId={OXY_CLIENT_ID}
-              queryClient={queryClient}
-              accountQueries={{ roots: 'all' }}
               // Intentionally kept as "oxy_syra_creators" for session continuity —
               // this is the persisted session storage key; renaming it would log
               // every existing user out. Do not change on the Studio rebrand.
               storageKeyPrefix="oxy_syra_creators"
             >
+              {/* First child: queries follow the session before anything below reads them. */}
+              <AccountQueryScope />
               <ImageResolverProvider value={resolveImage}>
                 <AccountColor />
                 <BottomSheetModalProvider>

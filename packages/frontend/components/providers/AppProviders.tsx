@@ -14,7 +14,7 @@
 
 import { setCatalogFileResolver } from '@/utils/catalogImages';
 import React, { memo, useCallback, useMemo } from 'react';
-import { type QueryClient, useQueryClient } from '@tanstack/react-query';
+import { type QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { I18nextProvider, useTranslation } from 'react-i18next';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
@@ -38,8 +38,8 @@ import { liveConfig, liveRoomsQueryKey } from '@/lib/liveConfig';
 import { useServerAppearanceSync } from '@/hooks/useServerAppearanceSync';
 import { usePlayerPresence } from '@/hooks/usePlayerPresence';
 import { clearStreamResolutionCache } from '@/services/streamService';
-import { SYRA_ACCOUNT_QUERIES } from '@/lib/queryClient';
 import { removeLegacyQueryCache } from '@/utils/removeLegacyQueryCache';
+import { AccountQueryScope } from './AccountQueryScope';
 import { QueueAccountScope } from './QueueAccountScope';
 
 /**
@@ -178,38 +178,41 @@ export const AppProviders = memo(function AppProviders({
     <SafeAreaProvider initialMetrics={initialWindowMetrics}>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <ErrorBoundary>
-          <OxyProvider
-            oxyServices={oxyServices}
-            clientId={OXY_CLIENT_ID}
-            storageKeyPrefix="oxy_syra"
-            queryClient={queryClient}
-            accountQueries={SYRA_ACCOUNT_QUERIES}
-          >
-            <ImageResolverProvider value={resolveImage}>
-              <I18nextProvider i18n={i18n}>
-                <AppearanceSync />
-                <QueueAccountScope />
-                <StreamCacheAuthInvalidator />
-                <PlaybackFailureReporter />
-                <PlayerPresence />
-                <BottomSheetModalProvider>
-                  <BottomSheetProvider>
-                    <MenuProvider>
-                      <HomeRefreshProvider>
-                        <LiveRoomsProvider>{children}</LiveRoomsProvider>
-                        <StatusBar style="auto" />
-                        {/* Mounted once for the whole app, after `children` so it
+          {/* Syra's own client: Services 15 mounts no QueryClientProvider. */}
+          <QueryClientProvider client={queryClient}>
+            <OxyProvider
+              oxyServices={oxyServices}
+              clientId={OXY_CLIENT_ID}
+              storageKeyPrefix="oxy_syra"
+            >
+              {/* First child: the cache follows the session before anything below reads it. */}
+              <AccountQueryScope />
+              <ImageResolverProvider value={resolveImage}>
+                <I18nextProvider i18n={i18n}>
+                  <AppearanceSync />
+                  <QueueAccountScope />
+                  <StreamCacheAuthInvalidator />
+                  <PlaybackFailureReporter />
+                  <PlayerPresence />
+                  <BottomSheetModalProvider>
+                    <BottomSheetProvider>
+                      <MenuProvider>
+                        <HomeRefreshProvider>
+                          <LiveRoomsProvider>{children}</LiveRoomsProvider>
+                          <StatusBar style="auto" />
+                          {/* Mounted once for the whole app, after `children` so it
                             overlays content. Toasts are rendered by the single
                             `ToastOutlet` that `OxyProvider` already mounts, which
                             sits above this banner. */}
-                        {isAppReady && <OfflineBanner />}
-                      </HomeRefreshProvider>
-                    </MenuProvider>
-                  </BottomSheetProvider>
-                </BottomSheetModalProvider>
-              </I18nextProvider>
-            </ImageResolverProvider>
-          </OxyProvider>
+                          {isAppReady && <OfflineBanner />}
+                        </HomeRefreshProvider>
+                      </MenuProvider>
+                    </BottomSheetProvider>
+                  </BottomSheetModalProvider>
+                </I18nextProvider>
+              </ImageResolverProvider>
+            </OxyProvider>
+          </QueryClientProvider>
         </ErrorBoundary>
       </GestureHandlerRootView>
     </SafeAreaProvider>
