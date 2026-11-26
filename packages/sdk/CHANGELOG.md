@@ -16,6 +16,8 @@ so an app on Bloom 23, which drops NativeWind, draws it unchanged.
   the dock and its backdrop pin to the viewport with `position: fixed` on the
   web, and nothing changes on native.
 - `@oxy.so/services` 15 is admitted (`>=13.0.0 <16.0.0`).
+- It is built, typechecked and tested against `@oxy.so/bloom` 23.9.1 and
+  `@oxy.so/services` 15.0.0, its dev dependencies.
 - The `nativewind` dev dependency and its `nativewind/types` reference are gone.
 
 ## 0.26.0
