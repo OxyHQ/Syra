@@ -76,10 +76,9 @@ export default function TrackScreen() {
               track.coverArtSizes,
             )}
           />
-          {/* TODO(lead): native artwork size. The classes `w-64 h-64 rounded-2xl` reached
-              only the web: there expo-image's container is react-native-css's `View`, on
-              native the class went to expo-image's native view, which ignores it, so the
-              artwork has no size there and draws at zero height. Kept as it drew. */}
+          {/* `w-64 h-64 rounded-2xl` reached only the web (expo-image's container there
+              was react-native-css's View; its native view ignored the class), so the size
+              stays web-only, as it drew. */}
           <Image
             source={{
               uri: pickCatalogImageUrl(
