@@ -23,6 +23,7 @@ import { OXY_CLIENT_ID } from '@/config';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { liveConfig, liveRoomsQueryKey } from '@/lib/liveConfig';
 import { AccountQueryScope } from './AccountQueryScope';
+import { QueryManagers } from './QueryManagers';
 
 interface AppProvidersProps {
   children: ReactNode;
@@ -73,6 +74,7 @@ export const AppProviders = memo(function AppProviders({
         <ErrorBoundary>
           {/* Studio's own client: Services 15 mounts no QueryClientProvider. */}
           <QueryClientProvider client={queryClient}>
+            <QueryManagers />
             <OxyProvider
               oxyServices={oxyServices}
               clientId={OXY_CLIENT_ID}
