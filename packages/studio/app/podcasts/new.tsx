@@ -11,8 +11,7 @@ import { HostsGuestsPicker, type HostsGuests } from '@/components/HostsGuestsPic
 import { useCreatePodcast } from '@/hooks/usePodcasts';
 import { extractInvalidIds } from '@/utils/api';
 import { toast } from '@oxy.so/bloom/toast';
-import { cn } from '@/lib/utils';
-import { createTokenStyles } from '@oxy.so/bloom/theme';
+import { createTokenStyles, tokenAlpha } from '@oxy.so/bloom/theme';
 
 const TYPES: { value: PodcastType; label: string; hint: string }[] = [
   { value: 'episodic', label: 'Episodic', hint: 'Standalone episodes, newest first' },
@@ -37,14 +36,9 @@ function TypeSelector({
             <Pressable
               key={option.value}
               onPress={() => onChange(option.value)}
-              className={cn(
-                'flex-1 rounded-xl border px-3 py-3',
-                active ? 'border-primary bg-primary/10' : 'border-border bg-surface',
-              )}
+              style={[styles.type, active ? styles.typeActive : styles.typeIdle]}
             >
-              <Text
-                className={cn('text-sm font-semibold', active ? 'text-primary' : 'text-foreground')}
-              >
+              <Text style={[styles.typeText, active ? styles.typeTextActive : styles.typeTextIdle]}>
                 {option.label}
               </Text>
               <Text style={styles.mutedText}>{option.hint}</Text>
@@ -216,6 +210,20 @@ export default function NewShowScreen() {
 }
 
 const useStyles = createTokenStyles((t) => ({
+  type: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: '0%',
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  typeActive: { borderColor: t.primary, backgroundColor: tokenAlpha(t.primary, 0.1) },
+  typeIdle: { borderColor: t.border, backgroundColor: t.surface },
+  typeText: { fontSize: 14, fontWeight: 600, lineHeight: 20 },
+  typeTextActive: { color: t.primary },
+  typeTextIdle: { color: t.foreground },
   section: { marginBottom: 16 },
   text: { marginBottom: 6, fontSize: 14, fontWeight: 500, color: t.foreground, lineHeight: 20 },
   row: { flexDirection: 'row', gap: 8 },

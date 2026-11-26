@@ -15,7 +15,6 @@ import { useMyArtistProfile } from '@/hooks/useArtist';
 import { useCreateAlbum } from '@/hooks/useMusic';
 import { getApiErrorMessage } from '@/utils/api';
 import { toast } from '@oxy.so/bloom/toast';
-import { cn } from '@/lib/utils';
 import { createTokenStyles, tokenAlpha } from '@oxy.so/bloom/theme';
 
 type AlbumType = NonNullable<CreateAlbumRequest['type']>;
@@ -48,14 +47,9 @@ function TypeSelector({
               key={option.value}
               onPress={() => onChange(option.value)}
               disabled={disabled}
-              className={cn(
-                'rounded-full border px-4 py-2',
-                active ? 'border-primary bg-primary/10' : 'border-border bg-surface',
-              )}
+              style={[styles.chip, active ? styles.chipActive : styles.chipIdle]}
             >
-              <Text
-                className={cn('text-sm font-semibold', active ? 'text-primary' : 'text-foreground')}
-              >
+              <Text style={[styles.chipText, active ? styles.chipTextActive : styles.chipTextIdle]}>
                 {option.label}
               </Text>
             </Pressable>
@@ -274,6 +268,12 @@ const useStyles = createTokenStyles((t) => ({
   section: { marginBottom: 16 },
   text: { marginBottom: 6, fontSize: 14, fontWeight: 500, color: t.foreground, lineHeight: 20 },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: { borderRadius: 9999, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 8 },
+  chipActive: { borderColor: t.primary, backgroundColor: tokenAlpha(t.primary, 0.1) },
+  chipIdle: { borderColor: t.border, backgroundColor: t.surface },
+  chipText: { fontSize: 14, fontWeight: 600, lineHeight: 20 },
+  chipTextActive: { color: t.primary },
+  chipTextIdle: { color: t.foreground },
   row2: {
     marginBottom: 16,
     flexDirection: 'row',

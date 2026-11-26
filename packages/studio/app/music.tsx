@@ -64,7 +64,7 @@ function ActionCard({
   return (
     <Pressable
       onPress={onPress}
-      className="flex-row items-center gap-3 rounded-2xl border border-border bg-surface px-4 py-3.5 active:opacity-80"
+      style={({ pressed }) => [styles.action, pressed && styles.pressed]}
     >
       <View style={styles.centered2}>
         <MaterialCommunityIcons name={icon} size={22} color={theme.colors.primary} />
@@ -300,6 +300,18 @@ export default function MusicScreen() {
 }
 
 const useStyles = createTokenStyles((t) => ({
+  action: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: t.border,
+    backgroundColor: t.surface,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  pressed: { opacity: 0.8 },
   centered: {
     alignItems: 'center',
     justifyContent: 'center',

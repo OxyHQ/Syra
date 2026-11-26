@@ -11,8 +11,7 @@ import { FormField } from '@/components/FormField';
 import { usePodcast } from '@/hooks/usePodcasts';
 import { useGenerateEpisode, useGenerations } from '@/hooks/useGenerations';
 import { getApiErrorMessage } from '@/utils/api';
-import { cn } from '@/lib/utils';
-import { createTokenStyles } from '@oxy.so/bloom/theme';
+import { createTokenStyles, tokenAlpha } from '@oxy.so/bloom/theme';
 
 const FORMATS: { value: GenerationFormat; label: string }[] = [
   { value: 'podcast', label: 'Conversation' },
@@ -48,16 +47,16 @@ function FormatSelector({
           <Pressable
             key={option.value}
             onPress={() => onChange(option.value)}
-            className={cn(
-              'rounded-xl border px-3 py-2',
-              option.value === value ? 'border-primary bg-primary/10' : 'border-border bg-surface',
-            )}
+            style={[
+              styles.format,
+              option.value === value ? styles.formatActive : styles.formatIdle,
+            ]}
           >
             <Text
-              className={cn(
-                'text-sm',
-                option.value === value ? 'text-primary font-medium' : 'text-foreground',
-              )}
+              style={[
+                styles.formatText,
+                option.value === value ? styles.formatTextActive : styles.formatTextIdle,
+              ]}
             >
               {option.label}
             </Text>
@@ -81,10 +80,10 @@ function GenerationRow({ generation }: { generation: EpisodeGeneration }) {
           {generation.topic ?? 'Choosing a subject…'}
         </Text>
         <Text
-          className={cn(
-            'text-xs',
-            generation.status === 'failed' ? 'text-destructive' : 'text-muted-foreground',
-          )}
+          style={[
+            styles.statusText,
+            generation.status === 'failed' ? styles.statusTextFailed : styles.statusTextRunning,
+          ]}
         >
           {running
             ? `${STATUS_LABEL[generation.status]} · ${generation.progress}%`
@@ -232,6 +231,15 @@ export default function GenerateEpisodeScreen() {
 }
 
 const useStyles = createTokenStyles((t) => ({
+  format: { borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 8 },
+  formatActive: { borderColor: t.primary, backgroundColor: tokenAlpha(t.primary, 0.1) },
+  formatIdle: { borderColor: t.border, backgroundColor: t.surface },
+  formatText: { fontSize: 14, lineHeight: 20 },
+  formatTextActive: { fontWeight: 500, color: t.primary },
+  formatTextIdle: { color: t.foreground },
+  statusText: { fontSize: 12, lineHeight: 16 },
+  statusTextFailed: { color: t.destructive },
+  statusTextRunning: { color: t.mutedForeground },
   section: { marginBottom: 16 },
   text: { marginBottom: 6, fontSize: 14, fontWeight: 500, color: t.foreground, lineHeight: 20 },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },

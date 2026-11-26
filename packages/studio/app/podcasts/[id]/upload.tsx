@@ -15,7 +15,6 @@ import { useUploadEpisode } from '@/hooks/usePodcasts';
 import type { EpisodeAudioFile } from '@/services/episodeService';
 import { extractInvalidIds } from '@/utils/api';
 import { toast } from '@oxy.so/bloom/toast';
-import { cn } from '@/lib/utils';
 import { createTokenStyles, tokenAlpha } from '@oxy.so/bloom/theme';
 
 const EPISODE_TYPES: { value: EpisodeType; label: string }[] = [
@@ -39,7 +38,7 @@ function AudioPicker({ file, onPick }: { file: EpisodeAudioFile | null; onPick: 
       <Text style={styles.text}>Audio file</Text>
       <Pressable
         onPress={onPick}
-        className="flex-row items-center gap-3 rounded-xl border border-dashed border-border bg-surface px-4 py-4 active:opacity-80"
+        style={({ pressed }) => [styles.audioPicker, pressed && styles.pressed]}
       >
         <View style={styles.centered}>
           <MaterialCommunityIcons
@@ -79,14 +78,9 @@ function TypeSelector({
             <Pressable
               key={option.value}
               onPress={() => onChange(option.value)}
-              className={cn(
-                'flex-1 rounded-xl border px-3 py-2.5 items-center',
-                active ? 'border-primary bg-primary/10' : 'border-border bg-surface',
-              )}
+              style={[styles.type, active ? styles.typeActive : styles.typeIdle]}
             >
-              <Text
-                className={cn('text-sm font-semibold', active ? 'text-primary' : 'text-foreground')}
-              >
+              <Text style={[styles.typeText, active ? styles.typeTextActive : styles.typeTextIdle]}>
                 {option.label}
               </Text>
             </Pressable>
@@ -257,6 +251,34 @@ export default function UploadEpisodeScreen() {
 }
 
 const useStyles = createTokenStyles((t) => ({
+  audioPicker: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 12,
+    borderStyle: 'dashed',
+    borderWidth: 1,
+    borderColor: t.border,
+    backgroundColor: t.surface,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  pressed: { opacity: 0.8 },
+  type: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: '0%',
+    alignItems: 'center',
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  typeActive: { borderColor: t.primary, backgroundColor: tokenAlpha(t.primary, 0.1) },
+  typeIdle: { borderColor: t.border, backgroundColor: t.surface },
+  typeText: { fontSize: 14, fontWeight: 600, lineHeight: 20 },
+  typeTextActive: { color: t.primary },
+  typeTextIdle: { color: t.foreground },
   section: { marginBottom: 16 },
   text: { marginBottom: 6, fontSize: 14, fontWeight: 500, color: t.foreground, lineHeight: 20 },
   centered: {

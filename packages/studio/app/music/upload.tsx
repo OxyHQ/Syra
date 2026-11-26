@@ -17,7 +17,6 @@ import { useMyAlbums, useUploadTrack } from '@/hooks/useMusic';
 import type { TrackAudioFile } from '@/services/musicService';
 import { getApiErrorMessage } from '@/utils/api';
 import { toast } from '@oxy.so/bloom/toast';
-import { cn } from '@/lib/utils';
 import { createTokenStyles, tokenAlpha } from '@oxy.so/bloom/theme';
 
 function AudioPicker({
@@ -37,10 +36,11 @@ function AudioPicker({
       <Pressable
         onPress={onPick}
         disabled={disabled}
-        className={cn(
-          'flex-row items-center gap-3 rounded-xl border border-dashed border-border bg-surface px-4 py-4 active:opacity-80',
-          disabled ? 'opacity-50' : '',
-        )}
+        style={({ pressed }) => [
+          styles.audioPicker,
+          disabled && styles.disabled,
+          pressed && styles.pressed,
+        ]}
       >
         <View style={styles.centered}>
           <MaterialCommunityIcons
@@ -85,13 +85,10 @@ function AlbumPicker({
         <Pressable
           onPress={() => onSelect(null)}
           disabled={disabled}
-          className={cn(
-            'rounded-full border px-4 py-2',
-            !selectedId ? 'border-primary bg-primary/10' : 'border-border bg-surface',
-          )}
+          style={[styles.chip, !selectedId ? styles.chipActive : styles.chipIdle]}
         >
           <Text
-            className={cn('text-sm font-medium', !selectedId ? 'text-primary' : 'text-foreground')}
+            style={[styles.chipText, !selectedId ? styles.chipTextActive : styles.chipTextIdle]}
           >
             None
           </Text>
@@ -103,14 +100,11 @@ function AlbumPicker({
               key={album.id}
               onPress={() => onSelect(album.id)}
               disabled={disabled}
-              className={cn(
-                'rounded-full border px-4 py-2',
-                active ? 'border-primary bg-primary/10' : 'border-border bg-surface',
-              )}
+              style={[styles.chip, active ? styles.chipActive : styles.chipIdle]}
             >
               <Text
                 numberOfLines={1}
-                className={cn('text-sm font-medium', active ? 'text-primary' : 'text-foreground')}
+                style={[styles.chipText, active ? styles.chipTextActive : styles.chipTextIdle]}
               >
                 {album.title}
               </Text>
@@ -361,6 +355,26 @@ export default function UploadSongScreen() {
 }
 
 const useStyles = createTokenStyles((t) => ({
+  audioPicker: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 12,
+    borderStyle: 'dashed',
+    borderWidth: 1,
+    borderColor: t.border,
+    backgroundColor: t.surface,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  disabled: { opacity: 0.5 },
+  pressed: { opacity: 0.8 },
+  chip: { borderRadius: 9999, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 8 },
+  chipActive: { borderColor: t.primary, backgroundColor: tokenAlpha(t.primary, 0.1) },
+  chipIdle: { borderColor: t.border, backgroundColor: t.surface },
+  chipText: { fontSize: 14, fontWeight: 500, lineHeight: 20 },
+  chipTextActive: { color: t.primary },
+  chipTextIdle: { color: t.foreground },
   section: { marginBottom: 16 },
   text: { marginBottom: 6, fontSize: 14, fontWeight: 500, color: t.foreground, lineHeight: 20 },
   centered: {

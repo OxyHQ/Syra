@@ -9,8 +9,7 @@ import { SignInGate } from '@/components/SignInGate';
 import { ScreenContainer } from '@/components/AppShell';
 import { useArtistInsights } from '@/hooks/useArtist';
 import type { InsightsPeriod } from '@/services/artistService';
-import { cn } from '@/lib/utils';
-import { createTokenStyles } from '@oxy.so/bloom/theme';
+import { createTokenStyles, tokenAlpha } from '@oxy.so/bloom/theme';
 
 const PERIODS: { value: InsightsPeriod; label: string }[] = [
   { value: '7days', label: '7 days' },
@@ -38,13 +37,10 @@ function PeriodSelector({
           <Pressable
             key={option.value}
             onPress={() => onChange(option.value)}
-            className={cn(
-              'flex-1 rounded-xl border px-3 py-2.5 items-center',
-              active ? 'border-primary bg-primary/10' : 'border-border bg-surface',
-            )}
+            style={[styles.period, active ? styles.periodActive : styles.periodIdle]}
           >
             <Text
-              className={cn('text-sm font-semibold', active ? 'text-primary' : 'text-foreground')}
+              style={[styles.periodText, active ? styles.periodTextActive : styles.periodTextIdle]}
             >
               {option.label}
             </Text>
@@ -156,6 +152,21 @@ export default function InsightsScreen() {
 }
 
 const useStyles = createTokenStyles((t) => ({
+  period: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: '0%',
+    alignItems: 'center',
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  periodActive: { borderColor: t.primary, backgroundColor: tokenAlpha(t.primary, 0.1) },
+  periodIdle: { borderColor: t.border, backgroundColor: t.surface },
+  periodText: { fontSize: 14, fontWeight: 600, lineHeight: 20 },
+  periodTextActive: { color: t.primary },
+  periodTextIdle: { color: t.foreground },
   row: { marginBottom: 24, flexDirection: 'row', gap: 8 },
   surface: {
     flexGrow: 1,

@@ -10,7 +10,7 @@ export default function NotFoundScreen() {
       <View style={styles.centered}>
         <Text style={styles.title}>Page not found</Text>
         <Text style={styles.mutedText}>This screen doesn&apos;t exist in Syra Studio.</Text>
-        <Link href="/" className="text-primary font-semibold text-base">
+        <Link href="/" style={styles.link}>
           Go to dashboard
         </Link>
       </View>
@@ -19,6 +19,7 @@ export default function NotFoundScreen() {
 }
 
 const useStyles = createTokenStyles((t) => ({
+  link: { fontSize: 16, fontWeight: 600, color: t.primary, lineHeight: 24 },
   centered: {
     flexGrow: 1,
     flexShrink: 1,
