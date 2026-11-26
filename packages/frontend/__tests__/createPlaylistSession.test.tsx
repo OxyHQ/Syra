@@ -1,12 +1,14 @@
 import TestRenderer, { act } from 'react-test-renderer';
 import { OxyServices } from '@oxy.so/core';
 import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react-query';
+import { createAccountQueryCache } from '@/lib/accountQueryCache';
 
 const mockOxy = new OxyServices({ baseURL: 'https://identity.example', enableCache: false });
 const mockToast = { error: jest.fn(), success: jest.fn() };
 const mockRouter = { replace: jest.fn(), back: jest.fn() };
 let mockIsAuthenticated = true;
 let mockVisibleUser = 'alice';
+jest.mock('@react-native-async-storage/async-storage', () => ({ __esModule: true, default: {} }));
 jest.mock('@/lib/oxyServices', () => ({ oxyServices: mockOxy }));
 jest.mock('@/config', () => ({ API_URL: 'https://syra.example' }));
 jest.mock('@oxy.so/services/ui/client', () => ({
@@ -101,9 +103,6 @@ function compiledScreen(): typeof CreatePlaylistScreen {
 }
 const CompiledPlaylistScreen = compiledScreen();
 
-const {
-  createAccountQueryPersistence,
-} = require('../../../node_modules/@oxy.so/services/lib/commonjs/ui/hooks/accountQueryPersistence.js');
 const token = (userId: string, version = 1) =>
   `e30.${Buffer.from(JSON.stringify({ userId, sessionId: userId, version, exp: 2000000000 })).toString('base64url')}.fixture`;
 const response = () =>
@@ -150,10 +149,8 @@ beforeEach(async () => {
     // These tests exercise session ownership, not mutation garbage collection.
     defaultOptions: { mutations: { retry: 1, retryDelay: 1, gcTime: Infinity } },
   });
-  persistence = createAccountQueryPersistence(client, {
-    roots: 'all',
-    memoryOnlyRoots: ['search'],
-  });
+  // Syra's own per-account cache (Services 15 has none): an account switch drops every query.
+  persistence = createAccountQueryCache(client);
   persistence.setStorage({
     getItem: async () => null,
     setItem: async () => undefined,

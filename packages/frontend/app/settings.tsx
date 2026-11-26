@@ -5,7 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useMutation } from '@tanstack/react-query';
 import { getAccountDisplayName } from '@oxy.so/core';
 import { useAccountColorSave, useOxy } from '@oxy.so/services/ui/client';
-import { SettingsListGroup, SettingsListItem } from '@oxy.so/bloom/settings-list';
+import { GroupedSection, GroupedSectionItem } from '@oxy.so/bloom/grouped-section';
 import { Switch } from '@oxy.so/bloom/switch';
 import {
   SegmentedControl,
@@ -341,32 +341,32 @@ const SettingsScreen: React.FC = () => {
               </Text>
             </View>
 
-            <SettingsListGroup title={t('settings.groups.account')}>
-              <SettingsListItem
+            <GroupedSection title={t('settings.groups.account')}>
+              <GroupedSectionItem
                 icon={<RowIcon name="person-outline" />}
                 title={t('settings.account.viewProfile')}
                 description={t('settings.account.viewProfileHint')}
                 onPress={handleViewProfile}
                 disabled={!user?.username}
               />
-              <SettingsListItem
+              <GroupedSectionItem
                 icon={<RowIcon name="person-circle-outline" />}
                 title={t('settings.account.manage')}
                 description={t('settings.account.manageHint')}
                 onPress={handleManageAccount}
               />
-            </SettingsListGroup>
+            </GroupedSection>
 
-            <SettingsListGroup title={t('settings.groups.create')}>
-              <SettingsListItem
+            <GroupedSection title={t('settings.groups.create')}>
+              <GroupedSectionItem
                 icon={<RowIcon name="mic-outline" />}
                 title={t('settings.create.studio')}
                 description={t('settings.create.studioHint')}
                 onPress={handleOpenStudio}
               />
-            </SettingsListGroup>
+            </GroupedSection>
 
-            <SettingsListGroup title={t('settings.groups.preferences')}>
+            <GroupedSection title={t('settings.groups.preferences')}>
               <SettingsControlBlock
                 icon="phone-portrait-outline"
                 title={t('settings.preferences.colorMode')}
@@ -432,10 +432,10 @@ const SettingsScreen: React.FC = () => {
                   ))}
                 </SegmentedControl>
               </SettingsControlBlock>
-            </SettingsListGroup>
+            </GroupedSection>
 
-            <SettingsListGroup title={t('settings.groups.playback')}>
-              <SettingsListItem
+            <GroupedSection title={t('settings.groups.playback')}>
+              <GroupedSectionItem
                 icon={<RowIcon name="play-circle-outline" />}
                 title={t('settings.playback.autoplay')}
                 description={t('settings.playback.autoplayHint')}
@@ -447,7 +447,7 @@ const SettingsScreen: React.FC = () => {
                   />
                 }
               />
-              <SettingsListItem
+              <GroupedSectionItem
                 icon={<RowIcon name="albums-outline" />}
                 title={t('settings.playback.gapless')}
                 description={t('settings.playback.gaplessHint')}
@@ -461,7 +461,7 @@ const SettingsScreen: React.FC = () => {
                   />
                 }
               />
-              <SettingsListItem
+              <GroupedSectionItem
                 icon={<RowIcon name="volume-medium-outline" />}
                 title={t('settings.playback.normalizeVolume')}
                 description={t('settings.playback.normalizeVolumeHint')}
@@ -475,7 +475,7 @@ const SettingsScreen: React.FC = () => {
                   />
                 }
               />
-              <SettingsListItem
+              <GroupedSectionItem
                 icon={<RowIcon name="alert-circle-outline" />}
                 title={t('settings.playback.explicit')}
                 description={t('settings.playback.explicitHint')}
@@ -505,9 +505,9 @@ const SettingsScreen: React.FC = () => {
                   }
                 />
               </SettingsControlBlock>
-            </SettingsListGroup>
+            </GroupedSection>
 
-            <SettingsListGroup title={t('settings.groups.audio')}>
+            <GroupedSection title={t('settings.groups.audio')}>
               <SettingsControlBlock
                 icon="wifi-outline"
                 title={t('settings.audio.streamingQuality')}
@@ -578,7 +578,7 @@ const SettingsScreen: React.FC = () => {
                 </SegmentedControl>
               </SettingsControlBlock>
 
-              <SettingsListItem
+              <GroupedSectionItem
                 icon={<RowIcon name="radio-outline" />}
                 title={t('settings.audio.dataSaver')}
                 description={t('settings.audio.dataSaverHint')}
@@ -590,9 +590,9 @@ const SettingsScreen: React.FC = () => {
                   />
                 }
               />
-            </SettingsListGroup>
+            </GroupedSection>
 
-            <SettingsListGroup title={t('settings.groups.privacy')}>
+            <GroupedSection title={t('settings.groups.privacy')}>
               {privacySettings ? (
                 <SettingsControlBlock
                   icon="lock-closed-outline"
@@ -625,7 +625,7 @@ const SettingsScreen: React.FC = () => {
                 </SettingsControlBlock>
               ) : null}
               {privacySettings ? (
-                <SettingsListItem
+                <GroupedSectionItem
                   icon={<RowIcon name="card-outline" />}
                   title={t('settings.privacy.showContactInfo')}
                   description={t('settings.privacy.showContactInfoHint')}
@@ -639,7 +639,7 @@ const SettingsScreen: React.FC = () => {
                 />
               ) : null}
               {privacySettings ? (
-                <SettingsListItem
+                <GroupedSectionItem
                   icon={<RowIcon name="ellipse-outline" />}
                   title={t('settings.privacy.showOnlineStatus')}
                   description={t('settings.privacy.showOnlineStatusHint')}
@@ -652,30 +652,30 @@ const SettingsScreen: React.FC = () => {
                   }
                 />
               ) : null}
-              <SettingsListItem
+              <GroupedSectionItem
                 icon={<RowIcon name="trash-outline" />}
                 title={t('settings.privacy.clearCache')}
                 description={t('settings.privacy.clearCacheHint')}
                 onPress={handleClearCache}
                 showChevron={false}
               />
-            </SettingsListGroup>
+            </GroupedSection>
 
-            <SettingsListGroup title={t('settings.groups.about')}>
-              <SettingsListItem
+            <GroupedSection title={t('settings.groups.about')}>
+              <GroupedSectionItem
                 icon={<RowIcon name="information-circle-outline" />}
                 title={t('settings.about.version')}
                 value={`Syra ${appVersion}`}
                 showChevron={false}
               />
-              <SettingsListItem
+              <GroupedSectionItem
                 icon={<RowIcon name="document-text-outline" />}
                 title={t('settings.about.terms')}
                 onPress={() =>
                   Alert.alert(t('settings.about.terms'), t('settings.alerts.termsSoon'))
                 }
               />
-              <SettingsListItem
+              <GroupedSectionItem
                 icon={<RowIcon name="shield-checkmark-outline" />}
                 title={t('settings.about.privacyPolicy')}
                 onPress={() =>
@@ -685,28 +685,28 @@ const SettingsScreen: React.FC = () => {
                   )
                 }
               />
-              <SettingsListItem
+              <GroupedSectionItem
                 icon={<RowIcon name="help-circle-outline" />}
                 title={t('settings.about.help')}
                 onPress={() => Alert.alert(t('settings.about.help'), t('settings.alerts.helpSoon'))}
               />
-              <SettingsListItem
+              <GroupedSectionItem
                 icon={<RowIcon name="flag-outline" />}
                 title={t('common.reportCopyright')}
                 description={t('settings.about.copyrightHint')}
                 onPress={() => router.push('/copyright/report')}
               />
-            </SettingsListGroup>
+            </GroupedSection>
 
-            <SettingsListGroup>
-              <SettingsListItem
+            <GroupedSection>
+              <GroupedSectionItem
                 icon={<RowIcon name="log-out-outline" destructive />}
                 title={t('settings.logOut')}
                 onPress={handleLogout}
                 destructive
                 showChevron={false}
               />
-            </SettingsListGroup>
+            </GroupedSection>
           </View>
         </ScrollView>
       </ThemedView>
