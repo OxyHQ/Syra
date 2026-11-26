@@ -5,8 +5,7 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from '@oxy.so/bloom/theme';
 import { useOxy, ProfileButton } from '@oxy.so/services/ui/client';
 import { useResponsive } from '@/hooks/useResponsive';
-import { cn } from '@/lib/utils';
-import { createTokenStyles } from '@oxy.so/bloom/theme';
+import { createTokenStyles, tokenAlpha } from '@oxy.so/bloom/theme';
 
 type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
 
@@ -81,20 +80,18 @@ function NavButton({
     <Pressable
       onPress={onPress}
       disabled={item.comingSoon}
-      className={cn(
-        'flex-row items-center gap-3 rounded-xl px-3 py-2.5',
-        active ? 'bg-primary/10' : 'active:bg-surface',
-        item.comingSoon ? 'opacity-50' : '',
-      )}
+      style={({ pressed }) => [
+        styles.nav,
+        active ? styles.navActive : pressed && styles.navPressed,
+        item.comingSoon && styles.navSoon,
+      ]}
     >
       <MaterialCommunityIcons
         name={item.icon}
         size={20}
         color={active ? theme.colors.primary : theme.colors.text}
       />
-      <Text
-        className={cn('text-sm flex-1', active ? 'text-primary font-semibold' : 'text-foreground')}
-      >
+      <Text style={[styles.navText, active ? styles.navTextActive : styles.navTextIdle]}>
         {item.label}
       </Text>
       {item.comingSoon ? <Text style={styles.mutedText2}>Soon</Text> : null}
@@ -135,7 +132,10 @@ function MobileTopBar() {
   const router = useRouter();
   return (
     <View style={styles.row2}>
-      <Pressable onPress={() => router.push('/')} className="active:opacity-70">
+      <Pressable
+        onPress={() => router.push('/')}
+        style={({ pressed }) => pressed && styles.brandPressed}
+      >
         <Brand />
       </Pressable>
       <View style={styles.container2}>
@@ -201,7 +201,7 @@ export function ScreenContainer({
             {onBack ? (
               <Pressable
                 onPress={onBack}
-                className="w-9 h-9 rounded-full items-center justify-center active:bg-surface"
+                style={({ pressed }) => [styles.back, pressed && styles.backPressed]}
               >
                 <MaterialCommunityIcons name="arrow-left" size={22} color={theme.colors.text} />
               </Pressable>
@@ -220,6 +220,29 @@ export function ScreenContainer({
 }
 
 const useStyles = createTokenStyles((t) => ({
+  nav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  navActive: { backgroundColor: tokenAlpha(t.primary, 0.1) },
+  navPressed: { backgroundColor: t.surface },
+  navSoon: { opacity: 0.5 },
+  navText: { flexGrow: 1, flexShrink: 1, flexBasis: '0%', fontSize: 14, lineHeight: 20 },
+  navTextActive: { fontWeight: 600, color: t.primary },
+  navTextIdle: { color: t.foreground },
+  brandPressed: { opacity: 0.7 },
+  back: {
+    height: 36,
+    width: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 9999,
+  },
+  backPressed: { backgroundColor: t.surface },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   centered: {
     height: 32,

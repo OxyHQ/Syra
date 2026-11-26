@@ -12,8 +12,8 @@ interface State {
   hasError: boolean;
 }
 
-// Fallback UI is a function component so it can consume NativeWind theme tokens
-// via className (class components cannot use hooks).
+// Fallback UI is a function component so it can read the Bloom theme tokens
+// through a hook (class components cannot use hooks).
 function ErrorFallbackView({ onRetry }: { onRetry: () => void }) {
   const styles = useStyles();
   return (

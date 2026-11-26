@@ -70,7 +70,11 @@ export function EpisodeRow({
             accessibilityState={{ disabled: isPending }}
             testID={`delete-episode-${episode.id}`}
             hitSlop={8}
-            className="p-2 rounded-full active:opacity-60 disabled:opacity-40"
+            style={({ pressed }) => [
+              styles.delete,
+              pressed && styles.deletePressed,
+              isPending && styles.deleteDisabled,
+            ]}
           >
             <MaterialCommunityIcons name="trash-can-outline" size={18} color={theme.colors.error} />
           </Pressable>
@@ -100,6 +104,9 @@ export function EpisodeRow({
 }
 
 const useStyles = createTokenStyles((t) => ({
+  delete: { borderRadius: 9999, padding: 8 },
+  deletePressed: { opacity: 0.6 },
+  deleteDisabled: { opacity: 0.4 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

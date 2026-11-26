@@ -7,7 +7,6 @@ import { useTheme } from '@oxy.so/bloom/theme';
 import { api } from '@/utils/api';
 import { resolveCatalogImageUrl } from '@/utils/catalogImages';
 import { toast } from '@oxy.so/bloom/toast';
-import { cn } from '@/lib/utils';
 import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 interface CoverArtPickerProps {
@@ -99,12 +98,13 @@ export function CoverArtPicker({
       <Pressable
         onPress={pickAndUpload}
         disabled={disabled}
-        style={{ width: size, height: size }}
-        className={cn(
-          'rounded-2xl border border-dashed items-center justify-center overflow-hidden bg-surface active:opacity-80',
-          error ? 'border-destructive' : 'border-border',
-          disabled ? 'opacity-50' : '',
-        )}
+        style={({ pressed }) => [
+          styles.picker,
+          error ? styles.pickerError : styles.pickerIdle,
+          disabled && styles.disabled,
+          pressed && styles.pressed,
+          { width: size, height: size },
+        ]}
       >
         {previewUri ? (
           <Image
@@ -137,6 +137,19 @@ export function CoverArtPicker({
 }
 
 const useStyles = createTokenStyles((t) => ({
+  picker: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    borderRadius: 16,
+    borderStyle: 'dashed',
+    borderWidth: 1,
+    backgroundColor: t.surface,
+  },
+  pickerError: { borderColor: t.destructive },
+  pickerIdle: { borderColor: t.border },
+  disabled: { opacity: 0.5 },
+  pressed: { opacity: 0.8 },
   centered: { alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 12 },
   mutedText: {
     textAlign: 'center',

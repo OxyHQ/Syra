@@ -6,8 +6,7 @@ import { Avatar } from '@oxy.so/bloom/avatar';
 import type { User } from '@oxy.so/core';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useUserSearch } from '@/hooks/useUserSearch';
-import { cn } from '@/lib/utils';
-import { createTokenStyles } from '@oxy.so/bloom/theme';
+import { createTokenStyles, tokenAlpha } from '@oxy.so/bloom/theme';
 
 export interface HostsGuests {
   hosts: User[];
@@ -29,16 +28,14 @@ function RoleButton({
   active: boolean;
   onPress: () => void;
 }) {
+  const styles = useStyles();
   return (
     <Pressable
       onPress={onPress}
-      className={cn(
-        'flex-row items-center gap-1 rounded-lg px-2.5 py-1.5',
-        active ? 'bg-primary' : 'bg-primary/10',
-      )}
+      style={[styles.role, active ? styles.roleActive : styles.roleIdle]}
     >
       {active ? <MaterialCommunityIcons name="check" size={13} color="#fff" /> : null}
-      <Text className={cn('text-xs font-semibold', active ? 'text-white' : 'text-primary')}>
+      <Text style={[styles.roleText, active ? styles.roleTextActive : styles.roleTextIdle]}>
         {label}
       </Text>
     </Pressable>
@@ -224,6 +221,19 @@ export function HostsGuestsPicker({
 }
 
 const useStyles = createTokenStyles((t) => ({
+  role: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  roleActive: { backgroundColor: t.primary },
+  roleIdle: { backgroundColor: tokenAlpha(t.primary, 0.1) },
+  roleText: { fontSize: 12, fontWeight: 600, lineHeight: 16 },
+  roleTextActive: { color: '#fff' },
+  roleTextIdle: { color: t.primary },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
