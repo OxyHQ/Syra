@@ -35,6 +35,9 @@ jest.mock('@oxy.so/bloom/skeleton', () => ({ Box: () => null }));
 jest.mock('@oxy.so/bloom/loading', () => ({ Loading: () => null }));
 jest.mock('@oxy.so/bloom/toast', () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
 jest.mock('@oxy.so/bloom/theme', () => ({
+  // The real token styles (`createTokenStyles`, `tokenAlpha`) from the CommonJS build: the
+  // `react-native` condition points at Bloom's TypeScript source, which Jest does not transform.
+  ...jest.requireActual('../../../node_modules/@oxy.so/bloom/lib/commonjs/theme/color-tokens.js'),
   useTheme: () => ({ colors: { textSecondary: '#666', primary: '#00f' } }),
 }));
 jest.mock('expo-router', () => ({

@@ -31,6 +31,9 @@ jest.mock('@oxy.so/bloom/alert-dialog', () => ({
 }));
 
 jest.mock('@oxy.so/bloom/theme', () => ({
+  // The real token styles (`createTokenStyles`, `tokenAlpha`) from the CommonJS build: the
+  // `react-native` condition points at Bloom's TypeScript source, which Jest does not transform.
+  ...jest.requireActual('../../../node_modules/@oxy.so/bloom/lib/commonjs/theme/color-tokens.js'),
   useTheme: () => ({
     colors: { error: '#ff0000', text: '#000', textSecondary: '#666', primary: '#00f' },
   }),
@@ -109,7 +112,7 @@ function renderRow(deletable: boolean): ReactTestRenderer {
 
 /**
  * The row's delete triggers, found by testID rather than by component type:
- * NativeWind rewrites the element it compiles `className` onto, so a
+ * NativeWind wraps React Native's components, so a
  * `findAllByType(Pressable)` matches nothing and every press below would
  * silently do nothing while the assertions still passed.
  */
