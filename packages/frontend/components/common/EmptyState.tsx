@@ -140,7 +140,7 @@ export const EmptyState = memo<EmptyStateProps>(
                       color={theme.colors.card}
                       style={styles.retryIcon}
                     />
-                    <Text style={[themed.text2, styles.retryButtonText]}>
+                    <Text style={[themed.cardText, styles.retryButtonText]}>
                       {t('common.tryAgain')}
                     </Text>
                   </>
@@ -212,7 +212,7 @@ export const EmptyState = memo<EmptyStateProps>(
                 style={styles.actionIcon}
               />
             )}
-            <Text style={[themed.text2, styles.actionButtonText]}>{action.label}</Text>
+            <Text style={[themed.cardText, styles.actionButtonText]}>{action.label}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -319,6 +319,6 @@ const styles = StyleSheet.create({
 const useThemedStyles = createTokenStyles((t) => ({
   text: { color: t.foreground },
   mutedText: { color: t.mutedForeground },
-  text2: { color: t.surface },
+  cardText: { color: t.card },
   surface: { backgroundColor: t.primary },
 }));

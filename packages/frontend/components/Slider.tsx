@@ -150,7 +150,7 @@ export const Slider: React.FC<SliderProps> = ({
             style={[themed.surface2, styles.fill, disabled && { opacity: 0.5 }, fillStyle]}
           />
           <Animated.View
-            style={[themed.surface3, styles.thumb, disabled && { opacity: 0.5 }, thumbStyle]}
+            style={[themed.card, styles.thumb, disabled && { opacity: 0.5 }, thumbStyle]}
           />
         </View>
       </GestureDetector>
@@ -213,5 +213,5 @@ const useThemedStyles = createTokenStyles((t) => ({
   text2: { color: t.primary },
   surface: { backgroundColor: t.border },
   surface2: { backgroundColor: t.primary },
-  surface3: { borderColor: t.primary, backgroundColor: t.surface },
+  card: { borderColor: t.primary, backgroundColor: t.card },
 }));

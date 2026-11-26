@@ -124,7 +124,7 @@ export const DevicePicker: React.FC<DevicePickerProps> = ({ visible, activeDevic
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={backdropStyle} onPress={onClose}>
         {/* Stop propagation so taps inside the sheet don't close it */}
-        <Pressable style={[themed.surface, sheetStyle]} onPress={() => undefined}>
+        <Pressable style={[themed.card, sheetStyle]} onPress={() => undefined}>
           <View style={styles.header}>
             <Text style={[themed.text, styles.title]}>{t('devices.title')}</Text>
             <Pressable
@@ -331,7 +331,7 @@ const styles = StyleSheet.create({
 const useThemedStyles = createTokenStyles((t) => ({
   text: { color: t.foreground },
   text2: { color: t.primary },
-  surface: { borderColor: t.border, backgroundColor: t.surface },
+  card: { borderColor: t.border, backgroundColor: t.card },
   surface2: { backgroundColor: t.surface },
   mutedText: { color: t.mutedForeground },
 }));
