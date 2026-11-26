@@ -23,6 +23,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import type { CatalogImageSizes, TrackImage } from '@syra/shared-types';
 import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { Z_INDEX } from '@/lib/constants';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 interface MediaCardProps {
   title: string;
@@ -97,6 +98,7 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
   onHoverIn,
   onHoverOut,
 }) => {
+  const themed = useThemedStyles();
   const { t } = useTranslation();
   const theme = useTheme();
   const resolvedImageUri =
@@ -341,7 +343,7 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
       ]}
     >
       {/* Image/Icon */}
-      <View className="bg-surface" style={[styles.imageContainer, { borderRadius }]}>
+      <View style={[themed.surface, styles.imageContainer, { borderRadius }]}>
         {resolvedImageUri ? (
           <Image
             source={{ uri: resolvedImageUri }}
@@ -359,8 +361,7 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
             navigating, the inverse of what a listener expects. */}
         {showPlayButton && (
           <Pressable
-            className="bg-primary"
-            style={styles.playButton}
+            style={[themed.surface2, styles.playButton]}
             onPress={handlePlayPress}
             accessibilityRole="button"
             accessibilityLabel={t('common.playTitle', { title })}
@@ -373,13 +374,13 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
       {/* Text Content */}
       <View style={styles.textContainer}>
         <View style={styles.titleRow}>
-          <Text className="text-foreground" style={styles.title} numberOfLines={2}>
+          <Text style={[themed.text, styles.title]} numberOfLines={2}>
             {title}
           </Text>
           {renderActionsMenu()}
         </View>
         {subtitle && (
-          <Text className="text-muted-foreground" style={styles.subtitle} numberOfLines={2}>
+          <Text style={[themed.mutedText, styles.subtitle]} numberOfLines={2}>
             {subtitle}
           </Text>
         )}
@@ -500,3 +501,10 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
 });
+
+const useThemedStyles = createTokenStyles((t) => ({
+  surface: { backgroundColor: t.surface },
+  surface2: { backgroundColor: t.primary },
+  text: { color: t.foreground },
+  mutedText: { color: t.mutedForeground },
+}));

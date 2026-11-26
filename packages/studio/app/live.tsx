@@ -19,6 +19,7 @@ import { ScreenContainer } from '@/components/AppShell';
 import { SignInGate } from '@/components/SignInGate';
 import { authenticatedClient } from '@/utils/api';
 import { liveRoomsQueryKey } from '@/lib/liveConfig';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 /**
  * Studio "Go Live" entry. A creator-flavored surface over the SAME `@syra.fm/sdk`
@@ -28,6 +29,7 @@ import { liveRoomsQueryKey } from '@/lib/liveConfig';
  * floating dock + in-room UI.
  */
 function GoLive() {
+  const styles = useStyles();
   const theme = useTheme();
   const { joinLiveRoom } = useLiveRoom();
 
@@ -64,12 +66,12 @@ function GoLive() {
   return (
     <>
       <ScreenContainer title="Go Live" subtitle="Host a live audio room for your listeners.">
-        <View className="rounded-2xl border border-border bg-surface p-5 mb-6">
-          <View className="flex-row items-center gap-2 mb-1">
+        <View style={styles.surface}>
+          <View style={styles.row}>
             <MaterialCommunityIcons name="access-point" size={20} color={theme.colors.primary} />
-            <Text className="text-lg font-bold text-foreground">Start a live room</Text>
+            <Text style={styles.title}>Start a live room</Text>
           </View>
-          <Text className="text-sm text-muted-foreground mb-4">
+          <Text style={styles.mutedText}>
             Go on air instantly, or schedule a room for later. Listeners can join, request to speak,
             and you can record.
           </Text>
@@ -90,27 +92,25 @@ function GoLive() {
           </Button>
         </View>
 
-        <Text className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
-          Live now
-        </Text>
+        <Text style={styles.mutedText2}>Live now</Text>
         {isLoading ? (
-          <View className="items-center justify-center py-12">
+          <View style={styles.centered}>
             <ActivityIndicator color={theme.colors.primary} />
           </View>
         ) : liveRooms.length > 0 ? (
-          <View className="gap-3">
+          <View style={styles.stack}>
             {liveRooms.map((room: Room) => (
               <RoomCard key={room.id} room={room} onPress={() => joinLiveRoom(room.id)} />
             ))}
           </View>
         ) : (
-          <View className="items-center justify-center py-10">
+          <View style={styles.centered2}>
             <MaterialCommunityIcons
               name="broadcast-off"
               size={44}
               color={theme.colors.textTertiary}
             />
-            <Text className="mt-3 text-sm text-muted-foreground text-center">
+            <Text style={styles.mutedText3}>
               No rooms are live right now. Be the first to go on air.
             </Text>
           </View>
@@ -130,12 +130,14 @@ function GoLive() {
           onFormStateChange={setFormState}
         />
         <View
-          className="gap-2.5 px-4 pt-2.5 pb-3.5"
-          style={{
-            borderTopWidth: 0.5,
-            borderTopColor: theme.colors.border,
-            backgroundColor: theme.colors.background,
-          }}
+          style={[
+            styles.container,
+            {
+              borderTopWidth: 0.5,
+              borderTopColor: theme.colors.border,
+              backgroundColor: theme.colors.background,
+            },
+          ]}
         >
           <Button
             fullWidth
@@ -179,3 +181,37 @@ export default function LiveScreen() {
     </SignInGate>
   );
 }
+
+const useStyles = createTokenStyles((t) => ({
+  surface: {
+    marginBottom: 24,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: t.border,
+    backgroundColor: t.surface,
+    padding: 20,
+  },
+  row: { marginBottom: 4, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  title: { fontSize: 18, fontWeight: 700, color: t.foreground, lineHeight: 28 },
+  mutedText: { marginBottom: 16, fontSize: 14, color: t.mutedForeground, lineHeight: 20 },
+  mutedText2: {
+    marginBottom: 12,
+    fontSize: 14,
+    fontWeight: 600,
+    color: t.mutedForeground,
+    textTransform: 'uppercase',
+    lineHeight: 20,
+    letterSpacing: 0.35,
+  },
+  centered: { alignItems: 'center', justifyContent: 'center', paddingVertical: 48 },
+  stack: { gap: 12 },
+  centered2: { alignItems: 'center', justifyContent: 'center', paddingVertical: 40 },
+  mutedText3: {
+    marginTop: 12,
+    textAlign: 'center',
+    fontSize: 14,
+    color: t.mutedForeground,
+    lineHeight: 20,
+  },
+  container: { gap: 10, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14 },
+}));

@@ -12,6 +12,7 @@ import { useEpisodeChapters } from '@/hooks/usePodcasts';
 import { resolvePodcastArtwork } from '@/utils/pickImage';
 import { formatDuration } from '@/utils/musicUtils';
 import { SpeedPill, SkipButton } from './PodcastTransportControls';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 /**
  * Now-playing view for a podcast episode (desktop right rail). Shows artwork,
@@ -19,6 +20,7 @@ import { SpeedPill, SkipButton } from './PodcastTransportControls';
  * Podcasting 2.0 chapter list when present (tap a chapter to seek).
  */
 export const EpisodeNowPlaying: React.FC = () => {
+  const themed = useThemedStyles();
   const { t } = useTranslation();
   const theme = useTheme();
   const router = useRouter();
@@ -53,7 +55,7 @@ export const EpisodeNowPlaying: React.FC = () => {
         {artwork ? (
           <ExpoImage source={{ uri: artwork }} style={styles.artwork} contentFit="cover" />
         ) : (
-          <View className="bg-popover" style={styles.artworkPlaceholder}>
+          <View style={[themed.surface, styles.artworkPlaceholder]}>
             <Ionicons name="mic" size={64} color={theme.colors.textSecondary} />
           </View>
         )}
@@ -69,11 +71,11 @@ export const EpisodeNowPlaying: React.FC = () => {
         }
         accessibilityRole="link"
       >
-        <Text className="text-primary" style={styles.show} numberOfLines={1}>
+        <Text style={[themed.text, styles.show]} numberOfLines={1}>
           {episode.podcastTitle}
         </Text>
       </Pressable>
-      <Text className="text-foreground" style={styles.title} numberOfLines={3}>
+      <Text style={[themed.text2, styles.title]} numberOfLines={3}>
         {episode.title}
       </Text>
 
@@ -82,8 +84,7 @@ export const EpisodeNowPlaying: React.FC = () => {
         <SkipButton direction="back" seconds={15} size={26} />
         <Pressable
           onPress={() => (isPlaying ? pause() : resume())}
-          className="bg-primary"
-          style={styles.playButton}
+          style={[themed.surface2, styles.playButton]}
           accessibilityRole="button"
           accessibilityLabel={isPlaying ? 'Pause' : 'Play'}
         >
@@ -101,10 +102,8 @@ export const EpisodeNowPlaying: React.FC = () => {
 
       {/* Chapters */}
       {chapters.length > 0 && (
-        <View className="bg-popover" style={styles.card}>
-          <Text className="text-foreground" style={styles.cardTitle}>
-            {t('episode.chapters')}
-          </Text>
+        <View style={[themed.surface, styles.card]}>
+          <Text style={[themed.text2, styles.cardTitle]}>{t('episode.chapters')}</Text>
           {chapters.map((chapter, index) => {
             const isActive = index === activeChapterIndex;
             return (
@@ -227,3 +226,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 });
+
+const useThemedStyles = createTokenStyles((t) => ({
+  surface: { backgroundColor: t.popover },
+  text: { color: t.primary },
+  text2: { color: t.foreground },
+  surface2: { backgroundColor: t.primary },
+}));

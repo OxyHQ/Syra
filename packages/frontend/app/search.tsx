@@ -25,12 +25,14 @@ import { usePlayEntity } from '@/hooks/usePlayEntity';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { trackArtistsText } from '@/utils/trackArtists';
 import { useMediaQuery } from 'react-responsive';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 /**
  * Syra Search Screen
  * Spotify-like search interface for tracks, albums, artists, and playlists
  */
 const SearchScreen: React.FC = () => {
+  const themed = useThemedStyles();
   const { t } = useTranslation();
   const theme = useTheme();
   const router = useRouter();
@@ -297,8 +299,7 @@ const SearchScreen: React.FC = () => {
     <>
       <SEO title={t('search.seo.title')} description={t('search.seo.description')} />
       <ScrollView
-        className="bg-surface"
-        style={styles.container}
+        style={[themed.surface, styles.container]}
         contentContainerStyle={[
           styles.contentContainer,
           !isMobile && styles.desktopContentContainer,
@@ -307,11 +308,10 @@ const SearchScreen: React.FC = () => {
       >
         {isMobile && (
           <View style={styles.header}>
-            <View className="bg-surface" style={styles.searchContainer}>
+            <View style={[themed.surface, styles.searchContainer]}>
               <Ionicons name="search" size={20} color={theme.colors.textSecondary} />
               <TextInput
-                className="text-foreground"
-                style={styles.searchInput}
+                style={[themed.container2, styles.searchInput]}
                 placeholder={t('search.placeholder')}
                 placeholderTextColor={theme.colors.textSecondary}
                 value={searchQuery}
@@ -328,7 +328,7 @@ const SearchScreen: React.FC = () => {
                   <Ionicons name="close-circle" size={18} color={theme.colors.textSecondary} />
                 </Pressable>
               )}
-              <View className="bg-border" style={styles.searchActionSeparator} />
+              <View style={[themed.surface2, styles.searchActionSeparator]} />
               <Pressable
                 onPress={handleBrowse}
                 accessibilityRole="button"
@@ -381,7 +381,7 @@ const SearchScreen: React.FC = () => {
         {searchLoading && hasQuery && (
           <View style={styles.results}>
             <View style={styles.searchSkeletonSection}>
-              <Text className="text-foreground" style={styles.searchSkeletonTitle}>
+              <Text style={[themed.container2, styles.searchSkeletonTitle]}>
                 {t('common.tracks')}
               </Text>
               <View style={styles.trackList}>
@@ -389,7 +389,7 @@ const SearchScreen: React.FC = () => {
               </View>
             </View>
             <View style={styles.searchSkeletonSection}>
-              <Text className="text-foreground" style={styles.searchSkeletonTitle}>
+              <Text style={[themed.container2, styles.searchSkeletonTitle]}>
                 {t('common.albums')}
               </Text>
               <MediaCardRowSkeleton count={5} />
@@ -830,7 +830,7 @@ const SearchScreen: React.FC = () => {
             {(activeCategory === SearchCategory.ALL ||
               activeCategory === SearchCategory.PODCASTS) &&
               searchResults.pendingPodcastImport && (
-                <Text className="text-muted-foreground" style={styles.podcastImportHint}>
+                <Text style={[themed.mutedText, styles.podcastImportHint]}>
                   {t('search.loadingMorePodcasts')}
                 </Text>
               )}
@@ -923,7 +923,7 @@ const SearchScreen: React.FC = () => {
                               contentFit="cover"
                             />
                           ) : (
-                            <View className="bg-popover" style={styles.personAvatarPlaceholder}>
+                            <View style={[themed.surface3, styles.personAvatarPlaceholder]}>
                               <Ionicons
                                 name="person"
                                 size={22}
@@ -932,18 +932,13 @@ const SearchScreen: React.FC = () => {
                             </View>
                           )}
                           <View style={styles.userInfo}>
-                            <Text
-                              className="text-foreground"
-                              style={styles.userName}
-                              numberOfLines={1}
-                            >
+                            <Text style={[themed.container2, styles.userName]} numberOfLines={1}>
                               {label}
                             </Text>
                             {typeof person.appearsInCount === 'number' &&
                               person.appearsInCount > 0 && (
                                 <Text
-                                  className="text-muted-foreground"
-                                  style={styles.userHandle}
+                                  style={[themed.mutedText, styles.userHandle]}
                                   numberOfLines={1}
                                 >
                                   {person.appearsInCount}{' '}
@@ -996,26 +991,14 @@ const SearchScreen: React.FC = () => {
                             label={user.displayName}
                           />
                           <View style={styles.userInfo}>
-                            <Text
-                              className="text-foreground"
-                              style={styles.userName}
-                              numberOfLines={1}
-                            >
+                            <Text style={[themed.container2, styles.userName]} numberOfLines={1}>
                               {user.displayName}
                             </Text>
-                            <Text
-                              className="text-muted-foreground"
-                              style={styles.userHandle}
-                              numberOfLines={1}
-                            >
+                            <Text style={[themed.mutedText, styles.userHandle]} numberOfLines={1}>
                               @{user.username} • {followers}
                             </Text>
                             {user.bio && (
-                              <Text
-                                className="text-muted-foreground"
-                                style={styles.userBio}
-                                numberOfLines={2}
-                              >
+                              <Text style={[themed.mutedText, styles.userBio]} numberOfLines={2}>
                                 {user.bio}
                               </Text>
                             )}
@@ -1037,7 +1020,7 @@ const SearchScreen: React.FC = () => {
                 search box rather than an empty catalogue. */}
             {!hasResults && (
               <View style={styles.noResultsContainer}>
-                <Text className="text-muted-foreground" style={styles.noResultsText}>
+                <Text style={[themed.mutedText, styles.noResultsText]}>
                   {t('search.noResults', { query: debouncedQuery })}
                 </Text>
               </View>
@@ -1186,3 +1169,11 @@ const styles = StyleSheet.create({
 });
 
 export default SearchScreen;
+
+const useThemedStyles = createTokenStyles((t) => ({
+  surface: { backgroundColor: t.surface },
+  container2: { color: t.foreground },
+  surface2: { backgroundColor: t.border },
+  mutedText: { color: t.mutedForeground },
+  surface3: { backgroundColor: t.popover },
+}));

@@ -5,8 +5,10 @@ import { useOxy } from '@oxy.so/services/ui/client';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { playlistSharingService } from '@/services/playlistSharingService';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 export default function JoinPlaylist() {
+  const styles = useStyles();
   const { token } = useLocalSearchParams<{ token?: string }>();
   const { canUsePrivateApi, openAccountDialog } = useOxy();
   const router = useRouter();
@@ -26,16 +28,16 @@ export default function JoinPlaylist() {
   });
   return (
     <ScrollView
-      className="bg-surface"
-      contentContainerClassName="p-6 gap-5"
+      style={styles.surface}
+      contentContainerStyle={styles.content}
       contentInsetAdjustmentBehavior="automatic"
     >
       <Stack.Screen options={{ title: t('collaboration.join') }} />
-      <Text className="text-foreground text-2xl font-semibold">{t('collaboration.join')}</Text>
-      <Text className="text-muted-foreground">{t('collaboration.consent')}</Text>
+      <Text style={styles.title}>{t('collaboration.join')}</Text>
+      <Text style={styles.mutedText}>{t('collaboration.consent')}</Text>
       {!canUsePrivateApi ? (
         <Pressable accessibilityRole="button" onPress={() => openAccountDialog('signin')}>
-          <Text className="text-primary">{t('collaboration.signIn')}</Text>
+          <Text style={styles.text}>{t('collaboration.signIn')}</Text>
         </Pressable>
       ) : (
         <Pressable
@@ -43,14 +45,23 @@ export default function JoinPlaylist() {
           disabled={join.isPending || !token}
           onPress={() => join.mutate()}
         >
-          <Text className="text-primary">{t('collaboration.accept')}</Text>
+          <Text style={styles.text}>{t('collaboration.accept')}</Text>
         </Pressable>
       )}
       {join.isError ? (
-        <Text selectable accessibilityRole="alert" className="text-error">
+        <Text selectable accessibilityRole="alert" style={styles.text2}>
           {join.error.message}
         </Text>
       ) : null}
     </ScrollView>
   );
 }
+
+const useStyles = createTokenStyles((t) => ({
+  surface: { backgroundColor: t.surface },
+  content: { gap: 20, padding: 24 },
+  title: { fontSize: 24, fontWeight: 600, color: t.foreground, lineHeight: 32 },
+  mutedText: { color: t.mutedForeground },
+  text: { color: t.primary },
+  text2: { color: t.error },
+}));

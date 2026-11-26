@@ -14,6 +14,7 @@ import { useTheme } from '@oxy.so/bloom/theme';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useImagePicker } from '@/hooks/useImagePicker';
 import { resolveCatalogImageUrl } from '@/utils/catalogImages';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 interface CoverArtPickerProps {
   value?: string; // Image ID or URL for display
@@ -32,6 +33,7 @@ export const CoverArtPicker: React.FC<CoverArtPickerProps> = ({
   size = 200,
   disabled = false,
 }) => {
+  const themed = useThemedStyles();
   const { t } = useTranslation();
   const theme = useTheme();
   // Web-only hover state to fade in the "change cover" overlay.
@@ -118,9 +120,7 @@ export const CoverArtPicker: React.FC<CoverArtPickerProps> = ({
       {isUploading ? (
         <View style={styles.uploadingContainer}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
-          <Text className="text-muted-foreground" style={styles.uploadingText}>
-            Uploading...
-          </Text>
+          <Text style={[themed.mutedText, styles.uploadingText]}>Uploading...</Text>
         </View>
       ) : imageUrl ? (
         <Image
@@ -135,9 +135,7 @@ export const CoverArtPicker: React.FC<CoverArtPickerProps> = ({
             size={size * 0.3}
             color={theme.colors.textSecondary}
           />
-          <Text className="text-muted-foreground" style={styles.placeholderText}>
-            {t('coverArt.add')}
-          </Text>
+          <Text style={[themed.mutedText, styles.placeholderText]}>{t('coverArt.add')}</Text>
         </View>
       )}
 
@@ -218,3 +216,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 });
+
+const useThemedStyles = createTokenStyles((t) => ({
+  mutedText: { color: t.mutedForeground },
+}));

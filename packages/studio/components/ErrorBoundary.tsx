@@ -1,6 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { logger } from '@/utils/logger';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 interface Props {
   children: ReactNode;
@@ -14,19 +15,15 @@ interface State {
 // Fallback UI is a function component so it can consume NativeWind theme tokens
 // via className (class components cannot use hooks).
 function ErrorFallbackView({ onRetry }: { onRetry: () => void }) {
+  const styles = useStyles();
   return (
-    <View className="flex-1 items-center justify-center bg-background px-5">
-      <Text className="text-2xl font-bold mb-3 text-center text-foreground">
-        Something went wrong
-      </Text>
-      <Text className="text-base text-center mb-6 leading-[22px] px-4 text-muted-foreground">
+    <View style={styles.centered}>
+      <Text style={styles.title}>Something went wrong</Text>
+      <Text style={styles.mutedText}>
         The studio hit an unexpected error. Try again — your shows and episodes are safe.
       </Text>
-      <Pressable
-        className="bg-primary px-6 py-3 rounded-xl min-w-[120px] items-center"
-        onPress={onRetry}
-      >
-        <Text className="text-base font-semibold text-primary-foreground">Try again</Text>
+      <Pressable style={styles.surface} onPress={onRetry}>
+        <Text style={styles.title2}>Try again</Text>
       </Pressable>
     </View>
   );
@@ -54,3 +51,40 @@ export default class ErrorBoundary extends Component<Props, State> {
     return this.props.children;
   }
 }
+
+const useStyles = createTokenStyles((t) => ({
+  centered: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: '0%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: t.background,
+    paddingHorizontal: 20,
+  },
+  title: {
+    marginBottom: 12,
+    textAlign: 'center',
+    fontSize: 24,
+    fontWeight: 700,
+    color: t.foreground,
+    lineHeight: 32,
+  },
+  mutedText: {
+    marginBottom: 24,
+    paddingHorizontal: 16,
+    textAlign: 'center',
+    fontSize: 16,
+    lineHeight: 22,
+    color: t.mutedForeground,
+  },
+  surface: {
+    minWidth: 120,
+    alignItems: 'center',
+    borderRadius: 12,
+    backgroundColor: t.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+  },
+  title2: { fontSize: 16, fontWeight: 600, color: t.primaryForeground, lineHeight: 24 },
+}));

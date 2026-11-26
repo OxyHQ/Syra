@@ -10,6 +10,7 @@ import { ScreenContainer } from '@/components/AppShell';
 import { useArtistInsights } from '@/hooks/useArtist';
 import type { InsightsPeriod } from '@/services/artistService';
 import { cn } from '@/lib/utils';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 const PERIODS: { value: InsightsPeriod; label: string }[] = [
   { value: '7days', label: '7 days' },
@@ -28,8 +29,9 @@ function PeriodSelector({
   value: InsightsPeriod;
   onChange: (value: InsightsPeriod) => void;
 }) {
+  const styles = useStyles();
   return (
-    <View className="flex-row gap-2 mb-6">
+    <View style={styles.row}>
       {PERIODS.map((option) => {
         const active = option.value === value;
         return (
@@ -62,17 +64,19 @@ function StatCard({
   label: string;
   value: string;
 }) {
+  const styles = useStyles();
   const theme = useTheme();
   return (
-    <View className="flex-1 rounded-2xl border border-border bg-surface px-4 py-4">
+    <View style={styles.surface}>
       <MaterialCommunityIcons name={icon} size={22} color={theme.colors.primary} />
-      <Text className="text-2xl font-bold text-foreground mt-2">{value}</Text>
-      <Text className="text-xs text-muted-foreground mt-0.5">{label}</Text>
+      <Text style={styles.title}>{value}</Text>
+      <Text style={styles.mutedText}>{label}</Text>
     </View>
   );
 }
 
 function Insights() {
+  const styles = useStyles();
   const router = useRouter();
   const [period, setPeriod] = useState<InsightsPeriod>('30days');
   const { data: insights, isLoading, isError, refetch } = useArtistInsights(period);
@@ -86,19 +90,19 @@ function Insights() {
       <PeriodSelector value={period} onChange={setPeriod} />
 
       {isLoading ? (
-        <View className="py-16 items-center">
+        <View style={styles.container}>
           <Loading />
         </View>
       ) : isError || !insights ? (
-        <View className="py-16 items-center px-6">
-          <Text className="text-base text-foreground mb-3">Couldn&apos;t load your insights.</Text>
+        <View style={styles.container2}>
+          <Text style={styles.text}>Couldn&apos;t load your insights.</Text>
           <Button onPress={() => refetch()} tone="neutral" appearance="outline">
             Retry
           </Button>
         </View>
       ) : (
         <>
-          <View className="flex-row gap-3 mb-3">
+          <View style={styles.row2}>
             <StatCard
               icon="play-circle-outline"
               label="Total plays"
@@ -110,34 +114,29 @@ function Insights() {
               value={formatCount(insights.monthlyListeners)}
             />
           </View>
-          <View className="flex-row gap-3 mb-6">
+          <View style={styles.row3}>
             <StatCard
               icon="heart-outline"
               label="Followers"
               value={formatCount(insights.followers)}
             />
-            <View className="flex-1" />
+            <View style={styles.fill} />
           </View>
 
-          <Text className="text-base font-semibold text-foreground mb-3">Top tracks</Text>
+          <Text style={styles.title2}>Top tracks</Text>
           {insights.topTracks.length === 0 ? (
-            <View className="rounded-2xl border border-border bg-surface px-4 py-8 items-center">
-              <Text className="text-sm text-muted-foreground">No plays yet in this period.</Text>
+            <View style={styles.surface2}>
+              <Text style={styles.mutedText2}>No plays yet in this period.</Text>
             </View>
           ) : (
-            <View className="gap-2">
+            <View style={styles.stack}>
               {insights.topTracks.map((track, index) => (
-                <View
-                  key={track.trackId}
-                  className="flex-row items-center gap-3 rounded-2xl border border-border bg-surface px-4 py-3"
-                >
-                  <Text className="text-sm font-bold text-muted-foreground w-6">{index + 1}</Text>
-                  <Text numberOfLines={1} className="text-sm font-medium text-foreground flex-1">
+                <View key={track.trackId} style={styles.row4}>
+                  <Text style={styles.mutedText3}>{index + 1}</Text>
+                  <Text numberOfLines={1} style={styles.text2}>
                     {track.title}
                   </Text>
-                  <Text className="text-sm text-muted-foreground">
-                    {formatCount(track.playCount)} plays
-                  </Text>
+                  <Text style={styles.mutedText2}>{formatCount(track.playCount)} plays</Text>
                 </View>
               ))}
             </View>
@@ -155,3 +154,65 @@ export default function InsightsScreen() {
     </SignInGate>
   );
 }
+
+const useStyles = createTokenStyles((t) => ({
+  row: { marginBottom: 24, flexDirection: 'row', gap: 8 },
+  surface: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: '0%',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: t.border,
+    backgroundColor: t.surface,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  title: { marginTop: 8, fontSize: 24, fontWeight: 700, color: t.foreground, lineHeight: 32 },
+  mutedText: { marginTop: 2, fontSize: 12, color: t.mutedForeground, lineHeight: 16 },
+  container: { alignItems: 'center', paddingVertical: 64 },
+  container2: { alignItems: 'center', paddingHorizontal: 24, paddingVertical: 64 },
+  text: { marginBottom: 12, fontSize: 16, color: t.foreground, lineHeight: 24 },
+  row2: { marginBottom: 12, flexDirection: 'row', gap: 12 },
+  row3: { marginBottom: 24, flexDirection: 'row', gap: 12 },
+  fill: { flexGrow: 1, flexShrink: 1, flexBasis: '0%' },
+  title2: { marginBottom: 12, fontSize: 16, fontWeight: 600, color: t.foreground, lineHeight: 24 },
+  surface2: {
+    alignItems: 'center',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: t.border,
+    backgroundColor: t.surface,
+    paddingHorizontal: 16,
+    paddingVertical: 32,
+  },
+  mutedText2: { fontSize: 14, color: t.mutedForeground, lineHeight: 20 },
+  stack: { gap: 8 },
+  row4: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: t.border,
+    backgroundColor: t.surface,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  mutedText3: {
+    width: 24,
+    fontSize: 14,
+    fontWeight: 700,
+    color: t.mutedForeground,
+    lineHeight: 20,
+  },
+  text2: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: '0%',
+    fontSize: 14,
+    fontWeight: 500,
+    color: t.foreground,
+    lineHeight: 20,
+  },
+}));

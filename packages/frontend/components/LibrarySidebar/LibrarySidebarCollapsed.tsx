@@ -11,6 +11,7 @@ import { Image } from 'expo-image';
 import { useOxy } from '@oxy.so/services/ui/client';
 import { useMyPodcasts, useSubscriptions } from '@/hooks/usePodcasts';
 import { pickCatalogImageUrl, resolvePodcastArtwork } from '@/utils/pickImage';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 interface LibrarySidebarCollapsedProps {
   onExpand: () => void;
@@ -39,6 +40,7 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
   error,
   onRetry,
 }) => {
+  const themed = useThemedStyles();
   const { t } = useTranslation();
   const router = useRouter();
   const theme = useTheme();
@@ -57,11 +59,11 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
   const myPodcasts = useMyPodcasts().data ?? [];
 
   return (
-    <View className="flex-1 items-center justify-start p-2">
-      <View className="w-full items-center justify-center mb-2">
+    <View style={styles.container}>
+      <View style={styles.centered}>
         <Pressable
           onPress={onExpand}
-          className="w-7 h-7 items-center justify-center rounded-[14px]"
+          style={styles.centered2}
           accessibilityRole="button"
           accessibilityLabel={t('sidebar.expandAccessibility')}
         >
@@ -70,23 +72,20 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
       </View>
 
       <ScrollView
-        className="flex-1 w-full"
-        contentContainerClassName="items-center gap-2 pb-2"
+        style={styles.container2}
+        contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
         {/* Liked Songs */}
         {isAuthenticated && (
-          <Pressable
-            className="w-10 h-10 rounded-[4px] items-center justify-center bg-primary"
-            onPress={() => router.push('/library/liked')}
-          >
+          <Pressable style={themed.centered3} onPress={() => router.push('/library/liked')}>
             <Ionicons name="heart" size={18} color={theme.colors.primaryForeground} />
           </Pressable>
         )}
 
         {/* Loading state */}
         {loading && isAuthenticated && (
-          <View className="p-2 items-center justify-center">
+          <View style={styles.centered4}>
             <ActivityIndicator size="small" color={theme.colors.primary} />
           </View>
         )}
@@ -97,7 +96,7 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
             spinner above, so no local pending state is needed here. */}
         {!loading && isAuthenticated && error && (
           <Pressable
-            className="w-10 h-10 rounded-[4px] items-center justify-center"
+            style={styles.centered5}
             onPress={() => {
               void onRetry();
             }}
@@ -122,7 +121,7 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
           subscribedPodcasts.length === 0 &&
           myPodcasts.length === 0 && (
             <Pressable
-              className="w-10 h-10 rounded-[4px] items-center justify-center"
+              style={styles.centered5}
               onPress={onExpand}
               accessibilityRole="button"
               accessibilityLabel={t('sidebar.emptyCollapsed')}
@@ -142,7 +141,7 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
           playlists.map((playlist) => (
             <Pressable
               key={playlist.id}
-              className="w-10 h-10 rounded-[4px] items-center justify-center"
+              style={styles.centered5}
               onPress={() => router.push(`/playlist/${playlist.id}`)}
             >
               {playlist.coverArt ? (
@@ -159,7 +158,7 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
                   contentFit="cover"
                 />
               ) : (
-                <View className="w-10 h-10 rounded-[4px] items-center justify-center bg-popover">
+                <View style={themed.centered6}>
                   <MaterialCommunityIcons
                     name="playlist-music"
                     size={18}
@@ -177,7 +176,7 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
           followedArtists.map((artist) => (
             <Pressable
               key={artist.id}
-              className="w-10 h-10 rounded-[4px] items-center justify-center"
+              style={styles.centered5}
               onPress={() => router.push(`/p/${artist.id}`)}
             >
               {artist.image || artist.images?.length ? (
@@ -194,7 +193,7 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
                   contentFit="cover"
                 />
               ) : (
-                <View className="w-10 h-10 rounded-[20px] items-center justify-center bg-popover">
+                <View style={themed.centered7}>
                   <Ionicons name="person" size={18} color={theme.colors.textSecondary} />
                 </View>
               )}
@@ -208,7 +207,7 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
           savedAlbums.map((album) => (
             <Pressable
               key={album.id}
-              className="w-10 h-10 rounded-[4px] items-center justify-center"
+              style={styles.centered5}
               onPress={() => router.push(`/album/${album.id}`)}
             >
               {album.coverArt ? (
@@ -225,7 +224,7 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
                   contentFit="cover"
                 />
               ) : (
-                <View className="w-10 h-10 rounded-[4px] items-center justify-center bg-popover">
+                <View style={themed.centered6}>
                   <MaterialCommunityIcons
                     name="album"
                     size={18}
@@ -247,7 +246,7 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
           subscribedPodcasts.map(({ podcast }) => (
             <Pressable
               key={`podcast-${podcast.id}`}
-              className="w-10 h-10 rounded-[4px] items-center justify-center"
+              style={styles.centered5}
               onPress={() =>
                 router.push({ pathname: '/podcasts/[id]', params: { id: podcast.id } })
               }
@@ -259,7 +258,7 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
                   contentFit="cover"
                 />
               ) : (
-                <View className="w-10 h-10 rounded-[4px] items-center justify-center bg-popover">
+                <View style={themed.centered6}>
                   <MaterialCommunityIcons
                     name="podcast"
                     size={18}
@@ -276,7 +275,7 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
           myPodcasts.map((podcast) => (
             <Pressable
               key={`show-${podcast.id}`}
-              className="w-10 h-10 rounded-[4px] items-center justify-center"
+              style={styles.centered5}
               onPress={() =>
                 router.push({ pathname: '/podcasts/[id]', params: { id: podcast.id } })
               }
@@ -288,7 +287,7 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
                   contentFit="cover"
                 />
               ) : (
-                <View className="w-10 h-10 rounded-[4px] items-center justify-center bg-popover">
+                <View style={themed.centered6}>
                   <MaterialCommunityIcons
                     name="podcast"
                     size={18}
@@ -315,4 +314,58 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
   },
+
+  container: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: '0%',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    padding: 8,
+  },
+  centered: { marginBottom: 8, width: '100%', alignItems: 'center', justifyContent: 'center' },
+  centered2: {
+    height: 28,
+    width: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 14,
+  },
+  container2: { width: '100%', flexGrow: 1, flexShrink: 1, flexBasis: '0%' },
+  content: { alignItems: 'center', gap: 8, paddingBottom: 8 },
+  centered4: { alignItems: 'center', justifyContent: 'center', padding: 8 },
+  centered5: {
+    height: 40,
+    width: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 4,
+  },
 });
+
+const useThemedStyles = createTokenStyles((t) => ({
+  centered3: {
+    height: 40,
+    width: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 4,
+    backgroundColor: t.primary,
+  },
+  centered6: {
+    height: 40,
+    width: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 4,
+    backgroundColor: t.popover,
+  },
+  centered7: {
+    height: 40,
+    width: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 20,
+    backgroundColor: t.popover,
+  },
+}));

@@ -30,6 +30,7 @@ import { usePlayEntity } from '@/hooks/usePlayEntity';
 import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { Album, Artist, Playlist, SearchCategory, SearchUser, Track } from '@syra/shared-types';
 import { usePlayerStore } from '@/stores/playerStore';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 type HeaderSearchItem = {
   key: string;
@@ -78,6 +79,7 @@ export const TOP_BAR_HEIGHT = 64;
  * Spotify-like top bar with logo, navigation, search, and user controls
  */
 export const TopBar: React.FC = () => {
+  const themed = useThemedStyles();
   const { t } = useTranslation();
   const router = useRouter();
   const pathname = usePathname();
@@ -297,8 +299,7 @@ export const TopBar: React.FC = () => {
 
   const renderArtwork = (item: HeaderSearchItem, showPlayButton: boolean) => (
     <View
-      className="bg-popover"
-      style={[styles.searchResultArtwork, { borderRadius: item.rounded ? 18 : 6 }]}
+      style={[themed.surface, styles.searchResultArtwork, { borderRadius: item.rounded ? 18 : 6 }]}
     >
       {item.avatarId ? (
         <Avatar source={item.avatarId} variant="thumb" size={36} label={item.title} />
@@ -317,7 +318,7 @@ export const TopBar: React.FC = () => {
           accessibilityRole="button"
           accessibilityLabel={t('common.playItem', { title: item.title })}
         >
-          <View className="bg-primary" style={styles.searchResultPlayButton}>
+          <View style={[themed.surface2, styles.searchResultPlayButton]}>
             <MaterialCommunityIcons name="play" size={18} color={theme.colors.primaryForeground} />
           </View>
         </Pressable>
@@ -338,14 +339,10 @@ export const TopBar: React.FC = () => {
       >
         {renderArtwork(item, isActive)}
         <View style={styles.searchResultText}>
-          <Text className="text-foreground" style={styles.searchResultTitle} numberOfLines={1}>
+          <Text style={[themed.text, styles.searchResultTitle]} numberOfLines={1}>
             {item.title}
           </Text>
-          <Text
-            className="text-muted-foreground"
-            style={styles.searchResultSubtitle}
-            numberOfLines={1}
-          >
+          <Text style={[themed.mutedText, styles.searchResultSubtitle]} numberOfLines={1}>
             {item.subtitle}
           </Text>
         </View>
@@ -359,7 +356,7 @@ export const TopBar: React.FC = () => {
 
     return (
       <View style={styles.searchResultSection}>
-        <Text className="text-muted-foreground" style={styles.searchResultSectionTitle}>
+        <Text style={[themed.mutedText, styles.searchResultSectionTitle]}>
           {t(SEARCH_SECTION_KEYS[title])}
         </Text>
         {sectionItems.map((item) =>
@@ -385,12 +382,10 @@ export const TopBar: React.FC = () => {
         nestedScrollEnabled
       >
         {isHeaderSearchLoading && (
-          <Text className="text-muted-foreground" style={styles.searchOverlayStateText}>
-            Searching...
-          </Text>
+          <Text style={[themed.mutedText, styles.searchOverlayStateText]}>Searching...</Text>
         )}
         {!isHeaderSearchLoading && totalResults === 0 && (
-          <Text className="text-muted-foreground" style={styles.searchOverlayStateText}>
+          <Text style={[themed.mutedText, styles.searchOverlayStateText]}>
             No results for &quot;{debouncedSearchQuery}&quot;
           </Text>
         )}
@@ -407,9 +402,7 @@ export const TopBar: React.FC = () => {
               className={isViewAllActive ? 'bg-popover' : undefined}
               style={({ pressed }) => [styles.viewAllButton, pressed && { opacity: 0.9 }]}
             >
-              <Text className="text-primary" style={styles.viewAllText}>
-                {t('topbar.viewAllResults')}
-              </Text>
+              <Text style={[themed.text2, styles.viewAllText]}>{t('topbar.viewAllResults')}</Text>
               <MaterialCommunityIcons name="arrow-right" size={18} color={theme.colors.primary} />
             </Pressable>
           </>
@@ -430,8 +423,7 @@ export const TopBar: React.FC = () => {
           <View style={[styles.searchContainer, containerStyle]}>
             <MaterialCommunityIcons name="magnify" size={20} color={theme.colors.textSecondary} />
             <TextInput
-              className="text-foreground"
-              style={styles.searchInput}
+              style={[themed.text, styles.searchInput]}
               placeholder={t('search.placeholder')}
               placeholderTextColor={theme.colors.textSecondary}
               value={searchQuery}
@@ -454,7 +446,7 @@ export const TopBar: React.FC = () => {
                 />
               </Pressable>
             )}
-            <View className="bg-border" style={styles.searchActionSeparator} />
+            <View style={[themed.surface3, styles.searchActionSeparator]} />
             <Pressable
               onPress={handleBrowse}
               accessibilityRole="button"
@@ -556,7 +548,7 @@ export const TopBar: React.FC = () => {
             />
           </Pressable>
 
-          {!isMobile && <View className="bg-border" style={styles.separator} />}
+          {!isMobile && <View style={[themed.surface3, styles.separator]} />}
 
           {renderSearchField(undefined, true)}
         </View>
@@ -809,3 +801,12 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
 });
+
+const useThemedStyles = createTokenStyles((t) => ({
+  surface: { backgroundColor: t.popover },
+  surface2: { backgroundColor: t.primary },
+  text: { color: t.foreground },
+  mutedText: { color: t.mutedForeground },
+  text2: { color: t.primary },
+  surface3: { backgroundColor: t.border },
+}));

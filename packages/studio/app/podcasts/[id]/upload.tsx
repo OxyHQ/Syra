@@ -16,6 +16,7 @@ import type { EpisodeAudioFile } from '@/services/episodeService';
 import { extractInvalidIds } from '@/utils/api';
 import { toast } from '@oxy.so/bloom/toast';
 import { cn } from '@/lib/utils';
+import { createTokenStyles, tokenAlpha } from '@oxy.so/bloom/theme';
 
 const EPISODE_TYPES: { value: EpisodeType; label: string }[] = [
   { value: 'full', label: 'Full' },
@@ -31,26 +32,27 @@ function parsePositiveInt(value: string): number | undefined {
 }
 
 function AudioPicker({ file, onPick }: { file: EpisodeAudioFile | null; onPick: () => void }) {
+  const styles = useStyles();
   const theme = useTheme();
   return (
-    <View className="mb-4">
-      <Text className="text-sm font-medium text-foreground mb-1.5">Audio file</Text>
+    <View style={styles.section}>
+      <Text style={styles.text}>Audio file</Text>
       <Pressable
         onPress={onPick}
         className="flex-row items-center gap-3 rounded-xl border border-dashed border-border bg-surface px-4 py-4 active:opacity-80"
       >
-        <View className="w-10 h-10 rounded-lg bg-primary/10 items-center justify-center">
+        <View style={styles.centered}>
           <MaterialCommunityIcons
             name={file ? 'music-box' : 'cloud-upload-outline'}
             size={22}
             color={theme.colors.primary}
           />
         </View>
-        <View className="flex-1">
-          <Text numberOfLines={1} className="text-sm font-medium text-foreground">
+        <View style={styles.fill}>
+          <Text numberOfLines={1} style={styles.text2}>
             {file ? file.name : 'Choose an audio file'}
           </Text>
-          <Text className="text-xs text-muted-foreground mt-0.5">
+          <Text style={styles.mutedText}>
             {file ? 'Tap to replace' : 'MP3, M4A, WAV, OGG, FLAC'}
           </Text>
         </View>
@@ -66,10 +68,11 @@ function TypeSelector({
   value: EpisodeType;
   onChange: (value: EpisodeType) => void;
 }) {
+  const styles = useStyles();
   return (
-    <View className="mb-4">
-      <Text className="text-sm font-medium text-foreground mb-1.5">Episode type</Text>
-      <View className="flex-row gap-2">
+    <View style={styles.section}>
+      <Text style={styles.text}>Episode type</Text>
+      <View style={styles.row}>
         {EPISODE_TYPES.map((option) => {
           const active = option.value === value;
           return (
@@ -95,6 +98,7 @@ function TypeSelector({
 }
 
 function UploadEpisodeForm({ id }: { id: string }) {
+  const styles = useStyles();
   const router = useRouter();
   const uploadEpisode = useUploadEpisode();
 
@@ -187,9 +191,7 @@ function UploadEpisodeForm({ id }: { id: string }) {
   return (
     <ScreenContainer title="Upload episode" onBack={() => router.back()}>
       <AudioPicker file={audioFile} onPick={pickAudio} />
-      {audioError ? (
-        <Text className="text-xs text-destructive -mt-2 mb-3">{audioError}</Text>
-      ) : null}
+      {audioError ? <Text style={styles.text3}>{audioError}</Text> : null}
 
       <FormField
         label="Title"
@@ -206,8 +208,8 @@ function UploadEpisodeForm({ id }: { id: string }) {
         onChangeText={setDescription}
         multiline
       />
-      <View className="flex-row gap-3">
-        <View className="flex-1">
+      <View style={styles.row2}>
+        <View style={styles.fill}>
           <FormField
             label="Season"
             placeholder="1"
@@ -216,7 +218,7 @@ function UploadEpisodeForm({ id }: { id: string }) {
             keyboardType="number-pad"
           />
         </View>
-        <View className="flex-1">
+        <View style={styles.fill}>
           <FormField
             label="Episode #"
             placeholder="1"
@@ -228,12 +230,10 @@ function UploadEpisodeForm({ id }: { id: string }) {
       </View>
       <TypeSelector value={episodeType} onChange={setEpisodeType} />
       <HostsGuestsPicker value={hostsGuests} onChange={setHostsGuests} />
-      <View className="flex-row items-center justify-between rounded-xl border border-border bg-surface px-4 py-3 mb-6">
-        <View className="flex-1 pr-3">
-          <Text className="text-sm font-medium text-foreground">Explicit content</Text>
-          <Text className="text-xs text-muted-foreground mt-0.5">
-            Marks this episode as explicit.
-          </Text>
+      <View style={styles.row3}>
+        <View style={styles.container}>
+          <Text style={styles.text2}>Explicit content</Text>
+          <Text style={styles.mutedText}>Marks this episode as explicit.</Text>
         </View>
         <Switch checked={explicit} onCheckedChange={setExplicit} />
       </View>
@@ -255,3 +255,35 @@ export default function UploadEpisodeScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   return <SignInGate>{id ? <UploadEpisodeForm id={id} /> : null}</SignInGate>;
 }
+
+const useStyles = createTokenStyles((t) => ({
+  section: { marginBottom: 16 },
+  text: { marginBottom: 6, fontSize: 14, fontWeight: 500, color: t.foreground, lineHeight: 20 },
+  centered: {
+    height: 40,
+    width: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 16,
+    backgroundColor: tokenAlpha(t.primary, 0.1),
+  },
+  fill: { flexGrow: 1, flexShrink: 1, flexBasis: '0%' },
+  text2: { fontSize: 14, fontWeight: 500, color: t.foreground, lineHeight: 20 },
+  mutedText: { marginTop: 2, fontSize: 12, color: t.mutedForeground, lineHeight: 16 },
+  row: { flexDirection: 'row', gap: 8 },
+  text3: { marginTop: -8, marginBottom: 12, fontSize: 12, color: t.destructive, lineHeight: 16 },
+  row2: { flexDirection: 'row', gap: 12 },
+  row3: {
+    marginBottom: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: t.border,
+    backgroundColor: t.surface,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  container: { flexGrow: 1, flexShrink: 1, flexBasis: '0%', paddingRight: 12 },
+}));

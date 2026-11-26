@@ -1,15 +1,15 @@
 import { Text, View } from 'react-native';
 import { Link, Stack } from 'expo-router';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 export default function NotFoundScreen() {
+  const styles = useStyles();
   return (
     <>
       <Stack.Screen options={{ title: 'Not found' }} />
-      <View className="flex-1 items-center justify-center bg-background px-6">
-        <Text className="text-2xl font-bold text-foreground mb-2">Page not found</Text>
-        <Text className="text-sm text-muted-foreground text-center mb-6">
-          This screen doesn&apos;t exist in Syra Studio.
-        </Text>
+      <View style={styles.centered}>
+        <Text style={styles.title}>Page not found</Text>
+        <Text style={styles.mutedText}>This screen doesn&apos;t exist in Syra Studio.</Text>
         <Link href="/" className="text-primary font-semibold text-base">
           Go to dashboard
         </Link>
@@ -17,3 +17,23 @@ export default function NotFoundScreen() {
     </>
   );
 }
+
+const useStyles = createTokenStyles((t) => ({
+  centered: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: '0%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: t.background,
+    paddingHorizontal: 24,
+  },
+  title: { marginBottom: 8, fontSize: 24, fontWeight: 700, color: t.foreground, lineHeight: 32 },
+  mutedText: {
+    marginBottom: 24,
+    textAlign: 'center',
+    fontSize: 14,
+    color: t.mutedForeground,
+    lineHeight: 20,
+  },
+}));

@@ -22,6 +22,7 @@ import { usePlayerStore } from '@/stores/playerStore';
 import { resolvePodcastArtwork } from '@/utils/pickImage';
 import { stripHtml } from '@/utils/podcastFormat';
 import { webViewStyle } from '@/utils/webStyles';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 // Picks black or white text for a hex background using WCAG relative luminance.
 function contrastTextColor(hex: string): string {
@@ -208,6 +209,7 @@ const PodcastShowView: React.FC<PodcastShowViewProps> = ({
   onPlayEpisode,
   onOpenEpisode,
 }) => {
+  const themed = useThemedStyles();
   const { t } = useTranslation();
   const theme = useTheme();
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
@@ -229,8 +231,7 @@ const PodcastShowView: React.FC<PodcastShowViewProps> = ({
     <>
       <SEO title={`${podcast.title} - Syra`} description={description.slice(0, 160)} />
       <ScrollView
-        className="bg-surface"
-        style={styles.container}
+        style={[themed.surface, styles.container]}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
@@ -242,17 +243,17 @@ const PodcastShowView: React.FC<PodcastShowViewProps> = ({
               {artwork ? (
                 <Image source={{ uri: artwork }} style={styles.headerArtwork} contentFit="cover" />
               ) : (
-                <View className="bg-popover" style={styles.headerArtworkPlaceholder}>
+                <View style={[themed.surface2, styles.headerArtworkPlaceholder]}>
                   <Ionicons name="mic" size={48} color={theme.colors.textSecondary} />
                 </View>
               )}
             </View>
             <View style={styles.headerInfo}>
-              <Text className="text-foreground" style={styles.showTitle} numberOfLines={3}>
+              <Text style={[themed.text, styles.showTitle]} numberOfLines={3}>
                 {podcast.title}
               </Text>
               {podcast.author ? (
-                <Text className="text-muted-foreground" style={styles.showAuthor} numberOfLines={2}>
+                <Text style={[themed.mutedText, styles.showAuthor]} numberOfLines={2}>
                   {podcast.author}
                 </Text>
               ) : null}
@@ -291,13 +292,12 @@ const PodcastShowView: React.FC<PodcastShowViewProps> = ({
             style={styles.descriptionWrap}
           >
             <Text
-              className="text-muted-foreground"
-              style={styles.description}
+              style={[themed.mutedText, styles.description]}
               numberOfLines={descriptionExpanded ? undefined : 3}
             >
               {description}
             </Text>
-            <Text className="text-primary" style={styles.descriptionToggle}>
+            <Text style={[themed.text2, styles.descriptionToggle]}>
               {descriptionExpanded ? t('common.showLess') : t('common.showMore')}
             </Text>
           </Pressable>
@@ -307,9 +307,7 @@ const PodcastShowView: React.FC<PodcastShowViewProps> = ({
         <HostsAndGuests persons={persons} />
 
         {/* Episodes */}
-        <Text className="text-foreground" style={styles.sectionTitle}>
-          {t('common.episodes')}
-        </Text>
+        <Text style={[themed.text, styles.sectionTitle]}>{t('common.episodes')}</Text>
         {episodesLoading && episodes.length === 0 ? (
           <LibraryListSkeleton count={6} />
         ) : episodesFailed && episodes.length === 0 ? (
@@ -323,9 +321,7 @@ const PodcastShowView: React.FC<PodcastShowViewProps> = ({
             containerStyle={styles.inlineState}
           />
         ) : episodes.length === 0 ? (
-          <Text className="text-muted-foreground" style={styles.emptyText}>
-            {t('podcasts.noEpisodes')}
-          </Text>
+          <Text style={[themed.mutedText, styles.emptyText]}>{t('podcasts.noEpisodes')}</Text>
         ) : (
           episodes.map((episode, index) => (
             <EpisodeRow
@@ -440,3 +436,11 @@ const styles = StyleSheet.create({
 });
 
 export default PodcastShowScreen;
+
+const useThemedStyles = createTokenStyles((t) => ({
+  surface: { backgroundColor: t.surface },
+  surface2: { backgroundColor: t.popover },
+  text: { color: t.foreground },
+  mutedText: { color: t.mutedForeground },
+  text2: { color: t.primary },
+}));

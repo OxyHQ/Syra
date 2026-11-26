@@ -39,7 +39,7 @@ export const ArtistDetailSkeleton: React.FC<ArtistDetailSkeletonProps> = React.m
             locations={[0, 0.6, 1]}
             style={styles.heroOverlay}
           />
-          <View className="gap-2" style={styles.titleContainer}>
+          <View style={[styles.stack, styles.titleContainer]}>
             <View className="h-10 sm:h-16 lg:h-24">
               <Skeleton.Box width="55%" height="100%" borderRadius={8} />
             </View>
@@ -149,4 +149,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingBottom: 24,
   },
+
+  stack: { gap: 8 },
 });

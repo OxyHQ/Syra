@@ -10,8 +10,10 @@ import { CoverArtPicker } from '@/components/CoverArtPicker';
 import { useRegisterArtist } from '@/hooks/useArtist';
 import { getApiErrorMessage } from '@/utils/api';
 import { toast } from '@oxy.so/bloom/toast';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 function RegisterArtistForm() {
+  const styles = useStyles();
   const router = useRouter();
   const registerArtist = useRegisterArtist();
 
@@ -58,14 +60,14 @@ function RegisterArtistForm() {
       subtitle="Create your artist profile to upload music"
       onBack={() => router.back()}
     >
-      <View className="items-center mb-6">
+      <View style={styles.container}>
         <CoverArtPicker
           value={image}
           onChange={setImage}
           size={140}
           disabled={registerArtist.isPending}
         />
-        <Text className="text-xs text-muted-foreground mt-2">Artist photo (optional)</Text>
+        <Text style={styles.mutedText}>Artist photo (optional)</Text>
       </View>
 
       <FormField
@@ -113,3 +115,8 @@ export default function RegisterArtistScreen() {
     </SignInGate>
   );
 }
+
+const useStyles = createTokenStyles((t) => ({
+  container: { marginBottom: 24, alignItems: 'center' },
+  mutedText: { marginTop: 8, fontSize: 12, color: t.mutedForeground, lineHeight: 16 },
+}));

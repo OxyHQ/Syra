@@ -11,10 +11,12 @@ import { SignInGate } from '@/components/SignInGate';
 import { ScreenContainer } from '@/components/AppShell';
 import { useMyArtistProfile, useArtistDashboard } from '@/hooks/useArtist';
 import { resolveCatalogImageUrl } from '@/utils/catalogImages';
+import { createTokenStyles, tokenAlpha } from '@oxy.so/bloom/theme';
 
 type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
 
 function ArtistAvatar({ artist, size = 56 }: { artist: Artist; size?: number }) {
+  const styles = useStyles();
   const theme = useTheme();
   const uri = resolveCatalogImageUrl(artist.image);
   if (uri) {
@@ -28,22 +30,20 @@ function ArtistAvatar({ artist, size = 56 }: { artist: Artist; size?: number }) 
     );
   }
   return (
-    <View
-      style={{ width: size, height: size }}
-      className="rounded-full bg-primary/10 items-center justify-center"
-    >
+    <View style={[styles.centered, { width: size, height: size }]}>
       <MaterialCommunityIcons name="account-music" size={size * 0.5} color={theme.colors.primary} />
     </View>
   );
 }
 
 function StatTile({ icon, label, value }: { icon: IconName; label: string; value: string }) {
+  const styles = useStyles();
   const theme = useTheme();
   return (
-    <View className="flex-1 rounded-2xl border border-border bg-surface px-4 py-4">
+    <View style={styles.surface}>
       <MaterialCommunityIcons name={icon} size={20} color={theme.colors.primary} />
-      <Text className="text-2xl font-bold text-foreground mt-2">{value}</Text>
-      <Text className="text-xs text-muted-foreground mt-0.5">{label}</Text>
+      <Text style={styles.title}>{value}</Text>
+      <Text style={styles.mutedText}>{label}</Text>
     </View>
   );
 }
@@ -59,18 +59,19 @@ function ActionCard({
   hint: string;
   onPress: () => void;
 }) {
+  const styles = useStyles();
   const theme = useTheme();
   return (
     <Pressable
       onPress={onPress}
       className="flex-row items-center gap-3 rounded-2xl border border-border bg-surface px-4 py-3.5 active:opacity-80"
     >
-      <View className="w-10 h-10 rounded-xl bg-primary/10 items-center justify-center">
+      <View style={styles.centered2}>
         <MaterialCommunityIcons name={icon} size={22} color={theme.colors.primary} />
       </View>
-      <View className="flex-1">
-        <Text className="text-sm font-semibold text-foreground">{label}</Text>
-        <Text className="text-xs text-muted-foreground mt-0.5">{hint}</Text>
+      <View style={styles.fill}>
+        <Text style={styles.title2}>{label}</Text>
+        <Text style={styles.mutedText}>{hint}</Text>
       </View>
       <MaterialCommunityIcons name="chevron-right" size={22} color={theme.colors.textSecondary} />
     </Pressable>
@@ -78,15 +79,16 @@ function ActionCard({
 }
 
 function BecomeArtistEmptyState({ onRegister }: { onRegister: () => void }) {
+  const styles = useStyles();
   const theme = useTheme();
   return (
     <ScreenContainer title="Music" subtitle="For artists">
-      <View className="items-center justify-center py-16 px-6">
-        <View className="w-16 h-16 rounded-2xl bg-primary/10 items-center justify-center mb-4">
+      <View style={styles.centered3}>
+        <View style={styles.centered4}>
           <MaterialCommunityIcons name="music" size={30} color={theme.colors.primary} />
         </View>
-        <Text className="text-lg font-semibold text-foreground mb-1">Bring your music to Syra</Text>
-        <Text className="text-sm text-muted-foreground text-center mb-5 max-w-[360px]">
+        <Text style={styles.title3}>Bring your music to Syra</Text>
+        <Text style={styles.mutedText2}>
           Register as an artist to upload songs, organize them into albums, and see how listeners
           are finding your music.
         </Text>
@@ -99,6 +101,7 @@ function BecomeArtistEmptyState({ onRegister }: { onRegister: () => void }) {
 }
 
 function StudioDashboard({ artist }: { artist: Artist }) {
+  const styles = useStyles();
   const router = useRouter();
   const theme = useTheme();
   const { data: dashboard, isLoading, isError, refetch } = useArtistDashboard();
@@ -124,11 +127,11 @@ function StudioDashboard({ artist }: { artist: Artist }) {
         </Button>
       }
     >
-      <View className="flex-row items-center gap-3 mb-6">
+      <View style={styles.row}>
         <ArtistAvatar artist={artist} />
-        <View className="flex-1">
-          <View className="flex-row items-center gap-1.5">
-            <Text numberOfLines={1} className="text-base font-semibold text-foreground">
+        <View style={styles.fill}>
+          <View style={styles.row2}>
+            <Text numberOfLines={1} style={styles.title4}>
               {artist.name}
             </Text>
             {artist.verified ? (
@@ -140,7 +143,7 @@ function StudioDashboard({ artist }: { artist: Artist }) {
             ) : null}
           </View>
           {artist.genres && artist.genres.length > 0 ? (
-            <Text numberOfLines={1} className="text-xs text-muted-foreground mt-0.5">
+            <Text numberOfLines={1} style={styles.mutedText}>
               {artist.genres.join(' · ')}
             </Text>
           ) : null}
@@ -148,24 +151,24 @@ function StudioDashboard({ artist }: { artist: Artist }) {
       </View>
 
       {dashboard?.uploadsDisabled ? (
-        <View className="flex-row gap-3 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 mb-4">
+        <View style={styles.row3}>
           <MaterialCommunityIcons name="alert-circle" size={22} color={theme.colors.error} />
-          <Text className="text-sm text-foreground flex-1">
+          <Text style={styles.text}>
             Uploads are disabled due to copyright strikes. Contact support for more information.
           </Text>
         </View>
       ) : null}
 
-      <View className="flex-row gap-3 mb-3">
+      <View style={styles.row4}>
         <StatTile icon="music-note" label="Tracks" value={stat(dashboard?.totalTracks)} />
         <StatTile icon="album" label="Albums" value={stat(dashboard?.totalAlbums)} />
       </View>
-      <View className="flex-row gap-3 mb-6">
+      <View style={styles.row5}>
         <StatTile icon="play-circle-outline" label="Plays" value={stat(dashboard?.totalPlays)} />
         <StatTile icon="heart-outline" label="Followers" value={stat(dashboard?.followers)} />
       </View>
 
-      <View className="gap-2 mb-6">
+      <View style={styles.stack}>
         <ActionCard
           icon="cloud-upload-outline"
           label="Upload song"
@@ -187,22 +190,22 @@ function StudioDashboard({ artist }: { artist: Artist }) {
       </View>
 
       {isLoading ? (
-        <View className="py-10 items-center">
+        <View style={styles.container}>
           <Loading />
         </View>
       ) : isError ? (
-        <View className="py-10 items-center px-6">
-          <Text className="text-base text-foreground mb-3">Couldn&apos;t load your studio.</Text>
+        <View style={styles.container2}>
+          <Text style={styles.text2}>Couldn&apos;t load your studio.</Text>
           <Button onPress={() => refetch()} tone="neutral" appearance="outline">
             Retry
           </Button>
         </View>
       ) : dashboard ? (
         <>
-          <Text className="text-base font-semibold text-foreground mb-3">Recent tracks</Text>
+          <Text style={styles.title5}>Recent tracks</Text>
           {dashboard.recentTracks.length === 0 ? (
-            <View className="rounded-2xl border border-border bg-surface px-4 py-8 items-center mb-6">
-              <Text className="text-sm text-muted-foreground mb-3">No tracks yet.</Text>
+            <View style={styles.surface2}>
+              <Text style={styles.mutedText3}>No tracks yet.</Text>
               <Button
                 size="sm"
                 onPress={() => go('/music/upload')}
@@ -213,34 +216,29 @@ function StudioDashboard({ artist }: { artist: Artist }) {
               </Button>
             </View>
           ) : (
-            <View className="gap-2 mb-6">
+            <View style={styles.stack}>
               {dashboard.recentTracks.map((track) => (
-                <View
-                  key={track.id}
-                  className="flex-row items-center gap-3 rounded-2xl border border-border bg-surface px-4 py-3"
-                >
-                  <View className="w-9 h-9 rounded-lg bg-primary/10 items-center justify-center">
+                <View key={track.id} style={styles.row6}>
+                  <View style={styles.centered5}>
                     <MaterialCommunityIcons
                       name="music-note"
                       size={18}
                       color={theme.colors.primary}
                     />
                   </View>
-                  <Text numberOfLines={1} className="text-sm font-medium text-foreground flex-1">
+                  <Text numberOfLines={1} style={styles.text3}>
                     {track.title}
                   </Text>
-                  <Text className="text-xs text-muted-foreground">
-                    {track.playCount.toLocaleString()} plays
-                  </Text>
+                  <Text style={styles.mutedText4}>{track.playCount.toLocaleString()} plays</Text>
                 </View>
               ))}
             </View>
           )}
 
-          <Text className="text-base font-semibold text-foreground mb-3">Recent albums</Text>
+          <Text style={styles.title5}>Recent albums</Text>
           {dashboard.recentAlbums.length === 0 ? (
-            <View className="rounded-2xl border border-border bg-surface px-4 py-8 items-center">
-              <Text className="text-sm text-muted-foreground mb-3">No albums yet.</Text>
+            <View style={styles.surface3}>
+              <Text style={styles.mutedText3}>No albums yet.</Text>
               <Button
                 size="sm"
                 onPress={() => go('/music/album/new')}
@@ -251,19 +249,16 @@ function StudioDashboard({ artist }: { artist: Artist }) {
               </Button>
             </View>
           ) : (
-            <View className="gap-2">
+            <View style={styles.stack2}>
               {dashboard.recentAlbums.map((album) => (
-                <View
-                  key={album.id}
-                  className="flex-row items-center gap-3 rounded-2xl border border-border bg-surface px-4 py-3"
-                >
-                  <View className="w-9 h-9 rounded-lg bg-primary/10 items-center justify-center">
+                <View key={album.id} style={styles.row6}>
+                  <View style={styles.centered5}>
                     <MaterialCommunityIcons name="album" size={18} color={theme.colors.primary} />
                   </View>
-                  <Text numberOfLines={1} className="text-sm font-medium text-foreground flex-1">
+                  <Text numberOfLines={1} style={styles.text3}>
                     {album.title}
                   </Text>
-                  <Text className="text-xs text-muted-foreground">
+                  <Text style={styles.mutedText4}>
                     {album.totalTracks} {album.totalTracks === 1 ? 'track' : 'tracks'}
                   </Text>
                 </View>
@@ -277,12 +272,13 @@ function StudioDashboard({ artist }: { artist: Artist }) {
 }
 
 function MusicStudio() {
+  const styles = useStyles();
   const router = useRouter();
   const { data: artist, isLoading } = useMyArtistProfile();
 
   if (isLoading) {
     return (
-      <View className="flex-1 items-center justify-center bg-background">
+      <View style={styles.centered6}>
         <Loading />
       </View>
     );
@@ -302,3 +298,146 @@ export default function MusicScreen() {
     </SignInGate>
   );
 }
+
+const useStyles = createTokenStyles((t) => ({
+  centered: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 9999,
+    backgroundColor: tokenAlpha(t.primary, 0.1),
+  },
+  surface: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: '0%',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: t.border,
+    backgroundColor: t.surface,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  title: { marginTop: 8, fontSize: 24, fontWeight: 700, color: t.foreground, lineHeight: 32 },
+  mutedText: { marginTop: 2, fontSize: 12, color: t.mutedForeground, lineHeight: 16 },
+  centered2: {
+    height: 40,
+    width: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+    backgroundColor: tokenAlpha(t.primary, 0.1),
+  },
+  fill: { flexGrow: 1, flexShrink: 1, flexBasis: '0%' },
+  title2: { fontSize: 14, fontWeight: 600, color: t.foreground, lineHeight: 20 },
+  centered3: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 64,
+  },
+  centered4: {
+    marginBottom: 16,
+    height: 64,
+    width: 64,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 16,
+    backgroundColor: tokenAlpha(t.primary, 0.1),
+  },
+  title3: { marginBottom: 4, fontSize: 18, fontWeight: 600, color: t.foreground, lineHeight: 28 },
+  mutedText2: {
+    marginBottom: 20,
+    maxWidth: 360,
+    textAlign: 'center',
+    fontSize: 14,
+    color: t.mutedForeground,
+    lineHeight: 20,
+  },
+  row: { marginBottom: 24, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  row2: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  title4: { fontSize: 16, fontWeight: 600, color: t.foreground, lineHeight: 24 },
+  row3: {
+    marginBottom: 16,
+    flexDirection: 'row',
+    gap: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: tokenAlpha(t.destructive, 0.4),
+    backgroundColor: tokenAlpha(t.destructive, 0.1),
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  text: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: '0%',
+    fontSize: 14,
+    color: t.foreground,
+    lineHeight: 20,
+  },
+  row4: { marginBottom: 12, flexDirection: 'row', gap: 12 },
+  row5: { marginBottom: 24, flexDirection: 'row', gap: 12 },
+  stack: { marginBottom: 24, gap: 8 },
+  container: { alignItems: 'center', paddingVertical: 40 },
+  container2: { alignItems: 'center', paddingHorizontal: 24, paddingVertical: 40 },
+  text2: { marginBottom: 12, fontSize: 16, color: t.foreground, lineHeight: 24 },
+  title5: { marginBottom: 12, fontSize: 16, fontWeight: 600, color: t.foreground, lineHeight: 24 },
+  surface2: {
+    marginBottom: 24,
+    alignItems: 'center',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: t.border,
+    backgroundColor: t.surface,
+    paddingHorizontal: 16,
+    paddingVertical: 32,
+  },
+  mutedText3: { marginBottom: 12, fontSize: 14, color: t.mutedForeground, lineHeight: 20 },
+  row6: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: t.border,
+    backgroundColor: t.surface,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  centered5: {
+    height: 36,
+    width: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 16,
+    backgroundColor: tokenAlpha(t.primary, 0.1),
+  },
+  text3: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: '0%',
+    fontSize: 14,
+    fontWeight: 500,
+    color: t.foreground,
+    lineHeight: 20,
+  },
+  mutedText4: { fontSize: 12, color: t.mutedForeground, lineHeight: 16 },
+  surface3: {
+    alignItems: 'center',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: t.border,
+    backgroundColor: t.surface,
+    paddingHorizontal: 16,
+    paddingVertical: 32,
+  },
+  stack2: { gap: 8 },
+  centered6: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: '0%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: t.background,
+  },
+}));

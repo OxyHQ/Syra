@@ -12,6 +12,7 @@ import { useNowPlayingMedia } from '@/hooks/useNowPlayingMedia';
 import { SpeedPill, SkipButton } from './podcast/PodcastTransportControls';
 import { CastButton } from './CastButton';
 import { webViewStyle } from '@/utils/webStyles';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 interface WebPressTarget {
   getBoundingClientRect?: () => { left: number; width: number };
@@ -36,6 +37,7 @@ const getProgressPercent = (currentTime: number, duration: number) => {
  * Floating, fully rounded player bar for mobile devices
  */
 export const MobilePlayerBar: React.FC = () => {
+  const themed = useThemedStyles();
   const { t } = useTranslation();
   const router = useRouter();
   const theme = useTheme();
@@ -137,7 +139,7 @@ export const MobilePlayerBar: React.FC = () => {
   }, [insets.bottom, theme.colors.primary, SPACING]);
 
   return (
-    <View className="bg-primary" style={containerStyle}>
+    <View style={[themed.surface, containerStyle]}>
       {/* Main Player Content */}
       <View
         style={[
@@ -161,7 +163,7 @@ export const MobilePlayerBar: React.FC = () => {
             {media?.imageUri ? (
               <Image source={{ uri: media.imageUri }} style={styles.albumArt} contentFit="cover" />
             ) : (
-              <View className="bg-surface" style={styles.albumArtPlaceholder}>
+              <View style={[themed.surface2, styles.albumArtPlaceholder]}>
                 <MaterialCommunityIcons
                   name={isEpisode ? 'microphone' : 'music'}
                   size={24}
@@ -171,14 +173,10 @@ export const MobilePlayerBar: React.FC = () => {
             )}
           </Pressable>
           <View style={styles.trackDetails}>
-            <Text className="text-primary-foreground" style={styles.trackTitle} numberOfLines={1}>
+            <Text style={[themed.text, styles.trackTitle]} numberOfLines={1}>
               {media ? media.title : isLoading ? 'Loading...' : 'No track selected'}
             </Text>
-            <Text
-              className="text-primary-foreground opacity-70"
-              style={styles.trackArtist}
-              numberOfLines={1}
-            >
+            <Text style={[themed.text2, styles.trackArtist]} numberOfLines={1}>
               {media
                 ? // A locker file with no resolved artist ships an empty name by
                   // design; it is an unknown artist, not a missing one.
@@ -263,10 +261,7 @@ export const MobilePlayerBar: React.FC = () => {
           }
         }}
       >
-        <View
-          className="bg-primary-foreground"
-          style={[styles.progressBar, { width: progressFillWidth }]}
-        />
+        <View style={[themed.surface3, styles.progressBar, { width: progressFillWidth }]} />
       </Pressable>
     </View>
   );
@@ -359,3 +354,11 @@ const styles = StyleSheet.create({
     marginHorizontal: 0,
   },
 });
+
+const useThemedStyles = createTokenStyles((t) => ({
+  surface: { backgroundColor: t.primary },
+  surface2: { backgroundColor: t.surface },
+  text: { color: t.primaryForeground },
+  text2: { color: t.primaryForeground, opacity: 0.7 },
+  surface3: { backgroundColor: t.primaryForeground },
+}));

@@ -12,8 +12,10 @@ import { ResponsiveGrid } from '@/components/ResponsiveGrid';
 import { GenreGridSkeleton } from '@/components/skeletons';
 import { browseService } from '@/services/browseService';
 import { usePlayerStore } from '@/stores/playerStore';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 const BrowseScreen: React.FC = () => {
+  const themed = useThemedStyles();
   const { t } = useTranslation();
   const theme = useTheme();
   const router = useRouter();
@@ -52,8 +54,7 @@ const BrowseScreen: React.FC = () => {
     <>
       <SEO title={t('browse.seo.title')} description={t('browse.seo.description')} />
       <ScrollView
-        className="bg-surface"
-        style={styles.container}
+        style={[themed.surface, styles.container]}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
@@ -120,3 +121,7 @@ const styles = StyleSheet.create({
 });
 
 export default BrowseScreen;
+
+const useThemedStyles = createTokenStyles((t) => ({
+  surface: { backgroundColor: t.surface },
+}));

@@ -17,6 +17,7 @@ import { ownedShowStateKey } from '@/utils/podcastFormat';
 import { EmptyState } from '@/components/common/EmptyState';
 import { cn } from '@/lib/utils';
 import type { LibrarySortOrder } from '@/stores/uiStore';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 /** Exported so the sidebar's filter state cannot drift from the chips it renders. */
 export type LibraryFilter =
@@ -179,6 +180,7 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
   error,
   onRetry,
 }) => {
+  const themed = useThemedStyles();
   const { t } = useTranslation();
   const router = useRouter();
   const theme = useTheme();
@@ -339,9 +341,9 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
     // Match the collapsed view, whose transparent container shows the wrapping
     // Panel's `surface` color (`backgroundSecondary`); use that same token here
     // instead of the darker app `background` so both views read identically.
-    <View className="flex-1 h-full pt-2.5 bg-surface">
-      <View className="flex-row items-center justify-between px-3 mb-3">
-        <View className="flex-row items-center gap-2 min-w-0">
+    <View style={themed.surface}>
+      <View style={styles.row}>
+        <View style={styles.row2}>
           <Pressable
             onPress={onCollapse}
             className="w-8 h-8 items-center justify-center rounded-[16px] web:cursor-pointer"
@@ -350,10 +352,10 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
           >
             <Octicons name="sidebar-collapse" size={19} color={theme.colors.textSecondary} />
           </Pressable>
-          <Text className="text-[16px] font-extrabold text-foreground">{t('library.title')}</Text>
+          <Text style={themed.title}>{t('library.title')}</Text>
         </View>
 
-        <View className="flex-row items-center gap-1">
+        <View style={styles.row3}>
           {canUsePrivateApi && (
             <Pressable
               onPress={() => router.push('/create-playlist')}
@@ -382,8 +384,8 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerClassName="gap-2 px-3"
-        className="grow-0 mb-2.5"
+        contentContainerStyle={styles.content}
+        style={styles.container}
       >
         {FILTERS.map((filter) => {
           const isActive = activeFilter === filter;
@@ -411,13 +413,13 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
         })}
       </ScrollView>
 
-      <View className="flex-row items-center gap-2 px-3 mb-2.5">
+      <View style={styles.row4}>
         {/* Bloom's Search rather than a hand-rolled box: it carries the pill
             field, the magnifying glass and the clear button, and it tracks the
             design system when that changes. `label` doubles as the placeholder,
             and clearing is a real control instead of the user deleting
             character by character. */}
-        <View className="flex-1 h-[34px] flex-row items-center gap-2 rounded-[6px] px-2.5 min-w-0">
+        <View style={styles.row5}>
           <Search
             value={searchQuery}
             onChangeText={onSearchChange}
@@ -439,9 +441,7 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
               : 'Grouped by type. Activate to sort A to Z.'
           }
         >
-          <Text className="text-[12px] font-bold text-muted-foreground">
-            {sortOrder === 'alphabetical' ? 'A–Z' : 'By type'}
-          </Text>
+          <Text style={themed.mutedText}>{sortOrder === 'alphabetical' ? 'A–Z' : 'By type'}</Text>
           <Ionicons
             name={sortOrder === 'alphabetical' ? 'text' : 'list'}
             size={18}
@@ -451,7 +451,7 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
       </View>
 
       {loading && isAuthenticated ? (
-        <View className="flex-1 items-center justify-center gap-2.5 p-[18px]">
+        <View style={styles.centered}>
           <ActivityIndicator size="small" color={theme.colors.primary} />
         </View>
       ) : error ? (
@@ -478,7 +478,7 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
         />
       ) : (
         <ScrollView
-          className="flex-1"
+          style={styles.fill}
           contentContainerClassName={cn('px-2 pb-3', isGrid && 'flex-row flex-wrap gap-2 px-3')}
           showsVerticalScrollIndicator={false}
         >
@@ -519,11 +519,11 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
                   />
                 )}
               </View>
-              <View className="flex-1 min-w-0">
-                <Text className="text-[14px] font-bold mb-[3px] text-foreground" numberOfLines={1}>
+              <View style={styles.container2}>
+                <Text style={themed.title2} numberOfLines={1}>
                   {entry.title}
                 </Text>
-                <Text className="text-[12px] font-medium text-muted-foreground" numberOfLines={1}>
+                <Text style={themed.mutedText2} numberOfLines={1}>
                   {entry.subtitle}
                 </Text>
               </View>
@@ -554,4 +554,61 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     backgroundColor: 'transparent',
   },
+
+  row: {
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+  },
+  row2: { minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  row3: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  content: { gap: 8, paddingHorizontal: 12 },
+  container: { marginBottom: 10, flexGrow: 0 },
+  row4: {
+    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+  },
+  row5: {
+    height: 34,
+    minWidth: 0,
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: '0%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 6,
+    paddingHorizontal: 10,
+  },
+  centered: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: '0%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    padding: 18,
+  },
+  fill: { flexGrow: 1, flexShrink: 1, flexBasis: '0%' },
+  container2: { minWidth: 0, flexGrow: 1, flexShrink: 1, flexBasis: '0%' },
 });
+
+const useThemedStyles = createTokenStyles((t) => ({
+  surface: {
+    height: '100%',
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: '0%',
+    backgroundColor: t.surface,
+    paddingTop: 10,
+  },
+  title: { fontSize: 16, fontWeight: 800, color: t.foreground },
+  mutedText: { fontSize: 12, fontWeight: 700, color: t.mutedForeground },
+  title2: { marginBottom: 3, fontSize: 14, fontWeight: 700, color: t.foreground },
+  mutedText2: { fontSize: 12, fontWeight: 500, color: t.mutedForeground },
+}));

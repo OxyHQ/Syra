@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { onlineManager } from '@tanstack/react-query';
 import { useTheme } from '@oxy.so/bloom/theme';
 import { TOP_BAR_HEIGHT } from '@/components/TopBar';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 /**
  * App-level offline indicator.
@@ -43,6 +44,7 @@ const getIsOnline = () => onlineManager.isOnline();
 const getIsOnlineForServer = () => true;
 
 export function OfflineBanner() {
+  const viewStyles = useViewStyles();
   const { t } = useTranslation();
   const isOnline = useSyncExternalStore(
     subscribeToOnlineManager,
@@ -91,11 +93,16 @@ export function OfflineBanner() {
   // for the content underneath it.
   return (
     <View style={styles.container} pointerEvents="none" accessibilityRole="alert">
-      <View className="bg-popover border-border" style={styles.banner}>
-        <Text className="text-foreground" style={styles.text}>
+      <View style={[viewStyles.surface, styles.banner]}>
+        <Text style={[viewStyles.text, styles.text]}>
           {t('common.offline', { defaultValue: "You're offline. Showing saved content." })}
         </Text>
       </View>
     </View>
   );
 }
+
+const useViewStyles = createTokenStyles((t) => ({
+  surface: { borderColor: t.border, backgroundColor: t.popover },
+  text: { color: t.foreground },
+}));

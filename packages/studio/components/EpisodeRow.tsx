@@ -10,6 +10,7 @@ import { StatusBadge } from '@/components/StatusBadge';
 import { useDeleteEpisode } from '@/hooks/usePodcasts';
 import { getApiErrorMessage } from '@/utils/api';
 import { formatDate, formatDuration } from '@/utils/format';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 /**
  * One episode in the show-detail list. The creator (owner) sees every status,
@@ -28,6 +29,7 @@ export function EpisodeRow({
   episode: Episode;
   deletable?: boolean;
 }) {
+  const styles = useStyles();
   const theme = useTheme();
   const [confirming, setConfirming] = useState(false);
   const { mutate: deleteEpisode, isPending } = useDeleteEpisode();
@@ -50,13 +52,13 @@ export function EpisodeRow({
 
   return (
     <>
-      <View className="flex-row items-center gap-3 py-3 border-b border-border">
+      <View style={styles.row}>
         <Artwork uri={episode.image} size={48} rounded="lg" />
-        <View className="flex-1">
-          <Text numberOfLines={1} className="text-sm font-medium text-foreground">
+        <View style={styles.fill}>
+          <Text numberOfLines={1} style={styles.text}>
             {episode.title}
           </Text>
-          {meta ? <Text className="text-xs text-muted-foreground mt-0.5">{meta}</Text> : null}
+          {meta ? <Text style={styles.mutedText}>{meta}</Text> : null}
         </View>
         <StatusBadge status={episode.status} />
         {deletable ? (
@@ -96,3 +98,17 @@ export function EpisodeRow({
     </>
   );
 }
+
+const useStyles = createTokenStyles((t) => ({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderBottomWidth: 1,
+    borderColor: t.border,
+    paddingVertical: 12,
+  },
+  fill: { flexGrow: 1, flexShrink: 1, flexBasis: '0%' },
+  text: { fontSize: 14, fontWeight: 500, color: t.foreground, lineHeight: 20 },
+  mutedText: { marginTop: 2, fontSize: 12, color: t.mutedForeground, lineHeight: 16 },
+}));

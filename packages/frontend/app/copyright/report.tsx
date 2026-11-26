@@ -24,6 +24,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { TrackArtistLine } from '@/components/TrackArtistLine';
 import { z } from 'zod';
+import { createTokenStyles, tokenAlpha } from '@oxy.so/bloom/theme';
 
 const copyrightReportFormSchema = z.object({
   trackId: z.string().min(1, 'Please select a track to report'),
@@ -53,6 +54,7 @@ function getCopyrightReportErrorMessage(error: unknown): string | null {
  * Public screen to report copyright violations
  */
 const CopyrightReportScreen: React.FC = () => {
+  const themed = useThemedStyles();
   const { t } = useTranslation();
   const theme = useTheme();
   const router = useRouter();
@@ -127,13 +129,12 @@ const CopyrightReportScreen: React.FC = () => {
       <SEO title={t('copyright.seo.title')} description={t('common.reportCopyright')} />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        className="bg-surface"
-        style={styles.container}
+        style={[themed.surface, styles.container]}
       >
         {/* Header */}
         <View
-          className="bg-surface border-b-border"
           style={[
+            themed.surface2,
             styles.header,
             {
               // Top safe-area is cleared by the shell's TopBar (single
@@ -145,9 +146,7 @@ const CopyrightReportScreen: React.FC = () => {
           <Pressable onPress={handleGoBack} disabled={isSubmitting} style={styles.backButton}>
             <MaterialCommunityIcons name="arrow-left" size={24} color={theme.colors.text} />
           </Pressable>
-          <Text className="text-foreground" style={styles.title}>
-            {t('copyright.title')}
-          </Text>
+          <Text style={[themed.text, styles.title]}>{t('copyright.title')}</Text>
           <View style={{ width: 24 }} />
         </View>
 
@@ -159,16 +158,12 @@ const CopyrightReportScreen: React.FC = () => {
         >
           {/* Instructions */}
           <View style={styles.section}>
-            <Text className="text-muted-foreground" style={styles.instructions}>
-              {t('copyright.intro')}
-            </Text>
+            <Text style={[themed.mutedText, styles.instructions]}>{t('copyright.intro')}</Text>
           </View>
 
           {/* Track Search */}
           <View style={styles.section}>
-            <Text className="text-foreground" style={styles.label}>
-              {t('copyright.searchLabel')}
-            </Text>
+            <Text style={[themed.text, styles.label]}>{t('copyright.searchLabel')}</Text>
             <View style={styles.searchContainer}>
               <TextInput
                 className={`bg-surface text-foreground ${selectedTrack ? 'border-primary' : 'border-border'}`}
@@ -188,15 +183,13 @@ const CopyrightReportScreen: React.FC = () => {
                 />
               )}
               {isSearchError && (
-                <Text className="text-error" style={styles.errorText}>
-                  {t('copyright.searchError')}
-                </Text>
+                <Text style={[themed.text2, styles.errorText]}>{t('copyright.searchError')}</Text>
               )}
             </View>
 
             {/* Search Results */}
             {searchResults.length > 0 && !selectedTrack && (
-              <View className="bg-surface" style={styles.resultsContainer}>
+              <View style={[themed.surface, styles.resultsContainer]}>
                 {searchResults.map((track) => (
                   <Pressable
                     key={track.id}
@@ -204,9 +197,7 @@ const CopyrightReportScreen: React.FC = () => {
                     style={[styles.resultItem, { borderBottomColor: theme.colors.border }]}
                   >
                     <View style={styles.resultInfo}>
-                      <Text className="text-foreground" style={styles.resultTitle}>
-                        {track.title}
-                      </Text>
+                      <Text style={[themed.text, styles.resultTitle]}>{track.title}</Text>
                       <TrackArtistLine
                         track={track}
                         className="text-muted-foreground"
@@ -227,14 +218,14 @@ const CopyrightReportScreen: React.FC = () => {
 
             {/* Selected Track */}
             {selectedTrack && (
-              <View className="bg-primary/10 border-primary" style={styles.selectedTrack}>
+              <View style={[themed.surface3, styles.selectedTrack]}>
                 <View style={styles.selectedTrackInfo}>
                   <MaterialCommunityIcons name="music" size={20} color={theme.colors.primary} />
                   <View style={styles.selectedTrackText}>
-                    <Text className="text-foreground" style={styles.selectedTrackTitle}>
+                    <Text style={[themed.text, styles.selectedTrackTitle]}>
                       {selectedTrack.title}
                     </Text>
-                    <Text className="text-muted-foreground" style={styles.selectedTrackArtist}>
+                    <Text style={[themed.mutedText, styles.selectedTrackArtist]}>
                       {selectedTrack.artistName}
                     </Text>
                   </View>
@@ -254,12 +245,9 @@ const CopyrightReportScreen: React.FC = () => {
 
           {/* Reason Input */}
           <View style={styles.section}>
-            <Text className="text-foreground" style={styles.label}>
-              {t('copyright.reasonLabel')}
-            </Text>
+            <Text style={[themed.text, styles.label]}>{t('copyright.reasonLabel')}</Text>
             <TextInput
-              className="bg-surface text-foreground border-border"
-              style={styles.reasonInput}
+              style={[themed.surface4, styles.reasonInput]}
               placeholder={t('copyright.reasonPlaceholder')}
               placeholderTextColor={theme.colors.textSecondary}
               value={reason}
@@ -269,7 +257,7 @@ const CopyrightReportScreen: React.FC = () => {
               textAlignVertical="top"
               editable={!isSubmitting}
             />
-            <Text className="text-muted-foreground" style={styles.characterCount}>
+            <Text style={[themed.mutedText, styles.characterCount]}>
               {reason.length} characters
             </Text>
           </View>
@@ -292,9 +280,7 @@ const CopyrightReportScreen: React.FC = () => {
             {isSubmitting ? (
               <ActivityIndicator size="small" color={theme.colors.primaryForeground} />
             ) : (
-              <Text className="text-primary-foreground" style={styles.submitButtonText}>
-                {t('copyright.submit')}
-              </Text>
+              <Text style={[themed.text3, styles.submitButtonText]}>{t('copyright.submit')}</Text>
             )}
           </Pressable>
         </ScrollView>
@@ -466,3 +452,14 @@ const styles = StyleSheet.create({
 });
 
 export default CopyrightReportScreen;
+
+const useThemedStyles = createTokenStyles((t) => ({
+  surface: { backgroundColor: t.surface },
+  surface2: { borderBottomColor: t.border, backgroundColor: t.surface },
+  text: { color: t.foreground },
+  mutedText: { color: t.mutedForeground },
+  text2: { color: t.error },
+  surface3: { borderColor: t.primary, backgroundColor: tokenAlpha(t.primary, 0.1) },
+  surface4: { borderColor: t.border, backgroundColor: t.surface, color: t.foreground },
+  text3: { color: t.primaryForeground },
+}));

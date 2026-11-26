@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxy.so/bloom/theme';
 import { MediaCardRowSkeleton } from '@/components/skeletons';
 import { EmptyState } from '@/components/common/EmptyState';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 interface ExploreSectionProps {
   title: string;
@@ -38,6 +39,7 @@ export const ExploreSection: React.FC<ExploreSectionProps> = ({
   loadingSkeleton,
   children,
 }) => {
+  const themed = useThemedStyles();
   const { t } = useTranslation();
   const theme = useTheme();
 
@@ -47,9 +49,7 @@ export const ExploreSection: React.FC<ExploreSectionProps> = ({
   if (error) {
     return (
       <View style={styles.section}>
-        <Text className="text-foreground" style={styles.sectionTitle}>
-          {title}
-        </Text>
+        <Text style={[themed.text, styles.sectionTitle]}>{title}</Text>
         <EmptyState
           icon={{ name: 'alert-circle-outline' }}
           error={{
@@ -70,9 +70,7 @@ export const ExploreSection: React.FC<ExploreSectionProps> = ({
   if (isLoading) {
     return (
       <View style={styles.section}>
-        <Text className="text-foreground" style={styles.sectionTitle}>
-          {title}
-        </Text>
+        <Text style={[themed.text, styles.sectionTitle]}>{title}</Text>
         {loadingSkeleton ?? <MediaCardRowSkeleton count={5} />}
       </View>
     );
@@ -88,9 +86,7 @@ export const ExploreSection: React.FC<ExploreSectionProps> = ({
 
   return (
     <View style={styles.section}>
-      <Text className="text-foreground" style={styles.sectionTitle}>
-        {title}
-      </Text>
+      <Text style={[themed.text, styles.sectionTitle]}>{title}</Text>
       {children}
     </View>
   );
@@ -113,3 +109,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
 });
+
+const useThemedStyles = createTokenStyles((t) => ({
+  text: { color: t.foreground },
+}));

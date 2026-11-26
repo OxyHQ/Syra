@@ -12,6 +12,7 @@ import { usePodcast } from '@/hooks/usePodcasts';
 import { useGenerateEpisode, useGenerations } from '@/hooks/useGenerations';
 import { getApiErrorMessage } from '@/utils/api';
 import { cn } from '@/lib/utils';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 const FORMATS: { value: GenerationFormat; label: string }[] = [
   { value: 'podcast', label: 'Conversation' },
@@ -38,10 +39,11 @@ function FormatSelector({
   value: GenerationFormat;
   onChange: (value: GenerationFormat) => void;
 }) {
+  const styles = useStyles();
   return (
-    <View className="mb-4">
-      <Text className="text-sm font-medium text-foreground mb-1.5">Format</Text>
-      <View className="flex-row flex-wrap gap-2">
+    <View style={styles.section}>
+      <Text style={styles.text}>Format</Text>
+      <View style={styles.row}>
         {FORMATS.map((option) => (
           <Pressable
             key={option.value}
@@ -62,7 +64,7 @@ function FormatSelector({
           </Pressable>
         ))}
       </View>
-      <Text className="text-xs text-muted-foreground mt-1">
+      <Text style={styles.mutedText}>
         Chosen once, with the first episode: it decides who speaks on the show.
       </Text>
     </View>
@@ -70,11 +72,12 @@ function FormatSelector({
 }
 
 function GenerationRow({ generation }: { generation: EpisodeGeneration }) {
+  const styles = useStyles();
   const running = generation.status !== 'completed' && generation.status !== 'failed';
   return (
-    <View className="py-3 border-b border-border">
-      <View className="flex-row items-center justify-between gap-3">
-        <Text numberOfLines={1} className="flex-1 text-sm text-foreground">
+    <View style={styles.container}>
+      <View style={styles.row2}>
+        <Text numberOfLines={1} style={styles.text2}>
           {generation.topic ?? 'Choosing a subject…'}
         </Text>
         <Text
@@ -89,20 +92,19 @@ function GenerationRow({ generation }: { generation: EpisodeGeneration }) {
         </Text>
       </View>
       {running ? (
-        <View className="h-1 rounded-full bg-border mt-2 overflow-hidden">
-          <View className="h-1 bg-primary" style={{ width: `${generation.progress}%` }} />
+        <View style={styles.surface}>
+          <View style={[styles.surface2, { width: `${generation.progress}%` }]} />
         </View>
       ) : null}
-      {generation.error ? (
-        <Text className="text-xs text-destructive mt-1">{generation.error}</Text>
-      ) : null}
+      {generation.error ? <Text style={styles.text3}>{generation.error}</Text> : null}
     </View>
   );
 }
 
 function GenerationsSkeleton() {
+  const styles = useStyles();
   return (
-    <View className="gap-3">
+    <View style={styles.stack}>
       {[0, 1, 2].map((row) => (
         <Skeleton.Box key={row} width="100%" height={36} borderRadius={8} />
       ))}
@@ -111,6 +113,7 @@ function GenerationsSkeleton() {
 }
 
 function GenerateEpisode({ id }: { id: string }) {
+  const styles = useStyles();
   const router = useRouter();
   const show = usePodcast(id);
   const generations = useGenerations(id);
@@ -153,13 +156,13 @@ function GenerateEpisode({ id }: { id: string }) {
       subtitle={show.data?.podcast.title}
       onBack={() => router.back()}
     >
-      <Text className="text-sm text-muted-foreground mb-4">
+      <Text style={styles.mutedText2}>
         Syra writes and voices a new episode of this show. Leave everything empty and it picks the
         next subject from what the show is about and what earlier episodes covered.
       </Text>
 
       {generations.isPending ? (
-        <View className="mb-4">
+        <View style={styles.section}>
           <Skeleton.Box width="100%" height={96} borderRadius={12} />
         </View>
       ) : first ? (
@@ -207,13 +210,13 @@ function GenerateEpisode({ id }: { id: string }) {
         Generate episode
       </Button>
 
-      <Text className="text-base font-semibold text-foreground mt-8 mb-1">Generated episodes</Text>
+      <Text style={styles.title}>Generated episodes</Text>
       {generations.isPending ? (
         <GenerationsSkeleton />
       ) : generations.isError ? (
-        <Text className="text-sm text-muted-foreground">Couldn&apos;t load them.</Text>
+        <Text style={styles.mutedText3}>Couldn&apos;t load them.</Text>
       ) : generations.data.length === 0 ? (
-        <Text className="text-sm text-muted-foreground">None yet.</Text>
+        <Text style={styles.mutedText3}>None yet.</Text>
       ) : (
         generations.data.map((generation) => (
           <GenerationRow key={generation.episodeId} generation={generation} />
@@ -227,3 +230,40 @@ export default function GenerateEpisodeScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   return <SignInGate>{id ? <GenerateEpisode id={id} /> : null}</SignInGate>;
 }
+
+const useStyles = createTokenStyles((t) => ({
+  section: { marginBottom: 16 },
+  text: { marginBottom: 6, fontSize: 14, fontWeight: 500, color: t.foreground, lineHeight: 20 },
+  row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  mutedText: { marginTop: 4, fontSize: 12, color: t.mutedForeground, lineHeight: 16 },
+  container: { borderBottomWidth: 1, borderColor: t.border, paddingVertical: 12 },
+  row2: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  text2: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: '0%',
+    fontSize: 14,
+    color: t.foreground,
+    lineHeight: 20,
+  },
+  surface: {
+    marginTop: 8,
+    height: 4,
+    overflow: 'hidden',
+    borderRadius: 9999,
+    backgroundColor: t.border,
+  },
+  surface2: { height: 4, backgroundColor: t.primary },
+  text3: { marginTop: 4, fontSize: 12, color: t.destructive, lineHeight: 16 },
+  stack: { gap: 12 },
+  mutedText2: { marginBottom: 16, fontSize: 14, color: t.mutedForeground, lineHeight: 20 },
+  title: {
+    marginTop: 32,
+    marginBottom: 4,
+    fontSize: 16,
+    fontWeight: 600,
+    color: t.foreground,
+    lineHeight: 24,
+  },
+  mutedText3: { fontSize: 14, color: t.mutedForeground, lineHeight: 20 },
+}));

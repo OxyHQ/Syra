@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxy.so/bloom/theme';
 import { flattenStyleArray } from '@/styles/shared';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 export interface EmptyStateProps {
   title?: string;
@@ -68,6 +69,7 @@ export const EmptyState = memo<EmptyStateProps>(
     accessible = true,
     accessibilityLabel,
   }) => {
+    const themed = useThemedStyles();
     const { t } = useTranslation();
     const theme = useTheme();
     const [isRetrying, setIsRetrying] = useState(false);
@@ -110,16 +112,12 @@ export const EmptyState = memo<EmptyStateProps>(
               </View>
             )}
 
-            <Text
-              className="text-foreground"
-              style={flattenStyleArray([styles.errorTitle, titleStyle])}
-            >
+            <Text style={[themed.text, flattenStyleArray([styles.errorTitle, titleStyle])]}>
               {error.title}
             </Text>
 
             <Text
-              className="text-muted-foreground"
-              style={flattenStyleArray([styles.errorMessage, subtitleStyle])}
+              style={[themed.mutedText, flattenStyleArray([styles.errorMessage, subtitleStyle])]}
             >
               {error.message}
             </Text>
@@ -142,7 +140,7 @@ export const EmptyState = memo<EmptyStateProps>(
                       color={theme.colors.card}
                       style={styles.retryIcon}
                     />
-                    <Text className="text-card" style={[styles.retryButtonText]}>
+                    <Text style={[themed.text2, styles.retryButtonText]}>
                       {t('common.tryAgain')}
                     </Text>
                   </>
@@ -187,18 +185,14 @@ export const EmptyState = memo<EmptyStateProps>(
         )}
 
         {title && (
-          <Text
-            className="text-foreground"
-            style={flattenStyleArray([styles.emptyStateText, titleStyle])}
-          >
+          <Text style={[themed.text, flattenStyleArray([styles.emptyStateText, titleStyle])]}>
             {title}
           </Text>
         )}
 
         {subtitle && (
           <Text
-            className="text-muted-foreground"
-            style={flattenStyleArray([styles.emptyStateSubtext, subtitleStyle])}
+            style={[themed.mutedText, flattenStyleArray([styles.emptyStateSubtext, subtitleStyle])]}
           >
             {subtitle}
           </Text>
@@ -206,8 +200,7 @@ export const EmptyState = memo<EmptyStateProps>(
 
         {action && (
           <TouchableOpacity
-            className="bg-primary"
-            style={[styles.actionButton]}
+            style={[themed.surface, styles.actionButton]}
             onPress={action.onPress}
             activeOpacity={0.8}
           >
@@ -219,9 +212,7 @@ export const EmptyState = memo<EmptyStateProps>(
                 style={styles.actionIcon}
               />
             )}
-            <Text className="text-card" style={[styles.actionButtonText]}>
-              {action.label}
-            </Text>
+            <Text style={[themed.text2, styles.actionButtonText]}>{action.label}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -324,3 +315,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+
+const useThemedStyles = createTokenStyles((t) => ({
+  text: { color: t.foreground },
+  mutedText: { color: t.mutedForeground },
+  text2: { color: t.surface },
+  surface: { backgroundColor: t.primary },
+}));

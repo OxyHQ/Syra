@@ -9,6 +9,7 @@ import { useLibrary, useToggleLikeTrack } from '@/hooks/useLibrary';
 import { usePlayerStore } from '@/stores/playerStore';
 import { webViewStyle } from '@/utils/webStyles';
 import { TrackArtistLine } from '@/components/TrackArtistLine';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 interface TrackRowProps {
   track: Track;
@@ -57,6 +58,7 @@ const TrackRowComponent: React.FC<TrackRowProps> = ({
   badge,
   showPlayCount = false,
 }) => {
+  const themed = useThemedStyles();
   const theme = useTheme();
   const [showActions, setShowActions] = useState(false);
   const { isTrackLiked } = useLibrary();
@@ -137,25 +139,19 @@ const TrackRowComponent: React.FC<TrackRowProps> = ({
               {track.title}
             </Text>
             {showPlayCount ? (
-              <Text className="text-muted-foreground text-sm">
+              <Text style={themed.mutedText}>
                 {new Intl.NumberFormat().format(track.playCount ?? 0)}
               </Text>
             ) : null}
             <View style={styles.trackArtistRow}>
               {track.isExplicit && (
-                <View className="bg-popover" style={styles.explicitBadge}>
-                  <Text className="text-muted-foreground" style={styles.explicitText}>
-                    E
-                  </Text>
+                <View style={[themed.surface, styles.explicitBadge]}>
+                  <Text style={[themed.mutedText2, styles.explicitText]}>E</Text>
                 </View>
               )}
               {badge ? (
-                <View className="bg-popover" style={styles.badge}>
-                  <Text
-                    className="text-muted-foreground"
-                    style={styles.badgeText}
-                    numberOfLines={1}
-                  >
+                <View style={[themed.surface, styles.badge]}>
+                  <Text style={[themed.mutedText2, styles.badgeText]} numberOfLines={1}>
                     {badge}
                   </Text>
                 </View>
@@ -202,7 +198,7 @@ const TrackRowComponent: React.FC<TrackRowProps> = ({
               color={theme.colors.text}
             />
           </Pressable>
-          <Text className="text-muted-foreground" style={styles.trackDuration}>
+          <Text style={[themed.mutedText2, styles.trackDuration]}>
             {formatDuration(track.duration)}
           </Text>
           {
@@ -345,3 +341,9 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
 });
+
+const useThemedStyles = createTokenStyles((t) => ({
+  mutedText: { fontSize: 14, color: t.mutedForeground, lineHeight: 20 },
+  surface: { backgroundColor: t.popover },
+  mutedText2: { color: t.mutedForeground },
+}));

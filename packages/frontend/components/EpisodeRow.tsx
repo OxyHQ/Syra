@@ -9,6 +9,7 @@ import { formatEpisodeDuration, formatPubDate, formatRemaining } from '@/utils/p
 import type { EpisodeProgressSnapshot } from '@/hooks/usePodcasts';
 import { usePlayerStore } from '@/stores/playerStore';
 import { webViewStyle } from '@/utils/webStyles';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 interface EpisodeRowProps {
   episode: Episode;
@@ -39,6 +40,7 @@ const EpisodeRowComponent: React.FC<EpisodeRowProps> = ({
   onPress,
   onPlayPress,
 }) => {
+  const themed = useThemedStyles();
   const theme = useTheme();
   const pause = usePlayerStore((state) => state.pause);
   const resume = usePlayerStore((state) => state.resume);
@@ -103,7 +105,7 @@ const EpisodeRowComponent: React.FC<EpisodeRowProps> = ({
       {imageUri ? (
         <Image source={{ uri: imageUri }} style={styles.artwork} contentFit="cover" />
       ) : (
-        <View className="bg-popover" style={styles.artworkPlaceholder}>
+        <View style={[themed.surface, styles.artworkPlaceholder]}>
           <Ionicons name="mic" size={20} color={theme.colors.textSecondary} />
         </View>
       )}
@@ -117,17 +119,16 @@ const EpisodeRowComponent: React.FC<EpisodeRowProps> = ({
         </Text>
 
         <View style={styles.metaRow}>
-          {completed && <View className="bg-primary" style={styles.playedDot} />}
-          <Text className="text-muted-foreground" style={styles.meta} numberOfLines={1}>
+          {completed && <View style={[themed.surface2, styles.playedDot]} />}
+          <Text style={[themed.mutedText, styles.meta]} numberOfLines={1}>
             {metaLabel}
           </Text>
         </View>
 
         {hasProgress && (
-          <View className="bg-border" style={styles.progressTrack}>
+          <View style={[themed.surface3, styles.progressTrack]}>
             <View
-              className="bg-primary"
-              style={[styles.progressFill, { width: `${progressPercent}%` }]}
+              style={[themed.surface2, styles.progressFill, { width: `${progressPercent}%` }]}
             />
           </View>
         )}
@@ -138,8 +139,7 @@ const EpisodeRowComponent: React.FC<EpisodeRowProps> = ({
           event?.stopPropagation?.();
           handlePlayPress();
         }}
-        className="border-border"
-        style={styles.playButton}
+        style={[themed.container, styles.playButton]}
         accessibilityRole="button"
         accessibilityLabel={isPlaying ? 'Pause episode' : 'Play episode'}
       >
@@ -219,3 +219,11 @@ const styles = StyleSheet.create({
     }),
   },
 });
+
+const useThemedStyles = createTokenStyles((t) => ({
+  surface: { backgroundColor: t.popover },
+  surface2: { backgroundColor: t.primary },
+  mutedText: { color: t.mutedForeground },
+  surface3: { backgroundColor: t.border },
+  container: { borderColor: t.border },
+}));

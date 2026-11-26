@@ -23,6 +23,7 @@ import { CastButton } from '@/components/CastButton';
 import { TrackArtistLine } from '@/components/TrackArtistLine';
 import { TrackCredits } from '@/components/TrackCredits';
 import { TrackActionsSheet } from '@/components/playlist/TrackActionsSheet';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 /**
  * Now Playing Sidebar Component
@@ -30,6 +31,7 @@ import { TrackActionsSheet } from '@/components/playlist/TrackActionsSheet';
  * Collapsible and hidden on mobile/tablet
  */
 export const NowPlaying: React.FC = () => {
+  const themed = useThemedStyles();
   const { t } = useTranslation();
   const theme = useTheme();
   const router = useRouter();
@@ -170,7 +172,7 @@ export const NowPlaying: React.FC = () => {
             />
           </View>
         ) : (
-          <View className="bg-surface" style={styles.backgroundPlaceholder}>
+          <View style={[themed.surface, styles.backgroundPlaceholder]}>
             <Ionicons name="musical-notes" size={80} color={theme.colors.textSecondary} />
           </View>
         )}
@@ -225,9 +227,9 @@ export const NowPlaying: React.FC = () => {
 
               {/* About This Artist Card */}
               {artist && (
-                <View className="bg-popover" style={styles.card}>
+                <View style={[themed.surface2, styles.card]}>
                   <View style={styles.cardHeader}>
-                    <Text className="text-foreground" style={styles.cardTitle}>
+                    <Text style={[themed.text, styles.cardTitle]}>
                       {t('nowPlaying.aboutArtist')}
                     </Text>
                   </View>
@@ -246,24 +248,16 @@ export const NowPlaying: React.FC = () => {
                         size={80}
                       />
                     ) : (
-                      <View className="bg-background" style={styles.artistImagePlaceholder}>
+                      <View style={[themed.surface3, styles.artistImagePlaceholder]}>
                         <Ionicons name="person" size={40} color={theme.colors.textSecondary} />
                       </View>
                     )}
                     <View style={styles.artistCardInfo}>
-                      <Text
-                        className="text-foreground"
-                        style={styles.artistCardName}
-                        numberOfLines={1}
-                      >
+                      <Text style={[themed.text, styles.artistCardName]} numberOfLines={1}>
                         {artist.name}
                       </Text>
                       {artist.genres && artist.genres.length > 0 && (
-                        <Text
-                          className="text-muted-foreground"
-                          style={styles.artistCardGenre}
-                          numberOfLines={1}
-                        >
+                        <Text style={[themed.mutedText, styles.artistCardGenre]} numberOfLines={1}>
                           {artist.genres[0]}
                         </Text>
                       )}
@@ -275,7 +269,7 @@ export const NowPlaying: React.FC = () => {
               {/* Lyrics Card — catalog only: the `Lyrics` collection is keyed
                     by track id, and a locker file has no row in it. */}
               {isCatalogTrack && (
-                <View className="bg-popover" style={styles.card}>
+                <View style={[themed.surface2, styles.card]}>
                   <Pressable
                     style={styles.cardHeader}
                     onPress={() => setLyricsExpanded((v) => !v)}
@@ -285,9 +279,7 @@ export const NowPlaying: React.FC = () => {
                     }
                   >
                     <View style={styles.cardHeaderRow}>
-                      <Text className="text-foreground" style={styles.cardTitle}>
-                        {t('nowPlaying.lyrics')}
-                      </Text>
+                      <Text style={[themed.text, styles.cardTitle]}>{t('nowPlaying.lyrics')}</Text>
                       <Ionicons
                         name={lyricsExpanded ? 'chevron-up' : 'chevron-down'}
                         size={16}
@@ -300,7 +292,7 @@ export const NowPlaying: React.FC = () => {
               )}
 
               {isCatalogTrack && currentTrack ? (
-                <View className="bg-popover" style={styles.card}>
+                <View style={[themed.surface2, styles.card]}>
                   <TrackCredits track={currentTrack} />
                 </View>
               ) : null}
@@ -313,11 +305,9 @@ export const NowPlaying: React.FC = () => {
               ) : null}
 
               {/* Next in Queue Card */}
-              <View className="bg-popover" style={styles.card}>
+              <View style={[themed.surface2, styles.card]}>
                 <View style={styles.cardHeader}>
-                  <Text className="text-foreground" style={styles.cardTitle}>
-                    {t('nowPlaying.nextInQueue')}
-                  </Text>
+                  <Text style={[themed.text, styles.cardTitle]}>{t('nowPlaying.nextInQueue')}</Text>
                 </View>
                 {nextTracks.length > 0 ? (
                   <View style={styles.queueContent}>
@@ -341,7 +331,7 @@ export const NowPlaying: React.FC = () => {
                             contentFit="cover"
                           />
                         ) : (
-                          <View className="bg-background" style={styles.queueItemImagePlaceholder}>
+                          <View style={[themed.surface3, styles.queueItemImagePlaceholder]}>
                             <Ionicons
                               name="musical-notes"
                               size={16}
@@ -350,11 +340,7 @@ export const NowPlaying: React.FC = () => {
                           </View>
                         )}
                         <View style={styles.queueItemInfo}>
-                          <Text
-                            className="text-foreground"
-                            style={styles.queueItemTitle}
-                            numberOfLines={1}
-                          >
+                          <Text style={[themed.text, styles.queueItemTitle]} numberOfLines={1}>
                             {track.title}
                           </Text>
                           <TrackArtistLine
@@ -371,7 +357,7 @@ export const NowPlaying: React.FC = () => {
                   </View>
                 ) : (
                   <View style={styles.emptyQueue}>
-                    <Text className="text-muted-foreground" style={styles.emptyQueueText}>
+                    <Text style={[themed.mutedText, styles.emptyQueueText]}>
                       {t('nowPlaying.queueEmpty')}
                     </Text>
                   </View>
@@ -386,10 +372,10 @@ export const NowPlaying: React.FC = () => {
                 color={theme.colors.textSecondary}
                 style={styles.placeholderIcon}
               />
-              <Text className="text-muted-foreground" style={styles.placeholderText}>
+              <Text style={[themed.mutedText, styles.placeholderText]}>
                 {t('nowPlaying.empty.title')}
               </Text>
-              <Text className="text-muted-foreground" style={styles.placeholderSubtext}>
+              <Text style={[themed.mutedText, styles.placeholderSubtext]}>
                 {t('nowPlaying.empty.subtitle')}
               </Text>
             </View>
@@ -689,3 +675,11 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
 });
+
+const useThemedStyles = createTokenStyles((t) => ({
+  surface: { backgroundColor: t.surface },
+  surface2: { backgroundColor: t.popover },
+  text: { color: t.foreground },
+  surface3: { backgroundColor: t.background },
+  mutedText: { color: t.mutedForeground },
+}));

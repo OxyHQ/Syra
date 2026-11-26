@@ -57,6 +57,7 @@ import { CATALOG_QUERY_KEYS } from '@/hooks/useLibraryCollections';
 import { isNotFoundError } from '@/utils/api';
 import { webViewStyle } from '@/utils/webStyles';
 import { createScopedLogger } from '@/utils/logger';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 const logger = createScopedLogger('EntityProfile');
 
@@ -104,6 +105,7 @@ const ARTIST_LINKS: {
  * the `appearsIn` (podcasts/episodes) half. A linked entity shows both.
  */
 const EntityProfileScreen: React.FC = () => {
+  const themed = useThemedStyles();
   const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -250,7 +252,7 @@ const EntityProfileScreen: React.FC = () => {
 
   if (isCatalogLoading) {
     return (
-      <View className="bg-surface" style={styles.container}>
+      <View style={[themed.surface, styles.container]}>
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
@@ -412,6 +414,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
   onCreditedTrackPress,
   onOpenLink,
 }) => {
+  const themed = useThemedStyles();
   const { t } = useTranslation();
   const theme = useTheme();
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
@@ -556,16 +559,15 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
   return (
     <>
       <SEO title={`${displayName} - Syra`} description={entity.bio || `Listen to ${displayName}`} />
-      <View className="bg-surface" style={styles.container}>
+      <View style={[themed.surface, styles.container]}>
         {/* Sticky Header */}
         <Animated.View
-          className="bg-background border-b-surface"
-          style={[styles.stickyHeader, stickyHeaderAnimatedStyle]}
+          style={[themed.surface2, styles.stickyHeader, stickyHeaderAnimatedStyle]}
           pointerEvents="box-none"
         >
           <View style={styles.stickyHeaderContent}>
             <View style={styles.stickyHeaderCenter}>
-              <View className="bg-surface" style={styles.stickyHeaderImageContainer}>
+              <View style={[themed.surface, styles.stickyHeaderImageContainer]}>
                 {iconImage ? (
                   <Image
                     source={{ uri: iconImage }}
@@ -576,7 +578,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
                   <Ionicons name="person" size={20} color={theme.colors.textSecondary} />
                 )}
               </View>
-              <Text className="text-foreground" style={styles.stickyHeaderTitle} numberOfLines={1}>
+              <Text style={[themed.text, styles.stickyHeaderTitle]} numberOfLines={1}>
                 {displayName}
               </Text>
               {entity.verified ? (
@@ -587,8 +589,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
             <View style={styles.stickyHeaderControls}>
               {canPlay && (
                 <Pressable
-                  className="bg-primary"
-                  style={styles.stickyHeaderPlayButton}
+                  style={[themed.surface3, styles.stickyHeaderPlayButton]}
                   onPress={onPlayAll}
                   accessibilityLabel={t(isArtistPlaying ? 'listener.pause' : 'listener.play')}
                   accessibilityRole="button"
@@ -631,7 +632,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
               {heroImage ? (
                 <Image source={{ uri: heroImage }} style={styles.headerImage} resizeMode="cover" />
               ) : (
-                <View className="bg-surface" style={styles.headerPlaceholder}>
+                <View style={[themed.surface, styles.headerPlaceholder]}>
                   <Ionicons name="person" size={80} color={theme.colors.textSecondary} />
                 </View>
               )}
@@ -675,21 +676,17 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
                   {entity.verified ? (
                     <View style={styles.verifiedRow}>
                       <Ionicons name="checkmark-circle" size={18} color={theme.colors.primary} />
-                      <Text className="text-foreground" style={styles.verifiedText}>
-                        {t('artist.verified')}
-                      </Text>
+                      <Text style={[themed.text, styles.verifiedText]}>{t('artist.verified')}</Text>
                     </View>
                   ) : null}
                   {entity.bio ? (
-                    <Text className="text-muted-foreground" style={styles.bio} numberOfLines={3}>
+                    <Text style={[themed.mutedText, styles.bio]} numberOfLines={3}>
                       {entity.bio}
                     </Text>
                   ) : null}
                   {metadata ? (
                     <View style={styles.metadataRow}>
-                      <Text className="text-muted-foreground" style={styles.metadata}>
-                        {metadata}
-                      </Text>
+                      <Text style={[themed.mutedText, styles.metadata]}>{metadata}</Text>
                     </View>
                   ) : null}
                   {entity.country ? (
@@ -699,9 +696,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
                         size={14}
                         color={theme.colors.textSecondary}
                       />
-                      <Text className="text-muted-foreground" style={styles.metadata}>
-                        {entity.country}
-                      </Text>
+                      <Text style={[themed.mutedText, styles.metadata]}>{entity.country}</Text>
                     </View>
                   ) : null}
 
@@ -719,15 +714,12 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
                           <Pressable
                             key={key}
                             onPress={() => onOpenLink(href)}
-                            className="bg-popover"
-                            style={styles.linkChip}
+                            style={[themed.surface4, styles.linkChip]}
                             accessibilityRole="link"
                             accessibilityLabel={label}
                           >
                             <Ionicons name={icon} size={14} color={theme.colors.text} />
-                            <Text className="text-foreground" style={styles.linkChipText}>
-                              {label}
-                            </Text>
+                            <Text style={[themed.text, styles.linkChipText]}>{label}</Text>
                           </Pressable>
                         );
                       })}
@@ -738,7 +730,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
                       profile lets them overwrite it, and they cannot decide what
                       to replace without knowing which values came from outside. */}
                   {externallySourced.length > 0 ? (
-                    <Text className="text-muted-foreground" style={styles.provenanceNote}>
+                    <Text style={[themed.mutedText, styles.provenanceNote]}>
                       {t('artist.externallySourced', { fields: externallySourced.join(', ') })}
                     </Text>
                   ) : null}
@@ -753,11 +745,10 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
 
             {/* Playback Controls (music) */}
             {(canPlay || artistId) && (
-              <View className="flex-wrap" style={styles.controlsContainer}>
+              <View style={[styles.container2, styles.controlsContainer]}>
                 {canPlay && (
                   <Pressable
-                    className="bg-primary"
-                    style={styles.playButton}
+                    style={[themed.surface3, styles.playButton]}
                     onPress={onPlayAll}
                     accessibilityLabel={t(isArtistPlaying ? 'listener.pause' : 'listener.play')}
                     accessibilityRole="button"
@@ -785,7 +776,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
                 <DropdownMenu open={isActionsOpen} onOpenChange={setIsActionsOpen}>
                   <DropdownMenuTrigger asChild label={t('listener.actions')}>
                     <Pressable
-                      className="size-11 items-center justify-center"
+                      style={styles.centered}
                       accessibilityRole="button"
                       accessibilityLabel={t('listener.actions')}
                     >
@@ -810,9 +801,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
             {tracks.length > 0 && (
               <>
                 <View style={styles.sectionHeader}>
-                  <Text className="text-foreground" style={styles.sectionTitle}>
-                    {t('artist.popular')}
-                  </Text>
+                  <Text style={[themed.text, styles.sectionTitle]}>{t('artist.popular')}</Text>
                 </View>
                 <View style={styles.trackList}>
                   {tracks.slice(0, 10).map((track, index) => {
@@ -846,11 +835,11 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
             {latestRelease ? (
               <>
                 <View style={styles.sectionHeader}>
-                  <Text className="text-foreground" style={styles.sectionTitle}>
+                  <Text style={[themed.text, styles.sectionTitle]}>
                     {t('listener.latestRelease')}
                   </Text>
                 </View>
-                <View className="px-6 pb-6 max-w-sm">
+                <View style={styles.container3}>
                   <MediaCard
                     title={latestRelease.title}
                     subtitle={latestRelease.releaseDate}
@@ -870,9 +859,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
               shelf.albums.length === 0 ? null : (
                 <React.Fragment key={shelf.key}>
                   <View style={styles.sectionHeader}>
-                    <Text className="text-foreground" style={styles.sectionTitle}>
-                      {t(shelf.titleKey)}
-                    </Text>
+                    <Text style={[themed.text, styles.sectionTitle]}>{t(shelf.titleKey)}</Text>
                     {shelf.albums.length > 6 ? (
                       <Pressable
                         accessibilityRole="button"
@@ -884,7 +871,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
                           )
                         }
                       >
-                        <Text className="text-primary">
+                        <Text style={themed.text2}>
                           {t(
                             expandedShelves.includes(shelf.key)
                               ? 'common.showLess'
@@ -929,9 +916,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
             {creditedOn.length > 0 && (
               <>
                 <View style={styles.sectionHeader}>
-                  <Text className="text-foreground" style={styles.sectionTitle}>
-                    {t('artist.appearsOn')}
-                  </Text>
+                  <Text style={[themed.text, styles.sectionTitle]}>{t('artist.appearsOn')}</Text>
                 </View>
                 <View style={styles.trackList}>
                   {creditedOn.map((credited, index) => {
@@ -961,9 +946,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
             {playlists.length > 0 && (
               <>
                 <View style={styles.sectionHeader}>
-                  <Text className="text-foreground" style={styles.sectionTitle}>
-                    {t('artist.inPlaylists')}
-                  </Text>
+                  <Text style={[themed.text, styles.sectionTitle]}>{t('artist.inPlaylists')}</Text>
                 </View>
                 <ResponsiveGrid minItemWidth={180} gap={8} style={styles.albumsGrid}>
                   {playlists.map((playlist) => (
@@ -986,9 +969,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
             {podcasts.length > 0 && (
               <>
                 <View style={styles.sectionHeader}>
-                  <Text className="text-foreground" style={styles.sectionTitle}>
-                    {t('artist.appearsIn')}
-                  </Text>
+                  <Text style={[themed.text, styles.sectionTitle]}>{t('artist.appearsIn')}</Text>
                 </View>
                 <ResponsiveGrid minItemWidth={160} gap={8} style={styles.albumsGrid}>
                   {podcasts.map((podcast) => (
@@ -1012,9 +993,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
             {episodes.length > 0 && (
               <>
                 <View style={styles.sectionHeader}>
-                  <Text className="text-foreground" style={styles.sectionTitle}>
-                    {t('common.episodes')}
-                  </Text>
+                  <Text style={[themed.text, styles.sectionTitle]}>{t('common.episodes')}</Text>
                 </View>
                 <View style={styles.trackList}>
                   {episodes.map((episode) => (
@@ -1037,13 +1016,9 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
               : relatedArtists.length > 0 && (
                   <>
                     <View style={styles.sectionHeader}>
-                      <Text className="text-foreground" style={styles.sectionTitle}>
-                        {t('artist.related')}
-                      </Text>
+                      <Text style={[themed.text, styles.sectionTitle]}>{t('artist.related')}</Text>
                     </View>
-                    <Text className="text-muted-foreground px-6 pb-3">
-                      {t('artist.relatedReason')}
-                    </Text>
+                    <Text style={themed.mutedText2}>{t('artist.relatedReason')}</Text>
                     <ScrollView
                       horizontal
                       showsHorizontalScrollIndicator={false}
@@ -1086,7 +1061,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
               creditedOn.length === 0 &&
               playlists.length === 0 && (
                 <View style={styles.emptyState}>
-                  <Text className="text-muted-foreground" style={styles.emptyStateText}>
+                  <Text style={[themed.mutedText, styles.emptyStateText]}>
                     {/* A contributed stub is sparse BY DESIGN for a while: the
                       profile is created from one file's tags and enrichment is
                       queued behind a rate-limited external source, so it can be
@@ -1351,6 +1326,21 @@ const styles = StyleSheet.create({
   emptyStateText: {
     fontSize: 14,
   },
+
+  container2: { flexWrap: 'wrap' },
+  centered: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  container3: { maxWidth: 384, paddingHorizontal: 24, paddingBottom: 24 },
 });
 
 export default EntityProfileScreen;
+
+const useThemedStyles = createTokenStyles((t) => ({
+  surface: { backgroundColor: t.surface },
+  surface2: { borderBottomColor: t.surface, backgroundColor: t.background },
+  text: { color: t.foreground },
+  surface3: { backgroundColor: t.primary },
+  mutedText: { color: t.mutedForeground },
+  surface4: { backgroundColor: t.popover },
+  text2: { color: t.primary },
+  mutedText2: { paddingHorizontal: 24, paddingBottom: 12, color: t.mutedForeground },
+}));

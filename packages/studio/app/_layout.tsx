@@ -27,6 +27,7 @@ import { oxyServices } from '@/lib/oxyServices';
 import { queryClient } from '@/lib/queryClient';
 
 import '../styles/global.css';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 /**
  * Root layout.
@@ -38,13 +39,14 @@ import '../styles/global.css';
  * which avoids the "useTheme must be used within a <BloomThemeProvider>" crash.
  */
 export default function RootLayout() {
+  const styles = useStyles();
   return (
     <BloomThemeProvider
       defaultMode="dark"
       defaultColorPreset="purple"
       onFontsLoading={<SplashScreen />}
     >
-      <View className="flex-1 bg-background">
+      <View style={styles.surface}>
         <AppProviders oxyServices={oxyServices} queryClient={queryClient}>
           <AppShell>
             <Slot />
@@ -54,3 +56,7 @@ export default function RootLayout() {
     </BloomThemeProvider>
   );
 }
+
+const useStyles = createTokenStyles((t) => ({
+  surface: { flexGrow: 1, flexShrink: 1, flexBasis: '0%', backgroundColor: t.background },
+}));

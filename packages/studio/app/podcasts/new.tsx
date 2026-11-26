@@ -12,6 +12,7 @@ import { useCreatePodcast } from '@/hooks/usePodcasts';
 import { extractInvalidIds } from '@/utils/api';
 import { toast } from '@oxy.so/bloom/toast';
 import { cn } from '@/lib/utils';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 const TYPES: { value: PodcastType; label: string; hint: string }[] = [
   { value: 'episodic', label: 'Episodic', hint: 'Standalone episodes, newest first' },
@@ -25,10 +26,11 @@ function TypeSelector({
   value: PodcastType;
   onChange: (value: PodcastType) => void;
 }) {
+  const styles = useStyles();
   return (
-    <View className="mb-4">
-      <Text className="text-sm font-medium text-foreground mb-1.5">Podcast type</Text>
-      <View className="flex-row gap-2">
+    <View style={styles.section}>
+      <Text style={styles.text}>Podcast type</Text>
+      <View style={styles.row}>
         {TYPES.map((option) => {
           const active = option.value === value;
           return (
@@ -45,7 +47,7 @@ function TypeSelector({
               >
                 {option.label}
               </Text>
-              <Text className="text-xs text-muted-foreground mt-0.5">{option.hint}</Text>
+              <Text style={styles.mutedText}>{option.hint}</Text>
             </Pressable>
           );
         })}
@@ -55,6 +57,7 @@ function TypeSelector({
 }
 
 function CreateShowForm() {
+  const styles = useStyles();
   const router = useRouter();
   const createPodcast = useCreatePodcast();
 
@@ -161,8 +164,8 @@ function CreateShowForm() {
         autoCapitalize="none"
         keyboardType="url"
       />
-      <View className="flex-row gap-3">
-        <View className="flex-1">
+      <View style={styles.row2}>
+        <View style={styles.fill}>
           <FormField
             label="Language"
             placeholder="en"
@@ -171,7 +174,7 @@ function CreateShowForm() {
             autoCapitalize="none"
           />
         </View>
-        <View className="flex-[2]">
+        <View style={styles.container}>
           <FormField
             label="Categories"
             placeholder="Technology, News"
@@ -183,12 +186,10 @@ function CreateShowForm() {
       </View>
       <TypeSelector value={type} onChange={setType} />
       <HostsGuestsPicker value={hostsGuests} onChange={setHostsGuests} />
-      <View className="flex-row items-center justify-between rounded-xl border border-border bg-surface px-4 py-3 mb-6">
-        <View className="flex-1 pr-3">
-          <Text className="text-sm font-medium text-foreground">Explicit content</Text>
-          <Text className="text-xs text-muted-foreground mt-0.5">
-            Marks the feed as explicit in directories.
-          </Text>
+      <View style={styles.row3}>
+        <View style={styles.container2}>
+          <Text style={styles.text2}>Explicit content</Text>
+          <Text style={styles.mutedText}>Marks the feed as explicit in directories.</Text>
         </View>
         <Switch checked={explicit} onCheckedChange={setExplicit} />
       </View>
@@ -213,3 +214,27 @@ export default function NewShowScreen() {
     </SignInGate>
   );
 }
+
+const useStyles = createTokenStyles((t) => ({
+  section: { marginBottom: 16 },
+  text: { marginBottom: 6, fontSize: 14, fontWeight: 500, color: t.foreground, lineHeight: 20 },
+  row: { flexDirection: 'row', gap: 8 },
+  mutedText: { marginTop: 2, fontSize: 12, color: t.mutedForeground, lineHeight: 16 },
+  row2: { flexDirection: 'row', gap: 12 },
+  fill: { flexGrow: 1, flexShrink: 1, flexBasis: '0%' },
+  container: { flexGrow: 2, flexShrink: 1, flexBasis: '0%' },
+  row3: {
+    marginBottom: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: t.border,
+    backgroundColor: t.surface,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  container2: { flexGrow: 1, flexShrink: 1, flexBasis: '0%', paddingRight: 12 },
+  text2: { fontSize: 14, fontWeight: 500, color: t.foreground, lineHeight: 20 },
+}));

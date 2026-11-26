@@ -14,6 +14,7 @@ import { usePlayerStore } from '@/stores/playerStore';
 import { resolvePodcastArtwork } from '@/utils/pickImage';
 import { stripHtml, formatPubDate, formatEpisodeDuration } from '@/utils/podcastFormat';
 import { formatDuration } from '@/utils/musicUtils';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 type EpisodeDetail = NonNullable<ReturnType<typeof useEpisode>['data']>;
 type EpisodeChapters = NonNullable<ReturnType<typeof useEpisodeChapters>['data']>;
@@ -192,6 +193,7 @@ const EpisodeView: React.FC<EpisodeViewProps> = ({
   onChapterPress,
   onOpenShow,
 }) => {
+  const themed = useThemedStyles();
   const { t } = useTranslation();
   const theme = useTheme();
   const metaParts = [
@@ -203,8 +205,7 @@ const EpisodeView: React.FC<EpisodeViewProps> = ({
     <>
       <SEO title={`${episode.title} - Syra`} description={description.slice(0, 160)} />
       <ScrollView
-        className="bg-surface"
-        style={styles.container}
+        style={[themed.surface, styles.container]}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
@@ -215,29 +216,24 @@ const EpisodeView: React.FC<EpisodeViewProps> = ({
             {artwork ? (
               <Image source={{ uri: artwork }} style={styles.artwork} contentFit="cover" />
             ) : (
-              <View className="bg-popover" style={styles.artworkPlaceholder}>
+              <View style={[themed.surface2, styles.artworkPlaceholder]}>
                 <Ionicons name="mic" size={48} color={theme.colors.textSecondary} />
               </View>
             )}
           </View>
           <Pressable onPress={onOpenShow} accessibilityRole="link">
-            <Text className="text-primary" style={styles.showLink} numberOfLines={1}>
+            <Text style={[themed.text, styles.showLink]} numberOfLines={1}>
               {episode.podcastTitle}
             </Text>
           </Pressable>
-          <Text className="text-foreground" style={styles.title}>
-            {episode.title}
-          </Text>
+          <Text style={[themed.text2, styles.title]}>{episode.title}</Text>
           {metaParts.length > 0 && (
-            <Text className="text-muted-foreground" style={styles.meta}>
-              {metaParts.join(' • ')}
-            </Text>
+            <Text style={[themed.mutedText, styles.meta]}>{metaParts.join(' • ')}</Text>
           )}
 
           <Pressable
             onPress={onPlay}
-            className="bg-primary"
-            style={styles.playButton}
+            style={[themed.surface3, styles.playButton]}
             accessibilityRole="button"
             accessibilityLabel={playLabel}
           >
@@ -246,9 +242,7 @@ const EpisodeView: React.FC<EpisodeViewProps> = ({
               size={20}
               color={theme.colors.primaryForeground}
             />
-            <Text className="text-primary-foreground" style={styles.playButtonText}>
-              {playLabel}
-            </Text>
+            <Text style={[themed.text3, styles.playButtonText]}>{playLabel}</Text>
           </Pressable>
         </View>
 
@@ -258,19 +252,17 @@ const EpisodeView: React.FC<EpisodeViewProps> = ({
         {/* Chapters */}
         {chapters && chapters.length > 0 && (
           <View style={styles.section}>
-            <Text className="text-foreground" style={styles.sectionTitle}>
-              {t('episode.chapters')}
-            </Text>
+            <Text style={[themed.text2, styles.sectionTitle]}>{t('episode.chapters')}</Text>
             {chapters.map((chapter, index) => (
               <Pressable
                 key={`${chapter.startTime}-${index}`}
                 onPress={() => onChapterPress(chapter.startTime)}
                 style={styles.chapterRow}
               >
-                <Text className="text-muted-foreground" style={styles.chapterTime}>
+                <Text style={[themed.mutedText, styles.chapterTime]}>
                   {formatDuration(chapter.startTime)}
                 </Text>
-                <Text className="text-foreground" style={styles.chapterTitle} numberOfLines={1}>
+                <Text style={[themed.text2, styles.chapterTitle]} numberOfLines={1}>
                   {chapter.title ?? t('episode.untitledChapter')}
                 </Text>
               </Pressable>
@@ -281,9 +273,7 @@ const EpisodeView: React.FC<EpisodeViewProps> = ({
         {/* Transcripts */}
         {episode.transcripts && episode.transcripts.length > 0 && (
           <View style={styles.section}>
-            <Text className="text-foreground" style={styles.sectionTitle}>
-              {t('episode.transcript')}
-            </Text>
+            <Text style={[themed.text2, styles.sectionTitle]}>{t('episode.transcript')}</Text>
             {episode.transcripts.map((transcript, index) => (
               <Pressable
                 key={`${transcript.url}-${index}`}
@@ -291,7 +281,7 @@ const EpisodeView: React.FC<EpisodeViewProps> = ({
                 style={styles.linkRow}
               >
                 <Ionicons name="document-text-outline" size={18} color={theme.colors.primary} />
-                <Text className="text-primary" style={styles.linkText} numberOfLines={1}>
+                <Text style={[themed.text, styles.linkText]} numberOfLines={1}>
                   {transcript.language
                     ? `Transcript (${transcript.language})`
                     : t('episode.viewTranscript')}
@@ -304,12 +294,8 @@ const EpisodeView: React.FC<EpisodeViewProps> = ({
         {/* Description */}
         {description ? (
           <View style={styles.section}>
-            <Text className="text-foreground" style={styles.sectionTitle}>
-              {t('common.about')}
-            </Text>
-            <Text className="text-muted-foreground" style={styles.description}>
-              {description}
-            </Text>
+            <Text style={[themed.text2, styles.sectionTitle]}>{t('common.about')}</Text>
+            <Text style={[themed.mutedText, styles.description]}>{description}</Text>
           </View>
         ) : null}
       </ScrollView>
@@ -412,3 +398,13 @@ const styles = StyleSheet.create({
 });
 
 export default EpisodeScreen;
+
+const useThemedStyles = createTokenStyles((t) => ({
+  surface: { backgroundColor: t.surface },
+  surface2: { backgroundColor: t.popover },
+  text: { color: t.primary },
+  text2: { color: t.foreground },
+  mutedText: { color: t.mutedForeground },
+  surface3: { backgroundColor: t.primary },
+  text3: { color: t.primaryForeground },
+}));

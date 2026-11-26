@@ -18,6 +18,7 @@ import type { TrackAudioFile } from '@/services/musicService';
 import { getApiErrorMessage } from '@/utils/api';
 import { toast } from '@oxy.so/bloom/toast';
 import { cn } from '@/lib/utils';
+import { createTokenStyles, tokenAlpha } from '@oxy.so/bloom/theme';
 
 function AudioPicker({
   file,
@@ -28,10 +29,11 @@ function AudioPicker({
   onPick: () => void;
   disabled: boolean;
 }) {
+  const styles = useStyles();
   const theme = useTheme();
   return (
-    <View className="mb-4">
-      <Text className="text-sm font-medium text-foreground mb-1.5">Audio file</Text>
+    <View style={styles.section}>
+      <Text style={styles.text}>Audio file</Text>
       <Pressable
         onPress={onPick}
         disabled={disabled}
@@ -40,18 +42,18 @@ function AudioPicker({
           disabled ? 'opacity-50' : '',
         )}
       >
-        <View className="w-10 h-10 rounded-lg bg-primary/10 items-center justify-center">
+        <View style={styles.centered}>
           <MaterialCommunityIcons
             name={file ? 'music-box' : 'cloud-upload-outline'}
             size={22}
             color={theme.colors.primary}
           />
         </View>
-        <View className="flex-1">
-          <Text numberOfLines={1} className="text-sm font-medium text-foreground">
+        <View style={styles.fill}>
+          <Text numberOfLines={1} style={styles.text2}>
             {file ? file.name : 'Choose an audio file'}
           </Text>
-          <Text className="text-xs text-muted-foreground mt-0.5">
+          <Text style={styles.mutedText}>
             {file ? 'Tap to replace' : 'MP3, M4A, WAV, OGG, FLAC'}
           </Text>
         </View>
@@ -71,13 +73,14 @@ function AlbumPicker({
   onSelect: (id: string | null) => void;
   disabled: boolean;
 }) {
+  const styles = useStyles();
   return (
-    <View className="mb-4">
-      <Text className="text-sm font-medium text-foreground mb-1.5">Album (optional)</Text>
+    <View style={styles.section}>
+      <Text style={styles.text}>Album (optional)</Text>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerClassName="gap-2"
+        contentContainerStyle={styles.content}
       >
         <Pressable
           onPress={() => onSelect(null)}
@@ -127,26 +130,28 @@ function UploadProgress({
   /** Fraction of the file sent (0–1). */
   progress: number;
 }) {
+  const styles = useStyles();
   const label =
     phase === 'uploading'
       ? `Uploading your track… ${Math.round(progress * 100)}%`
       : 'Processing audio (transcoding for streaming)…';
   return (
-    <View className="flex-row items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3 mb-4">
+    <View style={styles.row}>
       <Loading />
-      <Text className="text-sm text-foreground flex-1">{label}</Text>
+      <Text style={styles.text3}>{label}</Text>
     </View>
   );
 }
 
 function UploadDisabledNotice() {
+  const styles = useStyles();
   const theme = useTheme();
   return (
-    <View className="flex-row gap-3 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 mb-4">
+    <View style={styles.row2}>
       <MaterialCommunityIcons name="alert-circle" size={22} color={theme.colors.error} />
-      <View className="flex-1">
-        <Text className="text-sm font-semibold text-foreground">Uploads disabled</Text>
-        <Text className="text-xs text-muted-foreground mt-0.5">
+      <View style={styles.fill}>
+        <Text style={styles.title}>Uploads disabled</Text>
+        <Text style={styles.mutedText}>
           Uploads are disabled due to copyright strikes. Contact support for more information.
         </Text>
       </View>
@@ -161,6 +166,7 @@ function UploadTrackForm({
   artistId: string;
   uploadsDisabled: boolean;
 }) {
+  const styles = useStyles();
   const router = useRouter();
   const uploadTrack = useUploadTrack();
   const { data: albums } = useMyAlbums(artistId);
@@ -256,9 +262,7 @@ function UploadTrackForm({
       ) : null}
 
       <AudioPicker file={audioFile} onPick={pickAudio} disabled={busy || uploadsDisabled} />
-      {audioError ? (
-        <Text className="text-xs text-destructive -mt-2 mb-3">{audioError}</Text>
-      ) : null}
+      {audioError ? <Text style={styles.text4}>{audioError}</Text> : null}
 
       <FormField
         label="Title"
@@ -274,8 +278,8 @@ function UploadTrackForm({
         <AlbumPicker albums={albums} selectedId={albumId} onSelect={setAlbumId} disabled={busy} />
       ) : null}
 
-      <View className="mb-4">
-        <Text className="text-sm font-medium text-foreground mb-1.5">Cover art (optional)</Text>
+      <View style={styles.section}>
+        <Text style={styles.text}>Cover art (optional)</Text>
         <CoverArtPicker value={coverArt} onChange={setCoverArt} size={140} disabled={busy} />
       </View>
 
@@ -288,12 +292,10 @@ function UploadTrackForm({
         editable={!busy}
       />
 
-      <View className="flex-row items-center justify-between rounded-xl border border-border bg-surface px-4 py-3 mb-6">
-        <View className="flex-1 pr-3">
-          <Text className="text-sm font-medium text-foreground">Explicit content</Text>
-          <Text className="text-xs text-muted-foreground mt-0.5">
-            Marks this track as explicit.
-          </Text>
+      <View style={styles.row3}>
+        <View style={styles.container}>
+          <Text style={styles.text2}>Explicit content</Text>
+          <Text style={styles.mutedText}>Marks this track as explicit.</Text>
         </View>
         <Switch checked={explicit} onCheckedChange={setExplicit} disabled={busy} />
       </View>
@@ -313,13 +315,14 @@ function UploadTrackForm({
 }
 
 function UploadGate() {
+  const styles = useStyles();
   const router = useRouter();
   const theme = useTheme();
   const { data: artist, isLoading } = useMyArtistProfile();
 
   if (isLoading) {
     return (
-      <View className="flex-1 items-center justify-center bg-background">
+      <View style={styles.centered2}>
         <Loading />
       </View>
     );
@@ -328,16 +331,12 @@ function UploadGate() {
   if (!artist) {
     return (
       <ScreenContainer title="Upload song" onBack={() => router.back()}>
-        <View className="items-center justify-center py-16 px-6">
-          <View className="w-16 h-16 rounded-2xl bg-primary/10 items-center justify-center mb-4">
+        <View style={styles.centered3}>
+          <View style={styles.centered4}>
             <MaterialCommunityIcons name="account-music" size={30} color={theme.colors.primary} />
           </View>
-          <Text className="text-lg font-semibold text-foreground mb-1">
-            Register as an artist first
-          </Text>
-          <Text className="text-sm text-muted-foreground text-center mb-5 max-w-[360px]">
-            Create your artist profile before uploading music.
-          </Text>
+          <Text style={styles.title2}>Register as an artist first</Text>
+          <Text style={styles.mutedText2}>Create your artist profile before uploading music.</Text>
           <Button
             onPress={() => router.replace('/music/register')}
             tone="accent"
@@ -360,3 +359,98 @@ export default function UploadSongScreen() {
     </SignInGate>
   );
 }
+
+const useStyles = createTokenStyles((t) => ({
+  section: { marginBottom: 16 },
+  text: { marginBottom: 6, fontSize: 14, fontWeight: 500, color: t.foreground, lineHeight: 20 },
+  centered: {
+    height: 40,
+    width: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 16,
+    backgroundColor: tokenAlpha(t.primary, 0.1),
+  },
+  fill: { flexGrow: 1, flexShrink: 1, flexBasis: '0%' },
+  text2: { fontSize: 14, fontWeight: 500, color: t.foreground, lineHeight: 20 },
+  mutedText: { marginTop: 2, fontSize: 12, color: t.mutedForeground, lineHeight: 16 },
+  content: { gap: 8 },
+  row: {
+    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: t.border,
+    backgroundColor: t.surface,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  text3: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: '0%',
+    fontSize: 14,
+    color: t.foreground,
+    lineHeight: 20,
+  },
+  row2: {
+    marginBottom: 16,
+    flexDirection: 'row',
+    gap: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: tokenAlpha(t.destructive, 0.4),
+    backgroundColor: tokenAlpha(t.destructive, 0.1),
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  title: { fontSize: 14, fontWeight: 600, color: t.foreground, lineHeight: 20 },
+  text4: { marginTop: -8, marginBottom: 12, fontSize: 12, color: t.destructive, lineHeight: 16 },
+  row3: {
+    marginBottom: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: t.border,
+    backgroundColor: t.surface,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  container: { flexGrow: 1, flexShrink: 1, flexBasis: '0%', paddingRight: 12 },
+  centered2: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: '0%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: t.background,
+  },
+  centered3: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 64,
+  },
+  centered4: {
+    marginBottom: 16,
+    height: 64,
+    width: 64,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 16,
+    backgroundColor: tokenAlpha(t.primary, 0.1),
+  },
+  title2: { marginBottom: 4, fontSize: 18, fontWeight: 600, color: t.foreground, lineHeight: 28 },
+  mutedText2: {
+    marginBottom: 20,
+    maxWidth: 360,
+    textAlign: 'center',
+    fontSize: 14,
+    color: t.mutedForeground,
+    lineHeight: 20,
+  },
+}));

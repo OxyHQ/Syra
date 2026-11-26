@@ -8,6 +8,7 @@ import { api } from '@/utils/api';
 import { resolveCatalogImageUrl } from '@/utils/catalogImages';
 import { toast } from '@oxy.so/bloom/toast';
 import { cn } from '@/lib/utils';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 interface CoverArtPickerProps {
   /** Selected cover art as an uploaded image id. */
@@ -33,6 +34,7 @@ export function CoverArtPicker({
   disabled = false,
   error,
 }: CoverArtPickerProps) {
+  const styles = useStyles();
   const theme = useTheme();
   const [isUploading, setIsUploading] = useState(false);
   const [localPreview, setLocalPreview] = useState<string | null>(null);
@@ -112,26 +114,45 @@ export function CoverArtPicker({
             transition={150}
           />
         ) : (
-          <View className="items-center justify-center gap-1.5 px-3">
+          <View style={styles.centered}>
             <MaterialCommunityIcons
               name="image-plus"
               size={size * 0.26}
               color={theme.colors.textSecondary}
             />
-            <Text className="text-xs font-medium text-muted-foreground text-center">
-              Add cover art
-            </Text>
+            <Text style={styles.mutedText}>Add cover art</Text>
           </View>
         )}
 
         {isUploading ? (
-          <View className="absolute inset-0 items-center justify-center bg-black/50 gap-2">
+          <View style={styles.overlay}>
             <ActivityIndicator color="#fff" />
-            <Text className="text-xs font-medium text-white">Uploading…</Text>
+            <Text style={styles.text}>Uploading…</Text>
           </View>
         ) : null}
       </Pressable>
-      {error ? <Text className="text-xs text-destructive mt-1">{error}</Text> : null}
+      {error ? <Text style={styles.text2}>{error}</Text> : null}
     </View>
   );
 }
+
+const useStyles = createTokenStyles((t) => ({
+  centered: { alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 12 },
+  mutedText: {
+    textAlign: 'center',
+    fontSize: 12,
+    fontWeight: 500,
+    color: t.mutedForeground,
+    lineHeight: 16,
+  },
+  overlay: {
+    position: 'absolute',
+    inset: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#00000080',
+  },
+  text: { fontSize: 12, fontWeight: 500, color: '#fff', lineHeight: 16 },
+  text2: { marginTop: 4, fontSize: 12, color: t.destructive, lineHeight: 16 },
+}));

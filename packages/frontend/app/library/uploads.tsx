@@ -32,6 +32,7 @@ import { usePlayerStore } from '@/stores/playerStore';
 import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { formatDuration } from '@/utils/musicUtils';
 import { createScopedLogger } from '@/utils/logger';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 /**
  * Your uploads (`/library/uploads`) — the private locker.
@@ -138,6 +139,7 @@ interface UploadRowProps {
 }
 
 const UploadRow: React.FC<UploadRowProps> = ({ upload, isCurrent, onPlay }) => {
+  const themed = useThemedStyles();
   const theme = useTheme();
   const { t } = useTranslation();
   const [isExpanded, setIsExpanded] = useState(false);
@@ -219,7 +221,7 @@ const UploadRow: React.FC<UploadRowProps> = ({ upload, isCurrent, onPlay }) => {
   }, [albumName, artistName, attestationStatement, promoteUpload, t, title, upload.id]);
 
   return (
-    <View className="bg-popover" style={styles.row}>
+    <View style={[themed.surface, styles.row]}>
       <Pressable
         style={styles.rowMain}
         onPress={onPlay}
@@ -229,7 +231,7 @@ const UploadRow: React.FC<UploadRowProps> = ({ upload, isCurrent, onPlay }) => {
         {artworkUrl ? (
           <Image source={{ uri: artworkUrl }} style={styles.artwork} contentFit="cover" />
         ) : (
-          <View className="bg-surface" style={[styles.artwork, styles.artworkPlaceholder]}>
+          <View style={[themed.surface2, styles.artwork, styles.artworkPlaceholder]}>
             <Ionicons name="musical-note" size={18} color={theme.colors.textSecondary} />
           </View>
         )}
@@ -244,7 +246,7 @@ const UploadRow: React.FC<UploadRowProps> = ({ upload, isCurrent, onPlay }) => {
           >
             {upload.title}
           </Text>
-          <Text className="text-muted-foreground" style={styles.rowSubtitle} numberOfLines={1}>
+          <Text style={[themed.mutedText, styles.rowSubtitle]} numberOfLines={1}>
             {/* An empty artist is a valid private file, not a broken one. */}
             {upload.artistName || t('uploads.unknownArtist')}
             {upload.duration > 0 ? ` • ${formatDuration(upload.duration)}` : ''}
@@ -252,7 +254,7 @@ const UploadRow: React.FC<UploadRowProps> = ({ upload, isCurrent, onPlay }) => {
           {/* Retention, shown in the app rather than left to a notification the
               owner may never open. Playing the file pushes the date back. */}
           {expiringInDays !== null ? (
-            <Text className="text-error" style={styles.rowExpiry} numberOfLines={1}>
+            <Text style={[themed.text, styles.rowExpiry]} numberOfLines={1}>
               {expiringInDays === 0
                 ? t('uploads.locker.expiringToday')
                 : t('uploads.locker.expiringIn', { count: expiringInDays })}
@@ -283,32 +285,27 @@ const UploadRow: React.FC<UploadRowProps> = ({ upload, isCurrent, onPlay }) => {
 
       {isExpanded && (
         <View style={styles.actions}>
-          <Text className="text-muted-foreground" style={styles.actionsHint}>
-            {t('uploads.locker.editHint')}
-          </Text>
+          <Text style={[themed.mutedText, styles.actionsHint]}>{t('uploads.locker.editHint')}</Text>
           <TextInput
             value={title}
             onChangeText={setTitle}
             placeholder={t('uploads.details.title')}
             placeholderTextColor={theme.colors.textSecondary}
-            className="bg-surface text-foreground"
-            style={styles.input}
+            style={[themed.surface3, styles.input]}
           />
           <TextInput
             value={artistName}
             onChangeText={setArtistName}
             placeholder={t('uploads.details.artist')}
             placeholderTextColor={theme.colors.textSecondary}
-            className="bg-surface text-foreground"
-            style={styles.input}
+            style={[themed.surface3, styles.input]}
           />
           <TextInput
             value={albumName}
             onChangeText={setAlbumName}
             placeholder={t('uploads.details.album')}
             placeholderTextColor={theme.colors.textSecondary}
-            className="bg-surface text-foreground"
-            style={styles.input}
+            style={[themed.surface3, styles.input]}
           />
 
           <Pressable
@@ -340,9 +337,9 @@ const UploadRow: React.FC<UploadRowProps> = ({ upload, isCurrent, onPlay }) => {
             </Text>
           </Pressable>
 
-          <View className="bg-border" style={styles.divider} />
+          <View style={[themed.surface4, styles.divider]} />
 
-          <Text className="text-muted-foreground" style={styles.actionsHint}>
+          <Text style={[themed.mutedText, styles.actionsHint]}>
             {t('uploads.locker.contributeHint')}
           </Text>
           <Pressable
@@ -356,9 +353,7 @@ const UploadRow: React.FC<UploadRowProps> = ({ upload, isCurrent, onPlay }) => {
               size={20}
               color={attestationAccepted ? theme.colors.primary : theme.colors.textSecondary}
             />
-            <Text className="text-muted-foreground" style={styles.attestationText}>
-              {attestationStatement}
-            </Text>
+            <Text style={[themed.mutedText, styles.attestationText]}>{attestationStatement}</Text>
           </Pressable>
           <Pressable
             onPress={() => void handlePromote()}
@@ -389,18 +384,15 @@ const UploadRow: React.FC<UploadRowProps> = ({ upload, isCurrent, onPlay }) => {
             </Text>
           </Pressable>
 
-          <View className="bg-border" style={styles.divider} />
+          <View style={[themed.surface4, styles.divider]} />
 
           <Pressable
             onPress={() => void handleDelete()}
             disabled={deleteUpload.isPending}
-            className="bg-surface"
-            style={styles.actionButton}
+            style={[themed.surface2, styles.actionButton]}
             accessibilityRole="button"
           >
-            <Text className="text-error" style={styles.actionButtonText}>
-              {t('uploads.locker.delete')}
-            </Text>
+            <Text style={[themed.text, styles.actionButtonText]}>{t('uploads.locker.delete')}</Text>
           </Pressable>
         </View>
       )}
@@ -409,6 +401,7 @@ const UploadRow: React.FC<UploadRowProps> = ({ upload, isCurrent, onPlay }) => {
 };
 
 const UploadsScreen: React.FC = () => {
+  const themed = useThemedStyles();
   const theme = useTheme();
   const router = useRouter();
   const { t } = useTranslation();
@@ -468,7 +461,7 @@ const UploadsScreen: React.FC = () => {
 
   if (gate.isResolving || (isLoading && gate.canUsePrivateApi)) {
     return (
-      <View className="bg-surface" style={styles.centered}>
+      <View style={[themed.surface2, styles.centered]}>
         <LibraryListSkeleton count={8} />
       </View>
     );
@@ -506,24 +499,18 @@ const UploadsScreen: React.FC = () => {
         description={t('uploads.locker.seo.description')}
       />
       <ScrollView
-        className="bg-surface"
-        style={styles.scroll}
+        style={[themed.surface2, styles.scroll]}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
           <View style={styles.headerText}>
-            <Text className="text-foreground" style={styles.title}>
-              {t('uploads.locker.title')}
-            </Text>
-            <Text className="text-muted-foreground" style={styles.subtitle}>
-              {t('uploads.locker.subtitle')}
-            </Text>
+            <Text style={[themed.text2, styles.title]}>{t('uploads.locker.title')}</Text>
+            <Text style={[themed.mutedText, styles.subtitle]}>{t('uploads.locker.subtitle')}</Text>
           </View>
           <Pressable
             onPress={() => router.push('/upload')}
-            className="bg-primary"
-            style={styles.uploadButton}
+            style={[themed.surface5, styles.uploadButton]}
             accessibilityRole="button"
           >
             <Ionicons
@@ -531,9 +518,7 @@ const UploadsScreen: React.FC = () => {
               size={16}
               color={theme.colors.primaryForeground}
             />
-            <Text className="text-primary-foreground" style={styles.uploadButtonText}>
-              {t('uploads.title')}
-            </Text>
+            <Text style={[themed.text3, styles.uploadButtonText]}>{t('uploads.title')}</Text>
           </Pressable>
         </View>
 
@@ -549,14 +534,10 @@ const UploadsScreen: React.FC = () => {
           <>
             {albums.map(({ album, tracks: albumTracks }) => (
               <View key={album.albumKey} style={styles.section}>
-                <Text className="text-foreground" style={styles.sectionTitle} numberOfLines={1}>
+                <Text style={[themed.text2, styles.sectionTitle]} numberOfLines={1}>
                   {album.albumName ?? t('uploads.locker.untitledAlbum')}
                 </Text>
-                <Text
-                  className="text-muted-foreground"
-                  style={styles.sectionSubtitle}
-                  numberOfLines={1}
-                >
+                <Text style={[themed.mutedText, styles.sectionSubtitle]} numberOfLines={1}>
                   {/* The ALBUM artist, not a track's: on a compilation the track
                       artist differs per row, so a header taken from one would
                       name whichever track happened to sort first. */}
@@ -578,7 +559,7 @@ const UploadsScreen: React.FC = () => {
             {singles.length > 0 && (
               <View style={styles.section}>
                 {albums.length > 0 && (
-                  <Text className="text-foreground" style={styles.sectionTitle}>
+                  <Text style={[themed.text2, styles.sectionTitle]}>
                     {t('uploads.locker.otherFiles')}
                   </Text>
                 )}
@@ -751,3 +732,15 @@ const styles = StyleSheet.create({
 });
 
 export default UploadsScreen;
+
+const useThemedStyles = createTokenStyles((t) => ({
+  surface: { backgroundColor: t.popover },
+  surface2: { backgroundColor: t.surface },
+  mutedText: { color: t.mutedForeground },
+  text: { color: t.error },
+  surface3: { backgroundColor: t.surface, color: t.foreground },
+  surface4: { backgroundColor: t.border },
+  text2: { color: t.foreground },
+  surface5: { backgroundColor: t.primary },
+  text3: { color: t.primaryForeground },
+}));

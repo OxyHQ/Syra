@@ -32,6 +32,7 @@ import { CATALOG_QUERY_KEYS } from '@/hooks/useLibraryCollections';
 import { useOxy } from '@oxy.so/services/ui/client';
 import { PlaylistActionsSheet } from '@/components/playlist/PlaylistActionsSheet';
 import { TrackActionsSheet } from '@/components/playlist/TrackActionsSheet';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 const HEADER_HEIGHT = 400;
 
@@ -42,6 +43,7 @@ type PlaylistData = NonNullable<Awaited<ReturnType<typeof musicService.getPlayli
  * Displays playlist details with parallax header, gradient overlay, and track list
  */
 const PlaylistScreen: React.FC = () => {
+  const themed = useThemedStyles();
   const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -153,7 +155,7 @@ const PlaylistScreen: React.FC = () => {
 
   if (isCatalogLoading) {
     return (
-      <View className="bg-surface" style={styles.container}>
+      <View style={[themed.surface, styles.container]}>
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
@@ -259,6 +261,7 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
   onTrackPress,
   onDeleted,
 }) => {
+  const themed = useThemedStyles();
   const { t } = useTranslation();
   const theme = useTheme();
   const { user } = useOxy();
@@ -354,17 +357,16 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
         title={`${playlist.name} - Syra`}
         description={playlist.description || `Listen to ${playlist.name}`}
       />
-      <View className="bg-surface" style={styles.container}>
+      <View style={[themed.surface, styles.container]}>
         {/* Sticky Header */}
         <Animated.View
-          className="bg-background border-b-surface"
-          style={[styles.stickyHeader, stickyHeaderAnimatedStyle]}
+          style={[themed.surface2, styles.stickyHeader, stickyHeaderAnimatedStyle]}
           pointerEvents="box-none"
         >
           <View style={styles.stickyHeaderContent}>
             {/* Center - Title and cover art */}
             <View style={styles.stickyHeaderCenter}>
-              <View className="bg-surface" style={styles.stickyHeaderImageContainer}>
+              <View style={[themed.surface, styles.stickyHeaderImageContainer]}>
                 {playlistStickyImage ? (
                   <Image
                     source={{ uri: playlistStickyImage }}
@@ -375,7 +377,7 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
                   <Ionicons name="musical-notes" size={20} color={theme.colors.textSecondary} />
                 )}
               </View>
-              <Text className="text-foreground" style={styles.stickyHeaderTitle} numberOfLines={1}>
+              <Text style={[themed.text, styles.stickyHeaderTitle]} numberOfLines={1}>
                 {playlist.name}
               </Text>
             </View>
@@ -383,8 +385,11 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
             {/* Right side - Controls */}
             <View style={styles.stickyHeaderControls}>
               <Pressable
-                className="bg-primary"
-                style={[styles.stickyHeaderPlayButton, !canPlay && styles.disabledControl]}
+                style={[
+                  themed.surface3,
+                  styles.stickyHeaderPlayButton,
+                  !canPlay && styles.disabledControl,
+                ]}
                 onPress={onPlayPlaylist}
                 disabled={!canPlay}
                 accessibilityRole="button"
@@ -438,7 +443,7 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
               {heroImage ? (
                 <Image source={{ uri: heroImage }} style={styles.headerImage} resizeMode="cover" />
               ) : (
-                <View className="bg-surface" style={styles.headerPlaceholder}>
+                <View style={[themed.surface, styles.headerPlaceholder]}>
                   <Ionicons name="musical-notes" size={80} color={theme.colors.textSecondary} />
                 </View>
               )}
@@ -485,35 +490,24 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
                 )}
                 <View style={styles.infoTextContainer}>
                   {playlist.description && (
-                    <Text
-                      className="text-muted-foreground"
-                      style={styles.description}
-                      numberOfLines={2}
-                    >
+                    <Text style={[themed.mutedText, styles.description]} numberOfLines={2}>
                       {playlist.description}
                     </Text>
                   )}
                   <View style={styles.metadataRow}>
-                    <Text className="text-muted-foreground" style={styles.metadata}>
+                    <Text style={[themed.mutedText, styles.metadata]}>
                       {playlist.ownerUsername}
                     </Text>
                     {playlist.trackCount > 0 && (
                       <>
-                        <Text className="text-muted-foreground" style={styles.metadataSeparator}>
-                          •
-                        </Text>
-                        <Text className="text-muted-foreground" style={styles.metadata}>
+                        <Text style={[themed.mutedText, styles.metadataSeparator]}>•</Text>
+                        <Text style={[themed.mutedText, styles.metadata]}>
                           {playlist.trackCount} {playlist.trackCount === 1 ? 'song' : 'songs'}
                         </Text>
                         {totalDurationFormatted && (
                           <>
-                            <Text
-                              className="text-muted-foreground"
-                              style={styles.metadataSeparator}
-                            >
-                              •
-                            </Text>
-                            <Text className="text-muted-foreground" style={styles.metadata}>
+                            <Text style={[themed.mutedText, styles.metadataSeparator]}>•</Text>
+                            <Text style={[themed.mutedText, styles.metadata]}>
                               {totalDurationFormatted}
                             </Text>
                           </>
@@ -522,10 +516,8 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
                     )}
                     {playlist.followers !== undefined && playlist.followers > 0 && (
                       <>
-                        <Text className="text-muted-foreground" style={styles.metadataSeparator}>
-                          •
-                        </Text>
-                        <Text className="text-muted-foreground" style={styles.metadata}>
+                        <Text style={[themed.mutedText, styles.metadataSeparator]}>•</Text>
+                        <Text style={[themed.mutedText, styles.metadata]}>
                           {playlist.followers.toLocaleString()}{' '}
                           {playlist.followers === 1 ? 'save' : 'saves'}
                         </Text>
@@ -539,8 +531,7 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
             {/* Playback Controls */}
             <View style={styles.controlsContainer}>
               <Pressable
-                className="bg-primary"
-                style={[styles.playButton, !canPlay && styles.disabledControl]}
+                style={[themed.surface3, styles.playButton, !canPlay && styles.disabledControl]}
                 onPress={onPlayPlaylist}
                 disabled={!canPlay}
                 accessibilityRole="button"
@@ -612,10 +603,8 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
             {/* Track List Header */}
             <View style={styles.trackListHeader}>
               <View style={styles.trackListHeaderLeft}>
-                <Text className="text-muted-foreground" style={styles.trackListHeaderText}>
-                  #
-                </Text>
-                <Text className="text-muted-foreground" style={styles.trackListHeaderText}>
+                <Text style={[themed.mutedText, styles.trackListHeaderText]}>#</Text>
+                <Text style={[themed.mutedText, styles.trackListHeaderText]}>
                   {t('common.title')}
                 </Text>
               </View>
@@ -626,7 +615,7 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
             <View style={styles.trackList}>
               {tracks.length === 0 ? (
                 <View style={styles.emptyState}>
-                  <Text className="text-muted-foreground" style={styles.emptyStateText}>
+                  <Text style={[themed.mutedText, styles.emptyStateText]}>
                     {t('playlist.empty')}
                   </Text>
                 </View>
@@ -951,3 +940,11 @@ const styles = StyleSheet.create({
 });
 
 export default PlaylistScreen;
+
+const useThemedStyles = createTokenStyles((t) => ({
+  surface: { backgroundColor: t.surface },
+  surface2: { borderBottomColor: t.surface, backgroundColor: t.background },
+  text: { color: t.foreground },
+  surface3: { backgroundColor: t.primary },
+  mutedText: { color: t.mutedForeground },
+}));
