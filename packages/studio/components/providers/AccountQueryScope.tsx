@@ -1,5 +1,9 @@
-import type { QueryClient } from '@tanstack/react-query';
-import { useQueryClient } from '@tanstack/react-query';
+import {
+  defaultScheduler,
+  notifyManager,
+  type QueryClient,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { useOxyRuntime } from '@oxy.so/services/runtime';
 import { useLayoutEffect } from 'react';
 
@@ -27,10 +31,20 @@ export function followAccount(queryClient: QueryClient, runtime: SubjectSource):
     const next = runtime.getSnapshot().account?.id ?? null;
     if (next === accountId) return;
     accountId = next;
+    // Synchronous notifications (React Query's default is a `setTimeout`): the
+    // screens re-render in the same pass as the new account. Studio sets no
+    // scheduler of its own, so the default comes back.
     const cache = queryClient.getQueryCache();
-    for (const query of cache.getAll()) {
-      cache.remove(query);
-      query.reset();
+    notifyManager.setScheduler((callback) => callback());
+    try {
+      notifyManager.batch(() => {
+        for (const query of cache.getAll()) {
+          cache.remove(query);
+          query.reset();
+        }
+      });
+    } finally {
+      notifyManager.setScheduler(defaultScheduler);
     }
   };
   const unsubscribe = runtime.subscribe(sync);

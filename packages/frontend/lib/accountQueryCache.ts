@@ -28,8 +28,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   type DehydratedState,
+  defaultScheduler,
   dehydrate,
   hydrate,
+  notifyManager,
   type Query,
   type QueryClient,
 } from '@tanstack/react-query';
@@ -127,6 +129,30 @@ function hydrateBlob(queryClient: QueryClient, raw: string, buster: string): boo
   return true;
 }
 
+/**
+ * Remove every query, and reset each one removed: a removed query keeps its
+ * data and its observers until they render again, so a screen that is not
+ * re-rendered for the switch would go on showing it. The reset tells them, and
+ * cancels the query's in-flight read. Their notifications run synchronously
+ * (React Query schedules them on a `setTimeout` by default), so the screens
+ * re-render in the same pass as the new account and no frame shows the old
+ * one's data. Syra sets no scheduler of its own, so the default comes back.
+ */
+export function dropAllQueries(queryClient: QueryClient): void {
+  const cache = queryClient.getQueryCache();
+  notifyManager.setScheduler((callback) => callback());
+  try {
+    notifyManager.batch(() => {
+      for (const query of cache.getAll()) {
+        cache.remove(query);
+        query.reset();
+      }
+    });
+  } finally {
+    notifyManager.setScheduler(defaultScheduler);
+  }
+}
+
 export interface AccountQueryCache {
   /** Storage became available. Only the first call counts. */
   setStorage(storage: StorageInterface): void;
@@ -170,16 +196,6 @@ export function createAccountQueryCache(
     const serialized = snapshot(queryClient, buster);
     const key = accountQueryStorageKey(id);
     enqueue((storage) => storage.setItem(key, serialized));
-  };
-
-  const dropAccountQueries = () => {
-    const cache = queryClient.getQueryCache();
-    for (const query of cache.getAll()) {
-      cache.remove(query);
-      // A removed query keeps its data and its observers until they render
-      // again; resetting it tells them now, and cancels its in-flight read.
-      query.reset();
-    }
   };
 
   const startWriting = (id: string, current: number) => {
@@ -233,7 +249,7 @@ export function createAccountQueryCache(
       if (previous !== null && restoredFor === previous) write(previous);
       generation += 1;
       stopWriting?.();
-      dropAccountQueries();
+      dropAllQueries(queryClient);
       accountId = next;
       restoredFor = null;
       if (next === null && previous !== null) {
