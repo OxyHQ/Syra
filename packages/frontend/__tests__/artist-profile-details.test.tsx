@@ -8,6 +8,15 @@ import { ArtistProfileHeading } from '@/components/artist/ArtistProfileHeading';
 import en from '@/locales/en.json';
 import es from '@/locales/es.json';
 
+// The real token styles (`createTokenStyles`, `tokenAlpha`) from the CommonJS build: the
+// `react-native` condition points at Bloom's TypeScript source, which Jest does not transform.
+jest.mock('@oxy.so/bloom/theme', () =>
+  jest.requireActual('../../../node_modules/@oxy.so/bloom/lib/commonjs/theme/color-tokens.js'),
+);
+jest.mock('@oxy.so/bloom/hooks', () =>
+  jest.requireActual('../../../node_modules/@oxy.so/bloom/lib/commonjs/hooks/use-width-class.js'),
+);
+
 const i18n = createInstance();
 const navigate = jest.fn();
 const openLink = jest.fn();

@@ -43,7 +43,10 @@ const parsePrivacySettings = (value: unknown): PrivacySettings | null => {
   return parsed.success ? parsed.data : null;
 };
 
-/** OxyProvider owns account-scoped persistence; never read the former global cache. */
+/**
+ * The account cache (`lib/accountQueryCache.ts`) persists these per account and
+ * drops them on a switch; never read the former global cache.
+ */
 function usePrivacyViewer() {
   const context = useOxy();
   const [epoch, setEpoch] = useState(0);
@@ -98,7 +101,7 @@ export function useUpdatePrivacySettingsCache() {
   return async (privacySettings: PrivacySettings) => {
     const parsed = parsePrivacySettings(privacySettings);
     if (!parsed || !accountId || oxyServices.session.userId !== accountId) return;
-    // Refresh only this verified account. The provider handles switch/logout disposal.
+    // Refresh only this verified account. The account cache handles switch/logout disposal.
     await queryClient.invalidateQueries({ queryKey: ['privacySettings', accountId] });
   };
 }

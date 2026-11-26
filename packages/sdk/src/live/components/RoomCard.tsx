@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleProp, ViewStyle } from 'react-native';
 import MaterialCommunityIcons from '../icons/MaterialCommunityIcons';
 import { useAuth } from '@oxy.so/services/ui/client';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 import { useLiveConfig } from '../context/LiveConfigContext';
 import { AnimatedPulse } from './AnimatedPulse';
@@ -138,6 +139,7 @@ export const RoomCard: React.FC<RoomCardProps> = ({
   isSaved,
   style,
 }) => {
+  const styles = useStyles();
   const { useTheme, useUserById, AvatarComponent, getCachedFileDownloadUrlSync } = useLiveConfig();
   const theme = useTheme();
   const { oxyServices } = useAuth();
@@ -180,34 +182,33 @@ export const RoomCard: React.FC<RoomCardProps> = ({
   // It lives inside HORIZONTAL carousels, where a percentage width has no parent
   // to resolve against — hence the intrinsic width, capped at the parent so a
   // constrained host box (the composer preview) can still shrink it. Hosts
-  // override any of this through `style`, which wins over the className.
+  // override any of this through `style`, which wins over the card's own style.
   if (isCompact) {
     return (
       <TouchableOpacity
-        className="w-[200px] max-w-full min-h-[140px] justify-between rounded-2xl border border-border bg-surface p-3"
-        style={style}
+        style={[styles.compactCard, style]}
         onPress={onPress}
         activeOpacity={onPress ? 0.7 : 1}
         disabled={!onPress}
       >
-        <View className="flex-1">
+        <View style={styles.fill}>
           {isLive && (
-            <View className="mb-1.5 flex-row">
+            <View style={styles.compactBadgeRow}>
               <LiveBadge />
             </View>
           )}
-          <Text className="text-sm font-semibold leading-[18px] text-foreground" numberOfLines={2}>
+          <Text style={styles.compactTitle} numberOfLines={2}>
             {room.title}
           </Text>
         </View>
-        <View className="mt-2 gap-1">
-          <View className="flex-row items-center gap-1">
+        <View style={styles.compactMeta}>
+          <View style={styles.compactBylineRow}>
             <AvatarComponent size={14} source={hostAvatarUri} shape="squircle" />
-            <Text className="flex-1 text-[11px] text-muted-foreground" numberOfLines={1}>
+            <Text style={styles.compactByline} numberOfLines={1}>
               {byline}
             </Text>
           </View>
-          <Text className="text-[11px] text-muted-foreground" numberOfLines={1}>
+          <Text style={styles.compactMetaText} numberOfLines={1}>
             {isLive ? `${formatCompact(listenerCount)} listening` : scheduleLabel}
           </Text>
         </View>
@@ -219,53 +220,49 @@ export const RoomCard: React.FC<RoomCardProps> = ({
   if (isFeatured) {
     return (
       <TouchableOpacity
-        className="mb-3 w-full gap-2.5 rounded-2xl border border-border bg-surface p-3"
-        style={style}
+        style={[styles.featuredCard, style]}
         onPress={onPress}
         activeOpacity={onPress ? 0.7 : 1}
         disabled={!onPress}
       >
         {/* Status + the only number that matters on air, then icon-only actions */}
-        <View className="flex-row items-center gap-1.5">
+        <View style={styles.featuredStatusRow}>
           <LiveBadge />
           {listenerCount > 0 && (
             <>
-              <Text className="text-[13px] text-muted-foreground">·</Text>
-              <Text className="text-[13px] font-semibold text-muted-foreground" numberOfLines={1}>
+              <Text style={styles.metaText}>·</Text>
+              <Text style={styles.listenerCount} numberOfLines={1}>
                 {formatCompact(listenerCount)} listening
               </Text>
             </>
           )}
-          <View className="flex-1" />
+          <View style={styles.fill} />
           {onSave && (
             <SaveAction onSave={onSave} isSaved={isSaved} isScheduled={false} theme={theme} />
           )}
           {onMenuPress && <MenuAction onMenuPress={onMenuPress} theme={theme} />}
         </View>
 
-        <Text className="text-[17px] font-bold leading-[22px] text-foreground" numberOfLines={2}>
+        <Text style={styles.featuredTitle} numberOfLines={2}>
           {room.title}
         </Text>
 
         <SpeakerStack speakerIds={speakerIds} hiddenCount={hiddenSpeakerCount} />
 
         {/* Host — a room's primary identity — and the join affordance */}
-        <View className="flex-row items-center gap-2">
+        <View style={styles.featuredHostRow}>
           <AvatarComponent size={BYLINE_AVATAR_SIZE} source={hostAvatarUri} shape="squircle" />
-          <Text className="flex-1 text-[13px] text-muted-foreground" numberOfLines={1}>
+          <Text style={styles.featuredByline} numberOfLines={1}>
             {byline}
           </Text>
           {onPress && (
             <TouchableOpacity
-              className="rounded-full px-4 py-1.5"
-              style={{ backgroundColor: LIVE_COLOR }}
+              style={styles.joinButton}
               onPress={onPress}
               accessibilityRole="button"
               accessibilityLabel="Join room"
             >
-              <Text className="text-[13px] font-bold" style={{ color: LIVE_FOREGROUND_COLOR }}>
-                Join
-              </Text>
+              <Text style={styles.joinLabel}>Join</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -276,26 +273,25 @@ export const RoomCard: React.FC<RoomCardProps> = ({
   // --- Compact row: a SCHEDULED or ENDED room, flush in the feed ---
   return (
     <TouchableOpacity
-      className="w-full flex-row items-center gap-3 border-b border-border px-3 py-3"
-      style={style}
+      style={[styles.listRow, style]}
       onPress={onPress}
       activeOpacity={onPress ? 0.7 : 1}
       disabled={!onPress}
     >
       <AvatarComponent size={ROW_AVATAR_SIZE} source={hostAvatarUri} shape="squircle" />
 
-      <View className="flex-1 gap-0.5">
-        <View className="flex-row items-baseline gap-1.5">
-          <Text className="shrink text-[15px] font-semibold text-foreground" numberOfLines={1}>
+      <View style={styles.listRowBody}>
+        <View style={styles.listRowTitleLine}>
+          <Text style={styles.listRowTitle} numberOfLines={1}>
             {room.title}
           </Text>
           {scheduleLabel !== '' && (
-            <Text className="shrink-0 text-[13px] text-muted-foreground" numberOfLines={1}>
+            <Text style={styles.listRowSchedule} numberOfLines={1}>
               · {scheduleLabel}
             </Text>
           )}
         </View>
-        <Text className="text-[13px] text-muted-foreground" numberOfLines={1}>
+        <Text style={styles.metaText} numberOfLines={1}>
           {byline}
         </Text>
       </View>
@@ -314,13 +310,11 @@ export const RoomCard: React.FC<RoomCardProps> = ({
 // brand's "on air" signal, so its red comes from the shared live palette and its
 // content sits on white regardless of light/dark mode.
 function LiveBadge() {
+  const styles = useStyles();
   return (
-    <View
-      className="flex-row items-center gap-1 rounded-[4px] px-2 py-1"
-      style={{ backgroundColor: LIVE_COLOR }}
-    >
+    <View style={styles.liveBadge}>
       <AnimatedPulse size={6} color={LIVE_FOREGROUND_COLOR} />
-      <Text className="text-[10px] font-bold text-white">LIVE</Text>
+      <Text style={styles.liveBadgeLabel}>LIVE</Text>
     </View>
   );
 }
@@ -384,23 +378,19 @@ function MenuAction({ onMenuPress, theme }: { onMenuPress: () => void; theme: Li
 // --- Speaker stack (featured card only) ---
 
 function SpeakerStack({ speakerIds, hiddenCount }: { speakerIds: string[]; hiddenCount: number }) {
+  const styles = useStyles();
   if (speakerIds.length === 0) return null;
 
   return (
-    <View className="flex-row items-center">
+    <View style={styles.speakerStack}>
       {speakerIds.map((id, index) => (
-        <View key={id} className={index === 0 ? '' : '-ml-3'}>
+        <View key={id} style={index === 0 ? undefined : styles.speakerOverlap}>
           <SpeakerAvatar userId={id} />
         </View>
       ))}
       {hiddenCount > 0 && (
-        <View
-          className="-ml-3 items-center justify-center rounded-full border-2 border-surface bg-muted"
-          style={{ width: SPEAKER_AVATAR_SIZE, height: SPEAKER_AVATAR_SIZE }}
-        >
-          <Text className="text-[13px] font-bold text-muted-foreground">
-            +{formatCompact(hiddenCount)}
-          </Text>
+        <View style={[styles.speakerOverlap, styles.hiddenSpeakerCount]}>
+          <Text style={styles.hiddenSpeakerCountLabel}>+{formatCompact(hiddenCount)}</Text>
         </View>
       )}
     </View>
@@ -408,6 +398,7 @@ function SpeakerStack({ speakerIds, hiddenCount }: { speakerIds: string[]; hidde
 }
 
 function SpeakerAvatar({ userId }: { userId: string }) {
+  const styles = useStyles();
   const { useUserById, AvatarComponent, getCachedFileDownloadUrlSync } = useLiveConfig();
   const { oxyServices } = useAuth();
   const profile = useUserById(userId);
@@ -415,10 +406,104 @@ function SpeakerAvatar({ userId }: { userId: string }) {
 
   // The ring is the card's own surface color, so overlapping faces stay separable.
   return (
-    <View className="rounded-full border-2 border-surface">
+    <View style={styles.speakerRing}>
       <AvatarComponent size={SPEAKER_AVATAR_SIZE} source={avatarUri} shape="squircle" />
     </View>
   );
 }
 
 export default RoomCard;
+
+const useStyles = createTokenStyles((t) => ({
+  compactCard: {
+    minHeight: 140,
+    width: 200,
+    maxWidth: '100%',
+    justifyContent: 'space-between',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: t.border,
+    backgroundColor: t.surface,
+    padding: 12,
+  },
+  fill: { flexGrow: 1, flexShrink: 1, flexBasis: '0%' },
+  compactBadgeRow: { marginBottom: 6, flexDirection: 'row' },
+  compactTitle: { fontSize: 14, lineHeight: 18, fontWeight: 600, color: t.foreground },
+  compactMeta: { marginTop: 8, gap: 4 },
+  compactBylineRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  compactByline: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: '0%',
+    fontSize: 11,
+    color: t.mutedForeground,
+  },
+  compactMetaText: { fontSize: 11, color: t.mutedForeground },
+  featuredCard: {
+    marginBottom: 12,
+    width: '100%',
+    gap: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: t.border,
+    backgroundColor: t.surface,
+    padding: 12,
+  },
+  featuredStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  metaText: { fontSize: 13, color: t.mutedForeground },
+  listenerCount: { fontSize: 13, fontWeight: 600, color: t.mutedForeground },
+  featuredTitle: { fontSize: 17, lineHeight: 22, fontWeight: 700, color: t.foreground },
+  featuredHostRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  featuredByline: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: '0%',
+    fontSize: 13,
+    color: t.mutedForeground,
+  },
+  joinButton: {
+    borderRadius: 9999,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    backgroundColor: LIVE_COLOR,
+  },
+  joinLabel: { fontSize: 13, fontWeight: 700, color: LIVE_FOREGROUND_COLOR },
+  listRow: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderBottomWidth: 1,
+    borderColor: t.border,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  listRowBody: { flexGrow: 1, flexShrink: 1, flexBasis: '0%', gap: 2 },
+  listRowTitleLine: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
+  listRowTitle: { flexShrink: 1, fontSize: 15, fontWeight: 600, color: t.foreground },
+  listRowSchedule: { flexShrink: 0, fontSize: 13, color: t.mutedForeground },
+  liveBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: LIVE_COLOR,
+  },
+  liveBadgeLabel: { fontSize: 10, fontWeight: 700, color: LIVE_FOREGROUND_COLOR },
+  speakerStack: { flexDirection: 'row', alignItems: 'center' },
+  speakerOverlap: { marginLeft: -12 },
+  hiddenSpeakerCount: {
+    width: SPEAKER_AVATAR_SIZE,
+    height: SPEAKER_AVATAR_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 9999,
+    borderWidth: 2,
+    borderColor: t.surface,
+    backgroundColor: t.muted,
+  },
+  hiddenSpeakerCountLabel: { fontSize: 13, fontWeight: 700, color: t.mutedForeground },
+  speakerRing: { borderRadius: 9999, borderWidth: 2, borderColor: t.surface },
+}));

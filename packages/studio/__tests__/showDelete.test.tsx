@@ -64,6 +64,9 @@ jest.mock('@oxy.so/bloom/loading', () => ({ Loading: () => null }));
 jest.mock('@oxy.so/bloom/badge', () => ({ Badge: () => null }));
 jest.mock('@oxy.so/bloom/toast', () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
 jest.mock('@oxy.so/bloom/theme', () => ({
+  // The real token styles (`createTokenStyles`, `tokenAlpha`) from the CommonJS build: the
+  // `react-native` condition points at Bloom's TypeScript source, which Jest does not transform.
+  ...jest.requireActual('../../../node_modules/@oxy.so/bloom/lib/commonjs/theme/color-tokens.js'),
   useTheme: () => ({
     colors: { error: '#f00', text: '#000', textSecondary: '#666', primary: '#00f' },
   }),
@@ -169,8 +172,8 @@ async function renderScreen(): Promise<ReactTestRenderer> {
 }
 
 /**
- * Found by testID rather than by component type: NativeWind rewrites the
- * element it compiles `className` onto, so matching on `Pressable` finds
+ * Found by testID rather than by component type: NativeWind wraps React
+ * Native's components, so matching on `Pressable` finds
  * nothing and every press below would silently do nothing while the assertions
  * still passed.
  */

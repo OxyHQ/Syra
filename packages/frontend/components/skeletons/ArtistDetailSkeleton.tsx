@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import * as Skeleton from '@oxy.so/bloom/skeleton';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@oxy.so/bloom/theme';
+import { useWindowWidthClass } from '@oxy.so/bloom/hooks';
 import { TrackListSkeleton } from './TrackRowSkeleton';
 import { MediaCardRowSkeleton } from './MediaCardRowSkeleton';
 
@@ -23,6 +24,7 @@ interface ArtistDetailSkeletonProps {
 export const ArtistDetailSkeleton: React.FC<ArtistDetailSkeletonProps> = React.memo(
   ({ trackCount = 6, albumCount = 5 }) => {
     const theme = useTheme();
+    const width = useWindowWidthClass(BREAKPOINTS);
     const contentGradient: readonly [string, string, string] = [
       theme.colors.backgroundSecondary,
       theme.colors.backgroundSecondary,
@@ -39,8 +41,12 @@ export const ArtistDetailSkeleton: React.FC<ArtistDetailSkeletonProps> = React.m
             locations={[0, 0.6, 1]}
             style={styles.heroOverlay}
           />
-          <View className="gap-2" style={styles.titleContainer}>
-            <View className="h-10 sm:h-16 lg:h-24">
+          <View style={[styles.stack, styles.titleContainer]}>
+            <View
+              style={
+                width >= LG ? styles.titleLarge : width >= SM ? styles.titleMedium : styles.title
+              }
+            >
               <Skeleton.Box width="55%" height="100%" borderRadius={8} />
             </View>
             <Skeleton.Box width={190} height={24} borderRadius={4} />
@@ -90,7 +96,15 @@ export const ArtistDetailSkeleton: React.FC<ArtistDetailSkeletonProps> = React.m
 );
 ArtistDetailSkeleton.displayName = 'ArtistDetailSkeleton';
 
+// Tailwind's `sm` and `lg`: the title bar follows the heading's three sizes.
+const SM = 640;
+const LG = 1024;
+const BREAKPOINTS = [SM, LG];
+
 const styles = StyleSheet.create({
+  title: { height: 40 },
+  titleMedium: { height: 64 },
+  titleLarge: { height: 96 },
   hero: {
     height: HERO_HEIGHT,
     width: '100%',
@@ -149,4 +163,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingBottom: 24,
   },
+
+  stack: { gap: 8 },
 });

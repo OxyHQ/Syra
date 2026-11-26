@@ -15,7 +15,7 @@ import { useMyArtistProfile } from '@/hooks/useArtist';
 import { useCreateAlbum } from '@/hooks/useMusic';
 import { getApiErrorMessage } from '@/utils/api';
 import { toast } from '@oxy.so/bloom/toast';
-import { cn } from '@/lib/utils';
+import { createTokenStyles, tokenAlpha } from '@oxy.so/bloom/theme';
 
 type AlbumType = NonNullable<CreateAlbumRequest['type']>;
 
@@ -35,10 +35,11 @@ function TypeSelector({
   onChange: (value: AlbumType) => void;
   disabled: boolean;
 }) {
+  const styles = useStyles();
   return (
-    <View className="mb-4">
-      <Text className="text-sm font-medium text-foreground mb-1.5">Type</Text>
-      <View className="flex-row flex-wrap gap-2">
+    <View style={styles.section}>
+      <Text style={styles.text}>Type</Text>
+      <View style={styles.row}>
         {ALBUM_TYPES.map((option) => {
           const active = option.value === value;
           return (
@@ -46,14 +47,9 @@ function TypeSelector({
               key={option.value}
               onPress={() => onChange(option.value)}
               disabled={disabled}
-              className={cn(
-                'rounded-full border px-4 py-2',
-                active ? 'border-primary bg-primary/10' : 'border-border bg-surface',
-              )}
+              style={[styles.chip, active ? styles.chipActive : styles.chipIdle]}
             >
-              <Text
-                className={cn('text-sm font-semibold', active ? 'text-primary' : 'text-foreground')}
-              >
+              <Text style={[styles.chipText, active ? styles.chipTextActive : styles.chipTextIdle]}>
                 {option.label}
               </Text>
             </Pressable>
@@ -71,6 +67,7 @@ function CreateAlbumForm({
   artistId: string;
   uploadsDisabled: boolean;
 }) {
+  const styles = useStyles();
   const router = useRouter();
   const theme = useTheme();
   const createAlbum = useCreateAlbum();
@@ -145,15 +142,15 @@ function CreateAlbumForm({
       onBack={() => router.back()}
     >
       {uploadsDisabled ? (
-        <View className="flex-row gap-3 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 mb-4">
+        <View style={styles.row2}>
           <MaterialCommunityIcons name="alert-circle" size={22} color={theme.colors.error} />
-          <Text className="text-sm text-foreground flex-1">
+          <Text style={styles.text2}>
             Uploads are disabled due to copyright strikes. Contact support for more information.
           </Text>
         </View>
       ) : null}
 
-      <View className="items-center mb-6">
+      <View style={styles.container}>
         <CoverArtPicker
           value={coverArt}
           onChange={setCoverArt}
@@ -161,7 +158,7 @@ function CreateAlbumForm({
           disabled={busy}
           error={coverError}
         />
-        <Text className="text-xs text-muted-foreground mt-2">Cover art (required)</Text>
+        <Text style={styles.mutedText}>Cover art (required)</Text>
       </View>
 
       <FormField
@@ -199,12 +196,10 @@ function CreateAlbumForm({
         editable={!busy}
       />
 
-      <View className="flex-row items-center justify-between rounded-xl border border-border bg-surface px-4 py-3 mb-6">
-        <View className="flex-1 pr-3">
-          <Text className="text-sm font-medium text-foreground">Explicit content</Text>
-          <Text className="text-xs text-muted-foreground mt-0.5">
-            Marks this release as explicit.
-          </Text>
+      <View style={styles.row3}>
+        <View style={styles.container2}>
+          <Text style={styles.text3}>Explicit content</Text>
+          <Text style={styles.mutedText2}>Marks this release as explicit.</Text>
         </View>
         <Switch checked={explicit} onCheckedChange={setExplicit} disabled={busy} />
       </View>
@@ -224,13 +219,14 @@ function CreateAlbumForm({
 }
 
 function CreateAlbumGate() {
+  const styles = useStyles();
   const router = useRouter();
   const theme = useTheme();
   const { data: artist, isLoading } = useMyArtistProfile();
 
   if (isLoading) {
     return (
-      <View className="flex-1 items-center justify-center bg-background">
+      <View style={styles.centered}>
         <Loading />
       </View>
     );
@@ -239,16 +235,12 @@ function CreateAlbumGate() {
   if (!artist) {
     return (
       <ScreenContainer title="Create album" onBack={() => router.back()}>
-        <View className="items-center justify-center py-16 px-6">
-          <View className="w-16 h-16 rounded-2xl bg-primary/10 items-center justify-center mb-4">
+        <View style={styles.centered2}>
+          <View style={styles.centered3}>
             <MaterialCommunityIcons name="account-music" size={30} color={theme.colors.primary} />
           </View>
-          <Text className="text-lg font-semibold text-foreground mb-1">
-            Register as an artist first
-          </Text>
-          <Text className="text-sm text-muted-foreground text-center mb-5 max-w-[360px]">
-            Create your artist profile before creating albums.
-          </Text>
+          <Text style={styles.title}>Register as an artist first</Text>
+          <Text style={styles.mutedText3}>Create your artist profile before creating albums.</Text>
           <Button
             onPress={() => router.replace('/music/register')}
             tone="accent"
@@ -271,3 +263,83 @@ export default function NewAlbumScreen() {
     </SignInGate>
   );
 }
+
+const useStyles = createTokenStyles((t) => ({
+  section: { marginBottom: 16 },
+  text: { marginBottom: 6, fontSize: 14, fontWeight: 500, color: t.foreground, lineHeight: 20 },
+  row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: { borderRadius: 9999, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 8 },
+  chipActive: { borderColor: t.primary, backgroundColor: tokenAlpha(t.primary, 0.1) },
+  chipIdle: { borderColor: t.border, backgroundColor: t.surface },
+  chipText: { fontSize: 14, fontWeight: 600, lineHeight: 20 },
+  chipTextActive: { color: t.primary },
+  chipTextIdle: { color: t.foreground },
+  row2: {
+    marginBottom: 16,
+    flexDirection: 'row',
+    gap: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: tokenAlpha(t.destructive, 0.4),
+    backgroundColor: tokenAlpha(t.destructive, 0.1),
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  text2: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: '0%',
+    fontSize: 14,
+    color: t.foreground,
+    lineHeight: 20,
+  },
+  container: { marginBottom: 24, alignItems: 'center' },
+  mutedText: { marginTop: 8, fontSize: 12, color: t.mutedForeground, lineHeight: 16 },
+  row3: {
+    marginBottom: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: t.border,
+    backgroundColor: t.surface,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  container2: { flexGrow: 1, flexShrink: 1, flexBasis: '0%', paddingRight: 12 },
+  text3: { fontSize: 14, fontWeight: 500, color: t.foreground, lineHeight: 20 },
+  mutedText2: { marginTop: 2, fontSize: 12, color: t.mutedForeground, lineHeight: 16 },
+  centered: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: '0%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: t.background,
+  },
+  centered2: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 64,
+  },
+  centered3: {
+    marginBottom: 16,
+    height: 64,
+    width: 64,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 16,
+    backgroundColor: tokenAlpha(t.primary, 0.1),
+  },
+  title: { marginBottom: 4, fontSize: 18, fontWeight: 600, color: t.foreground, lineHeight: 28 },
+  mutedText3: {
+    marginBottom: 20,
+    maxWidth: 360,
+    textAlign: 'center',
+    fontSize: 14,
+    color: t.mutedForeground,
+    lineHeight: 20,
+  },
+}));

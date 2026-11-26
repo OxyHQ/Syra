@@ -33,7 +33,6 @@ interface TrackArtistLineProps {
   linked?: boolean;
   /** Rendered when the track has no artist at all — a locker file, typically. */
   fallback?: string;
-  className?: string;
 }
 
 export function TrackArtistLine({
@@ -43,21 +42,20 @@ export function TrackArtistLine({
   numberOfLines = 1,
   linked = true,
   fallback = '',
-  className,
 }: TrackArtistLineProps) {
   const router = useRouter();
   const artists = trackArtists(track);
 
   if (artists.length === 0) {
     return (
-      <Text className={className} style={style} numberOfLines={numberOfLines}>
+      <Text style={style} numberOfLines={numberOfLines}>
         {fallback}
       </Text>
     );
   }
 
   return (
-    <Text className={className} style={style} numberOfLines={numberOfLines}>
+    <Text style={style} numberOfLines={numberOfLines}>
       {artists.map((artist, index) => (
         // The id is absent for a credit that never resolved to a catalogue row,
         // and two guests can share a name on different tracks — neither is a key

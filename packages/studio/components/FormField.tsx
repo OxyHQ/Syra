@@ -1,7 +1,7 @@
 import { type ReactNode } from 'react';
 import { Text, TextInput, View, type TextInputProps } from 'react-native';
 import { useTheme } from '@oxy.so/bloom/theme';
-import { cn } from '@/lib/utils';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 interface FormFieldProps extends Omit<TextInputProps, 'placeholderTextColor'> {
   label: string;
@@ -13,30 +13,31 @@ interface FormFieldProps extends Omit<TextInputProps, 'placeholderTextColor'> {
 }
 
 /**
- * Labeled text input themed with NativeWind tokens. `placeholderTextColor` has
- * no NativeWind equivalent, so it reads the Bloom theme color directly.
+ * Labeled text input themed with Bloom tokens; `placeholderTextColor` reads the
+ * Bloom theme colour. A caller's `style` lands on the input, after the field's own.
  */
 export function FormField({
   label,
   hint,
   error,
   trailing,
-  className,
+  style,
   multiline,
   ...rest
 }: FormFieldProps) {
+  const styles = useStyles();
   const theme = useTheme();
   return (
-    <View className="mb-4">
-      <Text className="text-sm font-medium text-foreground mb-1.5">{label}</Text>
-      <View className="flex-row items-center">
+    <View style={styles.section}>
+      <Text style={styles.text}>{label}</Text>
+      <View style={styles.row}>
         <TextInput
-          className={cn(
-            'flex-1 rounded-xl border border-border bg-surface px-3.5 text-foreground',
-            multiline ? 'py-3 min-h-[96px]' : 'h-12',
-            error ? 'border-destructive' : '',
-            className,
-          )}
+          style={[
+            styles.input,
+            multiline ? styles.inputMultiline : styles.inputSingleLine,
+            error ? styles.inputError : null,
+            style,
+          ]}
           placeholderTextColor={theme.colors.textSecondary}
           multiline={multiline}
           textAlignVertical={multiline ? 'top' : 'center'}
@@ -45,10 +46,32 @@ export function FormField({
         {trailing}
       </View>
       {error ? (
-        <Text className="text-xs text-destructive mt-1">{error}</Text>
+        <Text style={styles.text2}>{error}</Text>
       ) : hint ? (
-        <Text className="text-xs text-muted-foreground mt-1">{hint}</Text>
+        <Text style={styles.mutedText}>{hint}</Text>
       ) : null}
     </View>
   );
 }
+
+const useStyles = createTokenStyles((t) => ({
+  input: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: '0%',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: t.border,
+    backgroundColor: t.surface,
+    paddingHorizontal: 14,
+    color: t.foreground,
+  },
+  inputMultiline: { minHeight: 96, paddingVertical: 12 },
+  inputSingleLine: { height: 48 },
+  inputError: { borderColor: t.destructive },
+  section: { marginBottom: 16 },
+  text: { marginBottom: 6, fontSize: 14, fontWeight: 500, color: t.foreground, lineHeight: 20 },
+  row: { flexDirection: 'row', alignItems: 'center' },
+  text2: { marginTop: 4, fontSize: 12, color: t.destructive, lineHeight: 16 },
+  mutedText: { marginTop: 4, fontSize: 12, color: t.mutedForeground, lineHeight: 16 },
+}));

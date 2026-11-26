@@ -5,6 +5,11 @@ import { MonthlyListeners } from '@/components/artist/MonthlyListeners';
 import { TrackCredits } from '@/components/TrackCredits';
 
 const mockNavigate = jest.fn();
+// The real token styles (`createTokenStyles`, `tokenAlpha`) from the CommonJS build: the
+// `react-native` condition points at Bloom's TypeScript source, which Jest does not transform.
+jest.mock('@oxy.so/bloom/theme', () =>
+  jest.requireActual('../../../node_modules/@oxy.so/bloom/lib/commonjs/theme/color-tokens.js'),
+);
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockNavigate }) }));
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({

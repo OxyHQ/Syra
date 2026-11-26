@@ -5,10 +5,10 @@
  * meaning that must survive every host theme (the live-indicator red reads as
  * "on air" in light and dark mode alike, and the room-type accents distinguish
  * Stage from Broadcast at a glance). Everything else in the live components
- * comes from the host's design tokens — NativeWind classNames (`bg-background`,
- * `text-foreground`, `text-muted-foreground`, `border-border`, …) or, where a
- * prop needs a literal color value (vector icons), the host `useTheme()` from
- * `LiveConfig`.
+ * comes from the host's design tokens — Bloom's colour tokens through
+ * `createTokenStyles` (`surface`, `foreground`, `mutedForeground`, `border`, …)
+ * or, where a prop needs a literal color value (vector icons), the host
+ * `useTheme()` from `LiveConfig`.
  *
  * Consuming apps should import these instead of re-declaring the hex values.
  */

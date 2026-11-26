@@ -1,8 +1,17 @@
-import { View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { Image } from 'expo-image';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { useTheme } from '@oxy.so/bloom/theme';
-import { cn } from '@/lib/utils';
+import { createTokenStyles, useTheme } from '@oxy.so/bloom/theme';
+
+type ArtworkRadius = 'lg' | 'xl' | '2xl';
+
+// Syra's theme: `rounded-lg` is `--radius` (1rem), `rounded-xl` Tailwind's 0.75rem,
+// `rounded-2xl` 1rem.
+const radii = StyleSheet.create({
+  lg: { borderRadius: 16 },
+  xl: { borderRadius: 12 },
+  '2xl': { borderRadius: 16 },
+});
 
 /**
  * Podcast/episode cover art. Podcast artwork is an external absolute URL
@@ -16,18 +25,19 @@ export function Artwork({
 }: {
   uri?: string | null;
   size?: number;
-  rounded?: 'lg' | 'xl' | '2xl';
+  rounded?: ArtworkRadius;
 }) {
+  const styles = useStyles();
   const theme = useTheme();
-  const radiusClass =
-    rounded === '2xl' ? 'rounded-2xl' : rounded === 'xl' ? 'rounded-xl' : 'rounded-lg';
+  const box = { width: size, height: size };
 
   if (uri) {
     return (
       <Image
         source={{ uri }}
-        style={{ width: size, height: size }}
-        className={cn(radiusClass, 'bg-surface')}
+        // expo-image's native view never read a class: only the web drew the
+        // radius and the surface behind the image, so only the web gets them.
+        style={[box, Platform.OS === 'web' && [radii[rounded], styles.surface]]}
         contentFit="cover"
         transition={150}
       />
@@ -35,10 +45,7 @@ export function Artwork({
   }
 
   return (
-    <View
-      style={{ width: size, height: size }}
-      className={cn(radiusClass, 'bg-surface items-center justify-center')}
-    >
+    <View style={[box, radii[rounded], styles.placeholder]}>
       <MaterialCommunityIcons
         name="podcast"
         size={size * 0.45}
@@ -47,3 +54,8 @@ export function Artwork({
     </View>
   );
 }
+
+const useStyles = createTokenStyles((t) => ({
+  surface: { backgroundColor: t.surface },
+  placeholder: { alignItems: 'center', justifyContent: 'center', backgroundColor: t.surface },
+}));

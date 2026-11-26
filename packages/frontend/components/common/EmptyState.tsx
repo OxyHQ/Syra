@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxy.so/bloom/theme';
 import { flattenStyleArray } from '@/styles/shared';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { createTokenStyles, tokenAlpha } from '@oxy.so/bloom/theme';
 
 export interface EmptyStateProps {
   title?: string;
@@ -36,12 +37,11 @@ export interface EmptyStateProps {
   style?: ViewStyle;
   containerStyle?: ViewStyle;
   /**
-   * Container colour, as a Bloom class. Callers used to thread this through
-   * `className="bg-surface"` —
-   * seventeen of them — which freezes the value at render and cannot follow a
-   * preset change. A class can.
+   * Container colour, as a Bloom token role: `background` (the default) or
+   * `surface`. A token style follows a preset change; a colour read at render
+   * would freeze.
    */
-  className?: string;
+  tone?: 'background' | 'surface';
   titleStyle?: TextStyle;
   subtitleStyle?: TextStyle;
   accessible?: boolean;
@@ -62,15 +62,17 @@ export const EmptyState = memo<EmptyStateProps>(
     customIcon,
     style,
     containerStyle,
-    className,
+    tone = 'background',
     titleStyle,
     subtitleStyle,
     accessible = true,
     accessibilityLabel,
   }) => {
+    const themed = useThemedStyles();
     const { t } = useTranslation();
     const theme = useTheme();
     const [isRetrying, setIsRetrying] = useState(false);
+    const toneStyle = tone === 'surface' ? themed.toneSurface : themed.toneBackground;
 
     const handleRetry = async () => {
       if (!error?.onRetry || isRetrying) return;
@@ -85,21 +87,19 @@ export const EmptyState = memo<EmptyStateProps>(
     // Error state with retry
     if (error) {
       return (
-        <View
-          className={className ?? 'bg-background'}
-          style={flattenStyleArray([styles.errorContainer, containerStyle])}
-        >
+        <View style={[toneStyle, flattenStyleArray([styles.errorContainer, containerStyle])]}>
           <View style={styles.errorContent}>
             {icon && (
               <View
-                // `bg-error/10` rather than `theme.colors.error + '15'`: a
-                // hex-alpha suffix on a Bloom token yields a malformed colour
+                // `tokenAlpha(t.error, 0.1)` rather than `theme.colors.error + '15'`:
+                // a hex-alpha suffix on a Bloom token yields a malformed colour
                 // react-native-web reads as fully OPAQUE. A caller-supplied
-                // `icon.backgroundColor` still wins — inline beats class.
-                className={icon.backgroundColor ? undefined : 'bg-error/10'}
+                // `icon.backgroundColor` replaces it.
                 style={[
                   styles.iconWrapper,
-                  icon.backgroundColor ? { backgroundColor: icon.backgroundColor } : null,
+                  icon.backgroundColor
+                    ? { backgroundColor: icon.backgroundColor }
+                    : themed.errorIconWrapper,
                 ]}
               >
                 <Ionicons
@@ -110,24 +110,23 @@ export const EmptyState = memo<EmptyStateProps>(
               </View>
             )}
 
-            <Text
-              className="text-foreground"
-              style={flattenStyleArray([styles.errorTitle, titleStyle])}
-            >
+            <Text style={[themed.text, flattenStyleArray([styles.errorTitle, titleStyle])]}>
               {error.title}
             </Text>
 
             <Text
-              className="text-muted-foreground"
-              style={flattenStyleArray([styles.errorMessage, subtitleStyle])}
+              style={[themed.mutedText, flattenStyleArray([styles.errorMessage, subtitleStyle])]}
             >
               {error.message}
             </Text>
 
             {error.onRetry && (
               <TouchableOpacity
-                className={`bg-primary ${isRetrying ? 'opacity-60' : 'opacity-100'}`}
-                style={styles.retryButton}
+                style={[
+                  themed.surface,
+                  isRetrying ? styles.retrying : styles.idle,
+                  styles.retryButton,
+                ]}
                 onPress={handleRetry}
                 disabled={isRetrying}
                 activeOpacity={0.8}
@@ -142,7 +141,7 @@ export const EmptyState = memo<EmptyStateProps>(
                       color={theme.colors.card}
                       style={styles.retryIcon}
                     />
-                    <Text className="text-card" style={[styles.retryButtonText]}>
+                    <Text style={[themed.cardText, styles.retryButtonText]}>
                       {t('common.tryAgain')}
                     </Text>
                   </>
@@ -161,8 +160,7 @@ export const EmptyState = memo<EmptyStateProps>(
 
     return (
       <View
-        className={className ?? 'bg-background'}
-        style={flattenStyleArray([styles.emptyState, containerStyle])}
+        style={[toneStyle, flattenStyleArray([styles.emptyState, containerStyle])]}
         accessible={accessible}
         accessibilityRole="text"
         accessibilityLabel={accessibilityLabel || `${title || ''}. ${subtitle || ''}`}
@@ -187,18 +185,14 @@ export const EmptyState = memo<EmptyStateProps>(
         )}
 
         {title && (
-          <Text
-            className="text-foreground"
-            style={flattenStyleArray([styles.emptyStateText, titleStyle])}
-          >
+          <Text style={[themed.text, flattenStyleArray([styles.emptyStateText, titleStyle])]}>
             {title}
           </Text>
         )}
 
         {subtitle && (
           <Text
-            className="text-muted-foreground"
-            style={flattenStyleArray([styles.emptyStateSubtext, subtitleStyle])}
+            style={[themed.mutedText, flattenStyleArray([styles.emptyStateSubtext, subtitleStyle])]}
           >
             {subtitle}
           </Text>
@@ -206,8 +200,7 @@ export const EmptyState = memo<EmptyStateProps>(
 
         {action && (
           <TouchableOpacity
-            className="bg-primary"
-            style={[styles.actionButton]}
+            style={[themed.surface, styles.actionButton]}
             onPress={action.onPress}
             activeOpacity={0.8}
           >
@@ -219,9 +212,7 @@ export const EmptyState = memo<EmptyStateProps>(
                 style={styles.actionIcon}
               />
             )}
-            <Text className="text-card" style={[styles.actionButtonText]}>
-              {action.label}
-            </Text>
+            <Text style={[themed.cardText, styles.actionButtonText]}>{action.label}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -278,6 +269,8 @@ const styles = StyleSheet.create({
     minWidth: 100,
     gap: 6,
   },
+  retrying: { opacity: 0.6 },
+  idle: { opacity: 1 },
   retryIcon: {
     marginRight: 0,
   },
@@ -324,3 +317,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+
+const useThemedStyles = createTokenStyles((t) => ({
+  text: { color: t.foreground },
+  mutedText: { color: t.mutedForeground },
+  cardText: { color: t.card },
+  surface: { backgroundColor: t.primary },
+  toneBackground: { backgroundColor: t.background },
+  toneSurface: { backgroundColor: t.surface },
+  errorIconWrapper: { backgroundColor: tokenAlpha(t.error, 0.1) },
+}));

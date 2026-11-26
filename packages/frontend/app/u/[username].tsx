@@ -8,12 +8,14 @@ import Avatar from '@/components/Avatar';
 import { ProfileHeaderSkeleton } from '@/components/skeletons';
 import { useProfileData } from '@/hooks/useProfileData';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 /**
  * User Profile Screen
  * Displays a user's profile with their music library, playlists, etc.
  */
 const UserProfileScreen: React.FC = () => {
+  const themed = useThemedStyles();
   const { t } = useTranslation();
   const theme = useTheme();
   const { username } = useLocalSearchParams<{ username: string }>();
@@ -23,11 +25,7 @@ const UserProfileScreen: React.FC = () => {
     return (
       <>
         <SEO title={`${username || 'User'} - Syra`} description={t('user.seo.description')} />
-        <ScrollView
-          className="bg-surface"
-          style={styles.container}
-          showsVerticalScrollIndicator={false}
-        >
+        <ScrollView style={[themed.surface, styles.container]} showsVerticalScrollIndicator={false}>
           <ProfileHeaderSkeleton />
         </ScrollView>
       </>
@@ -38,14 +36,10 @@ const UserProfileScreen: React.FC = () => {
     return (
       <>
         <SEO title={t('user.seo.notFoundTitle')} description={t('user.seo.notFoundDescription')} />
-        <View className="bg-surface" style={[styles.container, styles.centered]}>
+        <View style={[themed.surface, styles.container, styles.centered]}>
           <MaterialCommunityIcons name="account-off" size={64} color={theme.colors.textSecondary} />
-          <Text className="text-muted-foreground" style={styles.errorText}>
-            {t('user.notFound')}
-          </Text>
-          <Text className="text-muted-foreground" style={styles.errorSubtext}>
-            {t('user.notFoundMessage')}
-          </Text>
+          <Text style={[themed.mutedText, styles.errorText]}>{t('user.notFound')}</Text>
+          <Text style={[themed.mutedText, styles.errorSubtext]}>{t('user.notFoundMessage')}</Text>
         </View>
       </>
     );
@@ -62,8 +56,7 @@ const UserProfileScreen: React.FC = () => {
         description={profileData.bio || `Profile page for ${displayName}`}
       />
       <ScrollView
-        className="bg-surface"
-        style={styles.container}
+        style={[themed.surface, styles.container]}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
@@ -77,9 +70,7 @@ const UserProfileScreen: React.FC = () => {
           />
           <View style={styles.profileInfo}>
             <View style={styles.nameRow}>
-              <Text className="text-foreground" style={styles.displayName}>
-                {displayName}
-              </Text>
+              <Text style={[themed.text, styles.displayName]}>{displayName}</Text>
               {profileData.verified && (
                 <MaterialCommunityIcons
                   name="check-circle"
@@ -89,59 +80,37 @@ const UserProfileScreen: React.FC = () => {
                 />
               )}
             </View>
-            <Text className="text-muted-foreground" style={styles.username}>
-              @{profileData.username}
-            </Text>
-            {profileData.bio && (
-              <Text className="text-foreground" style={styles.bio}>
-                {profileData.bio}
-              </Text>
-            )}
+            <Text style={[themed.mutedText, styles.username]}>@{profileData.username}</Text>
+            {profileData.bio && <Text style={[themed.text, styles.bio]}>{profileData.bio}</Text>}
           </View>
         </View>
 
         {/* Stats Section */}
         <View style={[styles.statsSection, { borderBottomColor: theme.colors.border }]}>
           <View style={styles.statItem}>
-            <Text className="text-foreground" style={styles.statValue}>
-              {profileData.postsCount || 0}
-            </Text>
-            <Text className="text-muted-foreground" style={styles.statLabel}>
-              {t('common.playlists')}
-            </Text>
+            <Text style={[themed.text, styles.statValue]}>{profileData.postsCount || 0}</Text>
+            <Text style={[themed.mutedText, styles.statLabel]}>{t('common.playlists')}</Text>
           </View>
           <View style={styles.statItem}>
-            <Text className="text-foreground" style={styles.statValue}>
-              {profileData.stats?.followers || 0}
-            </Text>
-            <Text className="text-muted-foreground" style={styles.statLabel}>
-              {t('common.followers')}
-            </Text>
+            <Text style={[themed.text, styles.statValue]}>{profileData.stats?.followers || 0}</Text>
+            <Text style={[themed.mutedText, styles.statLabel]}>{t('common.followers')}</Text>
           </View>
           <View style={styles.statItem}>
-            <Text className="text-foreground" style={styles.statValue}>
-              {profileData.stats?.following || 0}
-            </Text>
-            <Text className="text-muted-foreground" style={styles.statLabel}>
-              {t('common.following')}
-            </Text>
+            <Text style={[themed.text, styles.statValue]}>{profileData.stats?.following || 0}</Text>
+            <Text style={[themed.mutedText, styles.statLabel]}>{t('common.following')}</Text>
           </View>
         </View>
 
         {/* Content Section */}
         <View style={styles.contentSection}>
-          <Text className="text-foreground" style={styles.sectionTitle}>
-            {t('user.publicPlaylists')}
-          </Text>
+          <Text style={[themed.text, styles.sectionTitle]}>{t('user.publicPlaylists')}</Text>
           <View style={styles.emptyState}>
             <MaterialCommunityIcons
               name="playlist-music"
               size={48}
               color={theme.colors.textSecondary}
             />
-            <Text className="text-muted-foreground" style={styles.emptyText}>
-              {t('user.noPublicPlaylists')}
-            </Text>
+            <Text style={[themed.mutedText, styles.emptyText]}>{t('user.noPublicPlaylists')}</Text>
           </View>
         </View>
 
@@ -243,3 +212,9 @@ const styles = StyleSheet.create({
 });
 
 export default UserProfileScreen;
+
+const useThemedStyles = createTokenStyles((t) => ({
+  surface: { backgroundColor: t.surface },
+  mutedText: { color: t.mutedForeground },
+  text: { color: t.foreground },
+}));

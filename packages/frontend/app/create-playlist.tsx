@@ -30,6 +30,7 @@ import { toast } from '@oxy.so/bloom/toast';
 import SEO from '@/components/SEO';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { z } from 'zod';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 interface FormErrors {
   name?: string;
@@ -103,6 +104,7 @@ function CreatePlaylistForm({
   owner: { accountId: string | null };
   currentOwner: RefObject<{ accountId: string | null } | null>;
 }) {
+  const themed = useThemedStyles();
   const { t } = useTranslation();
   const theme = useTheme();
   const router = useRouter();
@@ -231,13 +233,12 @@ function CreatePlaylistForm({
       />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        className="bg-surface"
-        style={styles.container}
+        style={[themed.surface, styles.container]}
       >
         {/* Header */}
         <View
-          className="bg-surface border-b-border"
           style={[
+            themed.surface2,
             styles.header,
             {
               // Top safe-area is cleared by the shell's TopBar (single
@@ -249,9 +250,7 @@ function CreatePlaylistForm({
           <Pressable onPress={handleGoBack} disabled={isCreating} style={styles.backButton}>
             <MaterialCommunityIcons name="arrow-left" size={24} color={theme.colors.text} />
           </Pressable>
-          <Text className="text-foreground" style={styles.title}>
-            {t('library.createPlaylist')}
-          </Text>
+          <Text style={[themed.text, styles.title]}>{t('library.createPlaylist')}</Text>
           <Pressable
             testID="create-playlist-submit"
             onPress={handleCreate}
@@ -270,7 +269,7 @@ function CreatePlaylistForm({
             {isCreating ? (
               <ActivityIndicator size="small" color={theme.colors.primaryForeground} />
             ) : (
-              <Text className="text-primary-foreground" style={styles.createHeaderButtonText}>
+              <Text style={[themed.text2, styles.createHeaderButtonText]}>
                 {t('common.create')}
               </Text>
             )}
@@ -278,7 +277,7 @@ function CreatePlaylistForm({
         </View>
 
         {sessionUnverified || needsRetry ? (
-          <Text accessibilityRole="alert" className="text-error" style={styles.errorText}>
+          <Text accessibilityRole="alert" style={[themed.text3, styles.errorText]}>
             {t(
               sessionUnverified
                 ? 'createPlaylist.sessionUnverified'
@@ -307,8 +306,11 @@ function CreatePlaylistForm({
             {/* Name Input */}
             <View style={styles.inputGroup}>
               <TextInput
-                className={`bg-surface text-foreground ${errors.name ? 'border-error' : 'border-border'}`}
-                style={styles.input}
+                style={[
+                  themed.input,
+                  errors.name ? themed.inputError : themed.inputIdle,
+                  styles.input,
+                ]}
                 placeholder={t('createPlaylist.namePlaceholder')}
                 placeholderTextColor={theme.colors.textSecondary}
                 value={name}
@@ -322,12 +324,8 @@ function CreatePlaylistForm({
                 editable={!isCreating}
                 autoFocus
               />
-              {errors.name && (
-                <Text className="text-error" style={styles.errorText}>
-                  {errors.name}
-                </Text>
-              )}
-              <Text className="text-muted-foreground" style={styles.characterCount}>
+              {errors.name && <Text style={[themed.text3, styles.errorText]}>{errors.name}</Text>}
+              <Text style={[themed.mutedText, styles.characterCount]}>
                 {name.length}/{NAME_MAX_LENGTH}
               </Text>
             </View>
@@ -335,8 +333,11 @@ function CreatePlaylistForm({
             {/* Description Input */}
             <View style={styles.inputGroup}>
               <TextInput
-                className={`bg-surface text-foreground ${errors.description ? 'border-error' : 'border-border'}`}
-                style={styles.textArea}
+                style={[
+                  themed.input,
+                  errors.description ? themed.inputError : themed.inputIdle,
+                  styles.textArea,
+                ]}
                 placeholder={t('createPlaylist.descriptionPlaceholder')}
                 placeholderTextColor={theme.colors.textSecondary}
                 value={description}
@@ -353,20 +354,16 @@ function CreatePlaylistForm({
                 editable={!isCreating}
               />
               {errors.description && (
-                <Text className="text-error" style={styles.errorText}>
-                  {errors.description}
-                </Text>
+                <Text style={[themed.text3, styles.errorText]}>{errors.description}</Text>
               )}
-              <Text className="text-muted-foreground" style={styles.characterCount}>
+              <Text style={[themed.mutedText, styles.characterCount]}>
                 {description.length}/{DESCRIPTION_MAX_LENGTH}
               </Text>
             </View>
 
             {/* Privacy/Visibility Selector */}
             <View style={styles.inputGroup}>
-              <Text className="text-foreground" style={styles.label}>
-                {t('createPlaylist.privacy')}
-              </Text>
+              <Text style={[themed.text, styles.label]}>{t('createPlaylist.privacy')}</Text>
               <View style={styles.visibilityOptions}>
                 {visibilityOptions.map((option) => (
                   <Pressable
@@ -399,12 +396,10 @@ function CreatePlaylistForm({
                       {option.label}
                     </Text>
                     <Text
-                      className={
-                        visibility === option.value
-                          ? 'text-primary-foreground opacity-80'
-                          : 'text-muted-foreground'
-                      }
-                      style={styles.visibilityOptionDescription}
+                      style={[
+                        visibility === option.value ? themed.selectedDescription : themed.mutedText,
+                        styles.visibilityOptionDescription,
+                      ]}
                     >
                       {option.description}
                     </Text>
@@ -534,3 +529,16 @@ const styles = StyleSheet.create({
 });
 
 export default CreatePlaylistScreen;
+
+const useThemedStyles = createTokenStyles((t) => ({
+  surface: { backgroundColor: t.surface },
+  surface2: { borderBottomColor: t.border, backgroundColor: t.surface },
+  text: { color: t.foreground },
+  text2: { color: t.primaryForeground },
+  text3: { color: t.error },
+  mutedText: { color: t.mutedForeground },
+  input: { backgroundColor: t.surface, color: t.foreground },
+  inputError: { borderColor: t.error },
+  inputIdle: { borderColor: t.border },
+  selectedDescription: { color: t.primaryForeground, opacity: 0.8 },
+}));

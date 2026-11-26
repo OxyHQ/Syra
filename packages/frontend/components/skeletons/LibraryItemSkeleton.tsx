@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import * as Skeleton from '@oxy.so/bloom/skeleton';
 import { useTheme } from '@oxy.so/bloom/theme';
 import { Repeat } from './Repeat';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 interface LibraryItemSkeletonProps {
   /** `circle` mirrors followed-artist rows; `square` mirrors playlist rows. */
@@ -15,10 +16,11 @@ interface LibraryItemSkeletonProps {
  */
 export const LibraryItemSkeleton: React.FC<LibraryItemSkeletonProps> = React.memo(
   ({ shape = 'square' }) => {
+    const themed = useThemedStyles();
     const theme = useTheme();
 
     return (
-      <View className="bg-popover" style={styles.libraryItem}>
+      <View style={[themed.surface, styles.libraryItem]}>
         {shape === 'circle' ? (
           <Skeleton.Circle size={48} />
         ) : (
@@ -68,3 +70,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
 });
+
+const useThemedStyles = createTokenStyles((t) => ({
+  surface: { backgroundColor: t.popover },
+}));

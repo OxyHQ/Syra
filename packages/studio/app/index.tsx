@@ -9,16 +9,18 @@ import { SignInGate } from '@/components/SignInGate';
 import { ScreenContainer } from '@/components/AppShell';
 import { ShowCard } from '@/components/ShowCard';
 import { useMyPodcasts } from '@/hooks/usePodcasts';
+import { createTokenStyles, tokenAlpha } from '@oxy.so/bloom/theme';
 
 function EmptyState({ onCreate }: { onCreate: () => void }) {
+  const styles = useStyles();
   const theme = useTheme();
   return (
-    <View className="items-center justify-center py-16 px-6">
-      <View className="w-16 h-16 rounded-2xl bg-primary/10 items-center justify-center mb-4">
+    <View style={styles.centered}>
+      <View style={styles.centered2}>
         <MaterialCommunityIcons name="microphone-plus" size={30} color={theme.colors.primary} />
       </View>
-      <Text className="text-lg font-semibold text-foreground mb-1">No podcasts yet</Text>
-      <Text className="text-sm text-muted-foreground text-center mb-5 max-w-[360px]">
+      <Text style={styles.title}>No podcasts yet</Text>
+      <Text style={styles.mutedText}>
         Create your first podcast to start uploading episodes and get a public RSS feed.
       </Text>
       <Button onPress={onCreate} tone="accent" appearance="solid">
@@ -29,6 +31,7 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
 }
 
 function Dashboard() {
+  const styles = useStyles();
   const router = useRouter();
   const { data: podcasts, isLoading, isError, refetch } = useMyPodcasts();
 
@@ -55,12 +58,12 @@ function Dashboard() {
       }
     >
       {isLoading ? (
-        <View className="py-16 items-center">
+        <View style={styles.container}>
           <Loading />
         </View>
       ) : isError ? (
-        <View className="py-16 items-center px-6">
-          <Text className="text-base text-foreground mb-3">Couldn&apos;t load your podcasts.</Text>
+        <View style={styles.container2}>
+          <Text style={styles.text}>Couldn&apos;t load your podcasts.</Text>
           <Button onPress={() => refetch()} tone="neutral" appearance="outline">
             Retry
           </Button>
@@ -68,7 +71,7 @@ function Dashboard() {
       ) : !podcasts || podcasts.length === 0 ? (
         <EmptyState onCreate={goToNew} />
       ) : (
-        <View className="gap-3">
+        <View style={styles.stack}>
           {podcasts.map((podcast) => (
             <ShowCard key={podcast.id} podcast={podcast} onPress={() => openShow(podcast.id)} />
           ))}
@@ -85,3 +88,34 @@ export default function DashboardScreen() {
     </SignInGate>
   );
 }
+
+const useStyles = createTokenStyles((t) => ({
+  centered: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 64,
+  },
+  centered2: {
+    marginBottom: 16,
+    height: 64,
+    width: 64,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 16,
+    backgroundColor: tokenAlpha(t.primary, 0.1),
+  },
+  title: { marginBottom: 4, fontSize: 18, fontWeight: 600, color: t.foreground, lineHeight: 28 },
+  mutedText: {
+    marginBottom: 20,
+    maxWidth: 360,
+    textAlign: 'center',
+    fontSize: 14,
+    color: t.mutedForeground,
+    lineHeight: 20,
+  },
+  container: { alignItems: 'center', paddingVertical: 64 },
+  container2: { alignItems: 'center', paddingHorizontal: 24, paddingVertical: 64 },
+  text: { marginBottom: 12, fontSize: 16, color: t.foreground, lineHeight: 24 },
+  stack: { gap: 12 },
+}));

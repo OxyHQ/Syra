@@ -14,6 +14,7 @@ import { useTheme } from '@oxy.so/bloom/theme';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useImagePicker } from '@/hooks/useImagePicker';
 import { resolveCatalogImageUrl } from '@/utils/catalogImages';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 interface CoverArtPickerProps {
   value?: string; // Image ID or URL for display
@@ -32,6 +33,7 @@ export const CoverArtPicker: React.FC<CoverArtPickerProps> = ({
   size = 200,
   disabled = false,
 }) => {
+  const themed = useThemedStyles();
   const { t } = useTranslation();
   const theme = useTheme();
   // Web-only hover state to fade in the "change cover" overlay.
@@ -112,15 +114,17 @@ export const CoverArtPicker: React.FC<CoverArtPickerProps> = ({
       disabled={disabled}
       onPointerEnter={Platform.OS === 'web' ? () => setIsHovered(true) : undefined}
       onPointerLeave={Platform.OS === 'web' ? () => setIsHovered(false) : undefined}
-      className={`bg-surface border-border ${disabled || isUploading ? 'opacity-50' : 'opacity-100'}`}
-      style={[styles.container, { width: size, height: size }]}
+      style={[
+        themed.container,
+        disabled || isUploading ? styles.dimmed : styles.enabled,
+        styles.container,
+        { width: size, height: size },
+      ]}
     >
       {isUploading ? (
         <View style={styles.uploadingContainer}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
-          <Text className="text-muted-foreground" style={styles.uploadingText}>
-            Uploading...
-          </Text>
+          <Text style={[themed.mutedText, styles.uploadingText]}>Uploading...</Text>
         </View>
       ) : imageUrl ? (
         <Image
@@ -135,9 +139,7 @@ export const CoverArtPicker: React.FC<CoverArtPickerProps> = ({
             size={size * 0.3}
             color={theme.colors.textSecondary}
           />
-          <Text className="text-muted-foreground" style={styles.placeholderText}>
-            {t('coverArt.add')}
-          </Text>
+          <Text style={[themed.mutedText, styles.placeholderText]}>{t('coverArt.add')}</Text>
         </View>
       )}
 
@@ -161,6 +163,8 @@ export const CoverArtPicker: React.FC<CoverArtPickerProps> = ({
 };
 
 const styles = StyleSheet.create({
+  enabled: { opacity: 1 },
+  dimmed: { opacity: 0.5 },
   container: {
     borderRadius: 20,
     borderWidth: 2,
@@ -218,3 +222,8 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 });
+
+const useThemedStyles = createTokenStyles((t) => ({
+  mutedText: { color: t.mutedForeground },
+  container: { borderColor: t.border, backgroundColor: t.surface },
+}));

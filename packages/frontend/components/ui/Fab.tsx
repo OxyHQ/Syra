@@ -10,6 +10,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useTheme } from '@oxy.so/bloom/theme';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -69,6 +70,7 @@ const FabComponent: React.FC<FabProps> = ({
   expanded,
   style,
 }) => {
+  const themed = useThemedStyles();
   const theme = useTheme();
   const iconSize = Math.round(size * 0.46);
 
@@ -117,8 +119,7 @@ const FabComponent: React.FC<FabProps> = ({
         onPress={onPress}
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}
-        className="bg-primary"
-        style={[styles.fab, circleDims, style]}
+        style={[themed.surface, styles.fab, circleDims, style]}
       >
         <MaterialCommunityIcons
           name={iconName}
@@ -135,8 +136,8 @@ const FabComponent: React.FC<FabProps> = ({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
-      className="bg-primary"
       style={[
+        themed.surface,
         styles.fab,
         styles.extended,
         { height: size, borderRadius: size / 2 },
@@ -149,11 +150,7 @@ const FabComponent: React.FC<FabProps> = ({
         size={iconSize}
         color={theme.colors.primaryForeground}
       />
-      <Animated.Text
-        numberOfLines={1}
-        className="text-primary-foreground"
-        style={[styles.label, labelAnimatedStyle]}
-      >
+      <Animated.Text numberOfLines={1} style={[themed.container, styles.label, labelAnimatedStyle]}>
         {label}
       </Animated.Text>
     </AnimatedPressable>
@@ -190,3 +187,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
+
+const useThemedStyles = createTokenStyles((t) => ({
+  surface: { backgroundColor: t.primary },
+  container: { color: t.primaryForeground },
+}));

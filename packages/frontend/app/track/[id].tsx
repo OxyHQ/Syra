@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { useLocalSearchParams, Stack } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -14,8 +14,10 @@ import { TrackActionsSheet } from '@/components/playlist/TrackActionsSheet';
 import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { shareMedia } from '@/utils/share-media';
 import SEO from '@/components/SEO';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 export default function TrackScreen() {
+  const styles = useStyles();
   const { id, t: timestamp } = useLocalSearchParams<{ id: string; t?: string }>();
   const { t } = useTranslation();
   const gate = useAuthGate();
@@ -46,8 +48,8 @@ export default function TrackScreen() {
   };
   return (
     <ScrollView
-      className="flex-1 bg-background"
-      contentContainerClassName="p-6 gap-5 pb-36"
+      style={styles.surface}
+      contentContainerStyle={styles.content}
       contentInsetAdjustmentBehavior="automatic"
     >
       <Stack.Screen options={{ title: track?.title ?? t('listener.track') }} />
@@ -59,7 +61,7 @@ export default function TrackScreen() {
             void query.refetch();
           }}
         >
-          <Text className="text-foreground">{t('listener.retry')}</Text>
+          <Text style={styles.text}>{t('listener.retry')}</Text>
         </Pressable>
       ) : null}
       {track ? (
@@ -74,6 +76,9 @@ export default function TrackScreen() {
               track.coverArtSizes,
             )}
           />
+          {/* `w-64 h-64 rounded-2xl` reached only the web (expo-image's container there
+              was react-native-css's View; its native view ignored the class), so the size
+              stays web-only, as it drew. */}
           <Image
             source={{
               uri: pickCatalogImageUrl(
@@ -83,40 +88,38 @@ export default function TrackScreen() {
                 track.coverArtSizes,
               ),
             }}
-            className="w-64 h-64 rounded-2xl"
+            style={styles.artwork}
             contentFit="cover"
           />
-          <Text selectable className="text-3xl font-bold text-foreground">
+          <Text selectable style={styles.title}>
             {track.title}
           </Text>
-          <TrackArtistLine track={track} className="text-muted-foreground text-lg" />
-          <View className="flex-row flex-wrap gap-3">
+          <TrackArtistLine track={track} style={styles.artist} />
+          <View style={styles.row}>
             <Pressable
               onPress={() => void handlePlay()}
               accessibilityRole="button"
-              className="rounded-full bg-primary px-6 py-3"
+              style={styles.surface2}
             >
-              <Text className="text-primary-foreground font-semibold">
-                {t(playing ? 'listener.pause' : 'listener.play')}
-              </Text>
+              <Text style={styles.title2}>{t(playing ? 'listener.pause' : 'listener.play')}</Text>
             </Pressable>
             <Pressable
               onPress={() => setShowActions(true)}
               accessibilityRole="button"
-              className="rounded-full bg-surface px-6 py-3"
+              style={styles.surface3}
             >
-              <Text className="text-foreground">{t('listener.actions')}</Text>
+              <Text style={styles.text}>{t('listener.actions')}</Text>
             </Pressable>
             <Pressable
               onPress={() => void shareMedia('track', id, track.title)}
               accessibilityRole="button"
-              className="rounded-full bg-surface px-6 py-3"
+              style={styles.surface3}
             >
-              <Text className="text-foreground">{t('listener.share')}</Text>
+              <Text style={styles.text}>{t('listener.share')}</Text>
             </Pressable>
           </View>
           <TrackCredits track={track} />
-          <Text className="text-xl font-semibold text-foreground">{t('listener.lyrics')}</Text>
+          <Text style={styles.title3}>{t('listener.lyrics')}</Text>
           <LyricsView trackId={id} />
           <TrackActionsSheet
             visible={showActions}
@@ -128,3 +131,27 @@ export default function TrackScreen() {
     </ScrollView>
   );
 }
+
+const useStyles = createTokenStyles((t) => ({
+  surface: { flexGrow: 1, flexShrink: 1, flexBasis: '0%', backgroundColor: t.background },
+  content: { gap: 20, padding: 24, paddingBottom: 144 },
+  text: { color: t.foreground },
+  title: { fontSize: 30, fontWeight: 700, color: t.foreground, lineHeight: 36 },
+  artist: { fontSize: 18, lineHeight: 28, color: t.mutedForeground },
+  artwork: Platform.select({ web: { width: 256, height: 256, borderRadius: 16 }, default: {} }),
+  row: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  surface2: {
+    borderRadius: 9999,
+    backgroundColor: t.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+  },
+  title2: { fontWeight: 600, color: t.primaryForeground },
+  surface3: {
+    borderRadius: 9999,
+    backgroundColor: t.surface,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+  },
+  title3: { fontSize: 20, fontWeight: 600, color: t.foreground, lineHeight: 28 },
+}));

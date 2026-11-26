@@ -8,6 +8,7 @@ import { useTheme } from '@oxy.so/bloom/theme';
 import type { ResolvedPerson } from '@syra/shared-types';
 import Avatar from '@/components/Avatar';
 import { resolveExternalImageUri } from '@/utils/pickImage';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 interface HostsAndGuestsProps {
   persons: ResolvedPerson[];
@@ -28,6 +29,7 @@ interface HostsAndGuestsProps {
  * the payload (the `/u/[username]` route resolves by username, not by Oxy id).
  */
 export const HostsAndGuests: React.FC<HostsAndGuestsProps> = ({ persons, title }) => {
+  const themed = useThemedStyles();
   const { t } = useTranslation();
   const heading = title ?? t('podcast.hostsAndGuests');
   const theme = useTheme();
@@ -39,9 +41,7 @@ export const HostsAndGuests: React.FC<HostsAndGuestsProps> = ({ persons, title }
 
   return (
     <View style={styles.section}>
-      <Text className="text-foreground" style={styles.sectionTitle}>
-        {heading}
-      </Text>
+      <Text style={[themed.text, styles.sectionTitle]}>{heading}</Text>
       {persons.map((person, index) => {
         const isOxyLinked = Boolean(person.linkedOxyUserId);
         const label = person.displayName || person.name;
@@ -72,16 +72,16 @@ export const HostsAndGuests: React.FC<HostsAndGuestsProps> = ({ persons, title }
             ) : externalImg ? (
               <Image source={{ uri: externalImg }} style={styles.avatar} contentFit="cover" />
             ) : (
-              <View className="bg-popover" style={styles.avatarPlaceholder}>
+              <View style={[themed.surface, styles.avatarPlaceholder]}>
                 <Ionicons name="person" size={18} color={theme.colors.textSecondary} />
               </View>
             )}
             <View style={styles.info}>
-              <Text className="text-foreground" style={styles.name} numberOfLines={1}>
+              <Text style={[themed.text, styles.name]} numberOfLines={1}>
                 {label}
               </Text>
               {person.role ? (
-                <Text className="text-muted-foreground" style={styles.role} numberOfLines={1}>
+                <Text style={[themed.mutedText, styles.role]} numberOfLines={1}>
                   {person.role}
                 </Text>
               ) : null}
@@ -136,3 +136,9 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
 });
+
+const useThemedStyles = createTokenStyles((t) => ({
+  text: { color: t.foreground },
+  surface: { backgroundColor: t.popover },
+  mutedText: { color: t.mutedForeground },
+}));

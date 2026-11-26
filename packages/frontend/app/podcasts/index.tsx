@@ -15,6 +15,7 @@ import { usePlayerStore } from '@/stores/playerStore';
 import { resolvePodcastArtwork } from '@/utils/pickImage';
 import { formatRemaining } from '@/utils/podcastFormat';
 import { webViewStyle } from '@/utils/webStyles';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 type ContinueEntry = NonNullable<ReturnType<typeof useContinueListening>['data']>[number];
 
@@ -124,40 +125,36 @@ const PodcastsContent: React.FC<PodcastsContentProps> = ({
   onPlayEpisode,
   onPlayShow,
 }) => {
+  const themed = useThemedStyles();
   const { t } = useTranslation();
   const theme = useTheme();
 
   return (
     <>
       <SEO title={t('podcasts.seo.title')} description={t('podcasts.seo.description')} />
-      <View className="bg-surface" style={styles.container}>
+      <View style={[themed.surface, styles.container]}>
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.header}>
-            <Text className="text-foreground" style={styles.title}>
-              {t('common.podcasts')}
-            </Text>
+            <Text style={[themed.text, styles.title]}>{t('common.podcasts')}</Text>
             <Pressable
               onPress={onFindPodcast}
-              className="bg-popover"
-              style={styles.discoverButton}
+              style={[themed.surface2, styles.discoverButton]}
               accessibilityRole="button"
               accessibilityLabel={t('podcasts.findAccessibility')}
             >
               <Ionicons name="search" size={16} color={theme.colors.text} />
-              <Text className="text-foreground" style={styles.discoverText}>
-                {t('podcasts.find')}
-              </Text>
+              <Text style={[themed.text, styles.discoverText]}>{t('podcasts.find')}</Text>
             </Pressable>
           </View>
 
           {/* Continue listening rail */}
           {inProgress.length > 0 && (
             <View style={styles.section}>
-              <Text className="text-foreground" style={styles.sectionTitle}>
+              <Text style={[themed.text, styles.sectionTitle]}>
                 {t('podcasts.continueListening')}
               </Text>
               <ScrollView
@@ -245,7 +242,7 @@ const PodcastsContent: React.FC<PodcastsContentProps> = ({
 
           {/* Browse grid */}
           <View style={styles.section}>
-            <Text className="text-foreground" style={styles.sectionTitle}>
+            <Text style={[themed.text, styles.sectionTitle]}>
               {activeCategory ?? t('podcasts.popularShows')}
             </Text>
             {podcastsPending ? (
@@ -272,17 +269,9 @@ const PodcastsContent: React.FC<PodcastsContentProps> = ({
             ) : (
               <View style={styles.empty}>
                 <Ionicons name="mic-outline" size={48} color={theme.colors.textSecondary} />
-                <Text className="text-muted-foreground" style={styles.emptyText}>
-                  {t('podcasts.empty')}
-                </Text>
-                <Pressable
-                  onPress={onFindPodcast}
-                  className="bg-primary"
-                  style={styles.emptyButton}
-                >
-                  <Text className="text-primary-foreground" style={styles.emptyButtonText}>
-                    {t('podcasts.find')}
-                  </Text>
+                <Text style={[themed.mutedText, styles.emptyText]}>{t('podcasts.empty')}</Text>
+                <Pressable onPress={onFindPodcast} style={[themed.surface3, styles.emptyButton]}>
+                  <Text style={[themed.text2, styles.emptyButtonText]}>{t('podcasts.find')}</Text>
                 </Pressable>
               </View>
             )}
@@ -381,3 +370,12 @@ const styles = StyleSheet.create({
 });
 
 export default PodcastsScreen;
+
+const useThemedStyles = createTokenStyles((t) => ({
+  surface: { backgroundColor: t.surface },
+  text: { color: t.foreground },
+  surface2: { backgroundColor: t.popover },
+  mutedText: { color: t.mutedForeground },
+  surface3: { backgroundColor: t.primary },
+  text2: { color: t.primaryForeground },
+}));

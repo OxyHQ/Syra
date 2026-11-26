@@ -4,6 +4,7 @@ import * as Skeleton from '@oxy.so/bloom/skeleton';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@oxy.so/bloom/theme';
 import { LibraryListSkeleton } from './LibraryItemSkeleton';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 interface PodcastDetailSkeletonProps {
   /** Number of placeholder episode rows. Defaults to 6. */
@@ -19,6 +20,7 @@ interface PodcastDetailSkeletonProps {
  */
 export const PodcastDetailSkeleton: React.FC<PodcastDetailSkeletonProps> = React.memo(
   ({ episodeCount = 6 }) => {
+    const themed = useThemedStyles();
     const theme = useTheme();
     const gradientColors: readonly [string, string, string] = [
       theme.colors.backgroundSecondary,
@@ -28,8 +30,7 @@ export const PodcastDetailSkeleton: React.FC<PodcastDetailSkeletonProps> = React
 
     return (
       <ScrollView
-        className="bg-surface"
-        style={styles.container}
+        style={[themed.surface, styles.container]}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
@@ -86,3 +87,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
 });
+
+const useThemedStyles = createTokenStyles((t) => ({
+  surface: { backgroundColor: t.surface },
+}));

@@ -16,6 +16,7 @@ import { toast } from '@oxy.so/bloom/toast';
 import { entityService } from '@/services/entityService';
 import { useAuthGate } from '@/hooks/useAuthGate';
 import { createScopedLogger } from '@/utils/logger';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 /**
  * "Is this you?" — the claim call to action on a contributed artist profile.
@@ -36,6 +37,7 @@ interface ArtistClaimCtaProps {
 }
 
 export const ArtistClaimCta: React.FC<ArtistClaimCtaProps> = ({ artistId, artistName }) => {
+  const themed = useThemedStyles();
   const theme = useTheme();
   const { t } = useTranslation();
   const gate = useAuthGate();
@@ -62,50 +64,38 @@ export const ArtistClaimCta: React.FC<ArtistClaimCtaProps> = ({ artistId, artist
 
   if (isSubmitted) {
     return (
-      <View className="bg-popover" style={styles.container}>
+      <View style={[themed.surface, styles.container]}>
         <View style={styles.headerRow}>
           <Ionicons name="hourglass-outline" size={18} color={theme.colors.textSecondary} />
-          <Text className="text-foreground" style={styles.title}>
-            {t('artist.claim.pendingTitle')}
-          </Text>
+          <Text style={[themed.text, styles.title]}>{t('artist.claim.pendingTitle')}</Text>
         </View>
-        <Text className="text-muted-foreground" style={styles.body}>
-          {t('artist.claim.pendingBody')}
-        </Text>
+        <Text style={[themed.mutedText, styles.body]}>{t('artist.claim.pendingBody')}</Text>
       </View>
     );
   }
 
   return (
-    <View className="bg-popover" style={styles.container}>
+    <View style={[themed.surface, styles.container]}>
       <View style={styles.headerRow}>
         <Ionicons name="person-add-outline" size={18} color={theme.colors.primary} />
-        <Text className="text-foreground" style={styles.title}>
+        <Text style={[themed.text, styles.title]}>
           {t('artist.claim.title', { name: artistName })}
         </Text>
       </View>
-      <Text className="text-muted-foreground" style={styles.body}>
-        {t('artist.claim.body')}
-      </Text>
+      <Text style={[themed.mutedText, styles.body]}>{t('artist.claim.body')}</Text>
 
       {!isOpen ? (
         <Pressable
           onPress={() => setIsOpen(true)}
-          className="bg-primary"
-          style={styles.button}
+          style={[themed.surface2, styles.button]}
           accessibilityRole="button"
         >
-          <Text className="text-primary-foreground" style={styles.buttonText}>
-            {t('artist.claim.cta')}
-          </Text>
+          <Text style={[themed.text2, styles.buttonText]}>{t('artist.claim.cta')}</Text>
         </Pressable>
       ) : (
         <>
-          <Text className="text-foreground" style={styles.label}>
-            {t('artist.claim.evidenceLabel')}
-          </Text>
+          <Text style={[themed.text, styles.label]}>{t('artist.claim.evidenceLabel')}</Text>
           <TextInput
-            className="bg-surface text-foreground"
             value={evidence}
             onChangeText={setEvidence}
             placeholder={t('artist.claim.evidencePlaceholder')}
@@ -113,24 +103,19 @@ export const ArtistClaimCta: React.FC<ArtistClaimCtaProps> = ({ artistId, artist
             multiline
             numberOfLines={4}
             editable={!claim.isPending}
-            style={[styles.input]}
+            style={[themed.surface3, styles.input]}
           />
           {!gate.canUsePrivateApi && (
-            <Text className="text-error" style={styles.body}>
-              {t('artist.claim.signInRequired')}
-            </Text>
+            <Text style={[themed.text3, styles.body]}>{t('artist.claim.signInRequired')}</Text>
           )}
           <View style={styles.actions}>
             <Pressable
               onPress={() => setIsOpen(false)}
-              className="bg-surface"
-              style={styles.button}
+              style={[themed.surface4, styles.button]}
               accessibilityRole="button"
               disabled={claim.isPending}
             >
-              <Text className="text-foreground" style={styles.buttonText}>
-                {t('common.cancel')}
-              </Text>
+              <Text style={[themed.text, styles.buttonText]}>{t('common.cancel')}</Text>
             </Pressable>
             <Pressable
               onPress={() => claim.mutate()}
@@ -224,3 +209,14 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
+
+const useThemedStyles = createTokenStyles((t) => ({
+  surface: { backgroundColor: t.popover },
+  text: { color: t.foreground },
+  mutedText: { color: t.mutedForeground },
+  surface2: { backgroundColor: t.primary },
+  text2: { color: t.primaryForeground },
+  surface3: { backgroundColor: t.surface, color: t.foreground },
+  text3: { color: t.error },
+  surface4: { backgroundColor: t.surface },
+}));

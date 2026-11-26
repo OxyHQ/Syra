@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { StyleSheet, View, Text, Pressable, type ViewStyle } from 'react-native';
+import { Platform, StyleSheet, View, Text, Pressable, type ViewStyle } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,7 +24,7 @@ import { EpisodeRow } from '@/components/EpisodeRow';
 import { useSubscriptions, useContinueListening, useMyPodcasts } from '@/hooks/usePodcasts';
 import { useUploads } from '@/hooks/useUploads';
 import { usePlayerStore } from '@/stores/playerStore';
-import { cn } from '@/lib/utils';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 /**
  * Bottom offset (in px) for the Create Playlist FAB. Clears the floating
@@ -109,6 +109,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
   loading: propsLoading,
   error: propsError,
 }) => {
+  const themed = useThemedStyles();
   const theme = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -222,22 +223,19 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
       {!showSidebarControls && (
         <SEO title={t('library.seo.title')} description={t('library.seo.description')} />
       )}
-      <View className="flex-1 relative">
+      <View style={styles.container}>
         <Animated.ScrollView
-          className="flex-1"
-          contentContainerClassName="px-3 pt-3 pb-[100px]"
+          style={styles.fill}
+          contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
           onScroll={scrollHandler}
           scrollEventThrottle={16}
         >
-          <View className="flex-row items-center justify-between mb-3">
-            <Text className="text-[24px] font-bold text-foreground">{t('library.title')}</Text>
-            <View className="flex-row gap-2 items-center">
+          <View style={styles.row}>
+            <Text style={themed.title}>{t('library.title')}</Text>
+            <View style={styles.row2}>
               {showSidebarControls && onFullscreen && (
-                <Pressable
-                  onPress={onFullscreen}
-                  className="w-7 h-7 items-center justify-center rounded-[14px] bg-popover web:cursor-pointer"
-                >
+                <Pressable onPress={onFullscreen} style={[themed.popover, styles.controlButton]}>
                   <Ionicons
                     name={isFullscreen ? 'contract' : 'expand'}
                     size={18}
@@ -246,52 +244,44 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                 </Pressable>
               )}
               {showSidebarControls && onCollapse && !isFullscreen && (
-                <Pressable
-                  onPress={onCollapse}
-                  className="w-7 h-7 items-center justify-center rounded-[14px] bg-popover web:cursor-pointer"
-                >
+                <Pressable onPress={onCollapse} style={[themed.popover, styles.controlButton]}>
                   <Octicons name="sidebar-collapse" size={18} color={theme.colors.text} />
                 </Pressable>
               )}
             </View>
           </View>
 
-          <View className="flex-row flex-wrap gap-3 px-4 py-2">
+          <View style={styles.row3}>
             <Pressable
               accessibilityRole="link"
               onPress={() => router.push('/library/history')}
-              className="px-3 py-2 rounded-full bg-surface"
+              style={themed.surface}
             >
-              <Text className="text-foreground">{t('listener.history')}</Text>
+              <Text style={themed.text}>{t('listener.history')}</Text>
             </Pressable>
             <Pressable
               accessibilityRole="link"
               onPress={() => router.push('/library/queue')}
-              className="px-3 py-2 rounded-full bg-surface"
+              style={themed.surface}
             >
-              <Text className="text-foreground">{t('listener.queue')}</Text>
+              <Text style={themed.text}>{t('listener.queue')}</Text>
             </Pressable>
           </View>
           {/* Filters */}
-          <View className="flex-row gap-1.5 mb-3 items-center">
+          <View style={styles.row4}>
             {LIBRARY_FILTERS.map((filter) => {
               const isActive = activeFilter === filter;
               return (
                 <Pressable
                   key={filter}
                   onPress={() => setActiveFilter(filter)}
-                  className={cn(
-                    'px-2.5 py-[3px] rounded-[12px] h-6 justify-center items-center',
-                    isActive ? 'bg-primary' : 'bg-popover',
-                  )}
+                  style={[isActive ? themed.activeChip : themed.popover, styles.filterChip]}
                 >
                   <Text
-                    className={cn(
-                      'text-[11px] leading-[13px]',
-                      isActive
-                        ? 'font-bold text-primary-foreground'
-                        : 'font-semibold text-foreground',
-                    )}
+                    style={[
+                      styles.filterLabel,
+                      isActive ? themed.activeFilterLabel : themed.filterLabel,
+                    ]}
                   >
                     {t(LIBRARY_FILTER_KEYS[filter])}
                   </Text>
@@ -302,18 +292,13 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
 
           {/* Liked Songs - show only when All or Playlists filter is active */}
           {gate.isAuthenticated && (activeFilter === 'All' || activeFilter === 'Playlists') && (
-            <Pressable
-              className="flex-row items-center gap-3 p-2 rounded-[6px] mb-2 bg-popover"
-              onPress={() => router.push('/library/liked')}
-            >
-              <View className="w-12 h-12 rounded-[4px] items-center justify-center bg-primary">
+            <Pressable style={themed.row5} onPress={() => router.push('/library/liked')}>
+              <View style={themed.centered}>
                 <Ionicons name="heart" size={24} color={theme.colors.primaryForeground} />
               </View>
-              <View className="flex-1">
-                <Text className="text-[14px] font-semibold mb-0.5 text-foreground">
-                  {t('library.likedSongs')}
-                </Text>
-                <Text className="text-[12px] text-muted-foreground">
+              <View style={styles.fill}>
+                <Text style={themed.title2}>{t('library.likedSongs')}</Text>
+                <Text style={themed.mutedText}>
                   Playlist •{' '}
                   {finalLoading
                     ? '...'
@@ -328,18 +313,13 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
           {gate.isAuthenticated &&
             (activeFilter === 'All' || activeFilter === 'Uploads') &&
             uploads.length > 0 && (
-              <Pressable
-                className="flex-row items-center gap-3 p-2 rounded-[6px] mb-2 bg-popover"
-                onPress={() => router.push('/library/uploads')}
-              >
-                <View className="w-12 h-12 rounded-[4px] items-center justify-center bg-surface">
+              <Pressable style={themed.row5} onPress={() => router.push('/library/uploads')}>
+                <View style={themed.centered2}>
                   <MaterialCommunityIcons name="folder-music" size={24} color={theme.colors.text} />
                 </View>
-                <View className="flex-1">
-                  <Text className="text-[14px] font-semibold mb-0.5 text-foreground">
-                    {t('uploads.locker.title')}
-                  </Text>
-                  <Text className="text-[12px] text-muted-foreground">
+                <View style={styles.fill}>
+                  <Text style={themed.title2}>{t('uploads.locker.title')}</Text>
+                  <Text style={themed.mutedText}>
                     {t('uploads.locker.trackCount', { count: uploadCount })}
                   </Text>
                 </View>
@@ -368,11 +348,9 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
 
           {/* Loading state */}
           {finalLoading && (gate.isAuthenticated || gate.isResolving) && (
-            <View className="mb-6">
-              <Text className="text-[16px] font-bold mb-3 text-foreground">
-                {t('common.playlists')}
-              </Text>
-              <View className="gap-0">
+            <View style={styles.section}>
+              <Text style={themed.title3}>{t('common.playlists')}</Text>
+              <View style={styles.stack}>
                 <LibraryListSkeleton count={6} />
               </View>
             </View>
@@ -396,15 +374,13 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
             !finalError &&
             finalPlaylists.length > 0 &&
             (activeFilter === 'All' || activeFilter === 'Playlists') && (
-              <View className="mb-6">
-                <Text className="text-[16px] font-bold mb-3 text-foreground">
-                  {t('common.playlists')}
-                </Text>
-                <View className="gap-0">
+              <View style={styles.section}>
+                <Text style={themed.title3}>{t('common.playlists')}</Text>
+                <View style={styles.stack}>
                   {finalPlaylists.map((playlist) => (
                     <Pressable
                       key={playlist.id}
-                      className="flex-row items-center gap-3 p-2 rounded-[6px] mb-2 bg-popover"
+                      style={themed.row5}
                       onPress={() => router.push(`/playlist/${playlist.id}`)}
                     >
                       {playlist.coverArt ? (
@@ -421,7 +397,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                           contentFit="cover"
                         />
                       ) : (
-                        <View className="w-12 h-12 rounded-[4px] items-center justify-center bg-background">
+                        <View style={themed.centered3}>
                           <MaterialCommunityIcons
                             name="playlist-music"
                             size={24}
@@ -429,14 +405,11 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                           />
                         </View>
                       )}
-                      <View className="flex-1">
-                        <Text
-                          className="text-[14px] font-semibold mb-0.5 text-foreground"
-                          numberOfLines={1}
-                        >
+                      <View style={styles.fill}>
+                        <Text style={themed.title2} numberOfLines={1}>
                           {playlist.name}
                         </Text>
-                        <Text className="text-[12px] text-muted-foreground">
+                        <Text style={themed.mutedText}>
                           {playlist.visibility === 'public'
                             ? t('common.public')
                             : t('common.private')}{' '}
@@ -454,15 +427,13 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
             !finalError &&
             finalFollowedArtists.length > 0 &&
             (activeFilter === 'All' || activeFilter === 'Artists') && (
-              <View className="mb-6">
-                <Text className="text-[16px] font-bold mb-3 text-foreground">
-                  {t('common.artists')}
-                </Text>
-                <View className="gap-0">
+              <View style={styles.section}>
+                <Text style={themed.title3}>{t('common.artists')}</Text>
+                <View style={styles.stack}>
                   {finalFollowedArtists.map((artist) => (
                     <Pressable
                       key={artist.id}
-                      className="flex-row items-center gap-3 p-2 rounded-[6px] mb-2 bg-popover"
+                      style={themed.row5}
                       onPress={() => router.push(`/p/${artist.id}`)}
                     >
                       {artist.image || artist.images?.length ? (
@@ -479,20 +450,15 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                           contentFit="cover"
                         />
                       ) : (
-                        <View className="w-12 h-12 rounded-[24px] items-center justify-center bg-background">
+                        <View style={themed.centered4}>
                           <Ionicons name="person" size={24} color={theme.colors.textSecondary} />
                         </View>
                       )}
-                      <View className="flex-1">
-                        <Text
-                          className="text-[14px] font-semibold mb-0.5 text-foreground"
-                          numberOfLines={1}
-                        >
+                      <View style={styles.fill}>
+                        <Text style={themed.title2} numberOfLines={1}>
                           {artist.name}
                         </Text>
-                        <Text className="text-[12px] text-muted-foreground">
-                          {t('common.artist')}
-                        </Text>
+                        <Text style={themed.mutedText}>{t('common.artist')}</Text>
                       </View>
                     </Pressable>
                   ))}
@@ -505,15 +471,13 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
             !finalError &&
             finalSavedAlbums.length > 0 &&
             (activeFilter === 'All' || activeFilter === 'Albums') && (
-              <View className="mb-6">
-                <Text className="text-[16px] font-bold mb-3 text-foreground">
-                  {t('common.albums')}
-                </Text>
-                <View className="gap-0">
+              <View style={styles.section}>
+                <Text style={themed.title3}>{t('common.albums')}</Text>
+                <View style={styles.stack}>
                   {finalSavedAlbums.map((album) => (
                     <Pressable
                       key={album.id}
-                      className="flex-row items-center gap-3 p-2 rounded-[6px] mb-2 bg-popover"
+                      style={themed.row5}
                       onPress={() => router.push(`/album/${album.id}`)}
                     >
                       {album.coverArt ? (
@@ -530,7 +494,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                           contentFit="cover"
                         />
                       ) : (
-                        <View className="w-12 h-12 rounded-[4px] items-center justify-center bg-background">
+                        <View style={themed.centered3}>
                           <MaterialCommunityIcons
                             name="album"
                             size={24}
@@ -538,14 +502,11 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                           />
                         </View>
                       )}
-                      <View className="flex-1">
-                        <Text
-                          className="text-[14px] font-semibold mb-0.5 text-foreground"
-                          numberOfLines={1}
-                        >
+                      <View style={styles.fill}>
+                        <Text style={themed.title2} numberOfLines={1}>
                           {album.title}
                         </Text>
-                        <Text className="text-[12px] text-muted-foreground">
+                        <Text style={themed.mutedText}>
                           {album.artistName} •{' '}
                           {album.releaseDate ? new Date(album.releaseDate).getFullYear() : ''}
                         </Text>
@@ -560,17 +521,15 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
           {gate.isAuthenticated &&
             (activeFilter === 'All' || activeFilter === 'Podcasts') &&
             subscribedPodcasts.length > 0 && (
-              <View className="mb-6">
-                <Text className="text-[16px] font-bold mb-3 text-foreground">
-                  {t('common.podcasts')}
-                </Text>
-                <View className="gap-0">
+              <View style={styles.section}>
+                <Text style={themed.title3}>{t('common.podcasts')}</Text>
+                <View style={styles.stack}>
                   {subscribedPodcasts.map(({ podcast }) => {
                     const imageUri = resolvePodcastArtwork(podcast, 'thumbnail');
                     return (
                       <Pressable
                         key={podcast.id}
-                        className="flex-row items-center gap-3 p-2 rounded-[6px] mb-2 bg-popover"
+                        style={themed.row5}
                         onPress={() =>
                           router.push({ pathname: '/podcasts/[id]', params: { id: podcast.id } })
                         }
@@ -582,7 +541,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                             contentFit="cover"
                           />
                         ) : (
-                          <View className="w-12 h-12 rounded-[4px] items-center justify-center bg-background">
+                          <View style={themed.centered3}>
                             <MaterialCommunityIcons
                               name="podcast"
                               size={24}
@@ -590,14 +549,11 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                             />
                           </View>
                         )}
-                        <View className="flex-1">
-                          <Text
-                            className="text-[14px] font-semibold mb-0.5 text-foreground"
-                            numberOfLines={1}
-                          >
+                        <View style={styles.fill}>
+                          <Text style={themed.title2} numberOfLines={1}>
                             {podcast.title}
                           </Text>
-                          <Text className="text-[12px] text-muted-foreground" numberOfLines={1}>
+                          <Text style={themed.mutedText} numberOfLines={1}>
                             {podcast.author ?? t('common.podcast')}
                           </Text>
                         </View>
@@ -637,17 +593,15 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
           {gate.isAuthenticated &&
             (activeFilter === 'All' || activeFilter === 'Shows') &&
             myPodcasts.length > 0 && (
-              <View className="mb-6">
-                <Text className="text-[16px] font-bold mb-3 text-foreground">
-                  {t('library.yourShows')}
-                </Text>
-                <View className="gap-0">
+              <View style={styles.section}>
+                <Text style={themed.title3}>{t('library.yourShows')}</Text>
+                <View style={styles.stack}>
                   {myPodcasts.map((podcast) => {
                     const imageUri = resolvePodcastArtwork(podcast, 'thumbnail');
                     return (
                       <Pressable
                         key={podcast.id}
-                        className="flex-row items-center gap-3 p-2 rounded-[6px] mb-2 bg-popover"
+                        style={themed.row5}
                         onPress={() =>
                           router.push({ pathname: '/podcasts/[id]', params: { id: podcast.id } })
                         }
@@ -659,7 +613,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                             contentFit="cover"
                           />
                         ) : (
-                          <View className="w-12 h-12 rounded-[4px] items-center justify-center bg-background">
+                          <View style={themed.centered3}>
                             <MaterialCommunityIcons
                               name="podcast"
                               size={24}
@@ -667,14 +621,11 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                             />
                           </View>
                         )}
-                        <View className="flex-1">
-                          <Text
-                            className="text-[14px] font-semibold mb-0.5 text-foreground"
-                            numberOfLines={1}
-                          >
+                        <View style={styles.fill}>
+                          <Text style={themed.title2} numberOfLines={1}>
                             {podcast.title}
                           </Text>
-                          <Text className="text-[12px] text-muted-foreground" numberOfLines={1}>
+                          <Text style={themed.mutedText} numberOfLines={1}>
                             {t(ownedShowStateKey(podcast))}
                           </Text>
                         </View>
@@ -709,11 +660,9 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
           {gate.isAuthenticated &&
             (activeFilter === 'All' || activeFilter === 'Episodes') &&
             inProgressEpisodes.length > 0 && (
-              <View className="mb-6">
-                <Text className="text-[16px] font-bold mb-3 text-foreground">
-                  {t('library.continueListening')}
-                </Text>
-                <View className="gap-0">
+              <View style={styles.section}>
+                <Text style={themed.title3}>{t('library.continueListening')}</Text>
+                <View style={styles.stack}>
                   {inProgressEpisodes.map((entry) => (
                     <EpisodeRow
                       key={entry.episode.id}
@@ -800,9 +749,6 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
   );
 };
 
-// The only styles left are the ones no NativeWind class can reach: `expo-image`
-// has no `className` prop, and `EmptyState` takes a `ViewStyle` through
-// `containerStyle` rather than a class.
 const styles = StyleSheet.create({
   // States rendered INSIDE the scroll view: no `flex: 1` stretch and no opaque
   // background of their own, so they sit inline under the filter row.
@@ -821,6 +767,103 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: 24,
   },
+
+  container: { position: 'relative', flexGrow: 1, flexShrink: 1, flexBasis: '0%' },
+  fill: { flexGrow: 1, flexShrink: 1, flexBasis: '0%' },
+  content: { paddingHorizontal: 12, paddingTop: 12, paddingBottom: 100 },
+  row: {
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  row2: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  row3: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  row4: { marginBottom: 12, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  section: { marginBottom: 24 },
+  stack: { gap: 0 },
+  controlButton: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 14,
+    ...Platform.select({ web: { cursor: 'pointer' as const } }),
+  },
+  filterChip: {
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+  },
+  filterLabel: { fontSize: 11, lineHeight: 13 },
 });
 
 export default LibraryScreen;
+
+const useThemedStyles = createTokenStyles((t) => ({
+  popover: { backgroundColor: t.popover },
+  activeChip: { backgroundColor: t.primary },
+  activeFilterLabel: { fontWeight: 700, color: t.primaryForeground },
+  filterLabel: { fontWeight: 600, color: t.foreground },
+  title: { fontSize: 24, fontWeight: 700, color: t.foreground },
+  surface: {
+    borderRadius: 9999,
+    backgroundColor: t.surface,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  text: { color: t.foreground },
+  row5: {
+    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 6,
+    backgroundColor: t.popover,
+    padding: 8,
+  },
+  centered: {
+    height: 48,
+    width: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 4,
+    backgroundColor: t.primary,
+  },
+  title2: { marginBottom: 2, fontSize: 14, fontWeight: 600, color: t.foreground },
+  mutedText: { fontSize: 12, color: t.mutedForeground },
+  centered2: {
+    height: 48,
+    width: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 4,
+    backgroundColor: t.surface,
+  },
+  title3: { marginBottom: 12, fontSize: 16, fontWeight: 700, color: t.foreground },
+  centered3: {
+    height: 48,
+    width: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 4,
+    backgroundColor: t.background,
+  },
+  centered4: {
+    height: 48,
+    width: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 24,
+    backgroundColor: t.background,
+  },
+}));

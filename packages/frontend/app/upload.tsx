@@ -25,6 +25,7 @@ import { useAuthGate } from '@/hooks/useAuthGate';
 import { useCreateUpload, useUploads } from '@/hooks/useUploads';
 import type { UploadAudioFile } from '@/services/uploadsService';
 import { createScopedLogger } from '@/utils/logger';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 /**
  * Upload music (`/upload`).
@@ -84,6 +85,7 @@ function formatBytes(size: number | undefined): string {
 }
 
 const UploadScreen: React.FC = () => {
+  const themed = useThemedStyles();
   const theme = useTheme();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -368,7 +370,7 @@ const UploadScreen: React.FC = () => {
 
   if (gate.isResolving) {
     return (
-      <View className="bg-surface" style={styles.centered}>
+      <View style={[themed.surface, styles.centered]}>
         <ActivityIndicator size="large" color={theme.colors.primary} />
       </View>
     );
@@ -392,35 +394,27 @@ const UploadScreen: React.FC = () => {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
-          className="bg-surface"
-          style={styles.scroll}
+          style={[themed.surface, styles.scroll]}
           contentContainerStyle={[styles.content, { paddingBottom: 120 + insets.bottom }]}
           showsVerticalScrollIndicator={false}
         >
-          <Text className="text-foreground" style={styles.title}>
-            {t('uploads.title')}
-          </Text>
-          <Text className="text-muted-foreground" style={styles.subtitle}>
-            {t('uploads.subtitle')}
-          </Text>
+          <Text style={[themed.text, styles.title]}>{t('uploads.title')}</Text>
+          <Text style={[themed.mutedText, styles.subtitle]}>{t('uploads.subtitle')}</Text>
 
           <Pressable
             onPress={handlePick}
             disabled={isUploading}
-            className="border-border"
-            style={styles.pickButton}
+            style={[themed.container, styles.pickButton]}
             accessibilityRole="button"
           >
             <Ionicons name="cloud-upload-outline" size={22} color={theme.colors.text} />
-            <Text className="text-foreground" style={styles.pickButtonText}>
+            <Text style={[themed.text, styles.pickButtonText]}>
               {files.length === 0 ? t('uploads.pick') : t('uploads.pickMore')}
             </Text>
           </Pressable>
 
           {files.length === 0 && (
-            <Text className="text-muted-foreground" style={styles.hint}>
-              {t('uploads.emptyHint')}
-            </Text>
+            <Text style={[themed.mutedText, styles.hint]}>{t('uploads.emptyHint')}</Text>
           )}
 
           {files.map((file) => {
@@ -429,13 +423,13 @@ const UploadScreen: React.FC = () => {
             const isThisUploading = uploadingKey === file.key;
 
             return (
-              <View key={file.key} className="bg-popover" style={styles.fileCard}>
+              <View key={file.key} style={[themed.surface2, styles.fileCard]}>
                 <View style={styles.fileHeader}>
                   <View style={styles.fileHeaderText}>
-                    <Text className="text-foreground" style={styles.fileName} numberOfLines={1}>
+                    <Text style={[themed.text, styles.fileName]} numberOfLines={1}>
                       {file.audioFile.name}
                     </Text>
-                    <Text className="text-muted-foreground" style={styles.fileMeta}>
+                    <Text style={[themed.mutedText, styles.fileMeta]}>
                       {formatBytes(file.audioFile.size)}
                     </Text>
                   </View>
@@ -507,7 +501,7 @@ const UploadScreen: React.FC = () => {
                         );
                       })}
                     </View>
-                    <Text className="text-muted-foreground" style={styles.destinationHint}>
+                    <Text style={[themed.mutedText, styles.destinationHint]}>
                       {t(`uploads.destination.${file.destination}Hint`)}
                     </Text>
 
@@ -521,47 +515,43 @@ const UploadScreen: React.FC = () => {
                         size={16}
                         color={theme.colors.textSecondary}
                       />
-                      <Text className="text-muted-foreground" style={styles.detailsToggleText}>
+                      <Text style={[themed.mutedText, styles.detailsToggleText]}>
                         {t('uploads.details.toggle')}
                       </Text>
                     </Pressable>
 
                     {file.showDetails && (
                       <View style={styles.details}>
-                        <Text className="text-muted-foreground" style={styles.detailsHint}>
+                        <Text style={[themed.mutedText, styles.detailsHint]}>
                           {t('uploads.details.hint')}
                         </Text>
                         <TextInput
-                          className="bg-surface text-foreground"
                           value={file.title}
                           onChangeText={(title) => updateFile(file.key, { title })}
                           placeholder={t('uploads.details.title')}
                           placeholderTextColor={theme.colors.textSecondary}
                           editable={!isUploading}
-                          style={[styles.input]}
+                          style={[themed.surface3, styles.input]}
                         />
                         <TextInput
-                          className="bg-surface text-foreground"
                           value={file.artistName}
                           onChangeText={(artistName) => updateFile(file.key, { artistName })}
                           placeholder={t('uploads.details.artist')}
                           placeholderTextColor={theme.colors.textSecondary}
                           editable={!isUploading}
-                          style={[styles.input]}
+                          style={[themed.surface3, styles.input]}
                         />
                         <TextInput
-                          className="bg-surface text-foreground"
                           value={file.albumName}
                           onChangeText={(albumName) => updateFile(file.key, { albumName })}
                           placeholder={t('uploads.details.album')}
                           placeholderTextColor={theme.colors.textSecondary}
                           editable={!isUploading}
-                          style={[styles.input]}
+                          style={[themed.surface3, styles.input]}
                         />
                         {file.destination === 'public' && (
                           <>
                             <TextInput
-                              className="bg-surface text-foreground"
                               value={file.isrc}
                               onChangeText={(isrc) => updateFile(file.key, { isrc })}
                               placeholder={t('uploads.details.isrc')}
@@ -569,9 +559,9 @@ const UploadScreen: React.FC = () => {
                               editable={!isUploading}
                               autoCapitalize="characters"
                               autoCorrect={false}
-                              style={[styles.input]}
+                              style={[themed.surface3, styles.input]}
                             />
-                            <Text className="text-muted-foreground" style={styles.detailsHint}>
+                            <Text style={[themed.mutedText, styles.detailsHint]}>
                               {t('uploads.details.isrcHint')}
                             </Text>
                           </>
@@ -590,16 +580,14 @@ const UploadScreen: React.FC = () => {
                 {isThisUploading && (
                   <View style={styles.statusRow}>
                     <ActivityIndicator size="small" color={theme.colors.primary} />
-                    <Text className="text-muted-foreground" style={styles.fileMeta}>
+                    <Text style={[themed.mutedText, styles.fileMeta]}>
                       {t('uploads.uploading')}
                     </Text>
                   </View>
                 )}
 
                 {failure && !outcome && (
-                  <Text className="text-error" style={styles.failureText}>
-                    {failure}
-                  </Text>
+                  <Text style={[themed.text2, styles.failureText]}>{failure}</Text>
                 )}
 
                 {outcome && (
@@ -623,8 +611,7 @@ const UploadScreen: React.FC = () => {
             <Pressable
               onPress={() => setAttestationAccepted((accepted) => !accepted)}
               disabled={isUploading}
-              className="bg-popover"
-              style={styles.attestation}
+              style={[themed.surface2, styles.attestation]}
               accessibilityRole="checkbox"
               accessibilityState={{ checked: attestationAccepted }}
             >
@@ -634,10 +621,10 @@ const UploadScreen: React.FC = () => {
                 color={attestationAccepted ? theme.colors.primary : theme.colors.textSecondary}
               />
               <View style={styles.attestationText}>
-                <Text className="text-foreground" style={styles.attestationTitle}>
+                <Text style={[themed.text, styles.attestationTitle]}>
                   {t('uploads.attestation.title')}
                 </Text>
-                <Text className="text-muted-foreground" style={styles.attestationBody}>
+                <Text style={[themed.mutedText, styles.attestationBody]}>
                   {attestationStatement}
                 </Text>
               </View>
@@ -645,17 +632,14 @@ const UploadScreen: React.FC = () => {
           )}
 
           {attestationMissing && (
-            <Text className="text-error" style={styles.failureText}>
+            <Text style={[themed.text2, styles.failureText]}>
               {t('uploads.attestation.required')}
             </Text>
           )}
         </ScrollView>
 
         {pendingFiles.length > 0 && (
-          <View
-            className="bg-surface border-t-border"
-            style={[styles.footer, { paddingBottom: 16 + insets.bottom }]}
-          >
+          <View style={[themed.surface4, styles.footer, { paddingBottom: 16 + insets.bottom }]}>
             <Pressable
               onPress={() => void handleUploadAll()}
               disabled={!canUpload}
@@ -862,3 +846,14 @@ const styles = StyleSheet.create({
 });
 
 export default UploadScreen;
+
+const useThemedStyles = createTokenStyles((t) => ({
+  surface: { backgroundColor: t.surface },
+  text: { color: t.foreground },
+  mutedText: { color: t.mutedForeground },
+  container: { borderColor: t.border },
+  surface2: { backgroundColor: t.popover },
+  surface3: { backgroundColor: t.surface, color: t.foreground },
+  text2: { color: t.error },
+  surface4: { borderTopColor: t.border, backgroundColor: t.surface },
+}));

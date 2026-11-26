@@ -13,6 +13,7 @@ import { CastButton } from './CastButton';
 import { useLibrary, useToggleLikeTrack } from '@/hooks/useLibrary';
 import { useNowPlayingMedia } from '@/hooks/useNowPlayingMedia';
 import { SpeedPill, SkipButton } from './podcast/PodcastTransportControls';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 interface WebPressTarget {
   getBoundingClientRect?: () => { left: number; width: number };
@@ -37,6 +38,7 @@ const getProgressPercent = (currentTime: number, duration: number) => {
  * Full-featured player bar for desktop with all controls
  */
 export const PlayerBar: React.FC = () => {
+  const themed = useThemedStyles();
   const { t } = useTranslation();
   const theme = useTheme();
   const toggleNowPlaying = useUIStore((s) => s.toggleNowPlaying);
@@ -122,11 +124,10 @@ export const PlayerBar: React.FC = () => {
   const containerStyle = useMemo(() => ({ ...styles.container }), []);
 
   return (
-    <View className="bg-background" style={containerStyle}>
+    <View style={[themed.surface, containerStyle]}>
       {/* Progress Bar */}
       <Pressable
-        className="bg-border"
-        style={styles.progressBarContainer}
+        style={[themed.surface2, styles.progressBarContainer]}
         onLayout={(event) => setProgressBarWidth(event.nativeEvent.layout.width)}
         onPress={(e) => {
           if (Platform.OS === 'web') {
@@ -134,7 +135,7 @@ export const PlayerBar: React.FC = () => {
           }
         }}
       >
-        <View className="bg-primary" style={[styles.progressBar, { width: progressFillWidth }]} />
+        <View style={[themed.surface3, styles.progressBar, { width: progressFillWidth }]} />
       </Pressable>
 
       {/* Main Player Content */}
@@ -157,7 +158,7 @@ export const PlayerBar: React.FC = () => {
             {media?.imageUri ? (
               <Image source={{ uri: media.imageUri }} style={styles.albumArt} contentFit="cover" />
             ) : (
-              <View className="bg-surface" style={styles.albumArtPlaceholder}>
+              <View style={[themed.surface4, styles.albumArtPlaceholder]}>
                 <MaterialCommunityIcons
                   name={isEpisode ? 'microphone' : 'music'}
                   size={24}
@@ -167,10 +168,10 @@ export const PlayerBar: React.FC = () => {
             )}
           </Pressable>
           <View style={styles.trackDetails}>
-            <Text className="text-foreground" style={styles.trackTitle} numberOfLines={1}>
+            <Text style={[themed.text, styles.trackTitle]} numberOfLines={1}>
               {media ? media.title : isLoading ? 'Loading...' : 'No track selected'}
             </Text>
-            <Text className="text-muted-foreground" style={styles.trackArtist} numberOfLines={1}>
+            <Text style={[themed.mutedText, styles.trackArtist]} numberOfLines={1}>
               {media
                 ? // A locker file with no resolved artist ships an empty name by
                   // design; it is an unknown artist, not a missing one.
@@ -464,3 +465,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 });
+
+const useThemedStyles = createTokenStyles((t) => ({
+  surface: { backgroundColor: t.background },
+  surface2: { backgroundColor: t.border },
+  surface3: { backgroundColor: t.primary },
+  surface4: { backgroundColor: t.surface },
+  text: { color: t.foreground },
+  mutedText: { color: t.mutedForeground },
+}));

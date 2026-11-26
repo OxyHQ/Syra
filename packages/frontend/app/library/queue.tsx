@@ -4,8 +4,10 @@ import { Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useQueueStore } from '@/stores/queueStore';
 import { usePlayerStore } from '@/stores/playerStore';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 export default function QueueScreen() {
+  const styles = useStyles();
   const { t } = useTranslation();
   const {
     queue,
@@ -21,27 +23,25 @@ export default function QueueScreen() {
   const { playFromQueue, stop } = usePlayerStore();
   return (
     <ScrollView
-      className="flex-1 bg-background"
-      contentContainerClassName="p-6 pb-36 gap-4"
+      style={styles.surface}
+      contentContainerStyle={styles.content}
       contentInsetAdjustmentBehavior="automatic"
     >
       <Stack.Screen options={{ title: t('listener.queue') }} />
-      <Text className="text-2xl font-bold text-foreground">{t('listener.queue')}</Text>
-      <Text className="text-muted-foreground">
-        {queue?.context?.name ?? t('listener.savedQueue')}
-      </Text>
-      <View className="flex-row flex-wrap gap-4">
+      <Text style={styles.title}>{t('listener.queue')}</Text>
+      <Text style={styles.mutedText}>{queue?.context?.name ?? t('listener.savedQueue')}</Text>
+      <View style={styles.row}>
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ selected: shuffle === 'on' }}
           onPress={toggleShuffle}
         >
-          <Text className="text-primary">
+          <Text style={styles.text}>
             {t('listener.shuffleQueue')} · {t(`listener.mode_${shuffle}`)}
           </Text>
         </Pressable>
         <Pressable accessibilityRole="button" onPress={cycleRepeat}>
-          <Text className="text-primary">
+          <Text style={styles.text}>
             {t('listener.repeat')} · {t(`listener.mode_${repeat}`)}
           </Text>
         </Pressable>
@@ -52,57 +52,50 @@ export default function QueueScreen() {
             void clearQueue();
           }}
         >
-          <Text className="text-primary">{t('listener.clearQueue')}</Text>
+          <Text style={styles.text}>{t('listener.clearQueue')}</Text>
         </Pressable>
       </View>
       {error ? (
-        <Text accessibilityRole="alert" selectable className="text-destructive">
+        <Text accessibilityRole="alert" selectable style={styles.text2}>
           {error}
         </Text>
       ) : null}
       {(queue?.tracks ?? []).map((track, index) => (
-        <View
-          key={`${track.kind}:${track.id}:${index}`}
-          className="flex-row items-center gap-3 py-3 border-b border-border"
-        >
+        <View key={`${track.kind}:${track.id}:${index}`} style={styles.row2}>
           <Pressable
             accessibilityRole="button"
             accessibilityState={{ selected: index === queue?.current }}
-            className="flex-1"
+            style={styles.fill}
             onPress={() => void playFromQueue(index)}
           >
-            <Text
-              className={
-                index === queue?.current ? 'text-primary font-semibold' : 'text-foreground'
-              }
-            >
+            <Text style={index === queue?.current ? styles.currentTitle : styles.queueTitle}>
               {index + 1}. {track.title}
             </Text>
-            <Text className="text-muted-foreground">{track.artistName}</Text>
+            <Text style={styles.mutedText}>{track.artistName}</Text>
           </Pressable>
           <Pressable
             accessibilityLabel={t('listener.moveUp')}
             disabled={index === 0}
-            className="p-3"
+            style={styles.section}
             onPress={() => void moveOccurrence(index, index - 1)}
           >
-            <Text className="text-primary">↑</Text>
+            <Text style={styles.text}>↑</Text>
           </Pressable>
           <Pressable
             accessibilityLabel={t('listener.moveDown')}
             disabled={index === (queue?.tracks.length ?? 0) - 1}
-            className="p-3"
+            style={styles.section}
             onPress={() => void moveOccurrence(index, index + 1)}
           >
-            <Text className="text-primary">↓</Text>
+            <Text style={styles.text}>↓</Text>
           </Pressable>
           {index !== queue?.current ? (
             <Pressable
               accessibilityLabel={t('listener.remove')}
-              className="p-3"
+              style={styles.section}
               onPress={() => void removeOccurrence(index)}
             >
-              <Text className="text-primary">×</Text>
+              <Text style={styles.text}>×</Text>
             </Pressable>
           ) : null}
         </View>
@@ -110,3 +103,25 @@ export default function QueueScreen() {
     </ScrollView>
   );
 }
+
+const useStyles = createTokenStyles((t) => ({
+  surface: { flexGrow: 1, flexShrink: 1, flexBasis: '0%', backgroundColor: t.background },
+  content: { gap: 16, padding: 24, paddingBottom: 144 },
+  title: { fontSize: 24, fontWeight: 700, color: t.foreground, lineHeight: 32 },
+  mutedText: { color: t.mutedForeground },
+  currentTitle: { fontWeight: 600, color: t.primary },
+  queueTitle: { color: t.foreground },
+  row: { flexDirection: 'row', flexWrap: 'wrap', gap: 16 },
+  text: { color: t.primary },
+  text2: { color: t.destructive },
+  row2: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderBottomWidth: 1,
+    borderColor: t.border,
+    paddingVertical: 12,
+  },
+  fill: { flexGrow: 1, flexShrink: 1, flexBasis: '0%' },
+  section: { padding: 12 },
+}));

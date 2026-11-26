@@ -15,6 +15,7 @@ import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { EmptyState } from '@/components/common/EmptyState';
 import { LibraryListSkeleton } from '@/components/skeletons';
 import { toast } from '@oxy.so/bloom/toast';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 interface AddToPlaylistSheetProps {
   visible: boolean;
@@ -38,6 +39,7 @@ export const AddToPlaylistSheet: React.FC<AddToPlaylistSheetProps> = ({
   tracks,
   excludePlaylistId,
 }) => {
+  const themed = useThemedStyles();
   const { t } = useTranslation();
   const theme = useTheme();
   const router = useRouter();
@@ -154,7 +156,7 @@ export const AddToPlaylistSheet: React.FC<AddToPlaylistSheetProps> = ({
               accessibilityRole="button"
               accessibilityLabel={`Add to ${playlist.name}`}
             >
-              <View className="bg-popover" style={styles.artwork}>
+              <View style={[themed.surface, styles.artwork]}>
                 {cover ? (
                   <Image source={{ uri: cover }} style={styles.artworkImage} contentFit="cover" />
                 ) : (
@@ -162,14 +164,10 @@ export const AddToPlaylistSheet: React.FC<AddToPlaylistSheetProps> = ({
                 )}
               </View>
               <View style={styles.rowText}>
-                <Text className="text-foreground" style={styles.rowTitle} numberOfLines={1}>
+                <Text style={[themed.text, styles.rowTitle]} numberOfLines={1}>
                   {playlist.name}
                 </Text>
-                <Text
-                  className="text-muted-foreground"
-                  style={styles.rowSubtitle}
-                  numberOfLines={1}
-                >
+                <Text style={[themed.mutedText, styles.rowSubtitle]} numberOfLines={1}>
                   {playlist.trackCount} {playlist.trackCount === 1 ? 'song' : 'songs'}
                 </Text>
               </View>
@@ -184,7 +182,7 @@ export const AddToPlaylistSheet: React.FC<AddToPlaylistSheetProps> = ({
     <BottomSheet ref={sheetRef} onDismiss={onClose} enablePanDownToClose>
       <View style={styles.sheet}>
         <View style={styles.header}>
-          <Text className="text-foreground" style={styles.title}>
+          <Text style={[themed.text, styles.title]}>
             {t('addToPlaylist.addCount', { count: tracks.length })}
           </Text>
           {canUsePrivateApi && (
@@ -195,9 +193,7 @@ export const AddToPlaylistSheet: React.FC<AddToPlaylistSheetProps> = ({
               accessibilityLabel={t('addToPlaylist.create')}
             >
               <Ionicons name="add" size={20} color={theme.colors.text} />
-              <Text className="text-foreground" style={styles.newButtonText}>
-                {t('common.new')}
-              </Text>
+              <Text style={[themed.text, styles.newButtonText]}>{t('common.new')}</Text>
             </Pressable>
           )}
         </View>
@@ -279,3 +275,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
 });
+
+const useThemedStyles = createTokenStyles((t) => ({
+  surface: { backgroundColor: t.popover },
+  text: { color: t.foreground },
+  mutedText: { color: t.mutedForeground },
+}));

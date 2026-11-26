@@ -9,6 +9,7 @@ import { useConnect } from '@/hooks/useConnect';
 import { useCast } from '@/hooks/useCast';
 import { EmptyState } from '@/components/common/EmptyState';
 import { createScopedLogger } from '@/utils/logger';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 const logger = createScopedLogger('DevicePicker');
 
@@ -32,15 +33,13 @@ interface DeviceRowProps {
 }
 
 const DeviceRow: React.FC<DeviceRowProps> = ({ device, isActive, onPress }) => {
+  const themed = useThemedStyles();
   const { t } = useTranslation();
   const theme = useTheme();
 
-  const rowStyle = useMemo(() => [styles.deviceRow], []);
-
   return (
     <Pressable
-      className={isActive ? 'bg-surface' : undefined}
-      style={rowStyle}
+      style={[isActive && themed.surface2, styles.deviceRow]}
       onPress={onPress}
       accessibilityRole="button"
     >
@@ -51,13 +50,11 @@ const DeviceRow: React.FC<DeviceRowProps> = ({ device, isActive, onPress }) => {
         style={styles.deviceIcon}
       />
       <View style={styles.deviceInfo}>
-        <Text className="text-foreground" style={styles.deviceName} numberOfLines={1}>
+        <Text style={[themed.text, styles.deviceName]} numberOfLines={1}>
           {device.name}
         </Text>
         {isActive && (
-          <Text className="text-primary" style={styles.deviceStatus}>
-            {t('devices.playing')}
-          </Text>
+          <Text style={[themed.text2, styles.deviceStatus]}>{t('devices.playing')}</Text>
         )}
       </View>
       {isActive && (
@@ -87,6 +84,7 @@ interface DevicePickerProps {
  * coupled to that component's styling layer).
  */
 export const DevicePicker: React.FC<DevicePickerProps> = ({ visible, activeDeviceId, onClose }) => {
+  const themed = useThemedStyles();
   const { t } = useTranslation();
   const theme = useTheme();
   const { devices, status, error, retry, transferTo } = useConnect();
@@ -123,11 +121,9 @@ export const DevicePicker: React.FC<DevicePickerProps> = ({ visible, activeDevic
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={backdropStyle} onPress={onClose}>
         {/* Stop propagation so taps inside the sheet don't close it */}
-        <Pressable className="bg-card border-border" style={sheetStyle} onPress={() => undefined}>
+        <Pressable style={[themed.card, sheetStyle]} onPress={() => undefined}>
           <View style={styles.header}>
-            <Text className="text-foreground" style={styles.title}>
-              {t('devices.title')}
-            </Text>
+            <Text style={[themed.text, styles.title]}>{t('devices.title')}</Text>
             <Pressable
               onPress={onClose}
               accessibilityRole="button"
@@ -140,7 +136,7 @@ export const DevicePicker: React.FC<DevicePickerProps> = ({ visible, activeDevic
           {status === 'loading' ? (
             <View style={styles.skeletonList}>
               {Array.from({ length: 3 }).map((_, i) => (
-                <View key={i} className="bg-surface" style={styles.skeletonRow}>
+                <View key={i} style={[themed.surface2, styles.skeletonRow]}>
                   <Skeleton.Circle size={36} />
                   <View style={styles.skeletonDeviceInfo}>
                     <Skeleton.Box width="55%" height={14} borderRadius={4} />
@@ -188,7 +184,7 @@ export const DevicePicker: React.FC<DevicePickerProps> = ({ visible, activeDevic
               platform/build can't cast, so no dead row is shown. */}
           {castSupported && (
             <View style={[styles.castSection, { borderTopColor: theme.colors.border }]}>
-              <Text className="text-muted-foreground" style={styles.sectionLabel}>
+              <Text style={[themed.mutedText, styles.sectionLabel]}>
                 {t('devices.castAndSpeakers')}
               </Text>
               <Pressable
@@ -209,19 +205,19 @@ export const DevicePicker: React.FC<DevicePickerProps> = ({ visible, activeDevic
                   style={styles.deviceIcon}
                 />
                 <View style={styles.deviceInfo}>
-                  <Text className="text-foreground" style={styles.deviceName} numberOfLines={1}>
+                  <Text style={[themed.text, styles.deviceName]} numberOfLines={1}>
                     {isCasting
                       ? (castDeviceName ?? t('devices.castDevice'))
                       : t('devices.connectToCast')}
                   </Text>
                   {isCasting && (
-                    <Text className="text-primary" style={styles.deviceStatus}>
+                    <Text style={[themed.text2, styles.deviceStatus]}>
                       {t('devices.connected')}
                     </Text>
                   )}
                 </View>
                 {isCasting && (
-                  <Text className="text-primary" style={styles.disconnectText}>
+                  <Text style={[themed.text2, styles.disconnectText]}>
                     {t('devices.disconnect')}
                   </Text>
                 )}
@@ -328,3 +324,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+
+const useThemedStyles = createTokenStyles((t) => ({
+  text: { color: t.foreground },
+  text2: { color: t.primary },
+  card: { borderColor: t.border, backgroundColor: t.card },
+  surface2: { backgroundColor: t.surface },
+  mutedText: { color: t.mutedForeground },
+}));

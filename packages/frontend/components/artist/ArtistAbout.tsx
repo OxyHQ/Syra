@@ -2,6 +2,7 @@ import React from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { EntityProfile } from '@syra/shared-types';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 interface ArtistAboutProps {
   entity: EntityProfile;
@@ -12,6 +13,7 @@ interface ArtistAboutProps {
 
 /** Render stored facts only. Partial dates stay partial; missing end dates are not "present". */
 export function ArtistAbout({ entity, hasImage, onNavigateArtist, onOpenLink }: ArtistAboutProps) {
+  const styles = useStyles();
   const { t } = useTranslation();
   const licence = hasImage ? entity.imageLicence : undefined;
   const facts = [
@@ -30,33 +32,33 @@ export function ArtistAbout({ entity, hasImage, onNavigateArtist, onOpenLink }: 
     return null;
 
   return (
-    <View className="px-6 py-6 gap-4 max-w-4xl">
-      <Text accessibilityRole="header" className="text-foreground text-2xl font-bold">
+    <View style={styles.container}>
+      <Text accessibilityRole="header" style={styles.title}>
         {t('common.about')}
       </Text>
       {entity.bio ? (
-        <Text selectable className="text-foreground text-base leading-6">
+        <Text selectable style={styles.bio}>
           {entity.bio}
         </Text>
       ) : null}
       {entity.disambiguation ? (
-        <Text selectable className="text-muted-foreground">
+        <Text selectable style={styles.mutedText}>
           {entity.disambiguation}
         </Text>
       ) : null}
       {facts.map((fact) => (
-        <View key={fact.label} className="gap-1">
-          <Text className="text-muted-foreground">{fact.label}</Text>
-          <Text selectable className="text-foreground">
+        <View key={fact.label} style={styles.stack}>
+          <Text style={styles.mutedText}>{fact.label}</Text>
+          <Text selectable style={styles.text}>
             {fact.value}
           </Text>
         </View>
       ))}
       {entity.members?.length ? (
-        <View className="gap-2">
-          <Text className="text-muted-foreground">{t('artist.members')}</Text>
+        <View style={styles.stack2}>
+          <Text style={styles.mutedText}>{t('artist.members')}</Text>
           {entity.members.map((member, index) => (
-            <View key={`${member.nameKey}:${index}`} className="gap-1">
+            <View key={`${member.nameKey}:${index}`} style={styles.stack}>
               {member.catalogEntityId ? (
                 <Pressable
                   accessibilityRole="link"
@@ -64,20 +66,20 @@ export function ArtistAbout({ entity, hasImage, onNavigateArtist, onOpenLink }: 
                     if (member.catalogEntityId) onNavigateArtist(member.catalogEntityId);
                   }}
                 >
-                  <Text className="text-primary text-base">{member.name}</Text>
+                  <Text style={styles.text2}>{member.name}</Text>
                 </Pressable>
               ) : (
-                <Text selectable className="text-foreground text-base">
+                <Text selectable style={styles.text3}>
                   {member.name}
                 </Text>
               )}
               {member.from ? (
-                <Text className="text-muted-foreground">
+                <Text style={styles.mutedText}>
                   {t('artist.memberFrom', { date: member.from })}
                 </Text>
               ) : null}
               {member.until ? (
-                <Text className="text-muted-foreground">
+                <Text style={styles.mutedText}>
                   {t('artist.memberUntil', { date: member.until })}
                 </Text>
               ) : null}
@@ -86,9 +88,9 @@ export function ArtistAbout({ entity, hasImage, onNavigateArtist, onOpenLink }: 
         </View>
       ) : null}
       {licence ? (
-        <View className="gap-2">
-          <Text className="text-muted-foreground">{t('artist.imageCredit')}</Text>
-          <Text selectable className="text-foreground">
+        <View style={styles.stack2}>
+          <Text style={styles.mutedText}>{t('artist.imageCredit')}</Text>
+          <Text selectable style={styles.text}>
             {licence.attribution}
           </Text>
           {licence.licenceUrl && /^https?:\/\//i.test(licence.licenceUrl) ? (
@@ -98,16 +100,16 @@ export function ArtistAbout({ entity, hasImage, onNavigateArtist, onOpenLink }: 
                 if (licence.licenceUrl) onOpenLink(licence.licenceUrl);
               }}
             >
-              <Text className="text-primary">{licence.licence}</Text>
+              <Text style={styles.text4}>{licence.licence}</Text>
             </Pressable>
           ) : (
-            <Text selectable className="text-foreground">
+            <Text selectable style={styles.text}>
               {licence.licence}
             </Text>
           )}
           {/^https?:\/\//i.test(licence.sourceUrl) ? (
             <Pressable accessibilityRole="link" onPress={() => onOpenLink(licence.sourceUrl)}>
-              <Text className="text-primary">{t('artist.imageSource')}</Text>
+              <Text style={styles.text4}>{t('artist.imageSource')}</Text>
             </Pressable>
           ) : null}
         </View>
@@ -115,3 +117,16 @@ export function ArtistAbout({ entity, hasImage, onNavigateArtist, onOpenLink }: 
     </View>
   );
 }
+
+const useStyles = createTokenStyles((t) => ({
+  container: { maxWidth: 896, gap: 16, paddingHorizontal: 24, paddingVertical: 24 },
+  title: { fontSize: 24, fontWeight: 700, color: t.foreground, lineHeight: 32 },
+  mutedText: { color: t.mutedForeground },
+  stack: { gap: 4 },
+  text: { color: t.foreground },
+  stack2: { gap: 8 },
+  text2: { fontSize: 16, color: t.primary, lineHeight: 24 },
+  text3: { fontSize: 16, color: t.foreground, lineHeight: 24 },
+  text4: { color: t.primary },
+  bio: { fontSize: 16, color: t.foreground, lineHeight: 24 },
+}));

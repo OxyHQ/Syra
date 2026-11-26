@@ -8,8 +8,10 @@ import { useAuthGate } from '@/hooks/useAuthGate';
 import { libraryService } from '@/services/libraryService';
 import { usePlayerStore } from '@/stores/playerStore';
 import { TrackRow } from '@/components/TrackRow';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 export default function ListeningHistoryScreen() {
+  const styles = useStyles();
   const { t } = useTranslation();
   const gate = useAuthGate();
   const { user } = useOxy();
@@ -24,17 +26,17 @@ export default function ListeningHistoryScreen() {
   const playTrackList = usePlayerStore((state) => state.playTrackList);
   return (
     <ScrollView
-      className="flex-1 bg-background"
-      contentContainerClassName="p-6 pb-36 gap-3"
+      style={styles.surface}
+      contentContainerStyle={styles.content}
       contentInsetAdjustmentBehavior="automatic"
     >
       <Stack.Screen options={{ title: t('listener.history') }} />
-      <Text className="text-2xl font-bold text-foreground">{t('listener.history')}</Text>
+      <Text style={styles.title}>{t('listener.history')}</Text>
       {gate.isResolving || (gate.canUsePrivateApi && query.isPending) ? (
         <ActivityIndicator />
       ) : null}
       {gate.status === 'guest' ? (
-        <Text className="text-muted-foreground">{t('listener.signIn')}</Text>
+        <Text style={styles.mutedText}>{t('listener.signIn')}</Text>
       ) : null}
       {query.isError || gate.isTimedOut ? (
         <Pressable
@@ -44,11 +46,11 @@ export default function ListeningHistoryScreen() {
             else gate.retry();
           }}
         >
-          <Text className="text-primary">{t('listener.retry')}</Text>
+          <Text style={styles.text}>{t('listener.retry')}</Text>
         </Pressable>
       ) : null}
       {query.isSuccess && !tracks.length ? (
-        <Text className="text-muted-foreground">{t('listener.historyEmpty')}</Text>
+        <Text style={styles.mutedText}>{t('listener.historyEmpty')}</Text>
       ) : null}
       {tracks.map((track, index) => (
         <TrackRow
@@ -68,3 +70,11 @@ export default function ListeningHistoryScreen() {
     </ScrollView>
   );
 }
+
+const useStyles = createTokenStyles((t) => ({
+  surface: { flexGrow: 1, flexShrink: 1, flexBasis: '0%', backgroundColor: t.background },
+  content: { gap: 12, padding: 24, paddingBottom: 144 },
+  title: { fontSize: 24, fontWeight: 700, color: t.foreground, lineHeight: 32 },
+  mutedText: { color: t.mutedForeground },
+  text: { color: t.primary },
+}));

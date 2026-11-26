@@ -6,8 +6,10 @@ import { useTranslation } from 'react-i18next';
 import type { Playlist } from '@syra/shared-types';
 import { playlistSharingService } from '@/services/playlistSharingService';
 import { shareUrl } from '@/utils/share-media';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 export function PlaylistCollaboration({ playlist }: { playlist: Playlist }) {
+  const styles = useStyles();
   const { user, canUsePrivateApi } = useOxy();
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
@@ -44,20 +46,20 @@ export function PlaylistCollaboration({ playlist }: { playlist: Playlist }) {
   });
   if (!canUsePrivateApi || !canView) return null;
   return (
-    <View className="px-6 py-4 gap-3">
+    <View style={styles.container}>
       <Pressable
         accessibilityRole="button"
         accessibilityState={{ expanded }}
         onPress={() => setExpanded(!expanded)}
       >
-        <Text className="text-foreground text-lg font-semibold">{t('collaboration.title')}</Text>
+        <Text style={styles.title}>{t('collaboration.title')}</Text>
       </Pressable>
       {expanded ? (
-        <View className="gap-4">
+        <View style={styles.stack}>
           {isOwner ? (
             <>
-              <Text className="text-muted-foreground">{t('collaboration.inviteHint')}</Text>
-              <View className="flex-row flex-wrap gap-4">
+              <Text style={styles.mutedText}>{t('collaboration.inviteHint')}</Text>
+              <View style={styles.row}>
                 {(['editor', 'viewer'] as const).map((role) => (
                   <Pressable
                     key={role}
@@ -65,7 +67,7 @@ export function PlaylistCollaboration({ playlist }: { playlist: Playlist }) {
                     disabled={change.isPending}
                     onPress={() => change.mutate({ action: 'invite', role })}
                   >
-                    <Text className="text-primary">{t(`collaboration.invite_${role}`)}</Text>
+                    <Text style={styles.text}>{t(`collaboration.invite_${role}`)}</Text>
                   </Pressable>
                 ))}
                 <Pressable
@@ -73,18 +75,18 @@ export function PlaylistCollaboration({ playlist }: { playlist: Playlist }) {
                   disabled={change.isPending}
                   onPress={() => change.mutate({ action: 'revoke' })}
                 >
-                  <Text className="text-primary">{t('collaboration.revoke')}</Text>
+                  <Text style={styles.text}>{t('collaboration.revoke')}</Text>
                 </Pressable>
               </View>
             </>
           ) : null}
           {(playlist.collaborators ?? []).map((member) => (
-            <View key={member.oxyUserId} className="gap-2">
-              <Text selectable className="text-foreground">
+            <View key={member.oxyUserId} style={styles.stack2}>
+              <Text selectable style={styles.text2}>
                 {member.username} · {t(`collaboration.${member.role}`)}
               </Text>
               {isOwner && member.oxyUserId !== playlist.ownerOxyUserId ? (
-                <View className="flex-row gap-4">
+                <View style={styles.row2}>
                   <Pressable
                     accessibilityRole="button"
                     disabled={change.isPending}
@@ -96,7 +98,7 @@ export function PlaylistCollaboration({ playlist }: { playlist: Playlist }) {
                       })
                     }
                   >
-                    <Text className="text-primary">
+                    <Text style={styles.text}>
                       {t(
                         member.role === 'editor'
                           ? 'collaboration.makeViewer'
@@ -111,30 +113,28 @@ export function PlaylistCollaboration({ playlist }: { playlist: Playlist }) {
                       change.mutate({ action: 'member', id: member.oxyUserId, role: null })
                     }
                   >
-                    <Text className="text-error">{t('collaboration.remove')}</Text>
+                    <Text style={styles.text3}>{t('collaboration.remove')}</Text>
                   </Pressable>
                 </View>
               ) : null}
             </View>
           ))}
           {change.isError ? (
-            <Text selectable accessibilityRole="alert" className="text-error">
+            <Text selectable accessibilityRole="alert" style={styles.text3}>
               {change.error.message}
             </Text>
           ) : null}
-          <Text className="text-foreground font-semibold">{t('collaboration.activity')}</Text>
-          {activity.isLoading ? (
-            <Text className="text-muted-foreground">{t('state.loading')}</Text>
-          ) : null}
+          <Text style={styles.title2}>{t('collaboration.activity')}</Text>
+          {activity.isLoading ? <Text style={styles.mutedText}>{t('state.loading')}</Text> : null}
           {activity.isError ? (
             <Pressable accessibilityRole="button" onPress={() => void activity.refetch()}>
-              <Text className="text-error">{t('listener.retry')}</Text>
+              <Text style={styles.text3}>{t('listener.retry')}</Text>
             </Pressable>
           ) : null}
           {activity.data?.items.map((event) => (
-            <View key={event.id} className="gap-1">
-              <Text className="text-foreground">{t(`collaboration.${event.action}`)}</Text>
-              <Text selectable className="text-muted-foreground">
+            <View key={event.id} style={styles.stack3}>
+              <Text style={styles.text2}>{t(`collaboration.${event.action}`)}</Text>
+              <Text selectable style={styles.mutedText}>
                 {event.actorOxyUserId === playlist.ownerOxyUserId
                   ? playlist.ownerUsername
                   : (playlist.collaborators?.find(
@@ -145,10 +145,25 @@ export function PlaylistCollaboration({ playlist }: { playlist: Playlist }) {
             </View>
           ))}
           {activity.data?.items.length === 0 ? (
-            <Text className="text-muted-foreground">{t('collaboration.noActivity')}</Text>
+            <Text style={styles.mutedText}>{t('collaboration.noActivity')}</Text>
           ) : null}
         </View>
       ) : null}
     </View>
   );
 }
+
+const useStyles = createTokenStyles((t) => ({
+  container: { gap: 12, paddingHorizontal: 24, paddingVertical: 16 },
+  title: { fontSize: 18, fontWeight: 600, color: t.foreground, lineHeight: 28 },
+  stack: { gap: 16 },
+  mutedText: { color: t.mutedForeground },
+  row: { flexDirection: 'row', flexWrap: 'wrap', gap: 16 },
+  text: { color: t.primary },
+  stack2: { gap: 8 },
+  text2: { color: t.foreground },
+  row2: { flexDirection: 'row', gap: 16 },
+  text3: { color: t.error },
+  title2: { fontWeight: 600, color: t.foreground },
+  stack3: { gap: 4 },
+}));

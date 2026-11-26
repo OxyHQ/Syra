@@ -12,6 +12,7 @@ import { webViewStyle } from '@/utils/webStyles';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@oxy.so/bloom/theme';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 interface GenreCardProps {
   name: string;
@@ -32,6 +33,7 @@ const GenreCardComponent: React.FC<GenreCardProps> = ({
   onPress,
   onPlayPress,
 }) => {
+  const themed = useThemedStyles();
   const theme = useTheme();
   const [isHovered, setIsHovered] = React.useState(false);
 
@@ -104,7 +106,7 @@ const GenreCardComponent: React.FC<GenreCardProps> = ({
           style={styles.playButtonContainer}
           onPress={handlePlayPress}
         >
-          <View className="bg-primary" style={styles.playButton}>
+          <View style={[themed.surface, styles.playButton]}>
             <Ionicons name="play" size={24} color={theme.colors.primaryForeground} />
           </View>
         </Pressable>
@@ -200,3 +202,7 @@ const styles = StyleSheet.create({
     }),
   },
 });
+
+const useThemedStyles = createTokenStyles((t) => ({
+  surface: { backgroundColor: t.primary },
+}));

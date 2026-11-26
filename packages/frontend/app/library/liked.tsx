@@ -14,6 +14,7 @@ import { libraryService } from '@/services/libraryService';
 import { LIBRARY_TRACKS_QUERY_KEY } from '@/hooks/useLibrary';
 import { usePlayerStore } from '@/stores/playerStore';
 import { formatTotalDuration } from '@/utils/musicUtils';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 /**
  * Liked Songs Screen (`/library/liked`)
@@ -24,6 +25,7 @@ import { formatTotalDuration } from '@/utils/musicUtils';
  * the `['library', 'tracks']` invalidation wired into the like mutation.
  */
 const LikedSongsScreen: React.FC = () => {
+  const themed = useThemedStyles();
   const theme = useTheme();
   const router = useRouter();
   const { t } = useTranslation();
@@ -67,7 +69,7 @@ const LikedSongsScreen: React.FC = () => {
   if (gate.isTimedOut) {
     return (
       <EmptyState
-        className="bg-surface"
+        tone="surface"
         icon={{ name: 'cloud-offline-outline' }}
         error={{
           title: t('common.sessionUnavailable'),
@@ -82,7 +84,7 @@ const LikedSongsScreen: React.FC = () => {
 
   if (gate.isResolving) {
     return (
-      <View className="bg-surface" style={styles.centered}>
+      <View style={[themed.surface, styles.centered]}>
         <LibraryListSkeleton count={8} />
       </View>
     );
@@ -90,16 +92,14 @@ const LikedSongsScreen: React.FC = () => {
 
   if (!gate.canUsePrivateApi) {
     return (
-      <View className="bg-surface" style={styles.centered}>
+      <View style={[themed.surface, styles.centered]}>
         <Ionicons
           name="lock-closed-outline"
           size={48}
           color={theme.colors.textSecondary}
           style={styles.centeredIcon}
         />
-        <Text className="text-muted-foreground" style={styles.centeredText}>
-          {t('liked.signedOut')}
-        </Text>
+        <Text style={[themed.mutedText, styles.centeredText]}>{t('liked.signedOut')}</Text>
       </View>
     );
   }
@@ -108,24 +108,19 @@ const LikedSongsScreen: React.FC = () => {
     <>
       <SEO title={t('liked.seo.title')} description={t('liked.seo.description')} />
       <ScrollView
-        className="bg-surface"
-        style={styles.scrollView}
+        style={[themed.surface, styles.scrollView]}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
         <View style={styles.header}>
-          <View className="bg-primary" style={styles.coverArt}>
+          <View style={[themed.surface2, styles.coverArt]}>
             <Ionicons name="heart" size={64} color={theme.colors.primaryForeground} />
           </View>
           <View style={styles.headerInfo}>
-            <Text className="text-muted-foreground" style={styles.headerEyebrow}>
-              {t('common.playlist')}
-            </Text>
-            <Text className="text-foreground" style={styles.headerTitle}>
-              {t('library.likedSongs')}
-            </Text>
-            <Text className="text-muted-foreground" style={styles.headerMeta}>
+            <Text style={[themed.mutedText, styles.headerEyebrow]}>{t('common.playlist')}</Text>
+            <Text style={[themed.text, styles.headerTitle]}>{t('library.likedSongs')}</Text>
+            <Text style={[themed.mutedText, styles.headerMeta]}>
               {isLoading ? '...' : `${total} ${total === 1 ? 'song' : 'songs'}`}
               {totalDurationFormatted ? ` • ${totalDurationFormatted}` : ''}
             </Text>
@@ -135,8 +130,7 @@ const LikedSongsScreen: React.FC = () => {
         {/* Controls */}
         <View style={styles.controlsContainer}>
           <Pressable
-            className="bg-primary"
-            style={styles.playButton}
+            style={[themed.surface2, styles.playButton]}
             onPress={handlePlayAll}
             disabled={tracks.length === 0}
             accessibilityRole="button"
@@ -171,17 +165,12 @@ const LikedSongsScreen: React.FC = () => {
               color={theme.colors.textSecondary}
               style={styles.centeredIcon}
             />
-            <Text className="text-muted-foreground" style={styles.centeredText}>
-              {t('liked.empty.title')}
-            </Text>
+            <Text style={[themed.mutedText, styles.centeredText]}>{t('liked.empty.title')}</Text>
             <Pressable
               onPress={() => router.push('/search')}
-              className="bg-primary"
-              style={styles.findButton}
+              style={[themed.surface2, styles.findButton]}
             >
-              <Text className="text-primary-foreground" style={styles.findButtonText}>
-                {t('liked.empty.action')}
-              </Text>
+              <Text style={[themed.text2, styles.findButtonText]}>{t('liked.empty.action')}</Text>
             </Pressable>
           </View>
         ) : (
@@ -316,3 +305,11 @@ const styles = StyleSheet.create({
 });
 
 export default LikedSongsScreen;
+
+const useThemedStyles = createTokenStyles((t) => ({
+  surface: { backgroundColor: t.surface },
+  mutedText: { color: t.mutedForeground },
+  surface2: { backgroundColor: t.primary },
+  text: { color: t.foreground },
+  text2: { color: t.primaryForeground },
+}));

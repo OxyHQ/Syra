@@ -5,6 +5,7 @@ import { useLyrics } from '@/hooks/useLyrics';
 import { usePlayerStore } from '@/stores/playerStore';
 import { activeLyricLineIndex } from '@/utils/lyrics';
 import { useTranslation } from 'react-i18next';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 const SECONDS_TO_MS = 1000;
 
@@ -25,6 +26,7 @@ interface LyricsViewProps {
  * - Plain lyrics: scrollable text block.
  */
 export const LyricsView: React.FC<LyricsViewProps> = React.memo(({ trackId }) => {
+  const styles = useStyles();
   const { t } = useTranslation();
   const { lyrics, isLoading, isError, retry } = useLyrics(trackId);
 
@@ -42,7 +44,7 @@ export const LyricsView: React.FC<LyricsViewProps> = React.memo(({ trackId }) =>
 
   if (isLoading) {
     return (
-      <View className="flex-1 px-6 py-4 gap-3">
+      <View style={styles.container}>
         {Array.from({ length: LYRICS_SKELETON_LINE_COUNT }).map((_, i) => (
           <Skeleton.Box key={i} width={i % 3 === 2 ? '55%' : '85%'} height={18} borderRadius={6} />
         ))}
@@ -52,10 +54,10 @@ export const LyricsView: React.FC<LyricsViewProps> = React.memo(({ trackId }) =>
 
   if (isError) {
     return (
-      <View className="p-6 gap-3">
-        <Text className="text-muted-foreground">{t('listener.lyricsFailed')}</Text>
+      <View style={styles.stack}>
+        <Text style={styles.mutedText}>{t('listener.lyricsFailed')}</Text>
         <Pressable accessibilityRole="button" onPress={retry}>
-          <Text className="text-primary">{t('listener.retry')}</Text>
+          <Text style={styles.text}>{t('listener.retry')}</Text>
         </Pressable>
       </View>
     );
@@ -66,10 +68,8 @@ export const LyricsView: React.FC<LyricsViewProps> = React.memo(({ trackId }) =>
     : lyrics?.lines.map((line) => line.text).join('\n');
   if (!lyrics || !plainText?.trim()) {
     return (
-      <View className="flex-1 items-center justify-center px-6">
-        <Text className="text-lg font-medium text-muted-foreground text-center">
-          {t('lyrics.unavailable')}
-        </Text>
+      <View style={styles.centered}>
+        <Text style={styles.mutedText2}>{t('lyrics.unavailable')}</Text>
       </View>
     );
   }
@@ -78,8 +78,8 @@ export const LyricsView: React.FC<LyricsViewProps> = React.memo(({ trackId }) =>
     return (
       <ScrollView
         key={trackId}
-        className="flex-1"
-        contentContainerClassName="px-6 py-4 gap-2"
+        style={styles.fill}
+        contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
         {lyrics.lines.map((line, index) => (
@@ -93,17 +93,13 @@ export const LyricsView: React.FC<LyricsViewProps> = React.memo(({ trackId }) =>
           >
             <Text
               selectable={!isCurrent}
-              className={
-                index === activeIndex
-                  ? 'text-lg font-semibold text-primary leading-relaxed'
-                  : 'text-base text-muted-foreground leading-relaxed'
-              }
+              style={index === activeIndex ? styles.activeLine : styles.line}
             >
               {line.text}
             </Text>
           </Pressable>
         ))}
-        <Text className="text-sm text-muted-foreground">
+        <Text style={styles.mutedText3}>
           {t('listener.lyricsSource', { source: lyrics.source })}
         </Text>
       </ScrollView>
@@ -113,16 +109,51 @@ export const LyricsView: React.FC<LyricsViewProps> = React.memo(({ trackId }) =>
   return (
     <ScrollView
       key={trackId}
-      className="flex-1"
-      contentContainerClassName="px-6 py-4"
+      style={styles.fill}
+      contentContainerStyle={styles.content2}
       showsVerticalScrollIndicator={false}
     >
-      <Text className="text-base text-foreground leading-relaxed">{plainText}</Text>
-      <Text className="text-sm text-muted-foreground mt-4">
-        {t('listener.lyricsSource', { source: lyrics.source })}
-      </Text>
+      <Text style={styles.text2}>{plainText}</Text>
+      <Text style={styles.mutedText4}>{t('listener.lyricsSource', { source: lyrics.source })}</Text>
     </ScrollView>
   );
 });
 
 LyricsView.displayName = 'LyricsView';
+
+const useStyles = createTokenStyles((t) => ({
+  container: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: '0%',
+    gap: 12,
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+  },
+  stack: { gap: 12, padding: 24 },
+  mutedText: { color: t.mutedForeground },
+  text: { color: t.primary },
+  activeLine: { fontSize: 18, lineHeight: 29.25, fontWeight: 600, color: t.primary },
+  line: { fontSize: 16, lineHeight: 26, color: t.mutedForeground },
+  centered: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: '0%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  mutedText2: {
+    textAlign: 'center',
+    fontSize: 18,
+    fontWeight: 500,
+    color: t.mutedForeground,
+    lineHeight: 28,
+  },
+  fill: { flexGrow: 1, flexShrink: 1, flexBasis: '0%' },
+  content: { gap: 8, paddingHorizontal: 24, paddingVertical: 16 },
+  mutedText3: { fontSize: 14, color: t.mutedForeground, lineHeight: 20 },
+  content2: { paddingHorizontal: 24, paddingVertical: 16 },
+  text2: { fontSize: 16, color: t.foreground, lineHeight: 26 },
+  mutedText4: { marginTop: 16, fontSize: 14, color: t.mutedForeground, lineHeight: 20 },
+}));

@@ -153,7 +153,7 @@ Containers follow the tracks. An album, artist, playlist, genre card or search r
 | Document | Covers |
 |---|---|
 | [Documentation index](./docs/README.md) | Everything below, in one place |
-| [Theme quick reference](./docs/THEME_QUICK_REFERENCE.md) | Theming with Bloom and NativeWind |
+| [Theme quick reference](./docs/THEME_QUICK_REFERENCE.md) | Theming with Bloom (no NativeWind: React Native styles over Bloom tokens) |
 | [Theming troubleshooting](./docs/THEMING_TROUBLESHOOTING.md) | Common theming failures and their causes |
 | [Performance guide](./docs/PERFORMANCE_GUIDE.md) | Where the time goes and how to get it back |
 | [Runbooks](./docs/runbooks) | Ordered production steps, including the user upload rollout |

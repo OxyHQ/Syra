@@ -37,6 +37,7 @@ import { authenticatedClient } from '@/utils/api';
 import { liveRoomsQueryKey } from '@/lib/liveConfig';
 import { trackArtistsText } from '@/utils/trackArtists';
 import { toast } from '@oxy.so/bloom/toast';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 const logger = createScopedLogger('HomeScreen');
 
@@ -362,6 +363,7 @@ const HomeSectionBlock: React.FC<HomeSectionBlockProps> = ({
   headerAction,
   children,
 }) => {
+  const themed = useThemedStyles();
   const { t } = useTranslation();
   const theme = useTheme();
 
@@ -376,9 +378,7 @@ const HomeSectionBlock: React.FC<HomeSectionBlockProps> = ({
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeaderRow}>
-        <Text className="text-foreground" style={styles.sectionHeaderTitle}>
-          {title}
-        </Text>
+        <Text style={[themed.text, styles.sectionHeaderTitle]}>{title}</Text>
         {headerAction}
       </View>
       {status === 'loading' ? (
@@ -498,6 +498,7 @@ const HomeContent: React.FC<HomeContentProps> = ({
   addPlaylistToQueue,
   addArtistToQueue,
 }) => {
+  const themed = useThemedStyles();
   const theme = useTheme();
   const router = useRouter();
   const { joinLiveRoom } = useLiveRoom();
@@ -535,7 +536,7 @@ const HomeContent: React.FC<HomeContentProps> = ({
     podcastsStatus === 'ready';
 
   return (
-    <View className="bg-surface" style={styles.gradientContainer}>
+    <View style={[themed.surface, styles.gradientContainer]}>
       <ScrollView
         style={[styles.scrollView, { backgroundColor: 'transparent' }]}
         contentContainerStyle={[
@@ -546,9 +547,7 @@ const HomeContent: React.FC<HomeContentProps> = ({
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text className="text-foreground" style={styles.title}>
-            {greeting}
-          </Text>
+          <Text style={[themed.text, styles.title]}>{greeting}</Text>
         </View>
 
         {/* Live now — currently-live audio rooms, surfaced at the top because
@@ -559,19 +558,15 @@ const HomeContent: React.FC<HomeContentProps> = ({
           <View style={styles.section}>
             <View style={styles.sectionHeaderRow}>
               <View style={styles.liveHeading}>
-                <View className="bg-error" style={styles.liveDot} />
-                <Text className="text-foreground" style={styles.sectionHeaderTitle}>
-                  {t('home.liveNow')}
-                </Text>
+                <View style={[themed.surface2, styles.liveDot]} />
+                <Text style={[themed.text, styles.sectionHeaderTitle]}>{t('home.liveNow')}</Text>
               </View>
               <Pressable
                 style={styles.seeAllButton}
                 onPress={() => router.push('/live')}
                 hitSlop={8}
               >
-                <Text className="text-muted-foreground" style={styles.seeAll}>
-                  {t('common.seeAll')}
-                </Text>
+                <Text style={[themed.mutedText, styles.seeAll]}>{t('common.seeAll')}</Text>
               </Pressable>
             </View>
             <ScrollView
@@ -639,8 +634,7 @@ const HomeContent: React.FC<HomeContentProps> = ({
               return (
                 <Pressable
                   key={itemKey}
-                  className="bg-surface"
-                  style={styles.compactGridItem}
+                  style={[themed.surface, styles.compactGridItem]}
                   onPress={() => {
                     if (item.type === 'album') {
                       router.push(`/album/${id}`);
@@ -659,8 +653,8 @@ const HomeContent: React.FC<HomeContentProps> = ({
                   onHoverOut={onSeedHoverOut}
                 >
                   <View
-                    className="bg-background"
                     style={[
+                      themed.surface3,
                       styles.compactImageContainer,
                       { borderRadius: item.shape === 'circle' ? 999 : 12 },
                     ]}
@@ -682,7 +676,7 @@ const HomeContent: React.FC<HomeContentProps> = ({
                       />
                     )}
                   </View>
-                  <Text className="text-foreground" style={styles.compactTitle} numberOfLines={1}>
+                  <Text style={[themed.text, styles.compactTitle]} numberOfLines={1}>
                     {title}
                   </Text>
                 </Pressable>
@@ -857,9 +851,7 @@ const HomeContent: React.FC<HomeContentProps> = ({
               }
               hitSlop={8}
             >
-              <Text className="text-muted-foreground" style={styles.seeAll}>
-                {t('common.seeAll')}
-              </Text>
+              <Text style={[themed.mutedText, styles.seeAll]}>{t('common.seeAll')}</Text>
             </Pressable>
           }
         >
@@ -908,9 +900,7 @@ const HomeContent: React.FC<HomeContentProps> = ({
               onPress={() => router.push('/podcasts')}
               hitSlop={8}
             >
-              <Text className="text-muted-foreground" style={styles.seeAll}>
-                {t('common.seeAll')}
-              </Text>
+              <Text style={[themed.mutedText, styles.seeAll]}>{t('common.seeAll')}</Text>
             </Pressable>
           }
         >
@@ -1101,9 +1091,7 @@ const HomeContent: React.FC<HomeContentProps> = ({
             accessibilityRole="link"
             accessibilityLabel={t('common.reportCopyright')}
           >
-            <Text className="text-muted-foreground" style={styles.footerLink}>
-              {t('common.reportCopyright')}
-            </Text>
+            <Text style={[themed.mutedText, styles.footerLink]}>{t('common.reportCopyright')}</Text>
           </Pressable>
         </View>
       </ScrollView>
@@ -1217,3 +1205,11 @@ const styles = StyleSheet.create({
 });
 
 export default HomeScreen;
+
+const useThemedStyles = createTokenStyles((t) => ({
+  text: { color: t.foreground },
+  surface: { backgroundColor: t.surface },
+  surface2: { backgroundColor: t.error },
+  mutedText: { color: t.mutedForeground },
+  surface3: { backgroundColor: t.background },
+}));

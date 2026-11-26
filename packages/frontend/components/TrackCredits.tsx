@@ -3,9 +3,11 @@ import { Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { normalizeNameKey, type Track } from '@syra/shared-types';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 /** Preserve unfamiliar roles and unresolved names; never invent contributors. */
 export function TrackCredits({ track }: { track: Track }) {
+  const styles = useStyles();
   const { t } = useTranslation();
   const router = useRouter();
   const credits = [...(track.credits ?? [])];
@@ -25,15 +27,15 @@ export function TrackCredits({ track }: { track: Track }) {
     });
   }
   return (
-    <View className="gap-4 py-4">
-      <Text className="text-xl font-semibold text-foreground">{t('listener.credits')}</Text>
+    <View style={styles.stack}>
+      <Text style={styles.title}>{t('listener.credits')}</Text>
       {credits.length === 0 ? (
-        <Text className="text-muted-foreground">{t('listener.noCredits')}</Text>
+        <Text style={styles.mutedText}>{t('listener.noCredits')}</Text>
       ) : null}
       {credits.map((credit, index) => (
         <View
           key={`${credit.catalogEntityId ?? credit.nameKey}:${credit.role}:${index}`}
-          className="gap-1"
+          style={styles.stack2}
         >
           {credit.catalogEntityId ? (
             <Pressable
@@ -42,28 +44,37 @@ export function TrackCredits({ track }: { track: Track }) {
                 router.push({ pathname: '/p/[id]', params: { id: credit.catalogEntityId } })
               }
             >
-              <Text className="text-primary text-base font-medium">{credit.name}</Text>
+              <Text style={styles.text}>{credit.name}</Text>
             </Pressable>
           ) : (
-            <Text selectable className="text-foreground text-base font-medium">
+            <Text selectable style={styles.text2}>
               {credit.name}
             </Text>
           )}
-          <Text selectable className="text-muted-foreground">
+          <Text selectable style={styles.mutedText}>
             {credit.role === 'artist' ? t('common.artist') : credit.role}
           </Text>
         </View>
       ))}
       {track.metadata?.copyright ? (
-        <Text selectable className="text-muted-foreground">
+        <Text selectable style={styles.mutedText}>
           {track.metadata.copyright}
         </Text>
       ) : null}
       {track.metadata?.publisher ? (
-        <Text selectable className="text-muted-foreground">
+        <Text selectable style={styles.mutedText}>
           {track.metadata.publisher}
         </Text>
       ) : null}
     </View>
   );
 }
+
+const useStyles = createTokenStyles((t) => ({
+  stack: { gap: 16, paddingVertical: 16 },
+  title: { fontSize: 20, fontWeight: 600, color: t.foreground, lineHeight: 28 },
+  mutedText: { color: t.mutedForeground },
+  stack2: { gap: 4 },
+  text: { fontSize: 16, fontWeight: 500, color: t.primary, lineHeight: 24 },
+  text2: { fontSize: 16, fontWeight: 500, color: t.foreground, lineHeight: 24 },
+}));

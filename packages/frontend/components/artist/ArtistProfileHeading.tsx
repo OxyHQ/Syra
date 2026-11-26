@@ -1,15 +1,20 @@
 import React from 'react';
-import { Text, View } from 'react-native';
+import { Text, View, StyleSheet } from 'react-native';
+import { useWindowWidthClass } from '@oxy.so/bloom/hooks';
 import type { ArtistStats } from '@syra/shared-types';
 import { MonthlyListeners } from './MonthlyListeners';
 
 /** Keep the name and its audience in one responsive hero, including linked people. */
 export function ArtistProfileHeading({ name, stats }: { name: string; stats?: ArtistStats }) {
+  const width = useWindowWidthClass(BREAKPOINTS);
   return (
-    <View className="gap-2 min-w-0">
+    <View style={styles.stack}>
       <Text
         accessibilityRole="header"
-        className="text-white text-4xl sm:text-6xl lg:text-8xl font-black"
+        style={[
+          styles.name,
+          width >= LG ? styles.nameLarge : width >= SM ? styles.nameMedium : null,
+        ]}
         numberOfLines={2}
       >
         {name}
@@ -18,3 +23,15 @@ export function ArtistProfileHeading({ name, stats }: { name: string; stats?: Ar
     </View>
   );
 }
+
+// Tailwind's `sm` and `lg`, the widths the name's `text-6xl` and `text-8xl` started at.
+const SM = 640;
+const LG = 1024;
+const BREAKPOINTS = [SM, LG];
+
+const styles = StyleSheet.create({
+  stack: { minWidth: 0, gap: 8 },
+  name: { fontSize: 36, lineHeight: 40, fontWeight: '900', color: '#fff' },
+  nameMedium: { fontSize: 60, lineHeight: 60 },
+  nameLarge: { fontSize: 96, lineHeight: 96 },
+});

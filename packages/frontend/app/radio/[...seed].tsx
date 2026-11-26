@@ -14,6 +14,7 @@ import { TrackListSkeleton } from '@/components/skeletons';
 import { useRadioStation, useResetRadioStation } from '@/hooks/useRadio';
 import { useAuthGate } from '@/hooks/useAuthGate';
 import { usePlayerStore } from '@/stores/playerStore';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 /**
  * A Syra Radio station (`/radio/<seedType>[/<seedId>]`).
@@ -30,6 +31,7 @@ import { usePlayerStore } from '@/stores/playerStore';
  * the beginning.
  */
 const RadioStationScreen: React.FC = () => {
+  const themed = useThemedStyles();
   const { t } = useTranslation();
   const theme = useTheme();
   const params = useLocalSearchParams<{ seed: string | string[] }>();
@@ -64,7 +66,7 @@ const RadioStationScreen: React.FC = () => {
   if (!seed) {
     return (
       <EmptyState
-        className="bg-surface"
+        tone="surface"
         icon={{ name: 'radio-outline' }}
         title={t('radio.errors.unknownStation')}
         subtitle={t('radio.errors.unknownStationMessage')}
@@ -78,7 +80,7 @@ const RadioStationScreen: React.FC = () => {
   if (gate.isTimedOut) {
     return (
       <EmptyState
-        className="bg-surface"
+        tone="surface"
         icon={{ name: 'cloud-offline-outline' }}
         error={{
           title: t('common.sessionUnavailable'),
@@ -93,7 +95,7 @@ const RadioStationScreen: React.FC = () => {
 
   if (gate.isResolving || station.isLoading) {
     return (
-      <View className="bg-surface" style={styles.container}>
+      <View style={[themed.surface, styles.container]}>
         <View style={styles.list}>
           <TrackListSkeleton count={8} />
         </View>
@@ -107,7 +109,7 @@ const RadioStationScreen: React.FC = () => {
   if (station.isError && tracks.length === 0) {
     return (
       <EmptyState
-        className="bg-surface"
+        tone="surface"
         icon={{ name: 'cloud-offline-outline' }}
         error={{
           title: t('radio.errors.load'),
@@ -138,7 +140,7 @@ const RadioStationScreen: React.FC = () => {
   return (
     <>
       <SEO title={t('radio.seo.title', { station: title })} description={stationInfo?.subtitle} />
-      <View className="bg-surface" style={styles.container}>
+      <View style={[themed.surface, styles.container]}>
         <FlatList
           data={tracks}
           keyExtractor={(track) => track.id}
@@ -162,7 +164,7 @@ const RadioStationScreen: React.FC = () => {
           }}
           ListHeaderComponent={
             <View style={styles.header}>
-              <View className="bg-background" style={styles.artwork}>
+              <View style={[themed.surface2, styles.artwork]}>
                 {stationInfo?.imageUrl ? (
                   <Image
                     source={{ uri: stationInfo.imageUrl }}
@@ -174,18 +176,12 @@ const RadioStationScreen: React.FC = () => {
                 )}
               </View>
               <View style={styles.headerText}>
-                <Text className="text-muted-foreground" style={styles.headerLabel}>
-                  {t('radio.label')}
-                </Text>
-                <Text className="text-foreground" style={styles.headerTitle} numberOfLines={2}>
+                <Text style={[themed.mutedText, styles.headerLabel]}>{t('radio.label')}</Text>
+                <Text style={[themed.text, styles.headerTitle]} numberOfLines={2}>
                   {title}
                 </Text>
                 {stationInfo?.subtitle ? (
-                  <Text
-                    className="text-muted-foreground"
-                    style={styles.headerSubtitle}
-                    numberOfLines={2}
-                  >
+                  <Text style={[themed.mutedText, styles.headerSubtitle]} numberOfLines={2}>
                     {stationInfo.subtitle}
                   </Text>
                 ) : null}
@@ -199,9 +195,7 @@ const RadioStationScreen: React.FC = () => {
                   hitSlop={8}
                 >
                   <Ionicons name="refresh" size={16} color={theme.colors.textSecondary} />
-                  <Text className="text-muted-foreground" style={styles.restartLabel}>
-                    {t('radio.restart')}
-                  </Text>
+                  <Text style={[themed.mutedText, styles.restartLabel]}>{t('radio.restart')}</Text>
                 </Pressable>
               </View>
             </View>
@@ -316,3 +310,10 @@ const styles = StyleSheet.create({
 });
 
 export default RadioStationScreen;
+
+const useThemedStyles = createTokenStyles((t) => ({
+  surface: { backgroundColor: t.surface },
+  surface2: { backgroundColor: t.background },
+  mutedText: { color: t.mutedForeground },
+  text: { color: t.foreground },
+}));

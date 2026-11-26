@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, runOnJS } from 'react-native-reanimated';
 import { useTheme } from '@oxy.so/bloom/theme';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 const THUMB_SIZE = 20;
 const THUMB_RADIUS = THUMB_SIZE / 2;
@@ -38,6 +39,7 @@ export const Slider: React.FC<SliderProps> = ({
   disabled = false,
   showValue = true,
 }) => {
+  const themed = useThemedStyles();
   const theme = useTheme();
   const [width, setWidth] = useState(0);
   const widthSV = useSharedValue(0);
@@ -129,14 +131,8 @@ export const Slider: React.FC<SliderProps> = ({
     <View style={styles.container}>
       {label && (
         <View style={styles.labelRow}>
-          <Text className="text-foreground" style={styles.label}>
-            {label}
-          </Text>
-          {showValue && (
-            <Text className="text-primary" style={styles.value}>
-              {displayValue}
-            </Text>
-          )}
+          <Text style={[themed.text, styles.label]}>{label}</Text>
+          {showValue && <Text style={[themed.text2, styles.value]}>{displayValue}</Text>}
         </View>
       )}
       <GestureDetector gesture={gesture}>
@@ -149,14 +145,12 @@ export const Slider: React.FC<SliderProps> = ({
             widthSV.value = newWidth;
           }}
         >
-          <View className="bg-border" style={[styles.track, disabled && { opacity: 0.5 }]} />
+          <View style={[themed.surface, styles.track, disabled && { opacity: 0.5 }]} />
           <Animated.View
-            className="bg-primary"
-            style={[styles.fill, disabled && { opacity: 0.5 }, fillStyle]}
+            style={[themed.surface2, styles.fill, disabled && { opacity: 0.5 }, fillStyle]}
           />
           <Animated.View
-            className="bg-card border-primary"
-            style={[styles.thumb, disabled && { opacity: 0.5 }, thumbStyle]}
+            style={[themed.card, styles.thumb, disabled && { opacity: 0.5 }, thumbStyle]}
           />
         </View>
       </GestureDetector>
@@ -213,3 +207,11 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
 });
+
+const useThemedStyles = createTokenStyles((t) => ({
+  text: { color: t.foreground },
+  text2: { color: t.primary },
+  surface: { backgroundColor: t.border },
+  surface2: { backgroundColor: t.primary },
+  card: { borderColor: t.primary, backgroundColor: t.card },
+}));

@@ -316,3 +316,25 @@ Refer to:
 - [THEMING_REFACTOR_SUMMARY.md](./THEMING_REFACTOR_SUMMARY.md) for detailed documentation
 - `packages/frontend/hooks/useTheme.ts` for implementation
 - `packages/frontend/utils/theme.ts` for utilities
+
+## Styles: no className
+
+Bloom 23 takes no `className`, and Syra has no NativeWind or Tailwind. A style that paints a theme
+colour is a `createTokenStyles` sheet, built once per palette:
+
+```typescript
+import { createTokenStyles, tokenAlpha } from "@oxy.so/bloom/theme";
+
+const useStyles = createTokenStyles((t) => ({
+  card: { borderRadius: 16, backgroundColor: t.card, borderColor: t.border, borderWidth: 1 },
+  badge: { backgroundColor: tokenAlpha(t.primary, 0.1) },
+}));
+
+function MyCard() {
+  const styles = useStyles();
+  return <View style={styles.card} />;
+}
+```
+
+A style with no colour is a plain `StyleSheet.create`. Pressed, web-only and breakpoint styles are the
+Pressable's `pressed` state, `Platform.OS === 'web'` and `useWindowWidthClass`.

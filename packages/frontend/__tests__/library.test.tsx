@@ -33,6 +33,9 @@ jest.mock('@oxy.so/services/ui/client', () => ({
 jest.mock('@oxy.so/bloom/toast', () => ({ toast: { error: jest.fn(), success: jest.fn() } }));
 
 jest.mock('@oxy.so/bloom/theme', () => ({
+  // The real token styles (`createTokenStyles`, `tokenAlpha`) from the CommonJS build: the
+  // `react-native` condition points at Bloom's TypeScript source, which Jest does not transform.
+  ...jest.requireActual('../../../node_modules/@oxy.so/bloom/lib/commonjs/theme/color-tokens.js'),
   useTheme: () => ({
     colors: {
       text: '#000000',

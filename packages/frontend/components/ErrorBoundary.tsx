@@ -1,6 +1,7 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { withTranslation } from 'react-i18next';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 interface Props {
   children: ReactNode;
@@ -13,24 +14,16 @@ interface State {
   error: Error | null;
 }
 
-// Fallback UI rendered as a function component so it can consume NativeWind theme
-// tokens via className (class components cannot use hooks directly).
+// Fallback UI rendered as a function component so it can read the theme's token
+// styles through a hook (class components cannot use hooks directly).
 function ErrorFallbackView({ t, onRetry }: { t: (key: string) => string; onRetry: () => void }) {
+  const styles = useStyles();
   return (
-    <View className="flex-1 items-center justify-center bg-background px-5">
-      <Text className="text-2xl font-bold mb-3 text-center text-foreground">
-        {t('error.boundary.title')}
-      </Text>
-      <Text className="text-base text-center mb-6 leading-[22px] px-4 text-muted-foreground">
-        {t('error.boundary.message')}
-      </Text>
-      <TouchableOpacity
-        className="bg-primary px-6 py-3 rounded-xl min-w-[120px] items-center"
-        onPress={onRetry}
-      >
-        <Text className="text-base font-semibold text-primary-foreground">
-          {t('error.boundary.retry')}
-        </Text>
+    <View style={styles.centered}>
+      <Text style={styles.title}>{t('error.boundary.title')}</Text>
+      <Text style={styles.mutedText}>{t('error.boundary.message')}</Text>
+      <TouchableOpacity style={styles.surface} onPress={onRetry}>
+        <Text style={styles.title2}>{t('error.boundary.retry')}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -77,3 +70,40 @@ type ErrorBoundaryProps = Omit<Props, 't'>;
 const ErrorBoundary: React.ComponentType<ErrorBoundaryProps> = withTranslation()(ErrorBoundaryBase);
 
 export default ErrorBoundary;
+
+const useStyles = createTokenStyles((t) => ({
+  centered: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: '0%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: t.background,
+    paddingHorizontal: 20,
+  },
+  title: {
+    marginBottom: 12,
+    textAlign: 'center',
+    fontSize: 24,
+    fontWeight: 700,
+    color: t.foreground,
+    lineHeight: 32,
+  },
+  mutedText: {
+    marginBottom: 24,
+    paddingHorizontal: 16,
+    textAlign: 'center',
+    fontSize: 16,
+    lineHeight: 22,
+    color: t.mutedForeground,
+  },
+  surface: {
+    minWidth: 120,
+    alignItems: 'center',
+    borderRadius: 12,
+    backgroundColor: t.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+  },
+  title2: { fontSize: 16, fontWeight: 600, color: t.primaryForeground, lineHeight: 24 },
+}));

@@ -1,6 +1,6 @@
 import type React from 'react';
 import { useCallback, useMemo } from 'react';
-import { Pressable } from 'react-native';
+import { Pressable, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { GemieAskProvider, useAskGemie } from '@gemies/sdk/ask';
 import { GemieAvatarIcon } from '@gemies/sdk/avatar';
@@ -73,9 +73,19 @@ const AskAliaButton: React.FC = () => {
       onPress={handlePress}
       accessibilityRole="button"
       accessibilityLabel={t('topbar.askAlia')}
-      className="h-10 w-10 items-center justify-center rounded-full"
+      style={styles.centered}
     >
       <GemieAvatarIcon width={24} height={24} fill={theme.colors.text} />
     </Pressable>
   );
 };
+
+const styles = StyleSheet.create({
+  centered: {
+    height: 40,
+    width: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 9999,
+  },
+});

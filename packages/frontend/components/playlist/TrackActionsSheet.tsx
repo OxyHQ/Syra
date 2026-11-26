@@ -13,6 +13,7 @@ import { toast } from '@oxy.so/bloom/toast';
 import { useQueueStore } from '@/stores/queueStore';
 import { toPlayableItem } from '@/utils/playableItem';
 import { shareMedia } from '@/utils/share-media';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 interface TrackActionsSheetProps {
   visible: boolean;
@@ -39,6 +40,7 @@ export const TrackActionsSheet: React.FC<TrackActionsSheetProps> = ({
   track,
   removeFrom,
 }) => {
+  const themed = useThemedStyles();
   const { t } = useTranslation();
   const theme = useTheme();
   const router = useRouter();
@@ -73,13 +75,12 @@ export const TrackActionsSheet: React.FC<TrackActionsSheetProps> = ({
     <>
       <BottomSheet ref={sheetRef} onDismiss={onClose} enablePanDownToClose>
         <View style={styles.sheet}>
-          <Text className="text-foreground" style={styles.trackTitle} numberOfLines={1}>
+          <Text style={[themed.text, styles.trackTitle]} numberOfLines={1}>
             {track.title}
           </Text>
           <TrackArtistLine
             track={track}
-            className="text-muted-foreground"
-            style={styles.trackArtist}
+            style={[themed.mutedText, styles.trackArtist]}
             numberOfLines={1}
             linked={false}
             fallback={track.artistName}
@@ -94,9 +95,7 @@ export const TrackActionsSheet: React.FC<TrackActionsSheetProps> = ({
             accessibilityRole="button"
           >
             <Ionicons name="radio-outline" size={22} color={theme.colors.text} />
-            <Text className="text-foreground" style={styles.actionText}>
-              {t('radio.songRadio')}
-            </Text>
+            <Text style={[themed.text, styles.actionText]}>{t('radio.songRadio')}</Text>
           </Pressable>
 
           <Pressable
@@ -105,9 +104,7 @@ export const TrackActionsSheet: React.FC<TrackActionsSheetProps> = ({
             accessibilityRole="button"
           >
             <Ionicons name="add-circle-outline" size={22} color={theme.colors.text} />
-            <Text className="text-foreground" style={styles.actionText}>
-              {t('trackActions.addToPlaylist')}
-            </Text>
+            <Text style={[themed.text, styles.actionText]}>{t('trackActions.addToPlaylist')}</Text>
           </Pressable>
 
           {(['next', 'last'] as const).map((position) => (
@@ -121,7 +118,7 @@ export const TrackActionsSheet: React.FC<TrackActionsSheetProps> = ({
               }}
             >
               <Ionicons name="list-outline" size={22} color={theme.colors.text} />
-              <Text className="text-foreground" style={styles.actionText}>
+              <Text style={[themed.text, styles.actionText]}>
                 {t(position === 'next' ? 'listener.playNext' : 'listener.addQueue')}
               </Text>
             </Pressable>
@@ -135,9 +132,7 @@ export const TrackActionsSheet: React.FC<TrackActionsSheetProps> = ({
             }}
           >
             <Ionicons name="information-circle-outline" size={22} color={theme.colors.text} />
-            <Text className="text-foreground" style={styles.actionText}>
-              {t('listener.creditsLyrics')}
-            </Text>
+            <Text style={[themed.text, styles.actionText]}>{t('listener.creditsLyrics')}</Text>
           </Pressable>
           {track.artistId ? (
             <Pressable
@@ -149,9 +144,7 @@ export const TrackActionsSheet: React.FC<TrackActionsSheetProps> = ({
               }}
             >
               <Ionicons name="person-outline" size={22} color={theme.colors.text} />
-              <Text className="text-foreground" style={styles.actionText}>
-                {t('common.goToArtist')}
-              </Text>
+              <Text style={[themed.text, styles.actionText]}>{t('common.goToArtist')}</Text>
             </Pressable>
           ) : null}
           {track.albumId ? (
@@ -164,9 +157,7 @@ export const TrackActionsSheet: React.FC<TrackActionsSheetProps> = ({
               }}
             >
               <Ionicons name="albums-outline" size={22} color={theme.colors.text} />
-              <Text className="text-foreground" style={styles.actionText}>
-                {t('listener.goAlbum')}
-              </Text>
+              <Text style={[themed.text, styles.actionText]}>{t('listener.goAlbum')}</Text>
             </Pressable>
           ) : null}
           <Pressable
@@ -178,9 +169,7 @@ export const TrackActionsSheet: React.FC<TrackActionsSheetProps> = ({
             }}
           >
             <Ionicons name="share-outline" size={22} color={theme.colors.text} />
-            <Text className="text-foreground" style={styles.actionText}>
-              {t('listener.share')}
-            </Text>
+            <Text style={[themed.text, styles.actionText]}>{t('listener.share')}</Text>
           </Pressable>
           {removeFrom && (
             <Pressable
@@ -191,7 +180,7 @@ export const TrackActionsSheet: React.FC<TrackActionsSheetProps> = ({
               accessibilityState={{ disabled: removeTracks.isPending }}
             >
               <Ionicons name="remove-circle-outline" size={22} color={theme.colors.error} />
-              <Text className="text-error" style={styles.actionText}>
+              <Text style={[themed.text2, styles.actionText]}>
                 {t('trackActions.removeFromPlaylist')}
               </Text>
             </Pressable>
@@ -238,3 +227,9 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 });
+
+const useThemedStyles = createTokenStyles((t) => ({
+  text: { color: t.foreground },
+  text2: { color: t.error },
+  mutedText: { color: t.mutedForeground },
+}));

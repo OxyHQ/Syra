@@ -2,6 +2,11 @@
 
 ## Current contract — 2026-10-25
 
+Update 2026-11-26: SDK 0.27.0 admits services >=13.0.0 <16.0.0 and takes
+`@oxy.so/bloom` >=23.0.0 as an optional peer; it is built and tested against
+Bloom 23.9.1 and Services 15.0.0. The frontend and Studio run Services 15.0.0
+and core 7.55.0. The version statements below are the 2026-10-25 snapshot.
+
 Own HTTP callers use `syraForOxySession(existingOxyServices)`. Own live-room
 callers use SDK 0.24's `connectWithOxy` lease API, backed by the shared target-bound
 Oxy credential getter. No copied bearer, internal app scope or connection

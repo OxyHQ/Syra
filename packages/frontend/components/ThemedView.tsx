@@ -1,10 +1,14 @@
 import { View, type ViewProps } from 'react-native';
-import { cn } from '@/lib/utils';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
-export type ThemedViewProps = ViewProps & {
-  className?: string;
-};
+export type ThemedViewProps = ViewProps;
 
-export function ThemedView({ style, className, ...otherProps }: ThemedViewProps) {
-  return <View className={cn('bg-background', className)} style={style} {...otherProps} />;
+/** A `View` on the theme's background; `style` lays it out and can repaint it. */
+export function ThemedView({ style, ...otherProps }: ThemedViewProps) {
+  const themed = useThemedStyles();
+  return <View style={[themed.background, style]} {...otherProps} />;
 }
+
+const useThemedStyles = createTokenStyles((t) => ({
+  background: { backgroundColor: t.background },
+}));

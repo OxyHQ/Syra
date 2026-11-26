@@ -35,6 +35,7 @@ import Svg, {
   Text as SvgText,
   TSpan,
 } from 'react-native-svg';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 const AnimatedBlurView = Animated.createAnimatedComponent(BlurView);
 
@@ -112,6 +113,7 @@ const GradientText: React.FC<{
 };
 
 const WelcomeModal: React.FC<WelcomeModalProps> = ({ visible, onClose }) => {
+  const themed = useThemedStyles();
   const { t } = useTranslation();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -260,30 +262,25 @@ const WelcomeModal: React.FC<WelcomeModalProps> = ({ visible, onClose }) => {
               {/* Create Account Button */}
               <Pressable
                 onPress={handleCreateAccount}
-                className="bg-primary"
-                style={styles.createAccountButton}
+                style={[themed.surface, styles.createAccountButton]}
               >
-                <Text className="text-primary-foreground" style={styles.createAccountButtonText}>
+                <Text style={[themed.text, styles.createAccountButtonText]}>
                   {t('common.createAccount')}
                 </Text>
               </Pressable>
 
               {/* Explore the app link */}
               <Pressable onPress={handleExploreApp} style={styles.exploreLink}>
-                <Text className="text-primary" style={styles.exploreLinkText}>
-                  {t('welcome.explore')}
-                </Text>
+                <Text style={[themed.text2, styles.exploreLinkText]}>{t('welcome.explore')}</Text>
               </Pressable>
 
               {/* Sign in prompt */}
               <View style={styles.signInContainer}>
-                <Text className="text-muted-foreground" style={styles.signInPrompt}>
+                <Text style={[themed.mutedText, styles.signInPrompt]}>
                   Already have an account?{' '}
                 </Text>
                 <Pressable onPress={handleSignIn}>
-                  <Text className="text-primary" style={styles.signInLink}>
-                    {t('common.signIn')}
-                  </Text>
+                  <Text style={[themed.text2, styles.signInLink]}>{t('common.signIn')}</Text>
                 </Pressable>
               </View>
             </View>
@@ -415,3 +412,10 @@ const styles = StyleSheet.create({
 
 // Memoize component to prevent unnecessary re-renders
 export default memo(WelcomeModal);
+
+const useThemedStyles = createTokenStyles((t) => ({
+  surface: { backgroundColor: t.primary },
+  text: { color: t.primaryForeground },
+  text2: { color: t.primary },
+  mutedText: { color: t.mutedForeground },
+}));

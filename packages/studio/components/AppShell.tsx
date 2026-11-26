@@ -5,7 +5,7 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from '@oxy.so/bloom/theme';
 import { useOxy, ProfileButton } from '@oxy.so/services/ui/client';
 import { useResponsive } from '@/hooks/useResponsive';
-import { cn } from '@/lib/utils';
+import { createTokenStyles, tokenAlpha } from '@oxy.so/bloom/theme';
 
 type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
 
@@ -36,14 +36,15 @@ function isActive(pathname: string, item: NavItem): boolean {
 }
 
 function Brand() {
+  const styles = useStyles();
   return (
-    <View className="flex-row items-center gap-2">
-      <View className="w-8 h-8 rounded-lg bg-primary items-center justify-center">
+    <View style={styles.row}>
+      <View style={styles.centered}>
         <MaterialCommunityIcons name="microphone-variant" size={18} color="#fff" />
       </View>
       <View>
-        <Text className="text-foreground font-bold text-base leading-tight">Syra</Text>
-        <Text className="text-muted-foreground text-[11px] leading-tight">Studio</Text>
+        <Text style={styles.title}>Syra</Text>
+        <Text style={styles.mutedText}>Studio</Text>
       </View>
     </View>
   );
@@ -73,44 +74,42 @@ function NavButton({
   active: boolean;
   onPress: () => void;
 }) {
+  const styles = useStyles();
   const theme = useTheme();
   return (
     <Pressable
       onPress={onPress}
       disabled={item.comingSoon}
-      className={cn(
-        'flex-row items-center gap-3 rounded-xl px-3 py-2.5',
-        active ? 'bg-primary/10' : 'active:bg-surface',
-        item.comingSoon ? 'opacity-50' : '',
-      )}
+      style={({ pressed }) => [
+        styles.nav,
+        active ? styles.navActive : pressed && styles.navPressed,
+        item.comingSoon && styles.navSoon,
+      ]}
     >
       <MaterialCommunityIcons
         name={item.icon}
         size={20}
         color={active ? theme.colors.primary : theme.colors.text}
       />
-      <Text
-        className={cn('text-sm flex-1', active ? 'text-primary font-semibold' : 'text-foreground')}
-      >
+      <Text style={[styles.navText, active ? styles.navTextActive : styles.navTextIdle]}>
         {item.label}
       </Text>
-      {item.comingSoon ? (
-        <Text className="text-[10px] uppercase tracking-wide text-muted-foreground">Soon</Text>
-      ) : null}
+      {item.comingSoon ? <Text style={styles.mutedText2}>Soon</Text> : null}
     </Pressable>
   );
 }
 
 function Sidebar() {
+  const styles = useStyles();
   const router = useRouter();
   const pathname = usePathname();
   return (
-    <View className="w-[260px] h-full border-r border-border bg-background px-3 py-4 justify-between">
-      <View className="gap-6">
-        <View className="px-2">
+    <View style={styles.surface}>
+      <View style={styles.stack}>
+        <View style={styles.section}>
           <Brand />
         </View>
-        <View className="gap-1">
+        <View style={styles.stack2}>
           {NAV_ITEMS.map((item) => (
             <NavButton
               key={item.label}
@@ -121,7 +120,7 @@ function Sidebar() {
           ))}
         </View>
       </View>
-      <View className="border-t border-border pt-2">
+      <View style={styles.container}>
         <AccountButton />
       </View>
     </View>
@@ -129,13 +128,17 @@ function Sidebar() {
 }
 
 function MobileTopBar() {
+  const styles = useStyles();
   const router = useRouter();
   return (
-    <View className="flex-row items-center justify-between border-b border-border bg-background px-4 h-14">
-      <Pressable onPress={() => router.push('/')} className="active:opacity-70">
+    <View style={styles.row2}>
+      <Pressable
+        onPress={() => router.push('/')}
+        style={({ pressed }) => pressed && styles.brandPressed}
+      >
         <Brand />
       </Pressable>
-      <View className="items-end">
+      <View style={styles.container2}>
         <AccountButton expanded={false} />
       </View>
     </View>
@@ -147,21 +150,22 @@ function MobileTopBar() {
  * bar on narrow screens. Routed content is rendered as `children` (the Slot).
  */
 export function AppShell({ children }: { children: ReactNode }) {
+  const styles = useStyles();
   const { isWide } = useResponsive();
 
   if (isWide) {
     return (
-      <View className="flex-1 flex-row bg-background">
+      <View style={styles.row3}>
         <Sidebar />
-        <View className="flex-1">{children}</View>
+        <View style={styles.fill}>{children}</View>
       </View>
     );
   }
 
   return (
-    <View className="flex-1 bg-background">
+    <View style={styles.surface2}>
       <MobileTopBar />
-      <View className="flex-1">{children}</View>
+      <View style={styles.fill}>{children}</View>
     </View>
   );
 }
@@ -183,29 +187,28 @@ export function ScreenContainer({
   actions?: ReactNode;
   children: ReactNode;
 }) {
+  const styles = useStyles();
   const theme = useTheme();
   return (
     <ScrollView
-      className="flex-1"
-      contentContainerClassName="px-5 py-6 w-full max-w-[820px] self-center"
+      style={styles.fill}
+      contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
     >
       {(title || onBack || actions) && (
-        <View className="flex-row items-center justify-between mb-6 gap-3">
-          <View className="flex-row items-center gap-3 flex-1">
+        <View style={styles.row4}>
+          <View style={styles.row5}>
             {onBack ? (
               <Pressable
                 onPress={onBack}
-                className="w-9 h-9 rounded-full items-center justify-center active:bg-surface"
+                style={({ pressed }) => [styles.back, pressed && styles.backPressed]}
               >
                 <MaterialCommunityIcons name="arrow-left" size={22} color={theme.colors.text} />
               </Pressable>
             ) : null}
-            <View className="flex-1">
-              {title ? <Text className="text-2xl font-bold text-foreground">{title}</Text> : null}
-              {subtitle ? (
-                <Text className="text-sm text-muted-foreground mt-0.5">{subtitle}</Text>
-              ) : null}
+            <View style={styles.fill}>
+              {title ? <Text style={styles.title2}>{title}</Text> : null}
+              {subtitle ? <Text style={styles.mutedText3}>{subtitle}</Text> : null}
             </View>
           </View>
           {actions}
@@ -215,3 +218,104 @@ export function ScreenContainer({
     </ScrollView>
   );
 }
+
+const useStyles = createTokenStyles((t) => ({
+  nav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  navActive: { backgroundColor: tokenAlpha(t.primary, 0.1) },
+  navPressed: { backgroundColor: t.surface },
+  navSoon: { opacity: 0.5 },
+  navText: { flexGrow: 1, flexShrink: 1, flexBasis: '0%', fontSize: 14, lineHeight: 20 },
+  navTextActive: { fontWeight: 600, color: t.primary },
+  navTextIdle: { color: t.foreground },
+  brandPressed: { opacity: 0.7 },
+  back: {
+    height: 36,
+    width: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 9999,
+  },
+  backPressed: { backgroundColor: t.surface },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  centered: {
+    height: 32,
+    width: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 16,
+    backgroundColor: t.primary,
+  },
+  title: { fontSize: 16, fontWeight: 700, color: t.foreground, lineHeight: 20 },
+  mutedText: { fontSize: 11, color: t.mutedForeground, lineHeight: 13.75 },
+  mutedText2: {
+    fontSize: 10,
+    color: t.mutedForeground,
+    textTransform: 'uppercase',
+    letterSpacing: 0.25,
+  },
+  surface: {
+    height: '100%',
+    width: 260,
+    justifyContent: 'space-between',
+    borderRightWidth: 1,
+    borderColor: t.border,
+    backgroundColor: t.background,
+    paddingHorizontal: 12,
+    paddingVertical: 16,
+  },
+  stack: { gap: 24 },
+  section: { paddingHorizontal: 8 },
+  stack2: { gap: 4 },
+  container: { borderTopWidth: 1, borderColor: t.border, paddingTop: 8 },
+  row2: {
+    height: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderColor: t.border,
+    backgroundColor: t.background,
+    paddingHorizontal: 16,
+  },
+  container2: { alignItems: 'flex-end' },
+  row3: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: '0%',
+    flexDirection: 'row',
+    backgroundColor: t.background,
+  },
+  fill: { flexGrow: 1, flexShrink: 1, flexBasis: '0%' },
+  surface2: { flexGrow: 1, flexShrink: 1, flexBasis: '0%', backgroundColor: t.background },
+  content: {
+    width: '100%',
+    maxWidth: 820,
+    alignSelf: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+  },
+  row4: {
+    marginBottom: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  row5: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: '0%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  title2: { fontSize: 24, fontWeight: 700, color: t.foreground, lineHeight: 32 },
+  mutedText3: { marginTop: 2, fontSize: 14, color: t.mutedForeground, lineHeight: 20 },
+}));

@@ -17,8 +17,10 @@ import { useDeletePodcast, usePodcast } from '@/hooks/usePodcasts';
 import { podcastRssUrl } from '@/services/podcastService';
 import { getApiErrorMessage } from '@/utils/api';
 import { pluralEpisodes } from '@/utils/format';
+import { createTokenStyles, tokenAlpha } from '@oxy.so/bloom/theme';
 
 function ShowDetail({ id }: { id: string }) {
+  const styles = useStyles();
   const router = useRouter();
   const { user } = useOxy();
   const { data, isLoading, isError, refetch } = usePodcast(id);
@@ -57,7 +59,7 @@ function ShowDetail({ id }: { id: string }) {
   if (isLoading) {
     return (
       <ScreenContainer onBack={() => router.back()}>
-        <View className="py-16 items-center">
+        <View style={styles.container}>
           <Loading />
         </View>
       </ScreenContainer>
@@ -67,8 +69,8 @@ function ShowDetail({ id }: { id: string }) {
   if (isError || !data) {
     return (
       <ScreenContainer title="Show" onBack={() => router.back()}>
-        <View className="py-16 items-center px-6">
-          <Text className="text-base text-foreground mb-3">Couldn&apos;t load this podcast.</Text>
+        <View style={styles.container2}>
+          <Text style={styles.text}>Couldn&apos;t load this podcast.</Text>
           <Button onPress={() => refetch()} tone="neutral" appearance="outline">
             Retry
           </Button>
@@ -117,7 +119,7 @@ function ShowDetail({ id }: { id: string }) {
       subtitle={podcast.author ?? undefined}
       onBack={() => router.back()}
       actions={
-        <View className="flex-row gap-2">
+        <View style={styles.row}>
           {owned ? (
             <Button
               size="sm"
@@ -142,36 +144,34 @@ function ShowDetail({ id }: { id: string }) {
         </View>
       }
     >
-      <View className="flex-row gap-4 mb-6">
+      <View style={styles.row2}>
         <Artwork uri={podcast.image} size={96} rounded="2xl" />
-        <View className="flex-1 justify-center gap-2">
-          <View className="flex-row items-center gap-2">
+        <View style={styles.container3}>
+          <View style={styles.row3}>
             <StatusBadge status={podcast.status} />
-            <Text className="text-xs text-muted-foreground capitalize">{podcast.type}</Text>
+            <Text style={styles.mutedText}>{podcast.type}</Text>
           </View>
-          <Text className="text-sm text-muted-foreground">
-            {pluralEpisodes(podcast.episodeCount)}
-          </Text>
+          <Text style={styles.mutedText2}>{pluralEpisodes(podcast.episodeCount)}</Text>
           {podcast.description ? (
-            <Text numberOfLines={3} className="text-sm text-foreground/80">
+            <Text numberOfLines={3} style={styles.text2}>
               {podcast.description}
             </Text>
           ) : null}
         </View>
       </View>
 
-      <View className="mb-6">
+      <View style={styles.section}>
         <CopyableField label="Public RSS feed" value={podcastRssUrl(podcast)} />
-        <Text className="text-xs text-muted-foreground mt-1.5">
+        <Text style={styles.mutedText3}>
           Submit this URL to Apple Podcasts, Spotify, and other directories to publish everywhere.
         </Text>
       </View>
 
-      <Text className="text-base font-semibold text-foreground mb-1">Episodes</Text>
+      <Text style={styles.title}>Episodes</Text>
       {episodes.length === 0 ? (
-        <View className="items-center py-12">
+        <View style={styles.container4}>
           <MaterialCommunityIcons name="playlist-music-outline" size={36} color="#9ca3af" />
-          <Text className="text-sm text-muted-foreground mt-2 mb-4">No episodes yet.</Text>
+          <Text style={styles.mutedText4}>No episodes yet.</Text>
           <Button onPress={goToUpload} tone="neutral" appearance="outline">
             Upload your first episode
           </Button>
@@ -186,13 +186,13 @@ function ShowDetail({ id }: { id: string }) {
 
       {owned ? (
         <>
-          <View className="mt-10 rounded-2xl border border-destructive/40 p-4">
-            <Text className="text-sm font-semibold text-foreground mb-1">Delete this show</Text>
-            <Text className="text-xs text-muted-foreground mb-4">
+          <View style={styles.container5}>
+            <Text style={styles.title2}>Delete this show</Text>
+            <Text style={styles.mutedText5}>
               Permanently removes {destroys}, every subscription and every listener&apos;s saved
               position. The public RSS feed stops working. This cannot be undone.
             </Text>
-            <View className="self-start">
+            <View style={styles.container6}>
               <Button
                 size="sm"
                 onPress={() => setConfirmingDelete(true)}
@@ -229,3 +229,42 @@ export default function ShowDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   return <SignInGate>{id ? <ShowDetail id={id} /> : null}</SignInGate>;
 }
+
+const useStyles = createTokenStyles((t) => ({
+  container: { alignItems: 'center', paddingVertical: 64 },
+  container2: { alignItems: 'center', paddingHorizontal: 24, paddingVertical: 64 },
+  text: { marginBottom: 12, fontSize: 16, color: t.foreground, lineHeight: 24 },
+  row: { flexDirection: 'row', gap: 8 },
+  row2: { marginBottom: 24, flexDirection: 'row', gap: 16 },
+  container3: { flexGrow: 1, flexShrink: 1, flexBasis: '0%', justifyContent: 'center', gap: 8 },
+  row3: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  mutedText: {
+    fontSize: 12,
+    color: t.mutedForeground,
+    textTransform: 'capitalize',
+    lineHeight: 16,
+  },
+  mutedText2: { fontSize: 14, color: t.mutedForeground, lineHeight: 20 },
+  text2: { fontSize: 14, color: tokenAlpha(t.foreground, 0.8), lineHeight: 20 },
+  section: { marginBottom: 24 },
+  mutedText3: { marginTop: 6, fontSize: 12, color: t.mutedForeground, lineHeight: 16 },
+  title: { marginBottom: 4, fontSize: 16, fontWeight: 600, color: t.foreground, lineHeight: 24 },
+  container4: { alignItems: 'center', paddingVertical: 48 },
+  mutedText4: {
+    marginTop: 8,
+    marginBottom: 16,
+    fontSize: 14,
+    color: t.mutedForeground,
+    lineHeight: 20,
+  },
+  container5: {
+    marginTop: 40,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: tokenAlpha(t.destructive, 0.4),
+    padding: 16,
+  },
+  title2: { marginBottom: 4, fontSize: 14, fontWeight: 600, color: t.foreground, lineHeight: 20 },
+  mutedText5: { marginBottom: 16, fontSize: 12, color: t.mutedForeground, lineHeight: 16 },
+  container6: { alignSelf: 'flex-start' },
+}));

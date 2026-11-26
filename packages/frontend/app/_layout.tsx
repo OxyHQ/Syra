@@ -40,6 +40,7 @@ import { createScopedLogger } from '@/utils/logger';
 
 // Styles
 import '../styles/global.css';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 // NATIVE ONLY: hold the OS splash so it stays visible until the app has finished
 // loading fonts + running init, then hide it once `appIsReady` flips (via
@@ -86,6 +87,7 @@ if (Platform.OS !== 'web') {
  * - Bottom player bar (always visible, fixed position)
  */
 const MainLayout: React.FC<MainLayoutProps> = memo(({ isScreenNotMobile }) => {
+  const viewStyles = useViewStyles();
   const theme = useTheme();
   const { forwardWheelEvent } = useLayoutScroll();
   const isDesktop = useIsDesktop();
@@ -218,7 +220,7 @@ const MainLayout: React.FC<MainLayoutProps> = memo(({ isScreenNotMobile }) => {
   );
 
   return (
-    <View className="bg-background" style={styles.outerContainer} {...containerProps}>
+    <View style={[viewStyles.surface, styles.outerContainer]} {...containerProps}>
       {/* Top Navigation Bar - Outside panels wrapper */}
       <View style={styles.topBarContainer}>
         <TopBar />
@@ -422,3 +424,7 @@ export default function RootLayout() {
     </BloomThemeProvider>
   );
 }
+
+const useViewStyles = createTokenStyles((t) => ({
+  surface: { backgroundColor: t.background },
+}));

@@ -24,12 +24,14 @@ import { CATALOG_QUERY_KEYS } from '@/hooks/useLibraryCollections';
 import { AddToPlaylistSheet } from '@/components/playlist/AddToPlaylistSheet';
 import { TrackActionsSheet } from '@/components/playlist/TrackActionsSheet';
 import { TrackArtistLine } from '@/components/TrackArtistLine';
+import { createTokenStyles, tokenAlpha } from '@oxy.so/bloom/theme';
 
 /**
  * Album Screen
  * Displays album details, tracks, and playback controls
  */
 const AlbumScreen: React.FC = () => {
+  const themed = useThemedStyles();
   const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -130,7 +132,7 @@ const AlbumScreen: React.FC = () => {
   if (gate.isTimedOut) {
     return (
       <EmptyState
-        className="bg-surface"
+        tone="surface"
         icon={{ name: 'cloud-offline-outline' }}
         error={{
           title: t('common.sessionUnavailable'),
@@ -146,8 +148,7 @@ const AlbumScreen: React.FC = () => {
   if (isCatalogLoading) {
     return (
       <ScrollView
-        className="bg-surface"
-        style={styles.scrollView}
+        style={[themed.surface, styles.scrollView]}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
@@ -161,7 +162,7 @@ const AlbumScreen: React.FC = () => {
   if ((albumQuery.isError || tracksQuery.isError) && !isNotFoundError(albumQuery.error)) {
     return (
       <EmptyState
-        className="bg-surface"
+        tone="surface"
         icon={{ name: 'cloud-offline-outline' }}
         error={{
           title: t('album.errors.load'),
@@ -177,7 +178,7 @@ const AlbumScreen: React.FC = () => {
   if (!album) {
     return (
       <EmptyState
-        className="bg-surface"
+        tone="surface"
         icon={{ name: 'disc-outline' }}
         title={t('album.notFound')}
         subtitle={t('album.notFoundMessage')}
@@ -259,6 +260,7 @@ const AlbumView: React.FC<AlbumViewProps> = ({
   onGoToArtist,
   formatReleaseDate,
 }) => {
+  const themed = useThemedStyles();
   const { t } = useTranslation();
   const theme = useTheme();
   const [addingAlbumToPlaylist, setAddingAlbumToPlaylist] = useState(false);
@@ -284,8 +286,7 @@ const AlbumView: React.FC<AlbumViewProps> = ({
         description={`Listen to ${album.title} by ${album.artistName}`}
       />
       <ScrollView
-        className="bg-surface"
-        style={styles.scrollView}
+        style={[themed.surface, styles.scrollView]}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
@@ -305,7 +306,7 @@ const AlbumView: React.FC<AlbumViewProps> = ({
                   resizeMode="cover"
                 />
               ) : (
-                <View className="bg-surface" style={styles.coverPlaceholder}>
+                <View style={[themed.surface, styles.coverPlaceholder]}>
                   <Ionicons name="musical-notes" size={64} color={theme.colors.textSecondary} />
                 </View>
               )}
@@ -313,20 +314,18 @@ const AlbumView: React.FC<AlbumViewProps> = ({
 
             {/* Album Info */}
             <View style={styles.infoContainer}>
-              <Text className="text-foreground" style={styles.albumTitle} numberOfLines={1}>
+              <Text style={[themed.text, styles.albumTitle]} numberOfLines={1}>
                 {album.title}
               </Text>
 
               {/* Artist Info */}
               <Pressable style={styles.artistRow} onPress={onGoToArtist}>
                 <Avatar source={albumThumbImage} size={24} style={styles.artistAvatar} />
-                <Text className="text-foreground" style={styles.artistName}>
-                  {album.artistName}
-                </Text>
+                <Text style={[themed.text, styles.artistName]}>{album.artistName}</Text>
               </Pressable>
 
               {/* Metadata */}
-              <Text className="text-muted-foreground" style={styles.metadata}>
+              <Text style={[themed.mutedText, styles.metadata]}>
                 {new Date(album.releaseDate).getFullYear()} • {album.totalTracks} songs,{' '}
                 {totalDurationFormatted}
               </Text>
@@ -336,8 +335,7 @@ const AlbumView: React.FC<AlbumViewProps> = ({
           {/* Playback Controls */}
           <View style={styles.controlsContainer}>
             <Pressable
-              className="bg-primary"
-              style={[styles.playButton, !canPlay && styles.disabledControl]}
+              style={[themed.surface2, styles.playButton, !canPlay && styles.disabledControl]}
               onPress={onPlayAlbum}
               disabled={!canPlay}
               accessibilityRole="button"
@@ -394,9 +392,7 @@ const AlbumView: React.FC<AlbumViewProps> = ({
             </Pressable>
 
             <View style={styles.listViewContainer}>
-              <Text className="text-foreground" style={styles.listViewText}>
-                {t('common.list')}
-              </Text>
+              <Text style={[themed.text, styles.listViewText]}>{t('common.list')}</Text>
               <Ionicons name="list" size={20} color={theme.colors.text} />
             </View>
           </View>
@@ -408,12 +404,8 @@ const AlbumView: React.FC<AlbumViewProps> = ({
         {/* Track List Header */}
         <View style={styles.trackListHeader}>
           <View style={styles.trackListHeaderLeft}>
-            <Text className="text-muted-foreground" style={styles.trackListHeaderText}>
-              #
-            </Text>
-            <Text className="text-muted-foreground" style={styles.trackListHeaderText}>
-              {t('common.title')}
-            </Text>
+            <Text style={[themed.mutedText, styles.trackListHeaderText]}>#</Text>
+            <Text style={[themed.mutedText, styles.trackListHeaderText]}>{t('common.title')}</Text>
           </View>
           <Ionicons name="time-outline" size={16} color={theme.colors.textSecondary} />
         </View>
@@ -422,7 +414,7 @@ const AlbumView: React.FC<AlbumViewProps> = ({
         <View style={styles.trackList}>
           {tracks.length === 0 ? (
             <View style={styles.emptyState}>
-              <Text className="text-muted-foreground" style={styles.emptyStateText}>
+              <Text style={[themed.mutedText, styles.emptyStateText]}>
                 {t('common.noPlayableTracks')}
               </Text>
             </View>
@@ -434,9 +426,8 @@ const AlbumView: React.FC<AlbumViewProps> = ({
 
               return (
                 <Pressable
-                  className={isCurrentTrack ? 'bg-surface/25' : undefined}
                   key={track.id}
-                  style={[styles.trackRow, undefined]}
+                  style={[styles.trackRow, isCurrentTrack && themed.currentRow]}
                   onPress={() => onTrackPress(track)}
                 >
                   <View style={styles.trackRowLeft}>
@@ -470,16 +461,13 @@ const AlbumView: React.FC<AlbumViewProps> = ({
                       </Text>
                       <View style={styles.trackArtistRow}>
                         {track.isExplicit && (
-                          <View className="bg-popover" style={styles.explicitBadge}>
-                            <Text className="text-muted-foreground" style={styles.explicitText}>
-                              E
-                            </Text>
+                          <View style={[themed.surface3, styles.explicitBadge]}>
+                            <Text style={[themed.mutedText, styles.explicitText]}>E</Text>
                           </View>
                         )}
                         <TrackArtistLine
                           track={track}
-                          className="text-muted-foreground"
-                          style={styles.trackArtist}
+                          style={[themed.mutedText, styles.trackArtist]}
                           numberOfLines={1}
                           fallback={track.artistName}
                         />
@@ -513,7 +501,7 @@ const AlbumView: React.FC<AlbumViewProps> = ({
                         color={isLiked ? theme.colors.primary : theme.colors.textSecondary}
                       />
                     </Pressable>
-                    <Text className="text-muted-foreground" style={styles.trackDuration}>
+                    <Text style={[themed.mutedText, styles.trackDuration]}>
                       {formatDuration(track.duration)}
                     </Text>
                     <Pressable
@@ -541,13 +529,9 @@ const AlbumView: React.FC<AlbumViewProps> = ({
         {/* Release Date & Copyright */}
         {album.releaseDate && (
           <View style={styles.footer}>
-            <Text className="text-muted-foreground" style={styles.footerText}>
-              {releaseDateFormatted}
-            </Text>
+            <Text style={[themed.mutedText, styles.footerText]}>{releaseDateFormatted}</Text>
             {album.copyright && (
-              <Text className="text-muted-foreground" style={styles.footerText}>
-                {album.copyright}
-              </Text>
+              <Text style={[themed.mutedText, styles.footerText]}>{album.copyright}</Text>
             )}
           </View>
         )}
@@ -801,3 +785,12 @@ const styles = StyleSheet.create({
 });
 
 export default AlbumScreen;
+
+const useThemedStyles = createTokenStyles((t) => ({
+  surface: { backgroundColor: t.surface },
+  text: { color: t.foreground },
+  mutedText: { color: t.mutedForeground },
+  surface2: { backgroundColor: t.primary },
+  surface3: { backgroundColor: t.popover },
+  currentRow: { backgroundColor: tokenAlpha(t.surface, 0.25) },
+}));

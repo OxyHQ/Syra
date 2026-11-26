@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import * as Skeleton from '@oxy.so/bloom/skeleton';
 import { useTheme } from '@oxy.so/bloom/theme';
 import { Repeat } from './Repeat';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 interface StatCardGridSkeletonProps {
   /** Number of stat cards. Defaults to 4. */
@@ -20,6 +21,7 @@ interface StatCardGridSkeletonProps {
  */
 export const StatCardGridSkeleton: React.FC<StatCardGridSkeletonProps> = React.memo(
   ({ count = 4, minWidth = '30%', showPeriodSelector = false }) => {
+    const themed = useThemedStyles();
     const theme = useTheme();
 
     return (
@@ -39,7 +41,7 @@ export const StatCardGridSkeleton: React.FC<StatCardGridSkeletonProps> = React.m
           <Repeat
             count={count}
             render={() => (
-              <View className="bg-surface" style={[styles.statCard, { minWidth }]}>
+              <View style={[themed.surface, styles.statCard, { minWidth }]}>
                 <Skeleton.Circle size={32} />
                 <Skeleton.Box width={64} height={24} borderRadius={6} />
                 <Skeleton.Box width={80} height={12} borderRadius={4} />
@@ -84,3 +86,7 @@ const styles = StyleSheet.create({
     minHeight: 132,
   },
 });
+
+const useThemedStyles = createTokenStyles((t) => ({
+  surface: { backgroundColor: t.surface },
+}));

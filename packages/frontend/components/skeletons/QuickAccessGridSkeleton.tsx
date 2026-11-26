@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import * as Skeleton from '@oxy.so/bloom/skeleton';
 import { useTheme } from '@oxy.so/bloom/theme';
 import { ResponsiveGrid } from '@/components/ResponsiveGrid';
+import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 interface QuickAccessGridSkeletonProps {
   /** Number of placeholder tiles. Defaults to 8 (the real grid's cap). */
@@ -15,12 +16,13 @@ interface QuickAccessGridSkeletonProps {
  */
 export const QuickAccessGridSkeleton: React.FC<QuickAccessGridSkeletonProps> = React.memo(
   ({ count = 8 }) => {
+    const themed = useThemedStyles();
     const theme = useTheme();
 
     return (
       <ResponsiveGrid minItemWidth={300} minColumns={2} gap={8} style={styles.compactGrid}>
         {Array.from({ length: count }).map((_, index) => (
-          <View key={index} className="bg-surface" style={styles.compactGridItem}>
+          <View key={index} style={[themed.surface, styles.compactGridItem]}>
             <Skeleton.Box width={40} height={40} borderRadius={12} style={styles.compactImage} />
             <View style={styles.compactTitle}>
               <Skeleton.Box width="70%" height={13} borderRadius={4} />
@@ -55,3 +57,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 });
+
+const useThemedStyles = createTokenStyles((t) => ({
+  surface: { backgroundColor: t.surface },
+}));
