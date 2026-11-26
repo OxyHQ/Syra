@@ -37,7 +37,6 @@ export function Artwork({
         source={{ uri }}
         // expo-image's native view never read a class: only the web drew the
         // radius and the surface behind the image, so only the web gets them.
-        // TODO(lead): native drew a square image; decide whether it should match.
         style={[box, Platform.OS === 'web' && [radii[rounded], styles.surface]]}
         contentFit="cover"
         transition={150}
