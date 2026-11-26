@@ -1,7 +1,7 @@
 {
   "name": "@syra/studio",
   "main": "expo-router/entry",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Syra Studio — manage podcast shows, upload episodes, generated RSS feed",
   "scripts": {
     "start": "RCT_METRO_PORT=8121 expo start --reset-cache --clear",
