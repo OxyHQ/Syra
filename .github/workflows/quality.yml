@@ -70,6 +70,39 @@ jobs:
               - 'packages/backend/package.json'
               - 'packages/backend/tsconfig*.json'
 
+  # The Seldon race (OxyHQ/oxy docs/engineering/build-and-deploy.md, CI on
+  # Seldon), opt-in with the repository variable CI_SELDON_RACE=true, on
+  # same-repository pull requests only (this workflow has no merge_group
+  # trigger; push runs stay hosted, because deploy-aws.yml and the release
+  # workflows trust a push run that concluded `success`). Unset, every job runs
+  # hosted as before and none of these takes a runner. Set, `quality` runs on
+  # the self-hosted seldon-ci pool; a lane still queued 3 minutes after it was
+  # created gets its hosted twin (`quality-hosted`), the lane that starts first
+  # wins and the finish job cancels the other through its job-level
+  # concurrency group. A Seldon lane that fails, whatever the reason (the house
+  # network drops new connections in bursts), reruns hosted in
+  # `quality-rescue`, which fails again on a genuine failure. CI complete takes
+  # the raced job's verdict from the race.
+  race:
+    if: ${{ vars.CI_SELDON_RACE == 'true' && github.run_attempt == 1 && (github.event_name == 'pull_request' || github.event_name == 'merge_group') && !github.event.pull_request.head.repo.fork }}
+    uses: OxyHQ/oxy/.github/workflows/seldon-race-start.yml@main
+    permissions:
+      actions: read
+    with:
+      names: |
+        quality
+
+  race-finish:
+    needs: race
+    # `!cancelled()`: an ancestor skipped on this event must not skip it.
+    if: ${{ !cancelled() && needs.race.outputs.race == 'true' }}
+    uses: OxyHQ/oxy/.github/workflows/seldon-race-finish.yml@main
+    permissions:
+      actions: read
+    with:
+      names: |
+        quality
+
   # Gates the rollout logic deploy-aws.yml runs against production. The script
   # and this harness are byte-identical copies of Mention's, so they share its
   # test rather than growing a second, drifting one. Separate job: it needs no
@@ -169,7 +202,13 @@ jobs:
           bash .github/scripts/smoke-backend-image.sh
 
   quality:
-    runs-on: ubuntu-latest
+    name: quality
+    runs-on: &seldon-lane ${{ vars.CI_SELDON_RACE == 'true' && github.run_attempt == 1 && (github.event_name == 'pull_request' || github.event_name == 'merge_group') && !github.event.pull_request.head.repo.fork && 'seldon-ci' || 'ubuntu-latest' }}
+    concurrency:
+      group: seldon-race-${{ github.run_id }}-${{ github.run_attempt }}-seldon-quality
+    permissions: &race-lane-permissions
+      contents: read
+      actions: read # the Seldon race guard reads this run's jobs
     # About 8 minutes warm; the bound only stops a hang holding a runner for
     # GitHub's 6-hour default.
     timeout-minutes: 40
@@ -181,7 +220,7 @@ jobs:
     # an extension dependency by accident, and this image is the thing that
     # would let it — a schema task that starts needing PostGIS or any other
     # extension adds it to `REQUIRED_EXTENSIONS` first, and only then here.
-    services:
+    services: &quality-services
       postgres:
         image: postgres:17
         env:
@@ -195,9 +234,16 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
-    env:
+    env: &quality-env
       TEST_DATABASE_URL: postgres://syra:syra@127.0.0.1:5432/syra_ci
-    steps:
+    steps: &quality-steps
+      # A lane that starts after its hosted twin waits here to be cancelled (the Seldon race).
+      - &race-guard
+        name: Seldon race guard
+        if: vars.CI_SELDON_RACE == 'true' && !endsWith(github.job, '-rescue')
+        uses: OxyHQ/oxy/.github/actions/seldon-race@main
+        with:
+          mode: guard
       - uses: actions/checkout@v7
       # Expo SDK 58's CLI (expo lint, jest-expo, expo export) needs Node
       # 22.13+; the runner's default Node is not guaranteed to be that. Same
@@ -410,3 +456,137 @@ jobs:
 
       - name: Backend tests
         run: bun run --filter @syra/backend test
+
+  # quality's hosted twin in the Seldon race: the same name, services, env and steps.
+  quality-hosted:
+    name: quality
+    needs: race
+    if: ${{ !cancelled() && needs.race.outputs.race == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    concurrency:
+      group: seldon-race-${{ github.run_id }}-${{ github.run_attempt }}-hosted-quality
+    permissions: *race-lane-permissions
+    services: *quality-services
+    env: *quality-env
+    steps: *quality-steps
+
+  # quality's rescue: reruns it hosted when its Seldon lane failed (the house
+  # network drops connections); a genuine failure fails again.
+  quality-rescue:
+    name: quality
+    needs: quality
+    if: ${{ !cancelled() && needs.quality.result == 'failure' && vars.CI_SELDON_RACE == 'true' && github.run_attempt == 1 && (github.event_name == 'pull_request' || github.event_name == 'merge_group') && !github.event.pull_request.head.repo.fork }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions: *race-lane-permissions
+    services: *quality-services
+    env: *quality-env
+    steps: *quality-steps
+
+  # The one check this workflow stands for, modelled on OxyHQ/Gemies' and
+  # OxyHQ/Bloom's: green only when every job above passed or skipped for a
+  # reason this workflow declares, so a cancelled or unexplained-skipped job can
+  # never read as a pass. A required check by job name cannot follow the Seldon
+  # race (the twin and the rescue share `quality`'s name, and a cancelled loser
+  # is not a failure); this one can.
+  #
+  # The skips it allows, and nothing else:
+  #   - `changes` runs on pull_request only.
+  #   - On pull_request, Deploy Script Tests and Backend Image Smoke skip when
+  #     `changes` passed and said their inputs are untouched.
+  #   - The race's jobs, the twin and the rescue skip whenever they are not
+  #     needed. When the race or the rescue ran, `quality` passes on the
+  #     race's verdict: it passed in some lane and failed in no hosted lane.
+  ci-complete:
+    name: CI complete
+    if: always()
+    # Not race-finish: its reapers run on seldon-ci-light and only follow the
+    # cancellation, so needing it would wait on Seldon.
+    needs:
+      - changes
+      - race
+      - deploy-script-test
+      - backend-image-smoke
+      - quality
+      - quality-hosted
+      - quality-rescue
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read # the Seldon race verdict reads this run's jobs
+    steps:
+      # Per job name: passed when one of its lanes succeeded and no hosted lane
+      # failed. Whenever the race is on: a rescue can run without the race.
+      - name: Seldon race verdict
+        id: race
+        if: vars.CI_SELDON_RACE == 'true'
+        uses: OxyHQ/oxy/.github/actions/seldon-race@main
+        with:
+          mode: verdict
+      - name: Every job passed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+          EVENT_NAME: ${{ github.event_name }}
+          RACE_VERDICT: ${{ steps.race.outputs.outcome }}
+        run: |
+          set -euo pipefail
+          failures=()
+          result() { jq -r --arg job "$1" '.[$job].result // "missing"' <<<"$RESULTS"; }
+          said() { jq -r --arg out "$1" '.changes.outputs[$out] // ""' <<<"$RESULTS"; }
+
+          # `changes` runs on pull requests and nowhere else.
+          changes="$(result changes)"
+          if [ "$EVENT_NAME" = pull_request ]; then
+            [ "$changes" = success ] || failures+=("changes did not pass: $changes")
+          else
+            [ "$changes" = skipped ] || failures+=("changes ran on $EVENT_NAME: $changes")
+          fi
+
+          # The race's start: skipped when not needed, never failed.
+          r="$(result race)"
+          case "$r" in
+            success | skipped) ;;
+            *) failures+=("race did not pass: $r") ;;
+          esac
+
+          # A raced family's result, in $family: the verdict when the race
+          # raced (and the job was not skipped) or its rescue ran; otherwise
+          # the job's own, with its twin and rescue skipped. Not called in a
+          # subshell, so its failures reach the list.
+          family() {
+            local job="$1" own twin rescue raced
+            own="$(result "$job")"
+            twin="$(result "$job-hosted")"
+            rescue="$(result "$job-rescue")"
+            raced="$(jq -r '.race.outputs.race // ""' <<<"$RESULTS")"
+            if [ "$rescue" != skipped ] || { [ "$raced" = true ] && ! { [ "$own" = skipped ] && [ "$twin" = skipped ]; }; }; then
+              family="${RACE_VERDICT:-no verdict}"
+              return
+            fi
+            [ "$twin" = skipped ] || failures+=("$job-hosted ran although the Seldon race did not: $twin")
+            family="$own"
+          }
+
+          family quality
+          [ "$family" = success ] || failures+=("quality did not pass: $family")
+
+          # job, its `changes` output, its result.
+          check() {
+            local job="$1" filter="$2" r="$3"
+            [ "$r" = success ] && return
+            if [ "$r" = skipped ] && [ "$EVENT_NAME" = pull_request ] && [ "$changes" = success ] && [ "$(said "$filter")" != true ]; then
+              return
+            fi
+            failures+=("$job did not pass: $r")
+          }
+          check deploy-script-test deploy-scripts "$(result deploy-script-test)"
+          check backend-image-smoke image "$(result backend-image-smoke)"
+
+          if [ ${#failures[@]} -gt 0 ]; then
+            for failure in "${failures[@]}"; do
+              echo "::error::$failure"
+            done
+            exit 1
+          fi
+          echo 'Every job passed, or skipped for a reason this workflow declares.'
