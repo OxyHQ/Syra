@@ -80,8 +80,7 @@ export const TrackActionsSheet: React.FC<TrackActionsSheetProps> = ({
           </Text>
           <TrackArtistLine
             track={track}
-            className="text-muted-foreground"
-            style={styles.trackArtist}
+            style={[themed.mutedText, styles.trackArtist]}
             numberOfLines={1}
             linked={false}
             fallback={track.artistName}
@@ -232,4 +231,5 @@ const styles = StyleSheet.create({
 const useThemedStyles = createTokenStyles((t) => ({
   text: { color: t.foreground },
   text2: { color: t.error },
+  mutedText: { color: t.mutedForeground },
 }));

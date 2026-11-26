@@ -109,7 +109,7 @@ const EpisodeScreen: React.FC = () => {
             await episodeQuery.refetch();
           },
         }}
-        className="bg-surface"
+        tone="surface"
       />
     );
   }
@@ -126,7 +126,7 @@ const EpisodeScreen: React.FC = () => {
           onPress: () => router.push('/podcasts'),
           icon: 'search-outline',
         }}
-        className="bg-surface"
+        tone="surface"
       />
     );
   }

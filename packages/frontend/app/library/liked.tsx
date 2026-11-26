@@ -69,7 +69,7 @@ const LikedSongsScreen: React.FC = () => {
   if (gate.isTimedOut) {
     return (
       <EmptyState
-        className="bg-surface"
+        tone="surface"
         icon={{ name: 'cloud-offline-outline' }}
         error={{
           title: t('common.sessionUnavailable'),

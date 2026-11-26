@@ -66,7 +66,7 @@ const RadioStationScreen: React.FC = () => {
   if (!seed) {
     return (
       <EmptyState
-        className="bg-surface"
+        tone="surface"
         icon={{ name: 'radio-outline' }}
         title={t('radio.errors.unknownStation')}
         subtitle={t('radio.errors.unknownStationMessage')}
@@ -80,7 +80,7 @@ const RadioStationScreen: React.FC = () => {
   if (gate.isTimedOut) {
     return (
       <EmptyState
-        className="bg-surface"
+        tone="surface"
         icon={{ name: 'cloud-offline-outline' }}
         error={{
           title: t('common.sessionUnavailable'),
@@ -109,7 +109,7 @@ const RadioStationScreen: React.FC = () => {
   if (station.isError && tracks.length === 0) {
     return (
       <EmptyState
-        className="bg-surface"
+        tone="surface"
         icon={{ name: 'cloud-offline-outline' }}
         error={{
           title: t('radio.errors.load'),

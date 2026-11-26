@@ -345,8 +345,7 @@ export const NowPlaying: React.FC = () => {
                           </Text>
                           <TrackArtistLine
                             track={track}
-                            className="text-muted-foreground"
-                            style={styles.queueItemArtist}
+                            style={[themed.mutedText, styles.queueItemArtist]}
                             numberOfLines={1}
                             linked={false}
                             fallback={track.artistName}

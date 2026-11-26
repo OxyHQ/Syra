@@ -180,8 +180,7 @@ const CatalogTrackPreview: React.FC<{ trackId: string; showAddToLibrary: boolean
           </Text>
           <TrackArtistLine
             track={track}
-            className="text-muted-foreground"
-            style={styles.matchedArtist}
+            style={[themed.mutedText, styles.matchedArtist]}
             numberOfLines={1}
             linked={false}
             fallback={track.artistName}

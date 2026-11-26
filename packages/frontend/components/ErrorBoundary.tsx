@@ -14,8 +14,8 @@ interface State {
   error: Error | null;
 }
 
-// Fallback UI rendered as a function component so it can consume NativeWind theme
-// tokens via className (class components cannot use hooks directly).
+// Fallback UI rendered as a function component so it can read the theme's token
+// styles through a hook (class components cannot use hooks directly).
 function ErrorFallbackView({ t, onRetry }: { t: (key: string) => string; onRetry: () => void }) {
   const styles = useStyles();
   return (

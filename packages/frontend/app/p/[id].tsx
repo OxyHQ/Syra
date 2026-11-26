@@ -237,7 +237,7 @@ const EntityProfileScreen: React.FC = () => {
   if (gate.isTimedOut) {
     return (
       <EmptyState
-        className="bg-surface"
+        tone="surface"
         icon={{ name: 'cloud-offline-outline' }}
         error={{
           title: t('common.sessionUnavailable'),
@@ -269,7 +269,7 @@ const EntityProfileScreen: React.FC = () => {
   if (entityQuery.isError && !isNotFoundError(entityQuery.error)) {
     return (
       <EmptyState
-        className="bg-surface"
+        tone="surface"
         icon={{ name: 'cloud-offline-outline' }}
         error={{
           title: t('artist.errors.load'),
@@ -285,7 +285,7 @@ const EntityProfileScreen: React.FC = () => {
   if (!entity) {
     return (
       <EmptyState
-        className="bg-surface"
+        tone="surface"
         icon={{ name: 'person-outline' }}
         title={t('artist.notFound')}
         subtitle={t('artist.notFoundMessage')}

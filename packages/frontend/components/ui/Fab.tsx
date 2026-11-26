@@ -136,8 +136,8 @@ const FabComponent: React.FC<FabProps> = ({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
-      className="bg-primary"
       style={[
+        themed.surface,
         styles.fab,
         styles.extended,
         { height: size, borderRadius: size / 2 },

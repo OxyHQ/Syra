@@ -274,7 +274,7 @@ const SettingsScreen: React.FC = () => {
     return (
       <>
         <SEO title={t('settings.seo.title')} description={t('settings.seo.description')} />
-        <ThemedView className="flex-1">
+        <ThemedView style={styles.fill}>
           <EmptyState
             containerStyle={styles.gateState}
             icon={{ name: 'cloud-offline-outline' }}
@@ -295,7 +295,7 @@ const SettingsScreen: React.FC = () => {
     return (
       <>
         <SEO title={t('settings.seo.title')} description={t('settings.seo.description')} />
-        <ThemedView className="flex-1 items-center justify-center px-12">
+        <ThemedView style={styles.gateMessage}>
           <Text style={themed.mutedText2}>{t('settings.gate.loading')}</Text>
         </ThemedView>
       </>
@@ -306,7 +306,7 @@ const SettingsScreen: React.FC = () => {
     return (
       <>
         <SEO title={t('settings.seo.title')} description={t('settings.seo.description')} />
-        <ThemedView className="flex-1 items-center justify-center px-12">
+        <ThemedView style={styles.gateMessage}>
           <Text style={themed.mutedText2}>{t('settings.gate.signInRequired')}</Text>
         </ThemedView>
       </>
@@ -316,7 +316,7 @@ const SettingsScreen: React.FC = () => {
   return (
     <>
       <SEO title={t('settings.seo.title')} description={t('settings.seo.description')} />
-      <ThemedView className="flex-1">
+      <ThemedView style={styles.fill}>
         <ScrollView
           style={styles.fill}
           contentContainerStyle={styles.scrollContent}
@@ -759,6 +759,14 @@ const styles = StyleSheet.create({
   },
 
   fill: { flexGrow: 1, flexShrink: 1, flexBasis: '0%' },
+  gateMessage: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: '0%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 48,
+  },
 });
 
 export default SettingsScreen;
