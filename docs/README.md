@@ -6,7 +6,7 @@ Documentation for the Syra music streaming platform.
 
 ### Theming System
 
-- **[Theme Quick Reference](./THEME_QUICK_REFERENCE.md)** — Quick reference for theming with NativeWind.
+- **[Theme Quick Reference](./THEME_QUICK_REFERENCE.md)** — Quick reference for theming with Bloom; styles are React Native styles over Bloom colour tokens (`createTokenStyles` from `@oxy.so/bloom/theme`), no `className`.
 - **[Theming Troubleshooting](./THEMING_TROUBLESHOOTING.md)** — Common issues and solutions.
 
 ### Performance

@@ -36,7 +36,7 @@ This package contains the complete React Native application that runs on Android
 ## Tech Stack
 - [Expo](https://expo.dev/) & React Native
 - TypeScript
-- NativeWind (Tailwind CSS for React Native)
+- React Native styles over Bloom colour tokens (`createTokenStyles`); no NativeWind or `className`
 - TanStack Query (server state and cross-screen invalidation)
 - Zod (runtime validation at API/service boundaries)
 - Zustand (local playback, queue, and UI state)
