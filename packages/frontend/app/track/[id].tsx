@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { useLocalSearchParams, Stack } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -76,6 +76,10 @@ export default function TrackScreen() {
               track.coverArtSizes,
             )}
           />
+          {/* TODO(lead): native artwork size. The classes `w-64 h-64 rounded-2xl` reached
+              only the web: there expo-image's container is react-native-css's `View`, on
+              native the class went to expo-image's native view, which ignores it, so the
+              artwork has no size there and draws at zero height. Kept as it drew. */}
           <Image
             source={{
               uri: pickCatalogImageUrl(
@@ -85,13 +89,13 @@ export default function TrackScreen() {
                 track.coverArtSizes,
               ),
             }}
-            className="w-64 h-64 rounded-2xl"
+            style={styles.artwork}
             contentFit="cover"
           />
           <Text selectable style={styles.title}>
             {track.title}
           </Text>
-          <TrackArtistLine track={track} className="text-muted-foreground text-lg" />
+          <TrackArtistLine track={track} style={styles.artist} />
           <View style={styles.row}>
             <Pressable
               onPress={() => void handlePlay()}
@@ -134,6 +138,8 @@ const useStyles = createTokenStyles((t) => ({
   content: { gap: 20, padding: 24, paddingBottom: 144 },
   text: { color: t.foreground },
   title: { fontSize: 30, fontWeight: 700, color: t.foreground, lineHeight: 36 },
+  artist: { fontSize: 18, lineHeight: 28, color: t.mutedForeground },
+  artwork: Platform.select({ web: { width: 256, height: 256, borderRadius: 16 }, default: {} }),
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   surface2: {
     borderRadius: 9999,

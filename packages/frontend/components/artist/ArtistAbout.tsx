@@ -37,7 +37,7 @@ export function ArtistAbout({ entity, hasImage, onNavigateArtist, onOpenLink }: 
         {t('common.about')}
       </Text>
       {entity.bio ? (
-        <Text selectable className="text-foreground text-base leading-6">
+        <Text selectable style={styles.bio}>
           {entity.bio}
         </Text>
       ) : null}
@@ -128,4 +128,5 @@ const useStyles = createTokenStyles((t) => ({
   text2: { fontSize: 16, color: t.primary, lineHeight: 24 },
   text3: { fontSize: 16, color: t.foreground, lineHeight: 24 },
   text4: { color: t.primary },
+  bio: { fontSize: 16, color: t.foreground, lineHeight: 24 },
 }));

@@ -6,7 +6,7 @@ import {
   BottomSheetBackdrop,
   BottomSheetBackdropProps,
 } from '@gorhom/bottom-sheet';
-import { useTheme } from '@oxy.so/bloom/theme';
+import { createTokenStyles, useTheme } from '@oxy.so/bloom/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface BottomSheetContextProps {
@@ -25,6 +25,7 @@ export const BottomSheetProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [bottomSheetContent, setBottomSheetContent] = useState<ReactNode>(null);
   const bottomSheetModalRef = useRef<BottomSheetModal | null>(null);
   const theme = useTheme();
+  const themed = useThemedStyles();
   const insets = useSafeAreaInsets();
 
   // Calculate snap points that allow the sheet to reach the top but respect safe area
@@ -77,7 +78,7 @@ export const BottomSheetProvider: React.FC<{ children: ReactNode }> = ({ childre
         enableHandlePanningGesture={true}
         index={0}
       >
-        <BottomSheetView className="bg-background" style={styles.contentView}>
+        <BottomSheetView style={[themed.background, styles.contentView]}>
           {bottomSheetContent}
         </BottomSheetView>
       </BottomSheetModal>
@@ -94,3 +95,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 });
+
+// gorhom's `BottomSheetView` spreads its props onto React Native's `View`, which
+// react-native-css wrapped on both platforms, so the background class did paint.
+const useThemedStyles = createTokenStyles((t) => ({
+  background: { backgroundColor: t.background },
+}));
