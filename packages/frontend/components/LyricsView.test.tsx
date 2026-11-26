@@ -7,6 +7,11 @@ const mockRetry = jest.fn();
 const mockSeek = jest.fn();
 let mockResult: { lyrics: Lyrics | null; isLoading: boolean; isError: boolean; retry: () => void };
 let mockState: { currentTrack: { id: string } | null; currentTime: number; seek: typeof mockSeek };
+// The real token styles (`createTokenStyles`, `tokenAlpha`) from the CommonJS build: the
+// `react-native` condition points at Bloom's TypeScript source, which Jest does not transform.
+jest.mock('@oxy.so/bloom/theme', () =>
+  jest.requireActual('../../../node_modules/@oxy.so/bloom/lib/commonjs/theme/color-tokens.js'),
+);
 jest.mock('@/hooks/useLyrics', () => ({ useLyrics: () => mockResult }));
 jest.mock('@/stores/playerStore', () => ({
   usePlayerStore: (selector: (state: typeof mockState) => unknown) => selector(mockState),
