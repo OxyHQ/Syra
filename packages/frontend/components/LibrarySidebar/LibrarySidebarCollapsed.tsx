@@ -302,7 +302,6 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
   );
 };
 
-// `expo-image` has no `className` prop, so the artwork sizing stays a style.
 const styles = StyleSheet.create({
   squareIcon: {
     width: 40,

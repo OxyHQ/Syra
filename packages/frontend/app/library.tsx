@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { StyleSheet, View, Text, Pressable, type ViewStyle } from 'react-native';
+import { Platform, StyleSheet, View, Text, Pressable, type ViewStyle } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,7 +24,6 @@ import { EpisodeRow } from '@/components/EpisodeRow';
 import { useSubscriptions, useContinueListening, useMyPodcasts } from '@/hooks/usePodcasts';
 import { useUploads } from '@/hooks/useUploads';
 import { usePlayerStore } from '@/stores/playerStore';
-import { cn } from '@/lib/utils';
 import { createTokenStyles } from '@oxy.so/bloom/theme';
 
 /**
@@ -236,10 +235,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
             <Text style={themed.title}>{t('library.title')}</Text>
             <View style={styles.row2}>
               {showSidebarControls && onFullscreen && (
-                <Pressable
-                  onPress={onFullscreen}
-                  className="w-7 h-7 items-center justify-center rounded-[14px] bg-popover web:cursor-pointer"
-                >
+                <Pressable onPress={onFullscreen} style={[themed.popover, styles.controlButton]}>
                   <Ionicons
                     name={isFullscreen ? 'contract' : 'expand'}
                     size={18}
@@ -248,10 +244,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                 </Pressable>
               )}
               {showSidebarControls && onCollapse && !isFullscreen && (
-                <Pressable
-                  onPress={onCollapse}
-                  className="w-7 h-7 items-center justify-center rounded-[14px] bg-popover web:cursor-pointer"
-                >
+                <Pressable onPress={onCollapse} style={[themed.popover, styles.controlButton]}>
                   <Octicons name="sidebar-collapse" size={18} color={theme.colors.text} />
                 </Pressable>
               )}
@@ -282,18 +275,13 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                 <Pressable
                   key={filter}
                   onPress={() => setActiveFilter(filter)}
-                  className={cn(
-                    'px-2.5 py-[3px] rounded-[12px] h-6 justify-center items-center',
-                    isActive ? 'bg-primary' : 'bg-popover',
-                  )}
+                  style={[isActive ? themed.activeChip : themed.popover, styles.filterChip]}
                 >
                   <Text
-                    className={cn(
-                      'text-[11px] leading-[13px]',
-                      isActive
-                        ? 'font-bold text-primary-foreground'
-                        : 'font-semibold text-foreground',
-                    )}
+                    style={[
+                      styles.filterLabel,
+                      isActive ? themed.activeFilterLabel : themed.filterLabel,
+                    ]}
                   >
                     {t(LIBRARY_FILTER_KEYS[filter])}
                   </Text>
@@ -761,9 +749,6 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
   );
 };
 
-// The only styles left are the ones no NativeWind class can reach: `expo-image`
-// has no `className` prop, and `EmptyState` takes a `ViewStyle` through
-// `containerStyle` rather than a class.
 const styles = StyleSheet.create({
   // States rendered INSIDE the scroll view: no `flex: 1` stretch and no opaque
   // background of their own, so they sit inline under the filter row.
@@ -803,11 +788,32 @@ const styles = StyleSheet.create({
   row4: { marginBottom: 12, flexDirection: 'row', alignItems: 'center', gap: 6 },
   section: { marginBottom: 24 },
   stack: { gap: 0 },
+  controlButton: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 14,
+    ...Platform.select({ web: { cursor: 'pointer' as const } }),
+  },
+  filterChip: {
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+  },
+  filterLabel: { fontSize: 11, lineHeight: 13 },
 });
 
 export default LibraryScreen;
 
 const useThemedStyles = createTokenStyles((t) => ({
+  popover: { backgroundColor: t.popover },
+  activeChip: { backgroundColor: t.primary },
+  activeFilterLabel: { fontWeight: 700, color: t.primaryForeground },
+  filterLabel: { fontWeight: 600, color: t.foreground },
   title: { fontSize: 24, fontWeight: 700, color: t.foreground },
   surface: {
     borderRadius: 9999,

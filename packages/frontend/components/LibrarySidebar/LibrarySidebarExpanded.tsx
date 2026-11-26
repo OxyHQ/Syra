@@ -1,5 +1,13 @@
 import React, { useMemo } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useRouter, type Href } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
@@ -15,7 +23,6 @@ import { Playlist, Album, Artist } from '@syra/shared-types';
 import { pickCatalogImageUrl, resolvePodcastArtwork } from '@/utils/pickImage';
 import { ownedShowStateKey } from '@/utils/podcastFormat';
 import { EmptyState } from '@/components/common/EmptyState';
-import { cn } from '@/lib/utils';
 import type { LibrarySortOrder } from '@/stores/uiStore';
 import { createTokenStyles } from '@oxy.so/bloom/theme';
 
@@ -346,7 +353,7 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
         <View style={styles.row2}>
           <Pressable
             onPress={onCollapse}
-            className="w-8 h-8 items-center justify-center rounded-[16px] web:cursor-pointer"
+            style={styles.headerButton}
             accessibilityRole="button"
             accessibilityLabel={t('sidebar.collapse')}
           >
@@ -359,7 +366,7 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
           {canUsePrivateApi && (
             <Pressable
               onPress={() => router.push('/create-playlist')}
-              className="w-8 h-8 items-center justify-center rounded-[16px] web:cursor-pointer"
+              style={styles.headerButton}
               accessibilityRole="button"
               accessibilityLabel={t('sidebar.createPlaylist')}
             >
@@ -368,7 +375,7 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
           )}
           <Pressable
             onPress={onFullscreen}
-            className="w-8 h-8 items-center justify-center rounded-[16px] web:cursor-pointer"
+            style={styles.headerButton}
             accessibilityRole="button"
             accessibilityLabel={isFullscreen ? 'Exit fullscreen library' : 'Expand library'}
           >
@@ -393,19 +400,11 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
             <Pressable
               key={filter}
               onPress={() => onFilterChange(filter)}
-              className={cn(
-                'h-[30px] px-3 items-center justify-center rounded-[15px]',
-                isActive ? 'bg-foreground' : 'bg-popover',
-              )}
+              style={[isActive ? themed.activeFilter : themed.filter, styles.filterChip]}
               accessibilityRole="button"
               accessibilityState={{ selected: isActive }}
             >
-              <Text
-                className={cn(
-                  'text-[13px] font-bold',
-                  isActive ? 'text-background' : 'text-foreground',
-                )}
-              >
+              <Text style={[styles.filterLabel, isActive ? themed.activeFilterLabel : themed.text]}>
                 {filter}
               </Text>
             </Pressable>
@@ -432,7 +431,7 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
             NOT offer "Recents" or "Recently added": library membership carries
             no per-user timestamp, so neither can be derived honestly here. */}
         <Pressable
-          className="h-[34px] flex-row items-center gap-1.5 web:cursor-pointer"
+          style={styles.sortButton}
           onPress={() => onSortOrderChange(sortOrder === 'type' ? 'alphabetical' : 'type')}
           accessibilityRole="button"
           accessibilityLabel={
@@ -479,25 +478,22 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
       ) : (
         <ScrollView
           style={styles.fill}
-          contentContainerClassName={cn('px-2 pb-3', isGrid && 'flex-row flex-wrap gap-2 px-3')}
+          contentContainerStyle={[styles.list, isGrid && styles.gridList]}
           showsVerticalScrollIndicator={false}
         >
           {entries.map((entry) => (
             <Pressable
               key={`${entry.kind}-${entry.id}`}
               onPress={() => router.push(entry.href)}
-              className={cn(
-                'min-h-[58px] flex-row items-center gap-2.5 px-1.5 rounded-[6px] web:cursor-pointer',
-                isGrid && 'w-[172px] min-h-[76px]',
-              )}
+              style={[styles.entry, isGrid && styles.gridEntry]}
               accessibilityRole="button"
             >
               <View
-                className={cn(
-                  'w-[46px] h-[46px] rounded-[4px] items-center justify-center overflow-hidden',
-                  entry.imageShape === 'circle' && 'rounded-[23px]',
-                  entry.kind === 'liked' ? 'bg-primary' : 'bg-popover',
-                )}
+                style={[
+                  styles.artwork,
+                  entry.imageShape === 'circle' && styles.circleArtwork,
+                  entry.kind === 'liked' ? themed.likedArtwork : themed.filter,
+                ]}
               >
                 {entry.imageUrl ? (
                   <Image
@@ -535,10 +531,54 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
   );
 };
 
-// The only styles left are the ones no NativeWind class can reach: `expo-image`
-// has no `className` prop, and `EmptyState` takes a `ViewStyle` through
-// `containerStyle` rather than a class.
+const WEB_POINTER = Platform.select({ web: { cursor: 'pointer' as const } });
+
 const styles = StyleSheet.create({
+  headerButton: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 16,
+    ...WEB_POINTER,
+  },
+  filterChip: {
+    height: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 15,
+    paddingHorizontal: 12,
+  },
+  filterLabel: { fontSize: 13, fontWeight: 700 },
+  sortButton: {
+    height: 34,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    ...WEB_POINTER,
+  },
+  list: { paddingHorizontal: 8, paddingBottom: 12 },
+  // The grid's 12 replaces the list's 8, as the class merge did.
+  gridList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 12 },
+  entry: {
+    minHeight: 58,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 6,
+    borderRadius: 6,
+    ...WEB_POINTER,
+  },
+  gridEntry: { width: 172, minHeight: 76 },
+  artwork: {
+    width: 46,
+    height: 46,
+    borderRadius: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  circleArtwork: { borderRadius: 23 },
   artworkImage: {
     width: 46,
     height: 46,
@@ -611,4 +651,9 @@ const useThemedStyles = createTokenStyles((t) => ({
   mutedText: { fontSize: 12, fontWeight: 700, color: t.mutedForeground },
   title2: { marginBottom: 3, fontSize: 14, fontWeight: 700, color: t.foreground },
   mutedText2: { fontSize: 12, fontWeight: 500, color: t.mutedForeground },
+  text: { color: t.foreground },
+  filter: { backgroundColor: t.popover },
+  activeFilter: { backgroundColor: t.foreground },
+  activeFilterLabel: { color: t.background },
+  likedArtwork: { backgroundColor: t.primary },
 }));
