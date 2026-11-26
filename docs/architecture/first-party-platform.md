@@ -78,7 +78,8 @@ never read. Queries include the verified viewer, target profile and session epoc
 a response from an earlier account cannot populate the current view. Offline or
 signed-out reads do not fall back to another account's settings. Studio now gives
 its existing QueryClient to OxyProvider with all account queries scoped, matching
-the main app. Two real React Query regressions cover account switch/logout and a
+the main app. (Services 15, 2026-11-26: OxyProvider takes no QueryClient; both
+apps scope their own queries, see `docs/agent-rules/frontend-state.md`.) Two real React Query regressions cover account switch/logout and a
 late response. Frontend and Studio typechecks pass with the candidate core.
 
 
