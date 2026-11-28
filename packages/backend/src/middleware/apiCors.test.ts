@@ -35,8 +35,21 @@ function socketAdmits(origin: string | undefined): Promise<boolean> {
   );
 }
 
-const ADMITTED = ['https://syra.fm', 'https://mention.earth', 'https://oxy.so'];
-const REFUSED = ['https://evil.example', 'https://syra.fm.evil.example', 'http://syra.fm'];
+const ADMITTED = [
+  'https://syra.fm',
+  'https://mention.earth',
+  'https://www.mention.earth',
+  'https://mention.org',
+  'https://www.mention.org',
+  'https://oxy.so',
+];
+const REFUSED = [
+  'https://evil.example',
+  'https://syra.fm.evil.example',
+  'http://syra.fm',
+  'https://mention.org.evil.example',
+  'http://mention.org',
+];
 
 describe('API CORS', () => {
   it('echoes an admitted origin exactly, with credentials', async () => {

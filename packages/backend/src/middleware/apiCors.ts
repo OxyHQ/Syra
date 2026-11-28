@@ -11,6 +11,8 @@ export const APP_ORIGINS: string[] = [
   'https://syra.fm',
   'https://mention.earth',
   'https://www.mention.earth',
+  'https://mention.org',
+  'https://www.mention.org',
   'http://localhost:8120',
   'http://localhost:8121',
   ...env.ALLOWED_ORIGINS,
