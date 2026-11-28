@@ -7,3 +7,15 @@
   Cache-Control: no-cache
 /oxy-sw-register.js
   Cache-Control: no-cache
+
+# Content-hashed: every file the Expo export writes under /_expo/static/ is named
+# by a hash of its bytes, so a browser keeps it for a year and never revalidates.
+# Without this rule the zone's 4-hour browser TTL made every return visit after
+# that re-ask for each one. Entry files (index.html, public/) are not here.
+#
+# A hashed name this deploy lacks (an old tab asking for the last release's
+# chunk) is a real 404 (`no-store`), never index.html kept for a year:
+# scripts/write-hashed-asset-404.mjs writes `_expo/static/404.html` after the
+# export, and Pages answers a miss with the closest 404.html.
+/_expo/static/*
+  Cache-Control: public, max-age=31536000, immutable
