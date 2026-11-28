@@ -172,6 +172,11 @@ export function referenceSource(entityType: OxyReferenceEntityType): ReferenceSo
  * The same resolution the triggers apply: the `image_assets` ids a row names
  * (every column, and every suggestion's `image.url`) mapped to their
  * `oxy_file_id`; a `via: 'file'` row's ids as they are.
+ *
+ * The page reads its columns in the same keyset scan that picks its ids, so
+ * each row is fetched once. Joining the page back to the table by id fetched
+ * every row a second time: on production's 458k episodes that was half the
+ * buffers of the image page and four fifths of the audio one.
  */
 export function inventoryQuery(
   source: ReferenceSource,
@@ -191,8 +196,12 @@ export function inventoryQuery(
                  then e.${ident(SUGGESTIONS_COLUMN)} else '[]'::jsonb end
           ) s`
     : sql``;
+  const pageColumns = sql.join(
+    source.columns.map((column) => sql`e.${ident(column)}`),
+    sql`, `,
+  );
   const page = sql`
-    select e.id from ${table} e
+    select e.id, ${pageColumns} from ${table} e
     ${afterEntityId === null ? sql`` : sql`where e.id > ${afterEntityId}`}
     order by e.id
     limit ${limit}
@@ -201,8 +210,7 @@ export function inventoryQuery(
     return sql`
       with page as (${page})
       select distinct v.value as "fileId", e.id as "entityId"
-      from page p
-      join ${table} e on e.id = p.id
+      from page e
       cross join lateral unnest(array[${values}]::text[]) as v(value)
       where v.value is not null
       order by e.id
@@ -211,8 +219,7 @@ export function inventoryQuery(
   return sql`
     with page as (${page})
     select distinct ia.oxy_file_id as "fileId", e.id as "entityId"
-    from page p
-    join ${table} e on e.id = p.id
+    from page e
     cross join lateral (
       select unnest(array[${values}]::text[]) as asset_id
       ${suggestions}
