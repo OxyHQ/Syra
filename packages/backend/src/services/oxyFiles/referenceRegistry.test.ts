@@ -1,9 +1,15 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'bun:test';
-import { sql } from 'drizzle-orm';
+import { sql, type SQL } from 'drizzle-orm';
 import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
 import { getDb } from '../../db/postgres';
 import { OXY_REFERENCE_ENTITY_TYPES, type OxyReferenceEntityType } from '../../db/schema/oxyFiles';
-import { REFERENCE_SOURCES } from './referenceRegistry';
+import {
+  inventoryQuery,
+  lastEntityIdOfPage,
+  REFERENCE_SOURCES,
+  type ReferenceSource,
+  SUGGESTIONS_COLUMN,
+} from './referenceRegistry';
 import { referenceInventory } from './referenceReconcile';
 
 /**
@@ -274,5 +280,145 @@ describe('the nightly inventory resolves exactly what the triggers queued', () =
     const seen: string[] = [];
     for await (const item of referenceInventory('house', 3)) seen.push(item.entityId);
     expect(seen).toEqual(['h-0', 'h-1', 'h-2', 'h-3', 'h-4', 'h-5', 'h-6']);
+  });
+});
+
+/**
+ * The inventory page as it was written before it read its columns in the keyset
+ * scan: the page's ids joined back to the table. Kept here to hold the two
+ * forms equal.
+ */
+function joinedInventoryQuery(
+  source: ReferenceSource,
+  afterEntityId: string | null,
+  limit: number,
+): SQL {
+  const col = (name: string) => sql.raw(`"${name}"`);
+  const table = col(source.table);
+  const values = sql.join(
+    source.columns.filter((c) => c !== SUGGESTIONS_COLUMN).map((c) => sql`e.${col(c)}`),
+    sql`, `,
+  );
+  const suggestions = source.columns.includes(SUGGESTIONS_COLUMN)
+    ? sql`union all select s -> 'image' ->> 'url'
+          from jsonb_array_elements(
+            case when jsonb_typeof(e.${col(SUGGESTIONS_COLUMN)}) = 'array'
+                 then e.${col(SUGGESTIONS_COLUMN)} else '[]'::jsonb end
+          ) s`
+    : sql``;
+  const page = sql`
+    select e.id from ${table} e
+    ${afterEntityId === null ? sql`` : sql`where e.id > ${afterEntityId}`}
+    order by e.id
+    limit ${limit}
+  `;
+  if (source.via === 'file') {
+    return sql`
+      with page as (${page})
+      select distinct v.value as "fileId", e.id as "entityId"
+      from page p
+      join ${table} e on e.id = p.id
+      cross join lateral unnest(array[${values}]::text[]) as v(value)
+      where v.value is not null
+      order by e.id
+    `;
+  }
+  return sql`
+    with page as (${page})
+    select distinct ia.oxy_file_id as "fileId", e.id as "entityId"
+    from page p
+    join ${table} e on e.id = p.id
+    cross join lateral (
+      select unnest(array[${values}]::text[]) as asset_id
+      ${suggestions}
+    ) v
+    join image_assets ia on ia.id = v.asset_id
+    where ia.oxy_file_id is not null
+    order by e.id
+  `;
+}
+
+type Pair = { fileId: string; entityId: string };
+
+async function pairs(query: SQL): Promise<Pair[]> {
+  return [...(await getDb().execute<Pair>(query))].map(({ fileId, entityId }) => ({
+    fileId,
+    entityId,
+  }));
+}
+
+/** Pairs in entity order; within one entity, by file (DISTINCT fixes no order there). */
+function canonical(page: Pair[]): Pair[] {
+  for (let i = 1; i < page.length; i += 1) {
+    const previous = page[i - 1];
+    const current = page[i];
+    if (previous && current) expect(previous.entityId <= current.entityId).toBe(true);
+  }
+  return [...page].sort(
+    (a, b) => a.entityId.localeCompare(b.entityId) || a.fileId.localeCompare(b.fileId),
+  );
+}
+
+describe('the inventory page reads its columns in the keyset scan', () => {
+  it('returns, page by page, exactly what the page joined back to its table returned', async () => {
+    await seedEveryEntity();
+    const db = getDb();
+    for (let i = 0; i < 6; i += 1) await image(`img-x${i}`, `F-x${i}`);
+    // Rows with no image, one image under several columns, an image shared with
+    // another row, and suggestions that are an array, a scalar and null.
+    const episodeImages: (string | null)[][] = [
+      [null, null, null],
+      ['img-x0', 'img-x0', 'img-x1'],
+      ['img-episode', null, 'img-x2'],
+      [null, 'img-x3', null],
+      ['img-x4', 'img-x5', 'img-x4'],
+    ];
+    for (const [i, [primary, small, original]] of episodeImages.entries()) {
+      await db.execute(sql`
+        insert into episodes (id, podcast_id, podcast_title, title, guid, pub_date, source,
+          image_id, image_sizes_small_id, image_sizes_original_id, audio_file_id)
+        values (${`episode-x${i}`}, 'podcast-1', 'Pod', 'E', ${`g-${i}`}, now(), 'syra',
+          ${primary ?? null}, ${small ?? null}, ${original ?? null}, ${i % 2 === 0 ? `F-audio-${i}` : null})
+      `);
+    }
+    const suggestions = [
+      JSON.stringify([{ image: { url: 'img-x0' } }, { image: { url: 'img-x1' } }]),
+      JSON.stringify({ image: { url: 'img-x2' } }),
+      'null',
+    ];
+    for (const [i, value] of suggestions.entries()) {
+      await db.execute(sql`
+        insert into catalog_entities (id, type, name, name_key, source, image_id, image_suggestions)
+        values (${`ce-x${i}`}, 'artist', 'A', ${`a-${i}`}, 'upload', ${i === 1 ? 'img-x3' : null}, ${value}::jsonb)
+      `);
+    }
+    for (let i = 0; i < 4; i += 1) {
+      await db.execute(sql`
+        insert into houses (id, name, created_by, avatar_file_id, cover_image_file_id)
+        values (${`house-x${i}`}, 'H', 'u', ${i === 0 ? null : `F-h${i}`}, ${i === 2 ? `F-h${i}` : null})
+      `);
+    }
+
+    let pages = 0;
+    for (const source of REFERENCE_SOURCES) {
+      for (const pageSize of [1, 2, 3, 100]) {
+        let after: string | null = null;
+        for (;;) {
+          const expected = await pairs(joinedInventoryQuery(source, after, pageSize));
+          const actual = await pairs(inventoryQuery(source, after, pageSize));
+          expect(canonical(actual)).toEqual(canonical(expected));
+          pages += 1;
+          const boundaries: { lastId: string | null; count: number }[] = [
+            ...(await db.execute<{ lastId: string | null; count: number }>(
+              lastEntityIdOfPage(source, after, pageSize),
+            )),
+          ];
+          const page = boundaries[0];
+          if (!page || page.count < pageSize || page.lastId === null) break;
+          after = page.lastId;
+        }
+      }
+    }
+    expect(pages).toBeGreaterThan(REFERENCE_SOURCES.length * 4);
   });
 });
